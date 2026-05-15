@@ -294,3 +294,43 @@ export function detectNavIntent(query: string): { route: string; label: string }
   }
   return null;
 }
+
+/**
+ * Regex that matches explicit navigation verbs.
+ * Used to gate voice-activated navigation so that casual mentions of a feature
+ * (e.g. "what is my wallet balance?") don't trigger auto-navigation.
+ */
+const VOICE_NAV_VERB = /\b(open|go\s+to|take\s+me\s+to|navigate\s+to|show\s+me\s+(the\s+)?|bring\s+me\s+to|head\s+to|switch\s+to|jump\s+to|launch|get\s+to|i\s+want\s+to\s+go\s+to)\b/i;
+
+/**
+ * Stricter version of detectNavIntent for voice / AI chat contexts.
+ * Only returns a match when the query contains an explicit navigation verb.
+ * Prevents casual feature mentions from triggering unwanted screen changes.
+ *
+ * Examples that WILL match:
+ *   "take me to wallet"  "open settings"  "go to airtime"  "show me the referral page"
+ * Examples that will NOT match (no verb):
+ *   "wallet balance?"  "what is Nexa?"  "premium features"
+ */
+export function detectVoiceNavCommand(query: string): { route: string; label: string } | null {
+  if (!VOICE_NAV_VERB.test(query)) return null;
+  return detectNavIntent(query);
+}
+
+/**
+ * A pool of varied confirmation messages AfuAI uses when voice-navigating.
+ * Randomly selected so repeated navigation commands feel natural.
+ */
+export const NAV_CONFIRMATION_PHRASES = [
+  (label: string) => `Sure! Taking you to **${label}** right now. Let me know if you need anything else once you're there.`,
+  (label: string) => `On it — navigating to **${label}**! Feel free to ask me anything once you arrive.`,
+  (label: string) => `Got it! I've opened **${label}** for you. Anything else I can help with?`,
+  (label: string) => `Heading to **${label}** right away. I'll be here if you have questions!`,
+  (label: string) => `Done! Bringing you to **${label}** now. Let me know if you need a hand.`,
+  (label: string) => `Sure thing — opening **${label}**. Ask me anything you need once you're there.`,
+];
+
+export function pickNavConfirmation(label: string): string {
+  const fn = NAV_CONFIRMATION_PHRASES[Math.floor(Math.random() * NAV_CONFIRMATION_PHRASES.length)];
+  return fn(label);
+}

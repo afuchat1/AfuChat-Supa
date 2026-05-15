@@ -74,7 +74,7 @@ import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { useDataMode } from "@/context/DataModeContext";
 import { markChatVisited, setActiveChatId, clearActiveChatId } from "@/lib/chatVisited";
 import { askAi, aiSuggestReply, transcribeAudio, getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
-import { buildNavigationContext, ACTION_ROUTES_GUIDE } from "@/lib/platformKnowledge";
+import { buildNavigationContext, ACTION_ROUTES_GUIDE, detectVoiceNavCommand, pickNavConfirmation } from "@/lib/platformKnowledge";
 import {
   playNotificationSound as playMgrSound,
   resetToPlaybackMode,
@@ -1214,6 +1214,7 @@ function ChatScreen() {
   const { user, profile, isPremium, subscription, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const BRAND = colors.accent;
+  const { textToSpeech: ttsEnabled } = useLanguage();
   const { prefs: chatPrefs, themeColors: chatThemeColors, bubbleRadius: chatBubbleRadius } = useChatPreferences();
   const { features: advancedFeatures } = useAdvancedFeatures();
   const { isLowData: chatIsLowData } = useDataMode();
@@ -2562,6 +2563,50 @@ function ChatScreen() {
   async function handleAfuAiResponse(userText: string, currentMessages: Message[], activeChatId?: string) {
     setIsAfuAiTyping(true);
     const chatId = activeChatId || (isDraft ? realChatId : id) || id;
+
+    // ── Voice-activated navigation fast-path ─────────────────────────────────
+    // Detects explicit commands like "take me to wallet" / "open settings" and
+    // handles them instantly — no AI round-trip needed for simple nav requests.
+    const navCommand = detectVoiceNavCommand(userText);
+    if (navCommand) {
+      const { route, label } = navCommand;
+      const confirmText = pickNavConfirmation(label);
+      const sentAt = new Date().toISOString();
+
+      // Speak confirmation if TTS is enabled in Language Settings
+      if (ttsEnabled) {
+        Speech.isSpeakingAsync()
+          .then((speaking) => {
+            if (speaking) Speech.stop();
+            Speech.speak(`Sure! Taking you to ${label}.`, { rate: 0.92, pitch: 1.05 });
+          })
+          .catch(() => {});
+      }
+
+      // Insert AfuAI confirmation bubble immediately (appears while navigating)
+      setMessages((prev) => [{
+        id: `afuai_nav_${Date.now()}`,
+        chat_id: chatId,
+        sender_id: AFUAI_BOT_ID,
+        encrypted_content: confirmText,
+        sent_at: sentAt,
+        sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+        reactions: [],
+        _isAi: true,
+        _aiSuggestions: [`What can I do in ${label}?`, "Go back to chat"],
+      }, ...prev]);
+
+      // Persist confirmation message to DB in background (fire-and-forget)
+      (async () => { try { await supabase.rpc("insert_afuai_message", { p_chat_id: chatId, p_content: confirmText }); } catch {} })();
+
+      // Navigate after a short delay so the confirmation bubble can animate in
+      setTimeout(() => router.push(route as any), 750);
+
+      setIsAfuAiTyping(false);
+      return;
+    }
+    // ── End voice-activated navigation ────────────────────────────────────────
+
     try {
       const userContext = await getAfuAiUserContext();
       const platformContext = buildNavigationContext();
