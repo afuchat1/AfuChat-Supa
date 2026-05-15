@@ -1,5 +1,12 @@
 import React from "react";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  ViewStyle,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -42,6 +49,7 @@ export function FollowButton({
     textColor: string;
     borderColor?: string;
     borderWidth?: number;
+    rippleColor: string;
   };
 
   const configs: Record<FollowState, Cfg> = {
@@ -50,12 +58,14 @@ export function FollowButton({
       icon: "person-add-outline",
       bg: colors.accent,
       textColor: "#fff",
+      rippleColor: "rgba(255,255,255,0.25)",
     },
     follow_back: {
       label: "Follow Back",
       icon: "person-add",
       bg: "#FF9500",
       textColor: "#fff",
+      rippleColor: "rgba(255,255,255,0.25)",
     },
     following: {
       label: "Following",
@@ -64,6 +74,7 @@ export function FollowButton({
       textColor: colors.accent,
       borderColor: colors.accent,
       borderWidth: 1.5,
+      rippleColor: colors.accent + "22",
     },
     friends: {
       label: "Friends",
@@ -72,26 +83,37 @@ export function FollowButton({
       textColor: "#34C759",
       borderColor: "#34C759",
       borderWidth: 1.5,
+      rippleColor: "rgba(52,199,89,0.15)",
     },
   };
 
   const cfg = configs[state];
 
+  // overflow:"hidden" on the button style clips the Android ripple to
+  // the pill shape. The borderRadius is already set on btn.
+  const ripple = Platform.OS === "android"
+    ? { color: cfg.rippleColor, borderless: false }
+    : undefined;
+
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      android_ripple={ripple}
+      style={({ pressed }) => [
         styles.btn,
         sm ? styles.btnSm : styles.btnMd,
         {
           backgroundColor: cfg.bg,
           borderColor: cfg.borderColor,
           borderWidth: cfg.borderWidth ?? 0,
+          overflow: "hidden",
         },
+        Platform.OS === "ios" && pressed ? { opacity: 0.72 } : null,
         style,
       ]}
       onPress={onToggle}
-      activeOpacity={0.75}
       disabled={loading || disabled}
+      accessibilityRole="button"
+      accessibilityLabel={cfg.label}
     >
       {loading ? (
         <ActivityIndicator size="small" color={cfg.textColor} />
@@ -109,7 +131,7 @@ export function FollowButton({
           </Text>
         </>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 

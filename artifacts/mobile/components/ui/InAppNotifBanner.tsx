@@ -16,7 +16,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Keyboard,
   PanResponder,
   Platform,
@@ -24,7 +23,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
@@ -374,21 +372,23 @@ export function InAppNotifBanner() {
                   editable={!isLoading}
                   multiline={false}
                 />
-                <TouchableOpacity
-                  style={[styles.sendBtn, { backgroundColor: BRAND, opacity: (!replyText.trim() || isLoading) ? 0.5 : 1 }]}
+                <Pressable
+                  android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+                  style={[styles.sendBtn, { backgroundColor: BRAND, opacity: (!replyText.trim() || isLoading) ? 0.5 : 1, overflow: "hidden" }]}
                   onPress={handleSendReply}
                   disabled={!replyText.trim() || isLoading}
                 >
                   <Ionicons name="send" size={15} color="#fff" />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             {/* Post/reply/mention/like actions */}
             {(type === "reply" || type === "mention" || type === "like") && (
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: likedLocal ? "#FF2D55" : colors.border + "50", borderColor: "#FF2D55" }]}
+                <Pressable
+                  android_ripple={{ color: "rgba(255,45,85,0.2)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: likedLocal ? "#FF2D55" : colors.border + "50", borderColor: "#FF2D55", overflow: "hidden" }]}
                   onPress={handleLike}
                   disabled={isLoading || likedLocal}
                 >
@@ -396,29 +396,32 @@ export function InAppNotifBanner() {
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: likedLocal ? "#fff" : "#FF2D55", marginLeft: 4 }}>
                     {likedLocal ? "Liked" : "Like"}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: BRAND }]}
+                </Pressable>
+                <Pressable
+                  android_ripple={{ color: "rgba(0,188,212,0.2)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: BRAND, overflow: "hidden" }]}
                   onPress={() => { dismissBanner(); if (payload.postId) router.push(`/p/${payload.postId}` as any); }}
                 >
                   <Ionicons name="return-down-back-outline" size={14} color={BRAND} />
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: BRAND, marginLeft: 4 }}>Reply</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border }]}
+                </Pressable>
+                <Pressable
+                  android_ripple={{ color: "rgba(0,0,0,0.08)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border, overflow: "hidden" }]}
                   onPress={() => { dismissBanner(); if (payload.postId) router.push(`/p/${payload.postId}` as any); }}
                 >
                   <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.textSecondary, marginLeft: 4 }}>View</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             {/* Follow actions */}
             {type === "follow" && (
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { flex: 1, backgroundColor: followedLocal ? "#10B981" : BRAND, borderColor: followedLocal ? "#10B981" : BRAND, justifyContent: "center" }]}
+                <Pressable
+                  android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+                  style={[styles.actionBtn, { flex: 1, backgroundColor: followedLocal ? "#10B981" : BRAND, borderColor: followedLocal ? "#10B981" : BRAND, justifyContent: "center", overflow: "hidden" }]}
                   onPress={handleFollowBack}
                   disabled={isLoading || followedLocal}
                 >
@@ -426,60 +429,66 @@ export function InAppNotifBanner() {
                   <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff", marginLeft: 5 }}>
                     {followedLocal ? "Following" : "Follow Back"}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border }]}
+                </Pressable>
+                <Pressable
+                  android_ripple={{ color: "rgba(0,0,0,0.08)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border, overflow: "hidden" }]}
                   onPress={() => { dismissBanner(); if (payload.actorId) router.push(`/contact/${payload.actorId}` as any); }}
                 >
                   <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.textSecondary, marginLeft: 4 }}>Profile</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border }]}
+                </Pressable>
+                <Pressable
+                  android_ripple={{ color: "rgba(0,0,0,0.06)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border, overflow: "hidden" }]}
                   onPress={dismissBanner}
                 >
                   <Ionicons name="close-circle-outline" size={14} color={colors.textMuted} />
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.textMuted, marginLeft: 4 }}>Dismiss</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             {/* Order actions */}
             {(type === "order" || type === "escrow") && (
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { flex: 1, backgroundColor: "#34C759", borderColor: "#34C759", justifyContent: "center" }]}
+                <Pressable
+                  android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+                  style={[styles.actionBtn, { flex: 1, backgroundColor: "#34C759", borderColor: "#34C759", justifyContent: "center", overflow: "hidden" }]}
                   onPress={() => { dismissBanner(); if (payload.url) router.push(payload.url as any); }}
                 >
                   <Ionicons name="bag-check-outline" size={14} color="#fff" />
                   <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff", marginLeft: 5 }}>View Order</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border }]}
+                </Pressable>
+                <Pressable
+                  android_ripple={{ color: "rgba(0,0,0,0.06)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border, overflow: "hidden" }]}
                   onPress={dismissBanner}
                 >
                   <Ionicons name="close-outline" size={14} color={colors.textMuted} />
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.textMuted, marginLeft: 4 }}>Dismiss</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
 
             {/* Gift / payment actions */}
             {(type === "gift" || type === "payment") && (
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { flex: 1, backgroundColor: "#FF9500", borderColor: "#FF9500", justifyContent: "center" }]}
+                <Pressable
+                  android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+                  style={[styles.actionBtn, { flex: 1, backgroundColor: "#FF9500", borderColor: "#FF9500", justifyContent: "center", overflow: "hidden" }]}
                   onPress={() => { dismissBanner(); router.push("/(tabs)/me" as any); }}
                 >
                   <Ionicons name="wallet-outline" size={14} color="#fff" />
                   <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff", marginLeft: 5 }}>View Wallet</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border }]}
+                </Pressable>
+                <Pressable
+                  android_ripple={{ color: "rgba(0,0,0,0.06)", borderless: false }}
+                  style={[styles.actionBtn, { backgroundColor: colors.border + "50", borderColor: colors.border, overflow: "hidden" }]}
                   onPress={dismissBanner}
                 >
                   <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.textMuted }}>Dismiss</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             )}
           </>

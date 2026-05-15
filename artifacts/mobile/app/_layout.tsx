@@ -5,8 +5,9 @@ enableScreens(true);
 
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import {
@@ -54,6 +55,9 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.root}>
+        {/* Translucent status bar — lets content draw edge-to-edge on Android.
+            Style is "auto" so it flips between light/dark with the theme. */}
+        <StatusBar style="auto" translucent backgroundColor="transparent" />
         <ThemeProvider>
           <AppAccentProvider>
             <DataModeProvider>
@@ -64,8 +68,14 @@ export default function RootLayout() {
                       <Stack
                         screenOptions={{
                           headerShown: false,
-                          animation: "ios_from_right",
-                          contentStyle: { backgroundColor: "#00BCD4" },
+                          // Android uses a slide transition; iOS uses the native
+                          // push animation. Both feel platform-correct.
+                          animation: Platform.OS === "android"
+                            ? "slide_from_right"
+                            : "ios_from_right",
+                          // Transparent so each screen's own background shows —
+                          // prevents the cyan flash visible between navigations.
+                          contentStyle: { backgroundColor: "transparent" },
                           freezeOnBlur: true,
                         }}
                       >

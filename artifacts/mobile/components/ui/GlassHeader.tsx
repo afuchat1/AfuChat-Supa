@@ -1,8 +1,9 @@
 import React from "react";
 import {
+  Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   type ViewStyle,
 } from "react-native";
@@ -32,7 +33,7 @@ export function GlassHeader({
   subtitle,
   largeTitle = false,
 }: GlassHeaderProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
   function handleBack() {
@@ -40,11 +41,24 @@ export function GlassHeader({
     if (router.canGoBack()) router.back();
   }
 
+  // Circular ripple for the back button on Android.
+  const backRipple = Platform.OS === "android"
+    ? {
+        color: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+        borderless: true,
+        radius: 22,
+      }
+    : undefined;
+
   return (
     <View
       style={[
         styles.container,
-        { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border },
+        {
+          paddingTop: insets.top,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        },
         style,
       ]}
     >
@@ -53,14 +67,26 @@ export function GlassHeader({
         {/* Left — back button */}
         <View style={styles.side}>
           {showBack && (
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backBtn}
-              hitSlop={{ top: 10, left: 10, right: 14, bottom: 10 }}
-              activeOpacity={0.6}
-            >
-              <Ionicons name="chevron-back" size={26} color={colors.accent} />
-            </TouchableOpacity>
+            // Clip container ensures circular ripple is bounded on Android.
+            <View style={styles.backBtnClip}>
+              <Pressable
+                android_ripple={backRipple}
+                style={({ pressed }) => [
+                  styles.backBtn,
+                  Platform.OS === "ios" && pressed ? { opacity: 0.6 } : null,
+                ]}
+                onPress={handleBack}
+                hitSlop={{ top: 8, left: 8, right: 12, bottom: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
+                <Ionicons
+                  name={Platform.OS === "android" ? "arrow-back" : "chevron-back"}
+                  size={26}
+                  color={colors.accent}
+                />
+              </Pressable>
+            </View>
           )}
         </View>
 
@@ -116,6 +142,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     gap: 1,
+  },
+  // Clips the circular ripple on Android to the button boundary.
+  backBtnClip: {
+    borderRadius: 22,
+    overflow: "hidden",
   },
   backBtn: {
     width: 44,

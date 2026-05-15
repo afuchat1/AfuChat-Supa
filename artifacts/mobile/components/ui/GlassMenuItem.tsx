@@ -1,9 +1,10 @@
 import React from "react";
 import {
   ActivityIndicator,
+  Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
   type ViewStyle,
 } from "react-native";
@@ -46,8 +47,12 @@ export function GlassMenuSeparator({ indent = 54 }: { indent?: number }) {
   const { colors } = useTheme();
   return (
     <View
-      style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: indent }}
-      pointerEvents="none"
+      style={{
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: colors.border,
+        marginLeft: indent,
+        pointerEvents: "none",
+      }}
     />
   );
 }
@@ -83,20 +88,46 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
   noChevron = false,
   rightElement,
 }: GlassMenuItemProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+
+  // The sectionCard parent already has overflow:"hidden" so the ripple
+  // is naturally clipped to the card's rounded rectangle.
+  const ripple = Platform.OS === "android"
+    ? {
+        color: danger
+          ? "rgba(255,59,48,0.12)"
+          : isDark
+            ? "rgba(255,255,255,0.08)"
+            : "rgba(0,0,0,0.06)",
+        borderless: false,
+      }
+    : undefined;
 
   return (
-    <TouchableOpacity
-      style={[styles.row, disabled && { opacity: 0.45 }]}
+    <Pressable
+      android_ripple={ripple}
+      style={({ pressed }) => [
+        styles.row,
+        disabled && { opacity: 0.45 },
+        // iOS press feedback (Android uses ripple)
+        Platform.OS === "ios" && pressed ? { opacity: 0.6 } : null,
+      ]}
       onPress={() => {
         if (disabled || loading) return;
         Haptics.selectionAsync();
         onPress?.();
       }}
-      activeOpacity={0.65}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || loading }}
     >
-      <View style={[styles.iconWrap, { backgroundColor: danger ? "#FF3B3015" : colors.backgroundSecondary }]}>
+      <View
+        style={[
+          styles.iconWrap,
+          { backgroundColor: danger ? "#FF3B3015" : colors.backgroundSecondary },
+        ]}
+      >
         <Ionicons
           name={icon}
           size={18}
@@ -125,7 +156,12 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
           ) : (
             <>
               {badge ? (
-                <View style={[styles.badge, { backgroundColor: badgeColor ?? colors.accent + "22" }]}>
+                <View
+                  style={[
+                    styles.badge,
+                    { backgroundColor: badgeColor ?? colors.accent + "22" },
+                  ]}
+                >
                   <Text style={[styles.badgeText, { color: badgeColor ?? colors.accent }]}>
                     {badge}
                   </Text>
@@ -143,7 +179,7 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
           )}
         </View>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 });
 
@@ -155,6 +191,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginLeft: 4,
   },
+  // overflow:"hidden" clips Android ripple to the card shape automatically.
   sectionCard: { borderRadius: 16, overflow: "hidden" },
 
   row: {

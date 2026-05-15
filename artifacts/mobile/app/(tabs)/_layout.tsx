@@ -2,13 +2,14 @@ import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { router, usePathname } from "expo-router";
@@ -44,7 +45,6 @@ function normalizeTabPath(p: string): string {
   return p;
 }
 
-// ─── Unread count ──────────────────────────────────────────────────────────────
 function useTotalUnread(userId: string | undefined): number {
   const [total, setTotal] = useState(0);
 
@@ -68,9 +68,6 @@ function useTotalUnread(userId: string | undefined): number {
   return total;
 }
 
-// ─── Floating Telegram-style tab bar ──────────────────────────────────────────
-// Pill-shaped floating bar with side margins + shadow.
-// Active tab gets its own tinted bubble — no sliding animation.
 function CompactTabBar({
   userId,
   avatarUrl,
@@ -78,92 +75,143 @@ function CompactTabBar({
   userId: string | undefined;
   avatarUrl: string | null | undefined;
 }) {
-  const pathname    = usePathname();
-  const insets      = useSafeAreaInsets();
+  const pathname        = usePathname();
+  const insets          = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const totalUnread = useTotalUnread(userId);
-  const active      = normalizeTabPath(pathname);
-  const isIOS       = Platform.OS === "ios";
+  const totalUnread     = useTotalUnread(userId);
+  const active          = normalizeTabPath(pathname);
+  const isIOS           = Platform.OS === "ios";
+  const isAndroid       = Platform.OS === "android";
 
-  const barBg = isDark ? "rgba(28,28,30,0.96)" : "rgba(255,255,255,0.97)";
+  const barBg = isDark ? "rgba(28,28,30,0.97)" : "rgba(255,255,255,0.97)";
+
+  // Android elevation is used for shadow; iOS uses shadowColor etc.
   const shadow = isDark
-    ? { shadowColor: "#000", shadowOpacity: 0.45, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 18 }
-    : { shadowColor: "#000", shadowOpacity: 0.13, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 12 };
-  const bottomPos = (insets.bottom > 0 ? insets.bottom : 10) + 6;
+    ? {
+        shadowColor: "#000",
+        shadowOpacity: 0.50,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 20,
+      }
+    : {
+        shadowColor: "#000",
+        shadowOpacity: 0.14,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 14,
+      };
+
+  // Edge-to-edge on Android can set insets.bottom to 0 on gesture-nav devices.
+  // Always guarantee at least 8dp above the gesture handle bar.
+  const bottomPos = Math.max(insets.bottom, isAndroid ? 8 : 10) + 6;
+
+  // Brand-tinted ripple — subtle so it doesn't fight with the focused highlight.
+  const ripple = { color: colors.accent + "28", borderless: false } as const;
+
+  function handleTabPress(route: typeof TABS[number]["route"]) {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(
+        isAndroid
+          ? Haptics.ImpactFeedbackStyle.Light
+          : Haptics.ImpactFeedbackStyle.Rigid,
+      ).catch(() => {});
+    }
+    router.navigate(route as any);
+  }
 
   return (
     <View
-      pointerEvents="box-none"
-      style={[bar.container, { bottom: bottomPos }]}
+      style={[bar.container, { bottom: bottomPos, pointerEvents: "box-none" }]}
     >
       <View style={[bar.pill, shadow, { backgroundColor: barBg }]}>
         {TABS.map((tab) => {
           const focused   = active === tab.route;
-          const iconColor = focused ? colors.accent : (isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.38)");
+          const iconColor = focused
+            ? colors.accent
+            : isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.38)";
           const isChats   = tab.route === "/(tabs)";
           const isProfile = tab.route === "/(tabs)/me";
 
           return (
-            // Outer View handles flex layout; TouchableOpacity is on the pill only
             <View key={tab.route} style={bar.item}>
-              <TouchableOpacity
+              {/*
+               * Two-layer pill structure for Android:
+               *   1. pillClip  — borderRadius + overflow:hidden clips the ripple
+               *   2. Pressable — receives android_ripple and the touch event
+               * The focused highlight colour lives on pillClip so it renders
+               * underneath the ripple overlay (correct stacking order).
+               */}
+              <View
                 style={[
-                  bar.innerPill,
-                  // Padding only when active — inactive has no visible shape
-                  focused
-                    ? { backgroundColor: colors.accent + "1C", paddingHorizontal: 18, paddingVertical: 6 }
-                    : { paddingHorizontal: 10, paddingVertical: 6 },
+                  bar.pillClip,
+                  focused && { backgroundColor: colors.accent + "1C" },
                 ]}
-                onPress={() => router.navigate(tab.route as any)}
-                activeOpacity={0.72}
-                accessibilityRole="button"
-                accessibilityLabel={tab.label}
-                accessibilityState={{ selected: focused }}
               >
-                {/* Icon */}
-                <View style={bar.iconWrap}>
-                  {isProfile && avatarUrl ? (
-                    <Image
-                      source={{ uri: avatarUrl }}
-                      style={[
-                        bar.avatar,
-                        focused
-                          ? { borderColor: colors.accent, borderWidth: 2 }
-                          : { borderColor: "transparent", borderWidth: 2 },
-                      ]}
-                    />
-                  ) : isChats ? (
-                    <Image
-                      source={afuSymbol}
-                      style={{ width: 22, height: 22 }}
-                      resizeMode="contain"
-                      tintColor={iconColor}
-                    />
-                  ) : isIOS ? (
-                    <SymbolView
-                      name={focused ? tab.sfOn : tab.sfOff}
-                      tintColor={iconColor}
-                      size={22}
-                    />
-                  ) : (
-                    <Ionicons
-                      name={(focused ? tab.mdOn : tab.mdOff) as any}
-                      size={22}
-                      color={iconColor}
-                    />
-                  )}
-                </View>
-
-                {/* Label */}
-                <Text
-                  style={[bar.label, { color: iconColor }]}
-                  numberOfLines={1}
+                <Pressable
+                  android_ripple={ripple}
+                  style={({ pressed }) => [
+                    bar.pressable,
+                    focused
+                      ? { paddingHorizontal: 18, paddingVertical: 6 }
+                      : { paddingHorizontal: 10, paddingVertical: 6 },
+                    // iOS uses opacity press; Android uses the ripple overlay.
+                    !isAndroid && pressed ? { opacity: 0.72 } : null,
+                  ]}
+                  onPress={() => handleTabPress(tab.route)}
+                  accessibilityRole="button"
+                  accessibilityLabel={tab.label}
+                  accessibilityState={{ selected: focused }}
+                  // Expand touch target to 48 dp minimum (Material guideline).
+                  hitSlop={
+                    isAndroid
+                      ? { top: 8, bottom: 8, left: 4, right: 4 }
+                      : undefined
+                  }
                 >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
+                  <View style={bar.iconWrap}>
+                    {isProfile && avatarUrl ? (
+                      <Image
+                        source={{ uri: avatarUrl }}
+                        style={[
+                          bar.avatar,
+                          focused
+                            ? { borderColor: colors.accent, borderWidth: 2 }
+                            : { borderColor: "transparent", borderWidth: 2 },
+                        ]}
+                      />
+                    ) : isChats ? (
+                      <Image
+                        source={afuSymbol}
+                        style={{ width: 22, height: 22 }}
+                        resizeMode="contain"
+                        tintColor={iconColor}
+                      />
+                    ) : isIOS ? (
+                      <SymbolView
+                        name={focused ? tab.sfOn : tab.sfOff}
+                        tintColor={iconColor}
+                        size={22}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={(focused ? tab.mdOn : tab.mdOff) as any}
+                        size={22}
+                        color={iconColor}
+                      />
+                    )}
+                  </View>
 
-              {/* Unread badge — outside the pill so it's never clipped */}
+                  <Text
+                    style={[bar.label, { color: iconColor }]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Unread badge — floats above the pill */}
               {isChats && totalUnread > 0 && (
                 <View
                   style={[
@@ -185,7 +233,6 @@ function CompactTabBar({
 }
 
 const bar = StyleSheet.create({
-  // Outer wrapper — centered, not edge-to-edge
   container: {
     position: "absolute",
     left: 0,
@@ -193,7 +240,6 @@ const bar = StyleSheet.create({
     alignItems: "center",
     zIndex: 100,
   },
-  // The floating pill — centered width, not full screen
   pill: {
     flexDirection: "row",
     borderRadius: 36,
@@ -202,23 +248,24 @@ const bar = StyleSheet.create({
     overflow: "visible",
     width: "84%",
   },
-  // Each tab button — flex container, no background
   item: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  // Oval/ellipse active highlight — wide horizontal, compact vertical
-  innerPill: {
+  // Must have overflow:"hidden" to clip the Android ripple to the pill shape.
+  pillClip: {
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  // Inner Pressable — padding here drives the visible pill size.
+  pressable: {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    paddingVertical: 5,
-    paddingHorizontal: 18,
     gap: 2,
   },
   iconWrap: {
-    position: "relative",
     width: 28,
     height: 28,
     alignItems: "center",
@@ -257,7 +304,6 @@ const bar = StyleSheet.create({
   },
 });
 
-// ─── Native tab layout (iOS Liquid Glass only) ────────────────────────────────
 function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <NativeTabs>
@@ -269,7 +315,6 @@ function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   );
 }
 
-// ─── Classic tab layout ───────────────────────────────────────────────────────
 function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   const { colors } = useTheme();
   return (
@@ -293,7 +338,6 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
   );
 }
 
-// ─── Root layout ──────────────────────────────────────────────────────────────
 export default function TabLayout() {
   const { session, profile, loading, user } = useAuth();
   const { isDesktop } = useIsDesktop();

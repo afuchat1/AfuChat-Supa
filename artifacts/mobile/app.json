@@ -40,8 +40,13 @@
     },
     "android": {
       "package": "com.afuchat.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#00BCD4"
+      },
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "pan",
+      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
