@@ -33,6 +33,7 @@ const afuSymbol = require("@/assets/images/afu-symbol.png");
 const TABS = [
   { route: "/(tabs)",          label: "Chats",    sfOn: "message.fill",        sfOff: "message",         mdOn: "chatbubble",  mdOff: "chatbubble-outline" },
   { route: "/(tabs)/discover", label: "Discover", sfOn: "safari.fill",          sfOff: "safari",          mdOn: "compass",     mdOff: "compass-outline"    },
+  { route: "/(tabs)/search",   label: "Search",   sfOn: "magnifyingglass.circle.fill", sfOff: "magnifyingglass.circle", mdOn: "search", mdOff: "search-outline" },
   { route: "/(tabs)/apps",     label: "Apps",     sfOn: "square.grid.2x2.fill", sfOff: "square.grid.2x2", mdOn: "grid",        mdOff: "grid-outline"       },
   { route: "/(tabs)/me",       label: "Profile",  sfOn: "person.circle.fill",   sfOff: "person.circle",   mdOn: "person",      mdOff: "person-outline"     },
 ] as const;
@@ -40,6 +41,7 @@ const TABS = [
 function normalizeTabPath(p: string): string {
   if (p === "/" || p === "/(tabs)" || p === "/(tabs)/index") return "/(tabs)";
   if (p === "/discover"  || p === "/(tabs)/discover")  return "/(tabs)/discover";
+  if (p === "/search"    || p === "/(tabs)/search")    return "/(tabs)/search";
   if (p === "/apps"      || p === "/(tabs)/apps")      return "/(tabs)/apps";
   if (p === "/me"        || p === "/(tabs)/me")        return "/(tabs)/me";
   return p;
@@ -160,8 +162,8 @@ function CompactTabBar({
                   style={({ pressed }) => [
                     bar.pressable,
                     focused
-                      ? { paddingHorizontal: 18, paddingVertical: 6 }
-                      : { paddingHorizontal: 10, paddingVertical: 6 },
+                      ? { paddingHorizontal: 12, paddingVertical: 6 }
+                      : { paddingHorizontal: 8, paddingVertical: 6 },
                     // iOS uses opacity press; Android uses the ripple overlay.
                     !isAndroid && pressed ? { opacity: 0.72 } : null,
                   ]}
@@ -251,9 +253,9 @@ const bar = StyleSheet.create({
     flexDirection: "row",
     borderRadius: 36,
     paddingVertical: 7,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     overflow: "visible",
-    width: "84%",
+    width: "92%",
   },
   item: {
     flex: 1,
@@ -316,6 +318,7 @@ function NativeTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
     <NativeTabs>
       {isLoggedIn && (<NativeTabs.Trigger name="index"><Icon sf={{ default: "message.fill", selected: "message.fill" }} /><Label>Chats</Label></NativeTabs.Trigger>)}
       {isLoggedIn && (<NativeTabs.Trigger name="discover"><Icon sf={{ default: "safari", selected: "safari.fill" }} /><Label>Discover</Label></NativeTabs.Trigger>)}
+      {isLoggedIn && (<NativeTabs.Trigger name="search"><Icon sf={{ default: "magnifyingglass.circle", selected: "magnifyingglass.circle.fill" }} /><Label>Search</Label></NativeTabs.Trigger>)}
       {isLoggedIn && (<NativeTabs.Trigger name="apps"><Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} /><Label>Apps</Label></NativeTabs.Trigger>)}
       {isLoggedIn && (<NativeTabs.Trigger name="me"><Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} /><Label>Profile</Label></NativeTabs.Trigger>)}
     </NativeTabs>
@@ -336,7 +339,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
     >
       <Tabs.Screen name="index"       options={{ href: isLoggedIn ? undefined : null }} />
       <Tabs.Screen name="discover"    options={{ href: isLoggedIn ? undefined : null }} />
-      <Tabs.Screen name="search"      options={{ href: null }} />
+      <Tabs.Screen name="search"      options={{ href: isLoggedIn ? undefined : null }} />
       <Tabs.Screen name="contacts"    options={{ href: null }} />
       <Tabs.Screen name="communities" options={{ href: null }} />
       <Tabs.Screen name="apps"        options={{ href: isLoggedIn ? undefined : null }} />

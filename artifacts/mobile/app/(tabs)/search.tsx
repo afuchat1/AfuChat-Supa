@@ -24,7 +24,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useIsDesktop } from "@/hooks/useIsDesktop";
 import { useOpenLink } from "@/lib/useOpenLink";
-import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
 import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
