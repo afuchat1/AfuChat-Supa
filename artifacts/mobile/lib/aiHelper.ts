@@ -9,11 +9,23 @@ function getEdgeFnBase(): string {
   return `${supabaseUrl}/functions/v1`;
 }
 
-/** Common auth headers for Supabase edge function calls. */
+/** Common auth headers for Supabase edge function calls (anon key — works for verify_jwt:false functions). */
 function edgeHeaders(): Record<string, string> {
   return {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${supabaseAnonKey}`,
+    "apikey": supabaseAnonKey,
+  };
+}
+
+/**
+ * Auth headers that include the signed-in user's JWT.
+ * Required for edge functions with verify_jwt:true (e.g. generate-ai-image, chat-with-afuai).
+ */
+export function edgeHeadersWithAuth(userAccessToken: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${userAccessToken}`,
     "apikey": supabaseAnonKey,
   };
 }
@@ -121,14 +133,27 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 }
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
-  const res = await fetch(`${getEdgeFnBase()}/transcribe`, {
+  // Route to afu-ai-reply (verify_jwt:false, handles {audioUrl} natively via Groq).
+  // Falls back to the dedicated transcribe-audio function if the primary fails.
+  const primary = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
     method: "POST",
     headers: edgeHeaders(),
     body: JSON.stringify({ audioUrl }),
   });
 
-  if (!res.ok) throw new Error(`Transcription failed: ${res.status}`);
-  const data = await res.json();
+  if (primary.ok) {
+    const data = await primary.json();
+    if (data.text !== undefined) return data.text || "";
+  }
+
+  // Fallback: dedicated transcribe-audio function (requires user JWT via supabase client)
+  const fallback = await fetch(`${getEdgeFnBase()}/transcribe-audio`, {
+    method: "POST",
+    headers: edgeHeaders(),
+    body: JSON.stringify({ audioUrl }),
+  });
+  if (!fallback.ok) throw new Error(`Transcription failed: ${fallback.status}`);
+  const data = await fallback.json();
   return data.text || "";
 }
 
