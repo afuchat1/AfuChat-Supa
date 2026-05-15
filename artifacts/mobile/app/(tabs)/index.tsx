@@ -14,9 +14,12 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { FlashList } from "@shopify/flash-list";
-// FlashList v2 produces text-node errors on React Native Web — fall back to FlatList.
-const SafeFlashList = Platform.OS === "web" ? (FlatList as any) : FlashList;
+// FlashList v2 module-level code crashes React Native Web (text-node errors).
+// Use a dynamic require that only runs on native so the module never loads on web.
+const SafeFlashList: typeof import("react-native").FlatList =
+  Platform.OS === "web"
+    ? (FlatList as any)
+    : (require("@shopify/flash-list").FlashList as any);
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

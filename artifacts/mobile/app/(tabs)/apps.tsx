@@ -63,6 +63,15 @@ const CATEGORIES: Category[] = [
         route: "/search",
         featuredSub: "Find people, posts, channels, events and more.",
       },
+      {
+        id: "lab",
+        label: "AI Lens",
+        icon: "scan",
+        gradient: ["#FF6B35", "#FF3B00"],
+        route: "/lab",
+        badge: "NEW",
+        featuredSub: "Point your camera at anything and get instant AI-powered answers.",
+      },
     ],
   },
   {
