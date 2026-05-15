@@ -617,7 +617,7 @@ export default function LabScreen() {
                       <Ionicons name="help-circle-outline" size={14} color={BRAND} style={{ marginTop: 1 }} />
                       <Text style={{ flex: 1, fontSize: 13, fontWeight: "700", color: BRAND }}>{item.q}</Text>
                     </View>
-                    <Text style={{ fontSize: 13, lineHeight: 19, color: "#333", paddingLeft: 20 }}>{item.a}</Text>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: "rgba(255,255,255,0.85)", paddingLeft: 20 }}>{item.a}</Text>
                   </View>
                 ))}
               </View>
@@ -638,7 +638,7 @@ export default function LabScreen() {
                   <TextInput
                     ref={moreInputRef}
                     style={{
-                      flex: 1, fontSize: 14, color: "#222",
+                      flex: 1, fontSize: 14, color: "#fff",
                       paddingVertical: 8, maxHeight: 80, lineHeight: 20,
                     }}
                     placeholder={`e.g. "What is it made of?" or "Is it healthy?"`}

@@ -1557,6 +1557,7 @@ function ChatScreen() {
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const autoSentInitialRef = useRef(false);
   const lensInjectedRef = useRef(false);
+  const [lensCardMsg, setLensCardMsg] = useState<Message | null>(null);
   const lensContextRef = useRef<{
     title: string; description: string; category: string;
     confidence: string; facts: string[]; answer?: string;
@@ -2383,17 +2384,16 @@ function ChatScreen() {
           chat_id: id as string,
           sender_id: AFUAI_BOT_ID,
           encrypted_content: ctx.title,
-          sent_at: new Date().toISOString(),
+          sent_at: new Date(0).toISOString(),
           sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
           reactions: [],
           _isAi: true,
           _isLensCard: true,
           _lensData: ctx,
         };
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === cardMsg.id)) return prev;
-          return [...prev, cardMsg];
-        });
+        // Keep the lens card in its own state so it's never wiped by
+        // any setMessages call (SQLite preload, network merge, realtime, etc.)
+        setLensCardMsg(cardMsg);
         // Immediately generate a rich AfuAI response about the scanned item
         setTimeout(() => handleAfuAiLensIntro(ctx, id as string), 700);
       } catch {}
@@ -4665,9 +4665,9 @@ STRICT RULES:
           <View style={{ flex: 1 }}>
             <FlatList
               ref={flatListRef}
-              data={messages}
+              data={lensCardMsg ? [...messages, lensCardMsg] : messages}
               keyExtractor={(m) => m.id}
-              extraData={highlightedMsgId}
+              extraData={[highlightedMsgId, lensCardMsg?.id]}
               renderItem={renderMessage}
               inverted
               contentContainerStyle={[st.listContent, { paddingTop: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 16 }]}
