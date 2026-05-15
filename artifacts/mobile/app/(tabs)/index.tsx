@@ -270,11 +270,14 @@ function ChatRow({
           <View style={[styles.onlineDot, { borderColor: colors.surface }]} />
         )}
       </View>
-      <View style={styles.rowContent}>
+      <View style={[styles.rowContent, item.is_archived && { opacity: 0.65 }]}>
         <View style={styles.rowTop}>
           <View style={styles.nameRow}>
             {item.is_pinned && (
               <Ionicons name="pin" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
+            )}
+            {item.is_archived && (
+              <Ionicons name="archive" size={12} color={colors.textMuted} style={{ marginRight: 4 }} />
             )}
             <Text
               style={[styles.name, { color: colors.text, fontFamily: hasUnread ? "Inter_700Bold" : "Inter_600SemiBold" }]}
@@ -826,14 +829,13 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
           chat_members(user_id, profiles(id, display_name, avatar_url, is_verified, is_organization_verified, last_seen, show_online_status))
         `)
         .in("id", chatIds)
-        .eq("is_archived", false)
         .order("updated_at", { ascending: false }),
       supabase
         .from("messages")
         .select("id, chat_id, encrypted_content, sent_at, attachment_type, sender_id")
         .in("chat_id", chatIds)
         .order("sent_at", { ascending: false })
-        .limit(chatIds.length * 3),
+        .limit(Math.max(chatIds.length * 2, 200)),
       unreadCheckIds.length > 0
         ? supabase
             .from("messages")
@@ -911,17 +913,23 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     }
 
     const items: ChatItem[] = chatRows.map((c: any) => {
-      const others = (c.chat_members || []).filter((m: any) => m.user_id !== user.id);
-      const other = others[0]?.profiles;
+      const allMembers = (c.chat_members || []) as any[];
+      const others = allMembers.filter((m: any) => m.user_id !== user.id);
+      // Self-chat ("My Notes"): no other members — use own profile
+      const isSelfChat = !c.is_group && !c.is_channel && others.length === 0;
+      const otherRaw = isSelfChat
+        ? allMembers.find((m: any) => m.user_id === user.id)
+        : others[0];
+      const otherProfile = Array.isArray(otherRaw?.profiles) ? otherRaw.profiles[0] : otherRaw?.profiles;
       const lm = lastMsgMap[c.id];
       return {
         id: c.id,
         name: c.name,
         is_group: !!c.is_group,
         is_channel: !!c.is_channel,
-        other_display_name: other?.display_name || "Unknown",
-        other_avatar: other?.avatar_url || null,
-        other_id: other?.id || "",
+        other_display_name: isSelfChat ? "My Notes" : (otherProfile?.display_name || "Unknown"),
+        other_avatar: isSelfChat ? null : (otherProfile?.avatar_url || null),
+        other_id: isSelfChat ? user.id : (otherProfile?.id || ""),
         last_message: lm?.lastMessage || "",
         last_message_at: lm?.lastMessageAt || c.updated_at || "",
         last_message_is_mine: lm?.isFromMe ?? false,
@@ -930,10 +938,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         is_archived: !!c.is_archived,
         avatar_url: c.avatar_url,
         unread_count: unreadMap[c.id] || 0,
-        is_verified: !!other?.is_verified,
-        is_organization_verified: !!other?.is_organization_verified,
-        other_last_seen: other?.last_seen || null,
-        other_show_online: other?.show_online_status !== false,
+        is_verified: isSelfChat ? false : !!otherProfile?.is_verified,
+        is_organization_verified: isSelfChat ? false : !!otherProfile?.is_organization_verified,
+        other_last_seen: isSelfChat ? null : (otherProfile?.last_seen || null),
+        other_show_online: isSelfChat ? false : (otherProfile?.show_online_status !== false),
       };
     });
 
@@ -942,8 +950,11 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     });
 
     items.sort((a, b) => {
+      // Pinned floats to top; archived sinks to bottom; otherwise newest-first
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
+      if (a.is_archived && !b.is_archived) return 1;
+      if (!a.is_archived && b.is_archived) return -1;
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
 
@@ -1000,10 +1011,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       }
       if (action === "toggleArchive") {
         const next = !item.is_archived;
-        // Archived chats are filtered out of the list (loadChats uses
-        // is_archived=false), so just remove locally for instant feedback.
+        // Update in-place — archived chats stay visible but sink to the
+        // bottom of the list (sort pushes is_archived=true to the end).
         setChats((prev) =>
-          next ? prev.filter((c) => c.id !== item.id) : prev,
+          prev.map((c) => c.id === item.id ? { ...c, is_archived: next } : c),
         );
         const { error } = await supabase
           .from("chats")
