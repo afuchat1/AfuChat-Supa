@@ -33,6 +33,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Camera — native only
 let CameraView: any = null;
@@ -578,26 +579,26 @@ export default function LabScreen() {
 
               <TouchableOpacity
                 style={styles.actionBtn}
-                onPress={() => {
+                onPress={async () => {
                   if (!result) return;
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   hideSheet();
-                  const facts = result.facts?.length
-                    ? `\n\nKey facts:\n${result.facts.map((f: string) => `• ${f}`).join("\n")}`
-                    : "";
-                  const answer = result.answer
-                    ? `\n\nInitial answer: ${result.answer}`
-                    : "";
-                  const context =
-                    `I just scanned something with AI Lens and got these results:\n\n` +
-                    `**${result.title}**\n${result.description}` +
-                    `\nCategory: ${result.category}` +
-                    facts +
-                    answer +
-                    `\n\nCan you tell me more about this?`;
+                  try {
+                    await AsyncStorage.setItem(
+                      "afuai_lens_context",
+                      JSON.stringify({
+                        title: result.title,
+                        description: result.description,
+                        category: result.category,
+                        facts: result.facts || [],
+                        answer: result.answer || "",
+                        expiresAt: Date.now() + 5 * 60 * 1000,
+                      })
+                    );
+                  } catch {}
                   router.push({
                     pathname: "/ai",
-                    params: { q: context },
+                    params: { q: `Tell me more about ${result.title}` },
                   } as any);
                 }}
                 activeOpacity={0.85}

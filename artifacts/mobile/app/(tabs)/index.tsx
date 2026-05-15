@@ -74,6 +74,21 @@ type StoryUser = {
   latestAt: string;
 };
 
+function stripMdPreview(s: string): string {
+  return s
+    .replace(/\[ACTION:[^\]]+\]/g, "")
+    .replace(/\[SUGGEST:[^\]]+\]/g, "")
+    .replace(/\[INVOICE:[\s\S]*?\]/g, "")
+    .replace(/\[EXEC:\w+:[\s\S]*?\]/g, "")
+    .replace(/\*{1,3}([^*\n]*)\*{1,3}/g, "$1")
+    .replace(/_{1,2}([^_\n]*)_{1,2}/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\*+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 type ChatItem = {
   id: string;
   name: string | null;
@@ -843,6 +858,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
             preview = pipeIdx >= 0 ? preview.slice(pipeIdx + 1) : "Shared a story";
           }
           preview = `📸 ${preview || "Story"}`;
+        } else {
+          preview = stripMdPreview(preview);
         }
         lastMsgMap[m.chat_id] = { lastMessage: preview, lastMessageAt: m.sent_at, isFromMe: m.sender_id === user.id, lastMsgId: m.id };
       }

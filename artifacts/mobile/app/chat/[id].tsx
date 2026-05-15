@@ -474,6 +474,20 @@ function parseAiRichText(raw: string): RichSeg[] {
   return segs;
 }
 function stripMd(s: string) { return s.replace(/\*{1,3}/g, "").replace(/^#{1,3}\s*/gm, "").replace(/`/g, ""); }
+function stripMdForPreview(s: string): string {
+  return s
+    .replace(/\[ACTION:[^\]]+\]/g, "")
+    .replace(/\[SUGGEST:[^\]]+\]/g, "")
+    .replace(/\[INVOICE:[\s\S]*?\]/g, "")
+    .replace(/\[EXEC:\w+:[\s\S]*?\]/g, "")
+    .replace(/\*{1,3}([^*\n]*)\*{1,3}/g, "$1")
+    .replace(/_{1,2}([^_\n]*)_{1,2}/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\*+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 function AiInlineText({ text, color }: { text: string; color: string }) {
   const parts: React.ReactNode[] = [];
   const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+?)`)/g;
@@ -869,7 +883,7 @@ function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, re
               <View style={[st.replyBarLine, { backgroundColor: isMe ? "rgba(255,255,255,0.9)" : BRAND }]} />
               <View style={st.replyTextWrap}>
                 <Text style={[st.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.85)" : colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
-                  {replyPreview}
+                  {stripMdForPreview(replyPreview)}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -2684,6 +2698,25 @@ STRICT RULES:
 - [SUGGEST:...] tags should offer meaningful next steps, not repeat the same question.
 - Keep your tone professional and warm. Never be dismissive or overly promotional.`;
 
+      let lensAddition = "";
+      try {
+        const lensRaw = await AsyncStorage.getItem("afuai_lens_context");
+        if (lensRaw) {
+          const ctx = JSON.parse(lensRaw);
+          if (ctx.expiresAt && ctx.expiresAt > Date.now()) {
+            lensAddition =
+              `\n\n[AI LENS SCAN CONTEXT]\nThe user just scanned something with AI Lens. Give a rich, engaging, conversational response about it — as if you are an expert guide who knows everything about this topic.\n` +
+              `Title: ${ctx.title}\n` +
+              `Description: ${ctx.description}\n` +
+              `Category: ${ctx.category}` +
+              (ctx.facts?.length ? `\nKey facts:\n${ctx.facts.map((f: string) => `• ${f}`).join("\n")}` : "") +
+              (ctx.answer ? `\nInitial analysis: ${ctx.answer}` : "") +
+              `\n\nExpand on this with interesting details, history, context, and any helpful tips. Make the conversation feel natural and informative.`;
+          }
+          await AsyncStorage.removeItem("afuai_lens_context");
+        }
+      } catch {}
+
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
         .slice(0, 10)
@@ -2694,7 +2727,7 @@ STRICT RULES:
       const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
         method: "POST",
         headers: edgeHeaders(),
-        body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt }, ...conversationMessages] }),
+        body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt + lensAddition }, ...conversationMessages] }),
       });
       const data = await res.json();
       const rawReply = (data.reply || "Sorry, I couldn't process that. Please try again.").trim();
@@ -4002,7 +4035,7 @@ STRICT RULES:
     if (!msgId) return null;
     const found = messages.find((m) => m.id === msgId);
     if (!found?.encrypted_content) return null;
-    const t = found.encrypted_content;
+    const t = stripMdForPreview(found.encrypted_content);
     return t.length > 80 ? t.slice(0, 80) + "…" : t;
   }
 
@@ -4360,7 +4393,7 @@ STRICT RULES:
             <View style={[st.replyBarAccent, { backgroundColor: "#FF9500" }]} />
             <View style={{ flex: 1 }}>
               <Text style={[st.replyBannerName, { color: "#FF9500" }]}>Editing message</Text>
-              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{editingMessage.encrypted_content}</Text>
+              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{stripMdForPreview(editingMessage.encrypted_content)}</Text>
             </View>
             <TouchableOpacity onPress={cancelEdit} hitSlop={8}>
               <Ionicons name="close" size={20} color={colors.textMuted} />
@@ -4373,7 +4406,7 @@ STRICT RULES:
             <View style={[st.replyBarAccent, { backgroundColor: BRAND }]} />
             <View style={{ flex: 1 }}>
               <Text style={[st.replyBannerName, { color: BRAND }]}>{replyTo.sender?.display_name || "Message"}</Text>
-              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{replyTo.encrypted_content ?? ""}</Text>
+              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{stripMdForPreview(replyTo.encrypted_content ?? "")}</Text>
             </View>
             <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={8}>
               <Ionicons name="close" size={20} color={colors.textMuted} />
