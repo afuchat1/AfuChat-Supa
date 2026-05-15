@@ -156,6 +156,7 @@ export default function OnboardingScreen() {
 
   const [selectedInterests, setSelectedInterests] = useState<Set<string>>(new Set());
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState("");
 
   const userId = params.userId || user?.id;
 
@@ -492,24 +493,24 @@ export default function OnboardingScreen() {
 
     try {
       const stored = await AsyncStorage.getItem("referrer_handle");
-      if (stored) {
-        await AsyncStorage.removeItem("referrer_handle");
-        const refHandle = stored.trim().toLowerCase();
-        // Call the SECURITY DEFINER SQL function — it runs as postgres,
-        // bypasses RLS so it can update the referrer's XP from the invitee's
-        // session, uses the correct column names, and is fully atomic.
-        if (refHandle && refHandle !== cleanHandle) {
-          const { data: rpcResult, error: rpcError } = await supabase.rpc(
-            "handle_referral_reward",
-            { p_referrer_handle: refHandle, p_referred_id: userId },
-          );
-          if (rpcError) {
-            console.warn("[referral] rpc error:", rpcError.message);
-          } else if (rpcResult && !rpcResult.ok) {
-            console.warn("[referral] not rewarded:", rpcResult.reason);
-          } else if (rpcResult?.ok) {
-            console.log("[referral] referrer rewarded with 2000 XP:", rpcResult.referrer_id);
-          }
+      if (stored) await AsyncStorage.removeItem("referrer_handle");
+      // Prefer typed referral code; fall back to code captured from deep link
+      const rawRef = referralCode.trim() || (stored?.trim() ?? "");
+      const refHandle = rawRef.toLowerCase();
+      // Call the SECURITY DEFINER SQL function — it runs as postgres,
+      // bypasses RLS so it can update the referrer's XP from the invitee's
+      // session, uses the correct column names, and is fully atomic.
+      if (refHandle && refHandle !== cleanHandle) {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+          "handle_referral_reward",
+          { p_referrer_handle: refHandle, p_referred_id: userId },
+        );
+        if (rpcError) {
+          console.warn("[referral] rpc error:", rpcError.message);
+        } else if (rpcResult && !rpcResult.ok) {
+          console.warn("[referral] not rewarded:", rpcResult.reason);
+        } else if (rpcResult?.ok) {
+          console.log("[referral] referrer rewarded with 2000 XP:", rpcResult.referrer_id);
         }
       }
     } catch (referralErr) {
@@ -850,6 +851,38 @@ export default function OnboardingScreen() {
               <Text style={[st.summaryValue, { color: colors.text }]}>{val}</Text>
             </View>
           ))}
+        </View>
+
+        {/* ── Referral code (optional) ── */}
+        <View style={st.fieldWrap}>
+          <Text style={[st.fieldLabel, { color: colors.textSecondary }]}>
+            Referral Code <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12 }}>(optional)</Text>
+          </Text>
+          <View style={[st.field, { backgroundColor: colors.inputBg }]}>
+            <Ionicons
+              name="gift-outline"
+              size={18}
+              color={referralCode.trim() ? colors.accent : colors.textMuted}
+              style={st.fieldIcon}
+            />
+            <TextInput
+              style={[st.input, { color: colors.text }]}
+              placeholder="e.g. JOHNDOE"
+              placeholderTextColor={colors.textMuted}
+              value={referralCode}
+              onChangeText={(t) => setReferralCode(t.replace(/\s/g, ""))}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            {referralCode.trim().length > 0 && (
+              <TouchableOpacity onPress={() => setReferralCode("")} style={{ padding: 4 }}>
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={[st.fieldHint, { color: colors.textMuted }]}>
+            Got invited? Enter the username of the person who referred you.
+          </Text>
         </View>
       </View>
     );
