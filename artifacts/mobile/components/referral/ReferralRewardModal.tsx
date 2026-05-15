@@ -16,6 +16,7 @@ import {
   Animated,
   Easing,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -173,7 +174,7 @@ export function ReferralRewardModal({
             <Animated.View style={[styles.crownWrap, { transform: [{ scale: crownScale }] }]}>
               <Animated.View style={[
                 styles.crownGlow,
-                { opacity: crownGlow, shadowColor: GOLD, shadowRadius: 18, shadowOpacity: 1 },
+                { opacity: crownGlow, ...(Platform.OS !== "web" ? { shadowColor: GOLD, shadowRadius: 18, shadowOpacity: 1 } : {}) },
               ]} />
               <Text style={styles.crownEmoji}>👑</Text>
             </Animated.View>
@@ -284,11 +285,10 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     borderRadius: 24,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 18,
+    ...Platform.select({
+      web: { boxShadow: "0 12px 24px rgba(0,0,0,0.35)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.35, shadowRadius: 24, elevation: 18 },
+    }),
   },
   header: {
     alignItems: "center",

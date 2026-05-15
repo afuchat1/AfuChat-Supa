@@ -1438,7 +1438,7 @@ export default function SearchScreen() {
             {CATEGORIES.map((cat, i) => (
               <Animated.View key={cat.id} entering={FadeInDown.delay(i * 28).duration(220)}>
                 <TouchableOpacity
-                  style={{ width: catW, alignItems: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 4, backgroundColor: colors.surface, borderRadius: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.22 : 0.06, shadowRadius: 8, elevation: 3 }}
+                  style={{ width: catW, alignItems: "center", gap: 8, paddingVertical: 14, paddingHorizontal: 4, backgroundColor: colors.surface, borderRadius: 16, elevation: 3, ...Platform.select({ web: { boxShadow: `0 2px 8px rgba(0,0,0,${isDark ? 0.22 : 0.06})` } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: isDark ? 0.22 : 0.06, shadowRadius: 8 } }) }}
                   onPress={() => { onTabPress(cat.id as SearchTab); inputRef.current?.focus(); }}
                   activeOpacity={0.78}
                 >
@@ -1693,11 +1693,10 @@ const ss = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     zIndex: 20,
     overflow: "visible" as any,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: "0 1px 4px rgba(0,0,0,0.04)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 },
+    }),
   },
 
   aiToggle: {
@@ -1794,11 +1793,10 @@ const ss = StyleSheet.create({
   contentCard: {
     borderRadius: 14,
     padding: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: "0 1px 4px rgba(0,0,0,0.05)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+    }),
   },
 
   postImage: {

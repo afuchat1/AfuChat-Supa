@@ -98,7 +98,7 @@ function ScanFrame({ scanning }: { scanning: boolean }) {
   return (
     <View style={{ width: FRAME_SIZE, height: FRAME_SIZE, position: "relative" }}>
       {/* Dimmed overlay outside frame */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]} />
 
       {/* Corner brackets */}
       {[
@@ -109,8 +109,7 @@ function ScanFrame({ scanning }: { scanning: boolean }) {
       ].map((pos, i) => (
         <RNAnimated.View
           key={i}
-          style={[styles.corner, pos, { borderColor }]}
-          pointerEvents="none"
+          style={[styles.corner, pos, { borderColor, pointerEvents: "none" }]}
         />
       ))}
 
@@ -124,9 +123,9 @@ function ScanFrame({ scanning }: { scanning: boolean }) {
                 inputRange: [0, 1],
                 outputRange: [0, FRAME_SIZE - 2],
               }),
+              pointerEvents: "none",
             },
           ]}
-          pointerEvents="none"
         />
       )}
     </View>
@@ -387,7 +386,7 @@ export default function LabScreen() {
       </View>
 
       {/* ── Dark vignette ── */}
-      <View style={styles.vignette} pointerEvents="none" />
+      <View style={[styles.vignette, { pointerEvents: "none" }]} />
 
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -420,7 +419,7 @@ export default function LabScreen() {
       </View>
 
       {/* ── Scan frame ── */}
-      <View style={styles.frameContainer} pointerEvents="none">
+      <View style={[styles.frameContainer, { pointerEvents: "none" }]}>
         <ScanFrame scanning={scanning || loading} />
         <Text style={styles.frameHint}>
           {loading ? "Analyzing…" : "Point at anything to identify it"}
@@ -706,10 +705,10 @@ const styles = StyleSheet.create({
     height:          2,
     backgroundColor: BRAND,
     opacity:         0.85,
-    shadowColor:     BRAND,
-    shadowOffset:    { width: 0, height: 0 },
-    shadowOpacity:   0.9,
-    shadowRadius:    6,
+    ...Platform.select({
+      web: { boxShadow: "0 0 6px rgba(255,107,53,0.9)" } as any,
+      default: { shadowColor: BRAND, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 6 },
+    }),
   },
 
   // Bottom controls
@@ -769,11 +768,10 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND,
     alignItems:      "center",
     justifyContent:  "center",
-    shadowColor:     BRAND,
-    shadowOffset:    { width: 0, height: 4 },
-    shadowOpacity:   0.55,
-    shadowRadius:    12,
-    elevation:       8,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 12px rgba(255,107,53,0.55)" } as any,
+      default: { shadowColor: BRAND, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.55, shadowRadius: 12, elevation: 8 },
+    }),
     borderWidth:     4,
     borderColor:     "rgba(255,255,255,0.25)",
   },
@@ -796,11 +794,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C1C1E",
     borderTopLeftRadius:  28,
     borderTopRightRadius: 28,
-    shadowColor:     "#000",
-    shadowOffset:    { width: 0, height: -4 },
-    shadowOpacity:   0.5,
-    shadowRadius:    20,
-    elevation:       24,
+    ...Platform.select({
+      web: { boxShadow: "0 -4px 20px rgba(0,0,0,0.5)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 24 },
+    }),
     zIndex:          50,
   },
   sheetHandle: {

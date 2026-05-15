@@ -706,10 +706,10 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     padding: 20,
     borderRadius: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 12px rgba(0,0,0,0.08)" } as any,
+      default: { shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+    }),
   },
 
   secretRow: { padding: 16, alignItems: "center" },

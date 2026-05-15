@@ -1232,7 +1232,7 @@ const st = StyleSheet.create({
   accentChipLabel:  { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
   accentSwatches:   { flexDirection: "row", gap: 10 },
   accentSwatch:     { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  accentSwatchActive: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4, transform: [{ scale: 1.15 }] },
+  accentSwatchActive: { ...Platform.select({ web: { boxShadow: "0 2px 4px rgba(0,0,0,0.3)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 4 } }), transform: [{ scale: 1.15 }] },
 
   // Avatar
   avatarSection:     { alignItems: "center", gap: 16, marginTop: 8 },

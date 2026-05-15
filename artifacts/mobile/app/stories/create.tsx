@@ -611,9 +611,10 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     padding: 0,
     maxHeight: 80,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    ...Platform.select({
+      web: { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    }),
   },
   charCount: {
     fontSize: 11,

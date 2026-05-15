@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   FlatList,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -156,7 +157,7 @@ export default function EmojiStickerPicker({ height, onEmojiSelected, onSendStic
             disableSafeArea
             expandable={false}
             theme={emojiTheme}
-            styles={{ container: { flex: 1, borderRadius: 0, shadowOpacity: 0, elevation: 0 } }}
+            styles={{ container: { flex: 1, borderRadius: 0, ...(Platform.OS !== "web" ? { shadowOpacity: 0 } : {}), elevation: 0 } }}
           />
         </View>
       )}

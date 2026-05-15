@@ -1742,7 +1742,11 @@ const cs = StyleSheet.create({
   zoomLabel: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 11 },
   countdown: {
     fontSize: 120, fontFamily: "Inter_700Bold",
-    color: "#fff", textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12,
+    color: "#fff",
+    ...Platform.select({
+      web: { textShadow: "0 2px 12px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 12 },
+    }),
   },
 });
 
@@ -1831,7 +1835,10 @@ const es = StyleSheet.create({
   trimHandle: {
     position: "absolute", top: 8, width: 28, height: 28, borderRadius: 14,
     alignItems: "center", justifyContent: "center", marginLeft: -14,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 6,
+    ...Platform.select({
+      web: { boxShadow: "0 2px 4px rgba(0,0,0,0.4)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4, elevation: 6 },
+    }),
   },
   trimHandleRight: {},
   trimRangeRow: { flexDirection: "row", justifyContent: "space-between" },

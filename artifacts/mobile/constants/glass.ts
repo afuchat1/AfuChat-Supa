@@ -38,36 +38,48 @@ export const GLASS = {
     light: ["rgba(255,255,255,0.80)", "rgba(255,255,255,0.00)"] as [string, string],
   },
 
-  // ── Shadows ───────────────────────────────────────────────────────────────
+  // ── Shadows (platform-safe) ───────────────────────────────────────────────
   shadow: {
-    dark: {
-      shadowColor:   "#000000",
-      shadowOpacity: 0.50,
-      shadowRadius:  28,
-      shadowOffset:  { width: 0, height: 10 },
-      elevation:     16,
-    },
-    darkSoft: {
-      shadowColor:   "#000000",
-      shadowOpacity: 0.30,
-      shadowRadius:  16,
-      shadowOffset:  { width: 0, height: 6 },
-      elevation:     10,
-    },
-    light: {
-      shadowColor:   "#000000",
-      shadowOpacity: 0.10,
-      shadowRadius:  20,
-      shadowOffset:  { width: 0, height: 6 },
-      elevation:     8,
-    },
-    lightSoft: {
-      shadowColor:   "#000000",
-      shadowOpacity: 0.06,
-      shadowRadius:  12,
-      shadowOffset:  { width: 0, height: 3 },
-      elevation:     4,
-    },
+    dark: Platform.select({
+      web: { boxShadow: "0 10px 28px rgba(0,0,0,0.50)" } as any,
+      default: {
+        shadowColor:   "#000000",
+        shadowOpacity: 0.50,
+        shadowRadius:  28,
+        shadowOffset:  { width: 0, height: 10 },
+        elevation:     16,
+      },
+    }),
+    darkSoft: Platform.select({
+      web: { boxShadow: "0 6px 16px rgba(0,0,0,0.30)" } as any,
+      default: {
+        shadowColor:   "#000000",
+        shadowOpacity: 0.30,
+        shadowRadius:  16,
+        shadowOffset:  { width: 0, height: 6 },
+        elevation:     10,
+      },
+    }),
+    light: Platform.select({
+      web: { boxShadow: "0 6px 20px rgba(0,0,0,0.10)" } as any,
+      default: {
+        shadowColor:   "#000000",
+        shadowOpacity: 0.10,
+        shadowRadius:  20,
+        shadowOffset:  { width: 0, height: 6 },
+        elevation:     8,
+      },
+    }),
+    lightSoft: Platform.select({
+      web: { boxShadow: "0 3px 12px rgba(0,0,0,0.06)" } as any,
+      default: {
+        shadowColor:   "#000000",
+        shadowOpacity: 0.06,
+        shadowRadius:  12,
+        shadowOffset:  { width: 0, height: 3 },
+        elevation:     4,
+      },
+    }),
   },
 
   // ── Radii ─────────────────────────────────────────────────────────────────
@@ -80,7 +92,7 @@ export const GLASS = {
     xxl: 32,
     pill:50,
   },
-} as const;
+};
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────
 

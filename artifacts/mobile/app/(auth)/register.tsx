@@ -69,7 +69,7 @@ function OAuthBtn({ label, logo, onPress, loading, colors, isDark }: any) {
     <TouchableOpacity
       accessibilityLabel={`Continue with ${label}`}
       accessibilityRole="button"
-      style={[oauthSt.btn, { backgroundColor: isDark ? "#15151A" : "#FFFFFF", borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", shadowColor: "#000" }]}
+      style={[oauthSt.btn, { backgroundColor: isDark ? "#15151A" : "#FFFFFF", borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", ...(Platform.OS !== "web" ? { shadowColor: "#000" } : {}) }]}
       onPress={onPress}
       disabled={loading}
       activeOpacity={0.7}
@@ -79,7 +79,7 @@ function OAuthBtn({ label, logo, onPress, loading, colors, isDark }: any) {
   );
 }
 const oauthSt = StyleSheet.create({
-  btn: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: "center", justifyContent: "center", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
+  btn: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: "center", justifyContent: "center", ...Platform.select({ web: { boxShadow: "0 2px 6px rgba(0,0,0,0.06)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 } }) },
 });
 
 // ─── Email verification modal ─────────────────────────────────────────────────
@@ -146,7 +146,7 @@ function VerifyEmailModal({
 const vmSt = StyleSheet.create({
   overlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
   card: { width: "100%", maxWidth: 420, borderRadius: 16, overflow: "hidden",
-    shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
+    ...Platform.select({ web: { boxShadow: "0 10px 20px rgba(0,0,0,0.25)" } as any, default: { shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 12 } }) },
   header: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 28, paddingTop: 28, paddingBottom: 20, gap: 12 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", letterSpacing: -0.3, marginBottom: 6 },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
@@ -343,7 +343,7 @@ export default function RegisterScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={[mobSt.scroll, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={mobSt.logoArea}>
-            <Image source={afuSymbol} style={[mobSt.logo, { tintColor: accent }]} resizeMode="contain" />
+            <Image source={afuSymbol} style={mobSt.logo} tintColor={accent} resizeMode="contain" />
             <Text style={[mobSt.appName, { color: colors.text }]}>AfuChat</Text>
             <Text style={[mobSt.tagline, { color: colors.textSecondary }]}>Create your free account</Text>
           </View>

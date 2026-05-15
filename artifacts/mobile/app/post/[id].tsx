@@ -707,10 +707,9 @@ export default function PostDetailScreen() {
                       <Image source={{ uri: allImages[0] }} style={styles.articleHero} resizeMode="cover" />
                       <LinearGradient
                         colors={["transparent", isDark ? "rgba(13,17,23,0.95)" : "rgba(255,255,255,0.92)"]}
-                        style={StyleSheet.absoluteFill}
+                        style={[StyleSheet.absoluteFill, { pointerEvents: "none" } as any]}
                         start={{ x: 0, y: 0.35 }}
                         end={{ x: 0, y: 1 }}
-                        pointerEvents="none"
                       />
                       <View style={styles.heroOverlayContent}>
                         <View style={styles.articleBadgeRow}>

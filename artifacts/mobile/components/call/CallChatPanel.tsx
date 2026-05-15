@@ -125,8 +125,8 @@ export function CallChatPanel({
 
   return (
     <Animated.View
-      pointerEvents={visible ? "auto" : "none"}
       style={[
+        { pointerEvents: visible ? "auto" : "none" } as any,
         isDesktop ? styles.panelDesktop : styles.panelMobile,
         { transform, opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
       ]}
@@ -213,10 +213,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(18,22,28,0.96)",
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: "rgba(255,255,255,0.1)",
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    shadowOffset: { width: -8, height: 0 },
+    ...Platform.select({
+      web: { boxShadow: "-8px 0 24px rgba(0,0,0,0.4)" } as any,
+      default: { shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: -8, height: 0 } },
+    }),
     zIndex: 30,
   },
   panelMobile: {

@@ -500,9 +500,9 @@ const s = StyleSheet.create({
   packCard: {
     width: (SW - 50) / 2, borderRadius: 18, padding: 16,
     alignItems: "center", position: "relative", borderWidth: 1.5,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1,
+    ...Platform.select({ web: { boxShadow: "0 2px 8px rgba(0,0,0,0.05)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 1 } }),
   },
-  packCardSel: { shadowOpacity: 0.12, elevation: 5 },
+  packCardSel: { ...Platform.select({ web: { boxShadow: "0 4px 12px rgba(0,0,0,0.12)" } as any, default: { shadowOpacity: 0.12, elevation: 5 } }) },
   popularBadge: { position: "absolute", top: 10, right: 10, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
   popularText: { color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   packIconWrap: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center", marginBottom: 10 },
@@ -532,7 +532,7 @@ const s = StyleSheet.create({
   webLoader: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   webLoaderText: { marginTop: 12, fontSize: 14, fontFamily: "Inter_400Regular" },
 
-  resultCard: { width: SW - 48, borderRadius: 24, padding: 28, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 4 },
+  resultCard: { width: SW - 48, borderRadius: 24, padding: 28, alignItems: "center", ...Platform.select({ web: { boxShadow: "0 4px 20px rgba(0,0,0,0.08)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 4 } }) },
   resultIcon: { width: 88, height: 88, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 20 },
   resultTitle: { fontSize: 22, fontFamily: "Inter_700Bold", marginBottom: 8 },
   resultSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginBottom: 24 },

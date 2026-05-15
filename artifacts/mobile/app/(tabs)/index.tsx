@@ -1334,8 +1334,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         {/* Title — absolutely centered so it stays in the middle
             regardless of how wide the left/right elements are */}
         <View
-          pointerEvents="none"
-          style={{ position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center" }}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 12, alignItems: "center", pointerEvents: "none" }}
         >
           <Text style={[styles.headerTitle, { color: colors.text }]}>
             {selectMode
@@ -1662,7 +1661,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               {
                 backgroundColor: isDark ? "rgba(20,20,26,0.93)" : "rgba(252,252,255,0.93)",
                 borderColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.07)",
-                shadowColor: "#000",
+                ...(Platform.OS !== "web" ? { shadowColor: "#000" } : {}),
               },
             ]}
           >
@@ -1785,10 +1784,10 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               bottom: insets.bottom + 90,
               backgroundColor: colors.surface,
               borderColor: colors.border,
-              shadowColor: "#000",
+              ...(Platform.OS !== "web" ? { shadowColor: "#000" } : {}),
+              pointerEvents: "box-none",
             },
           ]}
-          pointerEvents="box-none"
         >
           <TouchableOpacity
             style={[selStyles.deleteBtn, { backgroundColor: selectedIds.size > 0 ? "#FF3B30" : colors.backgroundSecondary }]}
@@ -1899,10 +1898,10 @@ const selStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 12px rgba(0,0,0,0.15)" } as any,
+      default: { shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
+    }),
     alignItems: "center",
   },
   deleteBtn: {
@@ -1942,10 +1941,10 @@ const styles = StyleSheet.create({
     zIndex: 20,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 2px 10px rgba(0,0,0,0.16)" } as any,
+      default: { shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.16, shadowRadius: 10, elevation: 8 },
+    }),
   },
   folderTabBarContent: {
     paddingHorizontal: 6,
@@ -2147,11 +2146,10 @@ const styles = StyleSheet.create({
     borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 8px rgba(0,0,0,0.25)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 6 },
+    }),
   },
   cameraFab: {
     position: "absolute",

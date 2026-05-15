@@ -651,7 +651,7 @@ const st = StyleSheet.create({
   actionBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 14 },
   section: {
     marginHorizontal: 16, marginBottom: 12, padding: 16, borderRadius: 18,
-    gap: 12, shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2,
+    gap: 12, ...Platform.select({ web: { boxShadow: "0 2px 8px rgba(0,0,0,0.04)" } as any, default: { shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 } }),
   },
   sectionTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 12 },

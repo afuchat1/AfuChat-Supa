@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -166,11 +167,10 @@ const styles = StyleSheet.create({
     width: 288,
     borderRadius: 18,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 24 },
-    shadowOpacity: 0.28,
-    shadowRadius: 32,
-    elevation: 24,
+    ...Platform.select({
+      web: { boxShadow: "0 24px 32px rgba(0,0,0,0.28)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 24 }, shadowOpacity: 0.28, shadowRadius: 32, elevation: 24 },
+    }),
   },
   content: {
     paddingTop: 22,

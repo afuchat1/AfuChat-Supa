@@ -85,22 +85,29 @@ function CompactTabBar({
 
   const barBg = isDark ? "rgba(28,28,30,0.97)" : "rgba(255,255,255,0.97)";
 
-  // Android elevation is used for shadow; iOS uses shadowColor etc.
-  const shadow = isDark
-    ? {
-        shadowColor: "#000",
-        shadowOpacity: 0.50,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 20,
-      }
-    : {
-        shadowColor: "#000",
-        shadowOpacity: 0.14,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 4 },
-        elevation: 14,
-      };
+  // Use boxShadow on web (shadow* props are deprecated there); native shadow on iOS/Android.
+  const shadow = Platform.select({
+    web: {
+      boxShadow: isDark
+        ? "0 8px 24px rgba(0,0,0,0.50)"
+        : "0 4px 18px rgba(0,0,0,0.14)",
+    },
+    default: isDark
+      ? {
+          shadowColor: "#000",
+          shadowOpacity: 0.50,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 20,
+        }
+      : {
+          shadowColor: "#000",
+          shadowOpacity: 0.14,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 14,
+        },
+  });
 
   // Edge-to-edge on Android can set insets.bottom to 0 on gesture-nav devices.
   // Always guarantee at least 8dp above the gesture handle bar.

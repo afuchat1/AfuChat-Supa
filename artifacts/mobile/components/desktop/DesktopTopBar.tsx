@@ -379,7 +379,7 @@ function NavDropdown({
               top: coords.top,
               backgroundColor: theme.menuBg,
               borderColor: theme.border,
-              shadowColor: theme.menuShadow,
+              ...(Platform.OS !== "web" ? { shadowColor: theme.menuShadow } : {}),
             },
           ]}
         >

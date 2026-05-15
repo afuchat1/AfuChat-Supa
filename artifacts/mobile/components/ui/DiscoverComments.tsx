@@ -390,7 +390,7 @@ const CommentRow = React.memo(function CommentRow({
             <Animated.View
               style={[
                 st.actionTray,
-                { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: "#000" },
+                { backgroundColor: colors.surface, borderColor: colors.border, ...(Platform.OS !== "web" ? { shadowColor: "#000" } : {}) },
                 { opacity: actionOp, transform: [{ scale: actionScale }] },
               ]}
             >
@@ -912,7 +912,7 @@ export function DiscoverCommentsSheet({
                 {
                   backgroundColor: colors.surface,
                   borderColor: inputFocused ? accent + "60" : colors.border,
-                  shadowColor: "#000",
+                  ...(Platform.OS !== "web" ? { shadowColor: "#000" } : {}),
                 },
               ]}
             >
@@ -1042,8 +1042,10 @@ const st = StyleSheet.create({
   sheet: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    shadowColor: "#000", shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.22, shadowRadius: 24, elevation: 28,
+    ...Platform.select({
+      web: { boxShadow: "0 -8px 24px rgba(0,0,0,0.22)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.22, shadowRadius: 24, elevation: 28 },
+    }),
   },
   handle: {
     width: 40, height: 4, borderRadius: 2,
@@ -1107,7 +1109,10 @@ const st = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     marginTop: 8, borderRadius: 20, borderWidth: 1,
     paddingHorizontal: 8, paddingVertical: 6, gap: 2,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10, elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 10px rgba(0,0,0,0.14)" } as any,
+      default: { shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 10, elevation: 8 },
+    }),
     alignSelf: "flex-start",
   },
   actionTrayEmoji: { paddingHorizontal: 6, paddingVertical: 4 },
@@ -1147,8 +1152,10 @@ const st = StyleSheet.create({
     borderTopWidth: 0,
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14, shadowRadius: 16, elevation: 12,
+    ...Platform.select({
+      web: { boxShadow: "0 6px 16px rgba(0,0,0,0.14)" } as any,
+      default: { shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.14, shadowRadius: 16, elevation: 12 },
+    }),
   },
   textInput: {
     fontSize: 14, fontFamily: "Inter_400Regular",

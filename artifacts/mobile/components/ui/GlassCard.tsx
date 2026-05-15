@@ -55,8 +55,8 @@ export const GlassCard = React.memo(function GlassCard({
           borderColor: colors.border,
         },
         style,
+        pointerEvents ? ({ pointerEvents } as any) : undefined,
       ]}
-      pointerEvents={pointerEvents}
     >
       <View style={innerStyle}>{children}</View>
     </View>

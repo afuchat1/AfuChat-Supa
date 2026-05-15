@@ -403,7 +403,7 @@ export default function PremiumScreen() {
           <View style={[s.glowOrb, { backgroundColor: tierColor + "22" }]} />
 
           <View style={[s.heroBadge, { backgroundColor: tierColor + "22", borderColor: tierColor + "44" }]}>
-            <Image source={afuSymbol} style={{ width: 32, height: 32, tintColor: tierColor }} resizeMode="contain" />
+            <Image source={afuSymbol} style={{ width: 32, height: 32 }} tintColor={tierColor} resizeMode="contain" />
           </View>
           <Text style={s.heroTitle}>AfuChat Premium</Text>
           <Text style={[s.heroSub, { color: tierColor + "CC" }]}>{cfg?.tagline ?? "Unlock everything"}</Text>

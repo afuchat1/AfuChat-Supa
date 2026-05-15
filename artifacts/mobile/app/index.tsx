@@ -10,7 +10,7 @@ const afuSymbol = require("@/assets/images/afu-symbol.png");
 function SplashBrand() {
   return (
     <View style={s.root}>
-      <Image source={afuSymbol} style={s.logo} resizeMode="contain" />
+      <Image source={afuSymbol} style={s.logo} tintColor="#fff" resizeMode="contain" />
       <Text style={s.wordmark}>AfuChat</Text>
       <Text style={s.tagline}>Connect · Chat · Discover</Text>
     </View>
@@ -85,7 +85,6 @@ const s = StyleSheet.create({
   logo: {
     width: 110,
     height: 110,
-    tintColor: "#fff",
   },
   wordmark: {
     marginTop: 18,

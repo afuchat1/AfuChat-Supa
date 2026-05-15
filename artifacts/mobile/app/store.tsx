@@ -501,11 +501,10 @@ const st = StyleSheet.create({
   productCard: {
     borderRadius: 16,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: "0 2px 8px rgba(0,0,0,0.07)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 3 },
+    }),
   },
   imgWrap: { width: "100%", position: "relative" },
   productImg: { width: "100%", height: "100%" },

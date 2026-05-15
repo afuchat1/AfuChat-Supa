@@ -253,10 +253,9 @@ export default function ProductTour() {
           borderColor: ACCENT,
           opacity: pulseAlpha,
           transform: [{ scale: pulseScale }],
-          shadowColor: ACCENT,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.7,
-          shadowRadius: 10,
+          ...(Platform.OS !== "web"
+            ? { shadowColor: ACCENT, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 10 }
+            : {}),
           pointerEvents: "none",
         } as any}
       />
@@ -352,11 +351,10 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
     gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 24,
-    elevation: 14,
+    ...Platform.select({
+      web: { boxShadow: "0 10px 24px rgba(0,0,0,0.22)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.22, shadowRadius: 24, elevation: 14 },
+    }),
   },
   row: {
     flexDirection: "row",

@@ -1420,11 +1420,10 @@ const st = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 16,
+    ...Platform.select({
+      web: { boxShadow: "0 -3px 12px rgba(0,0,0,0.12)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 16 },
+    }),
   },
   optionsHandle: {
     width: 36,

@@ -81,9 +81,8 @@ export function PostUploadBanner() {
     <Animated.View
       style={[
         styles.container,
-        { transform: [{ translateY: slideY }], paddingTop: topPadding },
+        { transform: [{ translateY: slideY }], paddingTop: topPadding, pointerEvents: "none" },
       ]}
-      pointerEvents="none"
     >
       <View style={[styles.inner, { backgroundColor: bgColor }]}>
         {/* Row: icon + label + spinner */}

@@ -397,11 +397,10 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     width: "100%",
     maxWidth: 360,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 8px rgba(0,0,0,0.3)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+    }),
   },
   nextBtnLast: {
     backgroundColor: "#00BCD4",

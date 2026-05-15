@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -326,11 +327,10 @@ const styles = StyleSheet.create({
   avatarWrap: {
     position: "relative",
     marginBottom: -38,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 6,
+    ...Platform.select({
+      web: { filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.18))" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 8, elevation: 6 },
+    }),
   },
   onlineDot: {
     position: "absolute",

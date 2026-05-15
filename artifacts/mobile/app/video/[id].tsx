@@ -152,7 +152,7 @@ function parseCommentText(text: string, accent: string): React.ReactNode {
 
 // ─── GradientOverlay ──────────────────────────────────────────────────────────
 
-const GRADIENT_BASE: any = { position: "absolute", left: 0, right: 0, pointerEvents: "none" };
+const GRADIENT_BASE: any = { position: "absolute", left: 0, right: 0 };
 
 function GradientOverlay({
   position,
@@ -169,8 +169,7 @@ function GradientOverlay({
         : "linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%)";
     return (
       <View
-        style={[GRADIENT_BASE, posStyle, { height, background: gradient } as any]}
-        pointerEvents="none"
+        style={[GRADIENT_BASE, posStyle, { height, background: gradient, pointerEvents: "none" } as any]}
       />
     );
   }
@@ -181,8 +180,7 @@ function GradientOverlay({
           ? ["transparent", "rgba(0,0,0,0.88)"]
           : ["rgba(0,0,0,0.55)", "transparent"]
       }
-      style={[GRADIENT_BASE, posStyle, { height }]}
-      pointerEvents="none"
+      style={[GRADIENT_BASE, posStyle, { height, pointerEvents: "none" } as any]}
     />
   );
 }
@@ -1106,8 +1104,7 @@ const VideoItem = React.memo(function VideoItem({
 
       {/* Double-tap like burst */}
       <Animated.View
-        style={[vStyles.centerOverlay, { opacity: doubleTapOpacity, transform: [{ scale: doubleTapScale }] }]}
-        pointerEvents="none"
+        style={[vStyles.centerOverlay, { opacity: doubleTapOpacity, transform: [{ scale: doubleTapScale }], pointerEvents: "none" } as any]}
       >
         <Ionicons name="heart" size={90} color="#FF3B30" />
       </Animated.View>
@@ -1235,13 +1232,13 @@ const vStyles = StyleSheet.create({
   authorRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 },
   avatarWrap: { borderWidth: 2, borderRadius: 23, padding: 1 },
   authorInfo: { flex: 1 },
-  authorHandle: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  authorHandle: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", ...Platform.select({ web: { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } as any, default: { textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 } }) },
   authorName: { color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   inlineFollow: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.5)", backgroundColor: "rgba(255,255,255,0.1)" },
   inlineFollowActive: { borderColor: "rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.06)" },
   inlineFollowText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   captionWrap: { marginTop: 2 },
-  caption: { color: "rgba(255,255,255,0.92)", fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  caption: { color: "rgba(255,255,255,0.92)", fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, ...Platform.select({ web: { textShadow: "0 1px 3px rgba(0,0,0,0.5)" } as any, default: { textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 } }) },
   captionMore: { marginTop: 1, fontSize: 13, lineHeight: 19 },
   captionEllipsis: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
   captionMoreLink: { color: "#00BCD4", fontFamily: "Inter_600SemiBold" },
@@ -1249,10 +1246,10 @@ const vStyles = StyleSheet.create({
   viewText: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "Inter_400Regular" },
   rightCol: { position: "absolute", right: 12, gap: 20, alignItems: "center" },
   actionItem: { alignItems: "center", gap: 3 },
-  actionLabel: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold", textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  actionLabel: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold", ...Platform.select({ web: { textShadow: "0 1px 2px rgba(0,0,0,0.5)" } as any, default: { textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 } }) },
   progressBar: { position: "absolute", left: 0, right: 0, height: 3, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center" },
   progressFill: { position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 2 },
-  progressThumb: { position: "absolute", width: 10, height: 10, borderRadius: 5, backgroundColor: "#fff", top: -3, marginLeft: -5, shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 3, elevation: 3 },
+  progressThumb: { position: "absolute", width: 10, height: 10, borderRadius: 5, backgroundColor: "#fff", top: -3, marginLeft: -5, ...Platform.select({ web: { boxShadow: "0 1px 3px rgba(0,0,0,0.4)" } as any, default: { shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 3, elevation: 3 } }) },
 });
 
 // ─── VideoPlayerScreen ────────────────────────────────────────────────────────

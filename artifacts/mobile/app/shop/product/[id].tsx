@@ -545,7 +545,7 @@ const st = StyleSheet.create({
     justifyContent: "center",
   },
   outOfStockText: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#fff" },
-  infoCard: { marginHorizontal: 16, marginTop: -20, borderRadius: 20, padding: 20, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+  infoCard: { marginHorizontal: 16, marginTop: -20, borderRadius: 20, padding: 20, marginBottom: 12, ...Platform.select({ web: { boxShadow: "0 2px 12px rgba(0,0,0,0.08)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 } }) },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 10, marginBottom: 8 },
   priceMain: { fontSize: 28, fontFamily: "Inter_700Bold" },
   priceUgx: { fontSize: 14, fontFamily: "Inter_400Regular" },

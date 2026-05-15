@@ -6,6 +6,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -175,7 +176,7 @@ function Gift3DCard({
       style={[
         styles.cardShadow,
         {
-          shadowColor: selected ? rColor : "transparent",
+          ...(Platform.OS !== "web" ? { shadowColor: selected ? rColor : "transparent" } : {}),
           transform: [{ scale }],
           opacity: canAfford ? 1 : 0.38,
         },
@@ -537,10 +538,10 @@ const styles = StyleSheet.create({
   },
   cardShadow: {
     width: CARD_W,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.55,
-    shadowRadius: 10,
-    elevation: 10,
+    ...Platform.select({
+      web: { boxShadow: "0 6px 10px rgba(0,0,0,0.55)" } as any,
+      default: { shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.55, shadowRadius: 10, elevation: 10 },
+    }),
     borderRadius: 16,
   },
   cardTouchable: {

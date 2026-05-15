@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   tabBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
 
   avatar: { width: 46, height: 46, borderRadius: 23, flexShrink: 0 },
-  reqCard: { borderRadius: 18, padding: 16, gap: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 },
+  reqCard: { borderRadius: 18, padding: 16, gap: 12, ...Platform.select({ web: { boxShadow: "0 1px 6px rgba(0,0,0,0.04)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 } }) },
   reqTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   reqName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   reqHandle: { fontSize: 12, fontFamily: "Inter_400Regular" },

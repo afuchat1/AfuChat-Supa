@@ -410,7 +410,7 @@ function CardFront({cardWidth:cw,cardHeight:ch,theme,profile,roleConf,memberNumb
       <GBg w={cw} h={ch} color={theme.primary}/>
       <FlagStrip colors={theme.flag} h={5}/>
       <LinearGradient colors={theme.headerBg} style={s.hdr}>
-        <Image source={afuSymbol} style={{width:17,height:17,tintColor:BRAND}} resizeMode="contain"/>
+        <Image source={afuSymbol} style={{width:17,height:17}} tintColor={BRAND} resizeMode="contain"/>
         <View style={{flex:1}}>
           <Text style={s.brand}>AFUCHAT</Text>
           <Text style={s.subHdr} numberOfLines={1}>UNIVERSE · DIGITAL IDENTITY CARD</Text>
@@ -461,7 +461,7 @@ function CardBack({cardWidth:cw,cardHeight:ch,theme,profile,memberNumber,afuId,i
       <GBg w={cw} h={ch} color={theme.primary}/>
       <FlagStrip colors={theme.flag} h={5}/>
       <LinearGradient colors={theme.headerBg} style={s.hdr}>
-        <Image source={afuSymbol} style={{width:13,height:13,tintColor:BRAND}} resizeMode="contain"/>
+        <Image source={afuSymbol} style={{width:13,height:13}} tintColor={BRAND} resizeMode="contain"/>
         <Text style={[s.subHdr,{color:BRAND,marginLeft:6}]}>AFUCHAT · DIGITAL FINGERPRINT</Text>
         <View style={{flex:1}}/>
         <View style={[s.secChip,{borderColor:theme.primary+"55"}]}>
@@ -514,7 +514,7 @@ const s = StyleSheet.create({
   tip:{flexDirection:"row",alignItems:"flex-start",gap:8,borderRadius:10,padding:12,borderWidth:0.5,maxWidth:360,width:"90%"},
   tipText:{flex:1,fontSize:11,lineHeight:17},
   captureLayer:{position:"absolute",left:0,top:0,opacity:0,zIndex:-1,pointerEvents:"none" as any},
-  card:{shadowColor:"#000",shadowOpacity:0.6,shadowRadius:20,shadowOffset:{width:0,height:8},elevation:12},
+  card:{...Platform.select({web:{boxShadow:"0 8px 20px rgba(0,0,0,0.6)"}as any,default:{shadowColor:"#000",shadowOpacity:0.6,shadowRadius:20,shadowOffset:{width:0,height:8},elevation:12}})},
   hdr:{flexDirection:"row",alignItems:"center",paddingHorizontal:10,paddingVertical:6,gap:6},
   brand:{fontSize:10,fontWeight:"900",color:BRAND,letterSpacing:1.5,lineHeight:13},
   subHdr:{fontSize:7,color:"#ffffff66",letterSpacing:0.7,lineHeight:10},

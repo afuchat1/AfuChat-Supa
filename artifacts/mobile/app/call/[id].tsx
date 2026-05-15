@@ -492,9 +492,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: "Inter_700Bold",
     marginBottom: 6,
-    textShadowColor: "rgba(0,0,0,0.4)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    ...Platform.select({
+      web: { textShadow: "0 1px 4px rgba(0,0,0,0.4)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.4)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+    }),
   },
   callStatus: {
     color: "rgba(255,255,255,0.85)",
@@ -602,10 +603,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     transform: [{ rotate: "135deg" }],
-    shadowColor: "#FF3B30",
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Platform.select({
+      web: { boxShadow: "0 0 12px rgba(255,59,48,0.5)" } as any,
+      default: { shadowColor: "#FF3B30", shadowOpacity: 0.5, shadowRadius: 12, elevation: 8 },
+    }),
   },
   errorBanner: {
     flexDirection: "row",

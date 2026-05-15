@@ -219,8 +219,7 @@ function PremiumBubbleShimmer() {
   const translateX = shimmer.interpolate({ inputRange: [0, 1], outputRange: [-80, 220] });
   return (
     <Animated.View
-      pointerEvents="none"
-      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: "hidden" }}
+      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 16, overflow: "hidden", pointerEvents: "none" }}
     >
       <Animated.View style={{ position: "absolute", top: 0, bottom: 0, width: 70, transform: [{ translateX }] }}>
         <LinearGradient
@@ -312,8 +311,8 @@ function SmartReplyBar({ messages, myId, input, onSend, colors }: {
         flexWrap: "wrap",
         borderTopWidth: show ? StyleSheet.hairlineWidth : 0,
         borderTopColor: colors.border,
+        pointerEvents: show ? "auto" : "none",
       }}
-      pointerEvents={show ? "auto" : "none"}
     >
       {replies.map((r) => (
         <TouchableOpacity
@@ -4419,8 +4418,7 @@ STRICT RULES:
               }
             />
             <Animated.View
-              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface, bottom: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 8 }]}
-              pointerEvents={showScrollBtn ? "auto" : "none"}
+              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface, bottom: floatingInputHeight + (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 8, pointerEvents: showScrollBtn ? "auto" : "none" }]}
             >
               <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
                 <Ionicons name="chevron-down" size={22} color={colors.text} />
@@ -4437,9 +4435,8 @@ STRICT RULES:
 
       {/* ── Floating input container ── absolutely positioned, rises with keyboard ── */}
       <View
-        style={[st.floatingInputContainer, { bottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom }]}
+        style={[st.floatingInputContainer, { bottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom, pointerEvents: "box-none" }]}
         onLayout={(e) => setFloatingInputHeight(e.nativeEvent.layout.height)}
-        pointerEvents="box-none"
       >
 
         {editingMessage && (
@@ -4652,7 +4649,7 @@ STRICT RULES:
                         )}
                         <GestureDetector gesture={micGesture}>
                           <ReAnimated.View style={[
-                            isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, shadowColor: BRAND }] : [st.sendBtn, { backgroundColor: BRAND }],
+                            isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, ...(Platform.OS !== "web" ? { shadowColor: BRAND } : {}) }] : [st.sendBtn, { backgroundColor: BRAND }],
                             isRecording && !recLocked ? micBtnAnimStyle : undefined,
                           ]}>
                             <Ionicons name="mic" size={isRecording ? 24 : 20} color="#fff" />
@@ -4765,7 +4762,7 @@ STRICT RULES:
                         )}
                         <GestureDetector gesture={micGesture}>
                           <ReAnimated.View style={[
-                            isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, shadowColor: BRAND }] : [st.sendBtn, { backgroundColor: BRAND }],
+                            isRecording && !recLocked ? [st.recMicBtn, { backgroundColor: BRAND, ...(Platform.OS !== "web" ? { shadowColor: BRAND } : {}) }] : [st.sendBtn, { backgroundColor: BRAND }],
                             isRecording && !recLocked ? micBtnAnimStyle : undefined,
                           ]}>
                             <Ionicons name="mic" size={isRecording ? 24 : 20} color="#fff" />
@@ -5543,11 +5540,10 @@ const st = StyleSheet.create({
     borderTopRightRadius: 18,
     paddingBottom: 32,
     paddingTop: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 16,
+    ...Platform.select({
+      web: { boxShadow: "0 -2px 10px rgba(0,0,0,0.12)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 16 },
+    }),
   },
   optionsHandle: { width: 38, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 14 },
   optionsIdentity: {
@@ -5616,10 +5612,10 @@ const st = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
+    ...Platform.select({
+      web: { boxShadow: "0 1px 2px rgba(0,0,0,0.06)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2 },
+    }),
   },
   dateBadgeText: { fontSize: 12, fontFamily: "Inter_500Medium" },
 
@@ -5657,10 +5653,10 @@ const st = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    ...Platform.select({
+      web: { boxShadow: "0 2px 6px rgba(0,0,0,0.15)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6 },
+    }),
   },
   scrollFabBtn: {
     width: 40,
@@ -5868,11 +5864,10 @@ const st = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(120,120,128,0.22)",
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 6,
+    ...Platform.select({
+      web: { boxShadow: "0 -2px 10px rgba(0,0,0,0.06)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 6 },
+    }),
   },
   inputBarRow: {
     flexDirection: "row",
@@ -5898,9 +5893,9 @@ const st = StyleSheet.create({
   recSlideHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 2 },
   recSlideText: { fontSize: 12, fontFamily: "Inter_400Regular" },
   recMicWrap: { alignItems: "center", justifyContent: "flex-end" },
-  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center", elevation: 8, shadowColor: BRAND_FALLBACK, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.55, shadowRadius: 10 },
+  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center", elevation: 8, ...Platform.select({ web: { boxShadow: `0 4px 10px rgba(0,0,0,0.55)` } as any, default: { shadowColor: BRAND_FALLBACK, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.55, shadowRadius: 10 } }) },
   recLockIndicator: { alignItems: "center", marginBottom: 8 },
-  recLockPill: { width: 32, borderRadius: 16, paddingVertical: 6, alignItems: "center", justifyContent: "center", elevation: 2, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 },
+  recLockPill: { width: 32, borderRadius: 16, paddingVertical: 6, alignItems: "center", justifyContent: "center", elevation: 2, ...Platform.select({ web: { boxShadow: "0 1px 3px rgba(0,0,0,0.1)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 } }) },
   recLockedInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, gap: 8, minHeight: 56 },
   recLockedTrash: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.12)", alignItems: "center", justifyContent: "center" },
   recLockedWaveWrap: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 2, height: 30, overflow: "hidden" },
@@ -5918,7 +5913,7 @@ const st = StyleSheet.create({
   sheetInput: { borderRadius: 12, padding: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
 
   reactModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
-  reactModalContainer: { width: "100%", borderRadius: 20, padding: 20, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, maxHeight: "85%" },
+  reactModalContainer: { width: "100%", borderRadius: 20, padding: 20, elevation: 10, ...Platform.select({ web: { boxShadow: "0 8px 20px rgba(0,0,0,0.25)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 } }), maxHeight: "85%" },
   reactModalEmojiRow: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 12 },
   reactModalEmojiBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   reactModalEmojiText: { fontSize: 24 },
@@ -5939,7 +5934,7 @@ const st = StyleSheet.create({
   redEnvBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 
   envRevealOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 24 },
-  envRevealCard: { width: "100%", borderRadius: 20, overflow: "hidden", elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 },
+  envRevealCard: { width: "100%", borderRadius: 20, overflow: "hidden", elevation: 10, ...Platform.select({ web: { boxShadow: "0 8px 20px rgba(0,0,0,0.3)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20 } }) },
   envRevealTop: { alignItems: "center", paddingTop: 28, paddingBottom: 20, paddingHorizontal: 24, backgroundColor: "#FF3B30" },
   envRevealBigEmoji: { fontSize: 64, marginBottom: 8 },
   envRevealAmountLabel: { fontSize: 16, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.85)", marginBottom: 4 },
@@ -5955,10 +5950,10 @@ const st = StyleSheet.create({
   envRevealBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 
   giftRevealOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
-  giftRevealContainer: { width: "100%", borderRadius: 20, padding: 24, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
+  giftRevealContainer: { width: "100%", borderRadius: 20, padding: 24, elevation: 10, ...Platform.select({ web: { boxShadow: "0 8px 20px rgba(0,0,0,0.25)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 } }) },
 
   giftModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
-  giftModalContainer: { width: "100%", height: "80%", borderRadius: 20, padding: 20, elevation: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 },
+  giftModalContainer: { width: "100%", height: "80%", borderRadius: 20, padding: 20, elevation: 10, ...Platform.select({ web: { boxShadow: "0 8px 20px rgba(0,0,0,0.25)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20 } }) },
   giftModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   giftModalTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
   giftModalMsgRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },

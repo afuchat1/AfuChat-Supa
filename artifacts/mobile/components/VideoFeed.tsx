@@ -110,9 +110,9 @@ function GradientOverlay() {
           styles.gradient,
           {
             background: "linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%)",
+            pointerEvents: "none",
           } as any,
         ]}
-        pointerEvents="none"
       />
     );
   }
@@ -120,8 +120,7 @@ function GradientOverlay() {
     <LinearGradient
       colors={["transparent", "rgba(0,0,0,0.92)"]}
       locations={[0, 1]}
-      style={styles.gradient}
-      pointerEvents="none"
+      style={[styles.gradient, { pointerEvents: "none" }]}
     />
   );
 }
@@ -409,15 +408,14 @@ const VideoItem = React.memo(
 
         {/* Double-tap heart burst */}
         <Animated.View
-          style={[styles.centerOverlay, dtAnimStyle]}
-          pointerEvents="none"
+          style={[styles.centerOverlay, dtAnimStyle, { pointerEvents: "none" }]}
         >
           <Ionicons name="heart" size={96} color="#FF2D55" />
         </Animated.View>
 
         {/* Pause indicator */}
         {paused && isActive && (
-          <View style={styles.centerOverlay} pointerEvents="none">
+          <View style={[styles.centerOverlay, { pointerEvents: "none" }]}>
             <View style={styles.pauseCircle}>
               <Ionicons name="play" size={30} color="#fff" style={{ marginLeft: 3 }} />
             </View>
@@ -435,7 +433,7 @@ const VideoItem = React.memo(
         <GradientOverlay />
 
         {/* Author row + caption */}
-        <View style={styles.bottomArea} pointerEvents="box-none">
+        <View style={[styles.bottomArea, { pointerEvents: "box-none" }]}>
           <TouchableOpacity
             onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } })}
             style={styles.authorRow}
@@ -476,7 +474,7 @@ const VideoItem = React.memo(
         </View>
 
         {/* Right action rail */}
-        <View style={styles.rightCol} pointerEvents="box-none">
+        <View style={[styles.rightCol, { pointerEvents: "box-none" }]}>
           {/* Like */}
           <View style={styles.actionItem}>
             <Animated.View style={heartAnimStyle}>
@@ -516,7 +514,7 @@ const VideoItem = React.memo(
         </View>
 
         {/* Progress bar — driven by Reanimated shared value */}
-        <View style={styles.progressTrack} pointerEvents="none">
+        <View style={[styles.progressTrack, { pointerEvents: "none" }]}>
           <Animated.View style={[styles.progressFill, progressBarStyle]} />
         </View>
       </View>
@@ -947,9 +945,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_700Bold",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    ...Platform.select({
+      web: { textShadow: "0 1px 4px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+    }),
   },
   displayName: {
     color: "rgba(255,255,255,0.58)",
@@ -975,9 +974,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 19,
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    ...Platform.select({
+      web: { textShadow: "0 1px 4px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+    }),
   },
   viewRow: {
     flexDirection: "row",
@@ -1005,9 +1005,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontFamily: "Inter_700Bold",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    ...Platform.select({
+      web: { textShadow: "0 1px 3px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    }),
   },
   progressTrack: {
     position: "absolute",

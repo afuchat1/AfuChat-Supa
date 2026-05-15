@@ -63,7 +63,8 @@ export function StoryRing({ size, storyCount, seenCount, children }: Props) {
         strokeDashoffset={-offset}
         strokeLinecap="round"
         rotation={-90}
-        origin={`${center}, ${center}`}
+        originX={center}
+        originY={center}
       />
     );
   }

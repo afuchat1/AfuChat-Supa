@@ -252,7 +252,7 @@ export default function AboutScreen() {
 
         {/* Footer — moved from Me tab */}
         <View style={st.footer}>
-          <Image source={afuSymbol} style={[st.footerSymbol, { tintColor: colors.accent }]} resizeMode="contain" />
+          <Image source={afuSymbol} style={st.footerSymbol} tintColor={colors.accent} resizeMode="contain" />
           <Text style={[st.footerName, { color: colors.text }]}>AfuChat</Text>
           <Text style={[st.footerVersion, { color: colors.textMuted }]}>Version {APP_VERSION} · Build {BUILD}</Text>
           <Text style={[st.footerCopy, { color: colors.textMuted }]}>

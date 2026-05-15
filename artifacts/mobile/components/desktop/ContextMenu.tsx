@@ -178,12 +178,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 6,
     zIndex: 9999,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    // @ts-ignore
-    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+    ...Platform.select({
+      web: { boxShadow: "0 8px 24px rgba(0,0,0,0.18)" } as any,
+      default: { shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+    }),
   },
   item: {
     flexDirection: "row",

@@ -186,11 +186,10 @@ const s = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
-    shadowRadius: 24,
-    elevation: 12,
+    ...Platform.select({
+      web: { boxShadow: "0 8px 24px rgba(0,0,0,0.14)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.14, shadowRadius: 24, elevation: 12 },
+    }),
   },
   topBar: { height: 4 },
   header: {
@@ -435,11 +434,10 @@ const m = StyleSheet.create({
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     paddingBottom: Platform.OS === "ios" ? 36 : 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 24,
-    elevation: 24,
+    ...Platform.select({
+      web: { boxShadow: "0 -8px 24px rgba(0,0,0,0.2)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.2, shadowRadius: 24, elevation: 24 },
+    }),
   },
   handle: {
     width: 38,

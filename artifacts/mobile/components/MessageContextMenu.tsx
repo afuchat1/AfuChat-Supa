@@ -139,8 +139,7 @@ export function MessageContextMenu({
 
   return (
     <View
-      style={styles.root}
-      pointerEvents="box-none"
+      style={[styles.root, { pointerEvents: "box-none" }]}
       // @ts-ignore — RN Web supports onContextMenu
       onContextMenu={(e: any) => e.preventDefault?.()}
     >

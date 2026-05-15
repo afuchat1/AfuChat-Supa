@@ -525,11 +525,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    elevation: 12,
+    ...Platform.select({
+      web: { boxShadow: "0 6px 14px rgba(0,0,0,0.22)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 12 },
+    }),
   },
   avatar: {
     width: 42,
@@ -595,11 +594,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     paddingHorizontal: 12,
     paddingBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 10,
+    ...Platform.select({
+      web: { boxShadow: "0 6px 12px rgba(0,0,0,0.18)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 10 },
+    }),
   },
   replyRow: {
     flexDirection: "row",

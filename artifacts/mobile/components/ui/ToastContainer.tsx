@@ -130,8 +130,7 @@ export function ToastContainer() {
 
   return (
     <View
-      style={[s.container, { bottom: insets.bottom + 90 }]}
-      pointerEvents="box-none"
+      style={[s.container, { bottom: insets.bottom + 90, pointerEvents: "box-none" }]}
     >
       {toasts.map((item) => (
         <SingleToast

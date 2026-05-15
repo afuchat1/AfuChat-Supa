@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   reactionEmoji: { fontSize: 14 },
   reactionCount: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   reactionOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.3)" },
-  reactionPicker: { flexDirection: "row", borderRadius: 32, paddingHorizontal: 12, paddingVertical: 10, gap: 4, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 },
+  reactionPicker: { flexDirection: "row", borderRadius: 32, paddingHorizontal: 12, paddingVertical: 10, gap: 4, ...Platform.select({ web: { boxShadow: "0 4px 12px rgba(0,0,0,0.2)" } as any, default: { shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 } }) },
   reactionPickerItem: { padding: 4 },
   reactionPickerEmoji: { fontSize: 26 },
   panel: { borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },

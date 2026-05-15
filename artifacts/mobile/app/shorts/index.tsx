@@ -49,7 +49,9 @@ export default function ShortsRedirect() {
     <View style={styles.root}>
       <Stack.Screen options={{ headerShown: false }} />
       {error ? (
-        <Text style={styles.errorText}>{error}</Text>
+        <View style={styles.errorWrap}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       ) : (
         <ShortsFeedSkeleton dark />
       )}
@@ -61,6 +63,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: "#000",
+  },
+  errorWrap: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,
@@ -69,5 +74,6 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
     fontSize: 15,
     fontFamily: "Inter_500Medium",
+    textAlign: "center",
   },
 });

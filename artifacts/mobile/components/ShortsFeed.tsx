@@ -164,8 +164,7 @@ function WebShortsPlayer({
       {!preloadOnly && (paused || showControls) && (
         <Pressable
           onPress={onTogglePause}
-          style={styles.centerPlayBtn}
-          pointerEvents="box-only"
+          style={[styles.centerPlayBtn, { pointerEvents: "box-only" }]}
         >
           <View style={styles.centerPlayCircle}>
             <Ionicons name={paused ? "play" : "pause"} size={36} color="#fff" />
@@ -229,7 +228,7 @@ function NativeShortsPlayer({
         {...(poster ? { usePosterImage: true } as any : {})}
       />
       {!preloadOnly && paused && (
-        <View style={styles.centerPlayBtn} pointerEvents="none">
+        <View style={[styles.centerPlayBtn, { pointerEvents: "none" }]}>
           <View style={styles.centerPlayCircle}>
             <Ionicons name="play" size={36} color="#fff" />
           </View>
@@ -341,7 +340,7 @@ function ShortCard({
         )}
 
         {/* TikTok-style right-side action rail, overlaid on the video */}
-        <View style={[styles.fullRail, { bottom: bottomInset + 90 }]} pointerEvents="box-none">
+        <View style={[styles.fullRail, { bottom: bottomInset + 90, pointerEvents: "box-none" }]}>
           <Pressable
             onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } } as any)}
             style={styles.fullAvatarWrap}
@@ -400,7 +399,7 @@ function ShortCard({
         </View>
 
         {/* Bottom-left: author + caption + audio source */}
-        <View style={[styles.fullBottomInfo, { bottom: bottomInset + 14 }]} pointerEvents="box-none">
+        <View style={[styles.fullBottomInfo, { bottom: bottomInset + 14, pointerEvents: "box-none" }]}>
           <Pressable
             onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } } as any)}
             style={styles.fullAuthorRow}
@@ -458,7 +457,7 @@ function ShortCard({
         )}
 
         {/* Bottom info overlay */}
-        <View style={styles.bottomInfo} pointerEvents="box-none">
+        <View style={[styles.bottomInfo, { pointerEvents: "box-none" }]}>
           <Pressable
             onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.author_id, init_name: item.profile.display_name, init_handle: item.profile.handle, init_avatar: item.profile.avatar_url ?? "" } } as any)}
             style={styles.authorRow}
@@ -496,7 +495,7 @@ function ShortCard({
       </View>
 
       {/* Right-side action rail (sits next to the 9:16 player on desktop) */}
-      <View style={styles.rightRail} pointerEvents="box-none">
+      <View style={[styles.rightRail, { pointerEvents: "box-none" }]}>
         <View style={styles.actionItem}>
           <Animated.View style={{ transform: [{ scale: heartScale }] }}>
             <Pressable onPress={handleLike} style={({ hovered }: any) => [
@@ -965,9 +964,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_400Regular",
     lineHeight: 18,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...Platform.select({
+      web: { textShadow: "0 1px 2px rgba(0,0,0,0.5)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+    }),
   },
   followInline: {
     paddingHorizontal: 12,
@@ -1014,10 +1014,10 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
+    ...Platform.select({
+      web: { boxShadow: "0 1px 3px rgba(0,0,0,0.08)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3 },
+    }),
   },
   actionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
@@ -1059,9 +1059,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...Platform.select({
+      web: { textShadow: "0 1px 2px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+    }),
   },
   fullBottomInfo: {
     position: "absolute",
@@ -1074,18 +1075,20 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontFamily: "Inter_700Bold",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    ...Platform.select({
+      web: { textShadow: "0 1px 3px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    }),
   },
   fullCaption: {
     color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     lineHeight: 19,
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    ...Platform.select({
+      web: { textShadow: "0 1px 3px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    }),
   },
   fullAudioRow: {
     flexDirection: "row",
@@ -1098,8 +1101,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     flex: 1,
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    ...Platform.select({
+      web: { textShadow: "0 1px 2px rgba(0,0,0,0.6)" } as any,
+      default: { textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+    }),
   },
 });

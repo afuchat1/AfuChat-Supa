@@ -413,7 +413,7 @@ function ScanScreenMobile() {
             <View style={[styles.corner, styles.tr, { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.bl, { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.br, { borderColor: colors.accent }]} />
-            <Animated.View style={[styles.scanLine, { backgroundColor: colors.accent, shadowColor: colors.accent }, scanLineStyle]} />
+            <Animated.View style={[styles.scanLine, { backgroundColor: colors.accent, ...(Platform.OS !== "web" ? { shadowColor: colors.accent } : {}) }, scanLineStyle]} />
           </View>
           <Text style={styles.scanHint}>
             Align the QR code within the frame
@@ -615,9 +615,10 @@ const styles = StyleSheet.create({
     height: 2.5,
     backgroundColor: Colors.brand,
     borderRadius: 2,
-    shadowColor: Colors.brand,
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+    ...Platform.select({
+      web: { filter: `drop-shadow(0 0 6px ${Colors.brand})` } as any,
+      default: { shadowColor: Colors.brand, shadowOpacity: 0.8, shadowRadius: 6 },
+    }),
   },
   scanHint: {
     color: "rgba(255,255,255,0.5)",

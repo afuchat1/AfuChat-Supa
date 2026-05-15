@@ -177,11 +177,7 @@ export function IncomingCallModal({ call, onDismiss }: Props) {
 
   return (
     <Animated.View
-      style={[
-        styles.container,
-        { top: insets.top + 8, transform: [{ translateY: slideAnim }] },
-      ]}
-      pointerEvents="box-none"
+      style={[styles.container, { top: insets.top + 8, transform: [{ translateY: slideAnim }], pointerEvents: "box-none" }]}
     >
       <View style={styles.card}>
         <View style={styles.row}>
@@ -247,11 +243,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C1C1E",
     borderRadius: 18,
     padding: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 20,
+    ...Platform.select({
+      web: { boxShadow: "0 6px 20px rgba(0,0,0,0.4)" } as any,
+      default: { shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 20, shadowOffset: { width: 0, height: 6 }, elevation: 20 },
+    }),
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.1)",
   },

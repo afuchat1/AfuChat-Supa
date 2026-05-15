@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -747,11 +748,10 @@ const st = StyleSheet.create({
   /* Header */
   header: {
     paddingBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: "0 2px 8px rgba(0,0,0,0.04)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 3 },
+    }),
   },
   headerRow: {
     flexDirection: "row",
@@ -933,11 +933,10 @@ const st = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    ...Platform.select({
+      web: { boxShadow: "0 4px 12px rgba(0,0,0,0.08)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
+    }),
   },
   emptyTitle: { fontSize: 19, fontFamily: "Inter_700Bold", textAlign: "center", letterSpacing: -0.3 },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
