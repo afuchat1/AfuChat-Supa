@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -382,6 +383,41 @@ export default function ContactProfileScreen() {
     if (!id) return;
     if (!user) { router.push("/(auth)/login"); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Self-chat → open My Notes
+    if (id === user.id) {
+      try {
+        const CACHE_KEY = `notes_chat_id_${user.id}`;
+        const NOTES_NAME = `notes:${user.id}`;
+        let notesId = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
+        if (notesId) {
+          const { data: existing } = await supabase
+            .from("chats").select("id, name").eq("id", notesId).eq("name", NOTES_NAME).maybeSingle();
+          if (!existing) notesId = null;
+        }
+        if (!notesId) {
+          const { data: found } = await supabase
+            .from("chats").select("id").eq("name", NOTES_NAME).maybeSingle();
+          if (found) {
+            notesId = found.id;
+          } else {
+            const { data: newChat, error: createErr } = await supabase
+              .from("chats")
+              .insert({ is_group: false, is_channel: false, name: NOTES_NAME, created_by: user.id, user_id: user.id })
+              .select("id").single();
+            if (createErr || !newChat) throw new Error(createErr?.message || "Failed to create notes chat");
+            await supabase.from("chat_members").insert({ chat_id: newChat.id, user_id: user.id });
+            notesId = newChat.id;
+          }
+          await AsyncStorage.setItem(CACHE_KEY, notesId!).catch(() => {});
+        }
+        router.push({ pathname: "/chat/[id]", params: { id: notesId, otherId: user.id, otherName: "My Notes" } } as any);
+      } catch (err: any) {
+        showAlert("Error", err.message || "Could not open notes");
+      }
+      return;
+    }
+
     const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", { other_user_id: id });
     if (error || !chatId) { showAlert("Error", "Could not start conversation. Please try again."); return; }
     router.push({ pathname: "/chat/[id]", params: { id: chatId } });
