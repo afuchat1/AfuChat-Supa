@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ActivityIndicator,
   Animated,
@@ -94,6 +95,10 @@ type ChatItem = {
   name: string | null;
   is_group: boolean;
   is_channel: boolean;
+  /** "notes" = My Notes self-chat (always pinned first); "channel_broadcast" = subscribed broadcast channel */
+  kind?: "notes" | "channel_broadcast";
+  /** For kind === "channel_broadcast": the real ID in the `channels` table */
+  channel_id?: string;
   other_display_name: string;
   other_avatar: string | null;
   other_id: string;
@@ -192,41 +197,25 @@ function ChatRow({
   onToggleSelect?: () => void;
 }) {
   const { colors } = useTheme();
-  const { bind, menuProps } = useContextMenu([
-    [
-      {
-        key: "open",
-        label: "Open chat",
-        icon: "open-outline",
-        onSelect: () => onAction?.("open", item),
-      },
-      {
-        key: "pin",
-        label: item.is_pinned ? "Unpin chat" : "Pin chat",
-        icon: item.is_pinned ? "pin" : "pin-outline",
-        onSelect: () => onAction?.("togglePin", item),
-      },
-      {
-        key: "archive",
-        label: item.is_archived ? "Unarchive" : "Archive",
-        icon: item.is_archived ? "archive" : "archive-outline",
-        onSelect: () => onAction?.("toggleArchive", item),
-      },
-    ],
-    [
-      {
-        key: "delete",
-        label: "Delete chat",
-        icon: "trash-outline",
-        destructive: true,
-        onSelect: () => onAction?.("delete", item),
-      },
-    ],
-  ]);
-  const displayName = item.is_group || item.is_channel
-    ? item.name
-    : (phonebookName || item.other_display_name);
-  const avatar = item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
+  const isSpecial = item.kind === "notes" || item.kind === "channel_broadcast";
+  const { bind, menuProps } = useContextMenu(
+    isSpecial
+      ? [[{ key: "open", label: "Open", icon: "open-outline", onSelect: () => onAction?.("open", item) }]]
+      : [
+          [
+            { key: "open", label: "Open chat", icon: "open-outline", onSelect: () => onAction?.("open", item) },
+            { key: "pin", label: item.is_pinned ? "Unpin chat" : "Pin chat", icon: item.is_pinned ? "pin" : "pin-outline", onSelect: () => onAction?.("togglePin", item) },
+            { key: "archive", label: item.is_archived ? "Unarchive" : "Archive", icon: item.is_archived ? "archive" : "archive-outline", onSelect: () => onAction?.("toggleArchive", item) },
+          ],
+          [{ key: "delete", label: "Delete chat", icon: "trash-outline", destructive: true, onSelect: () => onAction?.("delete", item) }],
+        ]
+  );
+  const displayName = item.kind === "notes"
+    ? "My Notes"
+    : item.is_group || item.is_channel
+      ? item.name
+      : (phonebookName || item.other_display_name);
+  const avatar = item.kind === "notes" ? null : item.is_group || item.is_channel ? item.avatar_url : item.other_avatar;
   const hasUnread = item.unread_count > 0 && !wasChatRecentlyVisited(item.id);
   const isOnlineDot = !item.is_group && !item.is_channel && isUserOnline(item.other_last_seen, item.other_show_online);
   const pulse = useRef(new Animated.Value(1)).current;
@@ -265,7 +254,18 @@ function ChatRow({
         </View>
       )}
       <View style={{ position: "relative" }}>
-        <Avatar uri={avatar} name={displayName || "Chat"} size={50} square={!!(item.is_organization_verified)} />
+        {item.kind === "notes" ? (
+          <LinearGradient
+            colors={["#7B61FF", "#00C2CB"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" }}
+          >
+            <Ionicons name="bookmark" size={24} color="#fff" />
+          </LinearGradient>
+        ) : (
+          <Avatar uri={avatar} name={displayName || "Chat"} size={50} square={!!(item.is_organization_verified)} />
+        )}
         {isOnlineDot && (
           <View style={[styles.onlineDot, { borderColor: colors.surface }]} />
         )}
@@ -608,6 +608,34 @@ function CompactStoryHeader({ userId, colors, onExpand }: { userId: string; colo
 
 type ChatTabKey = "all" | "unread" | "personal" | "groups" | "channels";
 
+const NOTES_CACHE_KEY = "notes_chat_id_v2";
+
+async function findOrCreateNotesChatId(userId: string): Promise<string | null> {
+  let id = await AsyncStorage.getItem(NOTES_CACHE_KEY).catch(() => null);
+  if (id) {
+    const { data } = await supabase.from("chats").select("id").eq("id", id).maybeSingle();
+    if (!data) id = null;
+  }
+  if (!id) {
+    const { data: found } = await supabase
+      .from("chats").select("id").eq("name", `notes:${userId}`).maybeSingle();
+    if (found) {
+      id = found.id;
+    } else {
+      const { data: newChat } = await supabase
+        .from("chats")
+        .insert({ name: `notes:${userId}`, is_group: false, is_channel: false })
+        .select("id").single();
+      if (newChat) {
+        id = newChat.id;
+        await supabase.from("chat_members").insert({ chat_id: id, user_id: userId });
+      }
+    }
+    if (id) await AsyncStorage.setItem(NOTES_CACHE_KEY, id).catch(() => {});
+  }
+  return id;
+}
+
 /**
  * The chats screen. By default this renders as a full-page route (chats tab).
  * When mounted with `panelMode`, it renders as a fixed-width 360px column
@@ -945,11 +973,15 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       };
     });
 
-    items.forEach((item) => {
-      if (item.unread_count === 0) clearChatVisited(item.id);
-    });
+    // Extract self-chat (My Notes) from items so we can always pin it at position 0
+    const selfChatItem = items.find(
+      (item) => !item.is_group && !item.is_channel && item.other_id === user.id
+    );
+    const regularItems = items.filter(
+      (item) => !((!item.is_group && !item.is_channel && item.other_id === user.id))
+    );
 
-    items.sort((a, b) => {
+    regularItems.sort((a, b) => {
       // Pinned floats to top; archived sinks to bottom; otherwise newest-first
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
@@ -958,12 +990,106 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
 
-    setChats(items);
-    saveConversations(items).catch(() => {});
+    // ── Fetch subscribed broadcast channels ──────────────────────────────────
+    const { data: subRows } = await supabase
+      .from("channel_subscriptions")
+      .select("channel_id, channels(id, name, avatar_url, is_verified)")
+      .eq("user_id", user.id);
+
+    const channelIds = (subRows || []).map((s: any) => s.channel_id).filter(Boolean);
+    const latestPostMap: Record<string, any> = {};
+    if (channelIds.length > 0) {
+      const { data: latestPosts } = await supabase
+        .from("posts")
+        .select("id, channel_id, content, created_at")
+        .in("channel_id", channelIds)
+        .order("created_at", { ascending: false })
+        .limit(Math.max(channelIds.length * 3, 50));
+      for (const p of (latestPosts || []) as any[]) {
+        if (!latestPostMap[p.channel_id]) latestPostMap[p.channel_id] = p;
+      }
+    }
+
+    const channelItems: ChatItem[] = (subRows || []).flatMap((s: any) => {
+      const ch = Array.isArray(s.channels) ? s.channels[0] : s.channels;
+      if (!ch) return [];
+      const lp = latestPostMap[s.channel_id];
+      return [{
+        id: `channel_broadcast:${ch.id}`,
+        channel_id: ch.id,
+        kind: "channel_broadcast" as const,
+        name: ch.name || "Channel",
+        is_group: false,
+        is_channel: true,
+        other_display_name: ch.name || "Channel",
+        other_avatar: null,
+        other_id: "",
+        last_message: lp?.content ? stripMdPreview(lp.content) : "No posts yet",
+        last_message_at: lp?.created_at || "",
+        last_message_is_mine: false,
+        last_message_status: "sent" as const,
+        is_pinned: false,
+        is_archived: false,
+        avatar_url: ch.avatar_url || null,
+        unread_count: 0,
+        is_verified: !!ch.is_verified,
+        is_organization_verified: false,
+        other_last_seen: null,
+        other_show_online: false,
+      }];
+    });
+
+    // Merge regular chats + broadcast channel items, keep sorted
+    const combined = [...regularItems, ...channelItems];
+    combined.sort((a, b) => {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      if (a.is_archived && !b.is_archived) return 1;
+      if (!a.is_archived && b.is_archived) return -1;
+      if (!a.last_message_at && b.last_message_at) return 1;
+      if (a.last_message_at && !b.last_message_at) return -1;
+      return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
+    });
+
+    // Build My Notes item — always at position 0 regardless of activity
+    const notesItem: ChatItem = {
+      id: selfChatItem?.id || "MY_NOTES_VIRTUAL",
+      kind: "notes" as const,
+      name: "My Notes",
+      is_group: false,
+      is_channel: false,
+      other_display_name: "My Notes",
+      other_avatar: null,
+      other_id: user.id,
+      last_message: selfChatItem?.last_message || "",
+      last_message_at: selfChatItem?.last_message_at || "",
+      last_message_is_mine: selfChatItem?.last_message_is_mine ?? true,
+      last_message_status: "sent" as const,
+      is_pinned: false,
+      is_archived: false,
+      avatar_url: null,
+      unread_count: selfChatItem?.unread_count || 0,
+      is_verified: false,
+      is_organization_verified: false,
+      other_last_seen: null,
+      other_show_online: false,
+    };
+
+    const finalItems = [notesItem, ...combined];
+
+    finalItems.forEach((item) => {
+      if (item.unread_count === 0 && item.kind !== "notes" && item.kind !== "channel_broadcast") {
+        clearChatVisited(item.id);
+      }
+    });
+
+    setChats(finalItems);
+    // Only persist real chat/group items locally (not synthetic notes or channel items)
+    saveConversations(regularItems).catch(() => {});
     // Proactively pre-cache messages for all visible chats so they open offline
     // even if the user has never tapped into that conversation before.
     // Fire-and-forget — skips any chat that already has local messages.
-    preloadConversationMessages(items.map((c) => c.id)).catch(() => {});
+    preloadConversationMessages(regularItems.map((c) => c.id)).catch(() => {});
     setLoading(false);
     setRefreshing(false);
   }, [user]);
@@ -979,11 +1105,20 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     ) => {
       if (action === "open") {
         Haptics.selectionAsync();
+        if (item.kind === "channel_broadcast" && item.channel_id) {
+          router.push({ pathname: "/channel/[id]", params: { id: item.channel_id } } as any);
+          return;
+        }
+        let chatId = item.id;
+        if (item.kind === "notes" && chatId === "MY_NOTES_VIRTUAL") {
+          chatId = (await findOrCreateNotesChatId(user?.id || "")) || "";
+          if (!chatId) return;
+        }
         router.push({
           pathname: "/chat/[id]",
           params: {
-            id: item.id,
-            otherName: item.other_display_name || "",
+            id: chatId,
+            otherName: item.kind === "notes" ? "My Notes" : (item.other_display_name || ""),
             otherAvatar: item.other_avatar || "",
             otherId: item.other_id || "",
             isGroup: item.is_group ? "true" : "false",
@@ -994,6 +1129,8 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
         });
         return;
       }
+      // Don't allow pin/archive/delete on special items
+      if (item.kind === "notes" || item.kind === "channel_broadcast") return;
       if (action === "togglePin") {
         const next = !item.is_pinned;
         setChats((prev) =>
@@ -1194,9 +1331,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
 
   const tabFiltered = chats.filter((c) => {
     if (tabFilter === "unread") return c.unread_count > 0;
-    if (tabFilter === "personal") return !c.is_group && !c.is_channel;
+    if (tabFilter === "personal") return !c.is_group && !c.is_channel && c.kind !== "channel_broadcast";
     if (tabFilter === "groups") return c.is_group && !c.is_channel;
-    if (tabFilter === "channels") return c.is_channel;
+    if (tabFilter === "channels") return c.is_channel || c.kind === "channel_broadcast";
     return true;
   });
 
@@ -1208,9 +1345,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
     : tabFiltered;
 
   const totalUnread = chats.reduce((sum, c) => sum + c.unread_count, 0);
-  const personalCount = chats.filter((c) => !c.is_group && !c.is_channel).length;
+  const personalCount = chats.filter((c) => !c.is_group && !c.is_channel && c.kind !== "channel_broadcast").length;
   const groupsCount = chats.filter((c) => c.is_group && !c.is_channel).length;
-  const channelsCount = chats.filter((c) => c.is_channel).length;
+  const channelsCount = chats.filter((c) => c.is_channel || c.kind === "channel_broadcast").length;
 
   const TABS: { key: ChatTabKey; label: string; icon: keyof typeof Ionicons.glyphMap; count: number }[] = [
     { key: "all", label: "All chats", icon: "chatbubbles-outline", count: chats.length },
@@ -1238,9 +1375,9 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
       let result = chats;
       if ("filter" in page) {
         if (page.filter === "unread")   result = chats.filter((c) => c.unread_count > 0);
-        else if (page.filter === "personal") result = chats.filter((c) => !c.is_group && !c.is_channel);
+        else if (page.filter === "personal") result = chats.filter((c) => !c.is_group && !c.is_channel && c.kind !== "channel_broadcast");
         else if (page.filter === "groups")   result = chats.filter((c) => c.is_group && !c.is_channel);
-        else if (page.filter === "channels") result = chats.filter((c) => c.is_channel);
+        else if (page.filter === "channels") result = chats.filter((c) => c.is_channel || c.kind === "channel_broadcast");
       }
       if (search) {
         result = result.filter((c) => {
@@ -1548,13 +1685,22 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                           isSelected={selectedIds.has(item.id)}
                           onEnterSelectMode={() => enterSelectMode(item.id)}
                           onToggleSelect={() => toggleSelect(item.id)}
-                          onPress={() => {
+                          onPress={async () => {
                             Haptics.selectionAsync();
+                            if (item.kind === "channel_broadcast" && item.channel_id) {
+                              router.push({ pathname: "/channel/[id]", params: { id: item.channel_id } } as any);
+                              return;
+                            }
+                            let chatId = item.id;
+                            if (item.kind === "notes" && chatId === "MY_NOTES_VIRTUAL") {
+                              chatId = (await findOrCreateNotesChatId(user.id)) || "";
+                              if (!chatId) return;
+                            }
                             router.push({
                               pathname: "/chat/[id]",
                               params: {
-                                id: item.id,
-                                otherName: (!item.is_group && !item.is_channel && phonebookNames.get(item.other_id)) || item.other_display_name || "",
+                                id: chatId,
+                                otherName: item.kind === "notes" ? "My Notes" : ((!item.is_group && !item.is_channel && phonebookNames.get(item.other_id)) || item.other_display_name || ""),
                                 otherAvatar: item.other_avatar || "",
                                 otherId: item.other_id || "",
                                 isGroup: item.is_group ? "true" : "false",
@@ -1620,13 +1766,22 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                     isSelected={selectedIds.has(item.id)}
                     onEnterSelectMode={() => enterSelectMode(item.id)}
                     onToggleSelect={() => toggleSelect(item.id)}
-                    onPress={() => {
+                    onPress={async () => {
                       Haptics.selectionAsync();
+                      if (item.kind === "channel_broadcast" && item.channel_id) {
+                        router.push({ pathname: "/channel/[id]", params: { id: item.channel_id } } as any);
+                        return;
+                      }
+                      let chatId = item.id;
+                      if (item.kind === "notes" && chatId === "MY_NOTES_VIRTUAL") {
+                        chatId = (await findOrCreateNotesChatId(user.id)) || "";
+                        if (!chatId) return;
+                      }
                       router.push({
                         pathname: "/chat/[id]",
                         params: {
-                          id: item.id,
-                          otherName: (!item.is_group && !item.is_channel && phonebookNames.get(item.other_id)) || item.other_display_name || "",
+                          id: chatId,
+                          otherName: item.kind === "notes" ? "My Notes" : ((!item.is_group && !item.is_channel && phonebookNames.get(item.other_id)) || item.other_display_name || ""),
                           otherAvatar: item.other_avatar || "",
                           otherId: item.other_id || "",
                           isGroup: item.is_group ? "true" : "false",
