@@ -5,11 +5,12 @@ enableScreens(true);
 
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Platform, StyleSheet } from "react-native";
+import { Linking, Platform, StyleSheet } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
+import { handleIncomingUrl } from "@/lib/deepLinkHandler";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -47,6 +48,17 @@ export default function RootLayout() {
 
   useEffect(() => {
     initConnectivityToasts();
+  }, []);
+
+  useEffect(() => {
+    // Cold start — app was killed and opened via a link
+    Linking.getInitialURL()
+      .then(handleIncomingUrl)
+      .catch(() => {});
+
+    // Warm start — app already running, link tapped in foreground/background
+    const sub = Linking.addEventListener("url", ({ url }) => handleIncomingUrl(url));
+    return () => sub.remove();
   }, []);
 
   if (!fontsLoaded && !fontError) {

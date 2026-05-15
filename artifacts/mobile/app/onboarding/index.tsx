@@ -157,6 +157,19 @@ export default function OnboardingScreen() {
   const [selectedInterests, setSelectedInterests] = useState<Set<string>>(new Set());
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState("");
+  const [referralAutoFilled, setReferralAutoFilled] = useState(false);
+
+  // Pre-fill referral code from deep-link if the user arrived via a referral URL
+  useEffect(() => {
+    AsyncStorage.getItem("referrer_handle")
+      .then((stored) => {
+        if (stored && stored.trim()) {
+          setReferralCode(stored.trim());
+          setReferralAutoFilled(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const userId = params.userId || user?.id;
 
@@ -855,9 +868,17 @@ export default function OnboardingScreen() {
 
         {/* ── Referral code (optional) ── */}
         <View style={st.fieldWrap}>
-          <Text style={[st.fieldLabel, { color: colors.textSecondary }]}>
-            Referral Code <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12 }}>(optional)</Text>
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <Text style={[st.fieldLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
+              Referral Code <Text style={{ fontFamily: "Inter_400Regular", fontSize: 12 }}>(optional)</Text>
+            </Text>
+            {referralAutoFilled && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.accent + "20", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                <Ionicons name="link-outline" size={10} color={colors.accent} />
+                <Text style={{ color: colors.accent, fontSize: 10, fontFamily: "Inter_600SemiBold" }}>Auto-filled</Text>
+              </View>
+            )}
+          </View>
           <View style={[st.field, { backgroundColor: colors.inputBg }]}>
             <Ionicons
               name="gift-outline"
@@ -870,18 +891,23 @@ export default function OnboardingScreen() {
               placeholder="e.g. JOHNDOE"
               placeholderTextColor={colors.textMuted}
               value={referralCode}
-              onChangeText={(t) => setReferralCode(t.replace(/\s/g, ""))}
+              onChangeText={(t) => {
+                setReferralCode(t.replace(/\s/g, ""));
+                if (referralAutoFilled) setReferralAutoFilled(false);
+              }}
               autoCapitalize="characters"
               autoCorrect={false}
             />
             {referralCode.trim().length > 0 && (
-              <TouchableOpacity onPress={() => setReferralCode("")} style={{ padding: 4 }}>
+              <TouchableOpacity onPress={() => { setReferralCode(""); setReferralAutoFilled(false); }} style={{ padding: 4 }}>
                 <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
           </View>
           <Text style={[st.fieldHint, { color: colors.textMuted }]}>
-            Got invited? Enter the username of the person who referred you.
+            {referralAutoFilled
+              ? "We detected an invite link — your referrer's code has been filled in automatically."
+              : "Got invited? Enter the username of the person who referred you."}
           </Text>
         </View>
       </View>
