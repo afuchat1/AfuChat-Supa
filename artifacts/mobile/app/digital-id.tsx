@@ -100,7 +100,7 @@ async function h2cCapture(el: HTMLElement): Promise<HTMLCanvasElement> {
   return h2c(el, { useCORS: true, allowTaint: false, backgroundColor: null, scale: 3, logging: false });
 }
 
-async function webDownload(domRef: React.RefObject<View>, filename: string) {
+async function webDownload(domRef: React.RefObject<View | null>, filename: string) {
   const el = domRef.current as unknown as HTMLElement | null;
   if (!el) return;
   const canvas = await h2cCapture(el);
@@ -118,7 +118,7 @@ async function nativeDownload(ref: React.RefObject<any>) {
   if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "image/png" });
 }
 
-async function webPrint(frontRef: React.RefObject<View>, backRef: React.RefObject<View>, handle: string) {
+async function webPrint(frontRef: React.RefObject<View | null>, backRef: React.RefObject<View | null>, handle: string) {
   const frontEl = frontRef.current as unknown as HTMLElement | null;
   const backEl  = backRef.current  as unknown as HTMLElement | null;
   if (!frontEl || !backEl) return;
@@ -184,8 +184,8 @@ export default function DigitalIdScreen() {
   /* capture refs */
   const frontDomRef  = useRef<View>(null);        // web html2canvas
   const backDomRef   = useRef<View>(null);
-  const frontShotRef = useRef<ViewShot>(null);     // native viewshot
-  const backShotRef  = useRef<ViewShot>(null);
+  const frontShotRef = useRef<any>(null);     // native viewshot
+  const backShotRef  = useRef<any>(null);
 
   useEffect(()=>{
     if(!profile?.id) return;

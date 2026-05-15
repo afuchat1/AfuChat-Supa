@@ -428,10 +428,7 @@ export default function ContactProfileScreen() {
         showAlert("Permission needed", "Allow contacts access to save this person to your phone.");
         return;
       }
-      await Contacts.presentContactInputAsync({
-        [Contacts.Fields.FirstName]: profile.display_name,
-        [Contacts.Fields.Note]: `AfuChat: @${profile.handle}`,
-      } as any);
+      await Contacts.presentContactPickerAsync();
     } catch {
       showAlert("Error", "Could not open contacts. Please try again.");
     }

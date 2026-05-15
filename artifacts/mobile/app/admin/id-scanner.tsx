@@ -161,14 +161,15 @@ async function fetchFullRecord(afuIdStr: string): Promise<FullRecord | null> {
     "created_at", "updated_at",
   ].join(", ");
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profileData, error: profileError } = await supabase
     .from("profiles")
     .select(COLS)
     .eq("id", baseProfile.id)
     .single();
 
   if (profileError) throw new Error(profileError.message);
-  if (!profile) return null;
+  if (!profileData) return null;
+  const profile = profileData as any;
 
   const [
     { count: membersBefore },

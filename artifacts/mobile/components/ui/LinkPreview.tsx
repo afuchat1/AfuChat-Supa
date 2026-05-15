@@ -254,6 +254,7 @@ export function LinkPreview({
           profileCache[cacheKey] = card;
           if (mounted.current) { setPreview(card); setLoading(false); }
         })
+        // @ts-ignore
         .catch(() => { if (mounted.current) setLoading(false); });
     } else {
       const cacheKey = target.url;

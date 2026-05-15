@@ -94,7 +94,7 @@ export function DevViewToolbar() {
           onPress={() => setOpen((v) => !v)}
           style={({ hovered, pressed }) => [
             styles.select,
-            // @ts-expect-error -- hovered is web-only
+            // @ts-ignore -- hovered is web-only
             hovered && styles.selectHovered,
             pressed && styles.selectPressed,
           ]}
@@ -117,7 +117,7 @@ export function DevViewToolbar() {
                   }}
                   style={({ hovered }) => [
                     styles.menuItem,
-                    // @ts-expect-error -- hovered is web-only
+                    // @ts-ignore -- hovered is web-only
                     hovered && styles.menuItemHovered,
                     active && styles.menuItemActive,
                   ]}
@@ -147,7 +147,6 @@ const styles = StyleSheet.create({
     right: 0,
     height: 34,
     paddingHorizontal: 14,
-    backgroundColor: "rgba(10, 10, 10, 0.92)",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -155,7 +154,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.08)",
     backgroundColor: "rgba(20, 20, 24, 0.97)",
-    // @ts-expect-error -- web-only
+    // @ts-ignore -- web-only
     fontFamily: "ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui",
   },
   leftCluster: {
@@ -168,7 +167,7 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: "#10b981",
-    // @ts-expect-error -- web-only
+    // @ts-ignore -- web-only
     boxShadow: "0 0 0 3px rgba(16, 185, 129, 0.18)",
   },
   brandText: {
@@ -202,7 +201,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.14)",
     backgroundColor: "rgba(255, 255, 255, 0.04)",
-    // @ts-expect-error -- web-only
+    // @ts-ignore -- web-only
     cursor: "pointer",
   },
   selectHovered: {
@@ -237,7 +236,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.12)",
     paddingVertical: 4,
-    // @ts-expect-error -- web-only
+    // @ts-ignore -- web-only
     boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)",
   },
   menuItem: {
@@ -246,7 +245,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    // @ts-expect-error -- web-only
+    // @ts-ignore -- web-only
     cursor: "pointer",
   },
   menuItemHovered: {

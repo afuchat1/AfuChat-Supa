@@ -20,6 +20,7 @@ import Reanimated, {
   Extrapolation,
   interpolate,
   runOnJS,
+  SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -106,7 +107,7 @@ function DotIndicator({
   accent,
 }: {
   index:      number;
-  translateX: Reanimated.SharedValue<number>;
+  translateX: SharedValue<number>;
   accent:     string;
 }) {
   const style = useAnimatedStyle(() => {

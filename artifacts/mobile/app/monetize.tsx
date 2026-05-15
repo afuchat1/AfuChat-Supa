@@ -291,11 +291,11 @@ export default function CreatorStudioScreen() {
   const [totalEarned,     setTotalEarned]     = useState(0);
   const [prevEarned,      setPrevEarned]      = useState(0);
   const [earningsByFeature, setEarningsByFeature] = useState<Record<string, number>>({});
-  const [chartData,       setChartData]       = useState<{ val: number }[]>([]);
+  const [chartData,       setChartData]       = useState<{ val: number; label?: string; shortLabel?: string }[]>([]);
   const [totalViews,      setTotalViews]      = useState(0);
   const [totalLikes,      setTotalLikes]      = useState(0);
   const [prevViews,       setPrevViews]       = useState(0);
-  const [followerCount,   setFollowerCount]   = useState<number>(profile?.followers_count ?? 0);
+  const [followerCount,   setFollowerCount]   = useState<number>((profile as any)?.followers_count ?? 0);
   const [tipsTotal,       setTipsTotal]       = useState(0);
   const [streak,          setStreak]          = useState(0);
   const [payoutHistory,   setPayoutHistory]   = useState<any[]>([]);
@@ -658,7 +658,7 @@ export default function CreatorStudioScreen() {
               {/* X-axis labels */}
               <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 4 }}>
                 {chartData.filter((_, i) => i === 0 || i === Math.floor(chartData.length / 2) || i === chartData.length - 1).map((d, i) => (
-                  <Text key={i} style={[cs.xLabel, { color: colors.textMuted }]}>{d.shortLabel || d.label.slice(0, 6)}</Text>
+                  <Text key={i} style={[cs.xLabel, { color: colors.textMuted }]}>{d.shortLabel || (d.label ?? "").slice(0, 6)}</Text>
                 ))}
               </View>
             </>

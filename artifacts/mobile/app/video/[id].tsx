@@ -1741,7 +1741,7 @@ export default function VideoPlayerScreen() {
         return;
       }
       const url = await resolveDownloadUrl();
-      const dest = `${FileSystem.cacheDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
+      const dest = `${(FileSystem as any).cacheDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
       const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
       if (!uri || (dlStatus !== undefined && (dlStatus < 200 || dlStatus >= 400))) throw new Error(`HTTP ${dlStatus}`);
       await MediaLibrary.createAssetAsync(uri);

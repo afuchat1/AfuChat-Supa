@@ -1539,7 +1539,6 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                     <SafeFlashList
                       data={pageChats}
                       keyExtractor={(item) => item.id}
-                      estimatedItemSize={72}
                       renderItem={({ item }) => (
                         <ChatRow
                           item={item}
@@ -1611,7 +1610,6 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
               <SafeFlashList
                 data={filtered}
                 keyExtractor={(item) => item.id}
-                estimatedItemSize={72}
                 renderItem={({ item }) => (
                   <ChatRow
                     item={item}

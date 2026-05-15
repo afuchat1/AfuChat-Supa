@@ -1088,9 +1088,9 @@ export default function CompanyPageScreen() {
                           setAiLoading("improve");
                           try {
                             const improved = await aiEnhanceOrgPost(postText, {
-                              orgName: page.name, orgType: page.org_type ?? undefined, industry: page.industry ?? undefined,
+                              name: page.name, orgType: page.org_type ?? undefined, industry: page.industry ?? undefined,
                               location: page.location ?? undefined, website: page.website ?? undefined,
-                              description: page.description ?? undefined, tagline: page.tagline ?? undefined,
+                              tagline: page.tagline ?? undefined,
                             });
                             setPostText(improved.slice(0, 3000));
                           } catch { showAlert("AI Error", "Could not improve your draft. Please try again."); }

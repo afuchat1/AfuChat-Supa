@@ -788,11 +788,11 @@ export default function WalletScreen() {
               </View>
               <Text style={[s.emptyTitle, { color: colors.text }]}>No transactions yet</Text>
               <Text style={[s.emptySub, { color: colors.textMuted }]}>
-                {activeTab === "points"
+                {(activeTab as string) === "points"
                   ? "Earn XP by posting, sending messages and daily login"
                   : "Buy ACoin or send Nexa to get started"}
               </Text>
-              {activeTab !== "points" && (
+              {(activeTab as string) !== "points" && (
                 <TouchableOpacity style={[s.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => router.push("/wallet/topup")}>
                   <Ionicons name="add" size={18} color="#fff" />
                   <Text style={s.emptyBtnText}>Buy ACoin</Text>

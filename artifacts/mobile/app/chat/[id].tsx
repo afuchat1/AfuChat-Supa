@@ -2849,7 +2849,7 @@ function ChatScreen() {
               await deleteAllLocalMessages(chatId);
             }
             if (chatInfo?.other_id === AFUAI_BOT_ID) {
-              await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId }).catch(() => {});
+              try { await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId }); } catch {}
             }
             setMessages([]);
           } catch {
@@ -4592,7 +4592,7 @@ STRICT RULES:
                     const Contacts = await import("expo-contacts");
                     const { status } = await Contacts.requestPermissionsAsync();
                     if (status !== "granted") { showAlert("Permission needed", "Allow contacts access to save this person."); return; }
-                    await Contacts.presentContactInputAsync({ [Contacts.Fields.FirstName]: chatInfo.other_name || "Unknown" } as any);
+                    await Contacts.presentContactPickerAsync();
                     setIsStranger(false);
                   } catch {}
                 }}

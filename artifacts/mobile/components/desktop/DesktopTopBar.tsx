@@ -369,7 +369,6 @@ function NavDropdown({
         <View
           // @ts-expect-error react-native-web maps dataSet to data-* attrs
           dataSet={{ "nav-dropdown": "1" }}
-          // @ts-expect-error react-native-web passes through mouse events
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
           style={[
