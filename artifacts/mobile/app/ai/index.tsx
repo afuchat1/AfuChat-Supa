@@ -40,22 +40,43 @@ export default function AiRedirect() {
         ? { lensIntro }
         : undefined;
 
-    AsyncStorage.getItem(AI_CHAT_CACHE_KEY).then((cached) => {
+    async function openAiChat() {
+      // 1. Try validated cache first — avoids an RPC round-trip on repeat visits
+      const cached = await AsyncStorage.getItem(AI_CHAT_CACHE_KEY).catch(() => null);
       if (cached) {
-        goToAiChat(cached, opts);
-      }
-    });
-
-    supabase
-      .rpc("get_or_create_direct_chat", { other_user_id: AFUAI_BOT_ID })
-      .then(({ data: chatId }) => {
-        if (chatId) {
-          AsyncStorage.setItem(AI_CHAT_CACHE_KEY, chatId).catch(() => {});
-          goToAiChat(chatId, opts);
-        } else {
-          router.back();
+        const { data: member } = await supabase
+          .from("chat_members")
+          .select("chat_id")
+          .eq("chat_id", cached)
+          .eq("user_id", user!.id)
+          .maybeSingle();
+        if (member) {
+          // Cache is valid — navigate immediately, refresh cache silently in background
+          goToAiChat(cached, opts);
+          supabase
+            .rpc("get_or_create_direct_chat", { other_user_id: AFUAI_BOT_ID })
+            .then(({ data: chatId }) => {
+              if (chatId && chatId !== cached) {
+                AsyncStorage.setItem(AI_CHAT_CACHE_KEY, chatId).catch(() => {});
+              }
+            });
+          return;
         }
-      });
+        // Cache is stale — clear it
+        await AsyncStorage.removeItem(AI_CHAT_CACHE_KEY).catch(() => {});
+      }
+
+      // 2. No valid cache — call the RPC and navigate once with the result
+      const { data: chatId } = await supabase.rpc("get_or_create_direct_chat", { other_user_id: AFUAI_BOT_ID });
+      if (chatId) {
+        AsyncStorage.setItem(AI_CHAT_CACHE_KEY, chatId).catch(() => {});
+        goToAiChat(chatId, opts);
+      } else {
+        router.back();
+      }
+    }
+
+    openAiChat();
   }, [user]);
 
   return (
