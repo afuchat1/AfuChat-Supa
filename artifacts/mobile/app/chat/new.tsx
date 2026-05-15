@@ -354,7 +354,13 @@ export default function NewChatScreen() {
       showAlert("Error", "Could not start conversation. Please try again.");
       return;
     }
-    router.replace({ pathname: "/chat/[id]", params: { id: chatId } });
+    const isSelfChat = contactId === user.id;
+    router.replace({
+      pathname: "/chat/[id]",
+      params: isSelfChat
+        ? { id: chatId, otherId: user.id, otherName: "My Notes" }
+        : { id: chatId },
+    });
   }
 
   async function createGroup() {

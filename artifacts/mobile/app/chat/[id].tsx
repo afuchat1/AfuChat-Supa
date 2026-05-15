@@ -1767,23 +1767,27 @@ function ChatScreen() {
       .single();
 
     if (chat) {
-      const others = (chat.chat_members || []).filter((m: any) => m.user_id !== user.id);
-      const profileRaw = others[0]?.profiles;
+      const allMembers = (chat.chat_members || []) as any[];
+      const others = allMembers.filter((m) => m.user_id !== user.id);
+      // Self-chat ("My Notes"): when the user is the only member, treat themselves as the other
+      const isSelf = others.length === 0;
+      const sourceMember = isSelf ? allMembers.find((m) => m.user_id === user.id) : others[0];
+      const profileRaw = sourceMember?.profiles;
       const other: any = Array.isArray(profileRaw) ? profileRaw[0] : profileRaw;
-      const memberIds = others.map((m: any) => m.profiles?.id).filter(Boolean) as string[];
+      const memberIds = isSelf ? [user.id] : others.map((m: any) => m.profiles?.id).filter(Boolean) as string[];
       setChatInfo({
         is_group: !!chat.is_group,
         is_channel: !!chat.is_channel,
         name: chat.name,
-        other_name: other?.display_name || "Unknown",
-        other_avatar: other?.avatar_url || null,
-        other_id: other?.id || "",
+        other_name: isSelf ? "My Notes" : (other?.display_name || "Unknown"),
+        other_avatar: isSelf ? null : (other?.avatar_url || null),
+        other_id: isSelf ? user.id : (other?.id || ""),
         member_ids: memberIds,
         avatar_url: chat.avatar_url,
-        is_verified: !!other?.is_verified,
-        is_organization_verified: !!other?.is_organization_verified,
-        other_last_seen: other?.last_seen || null,
-        other_show_online_status: other?.show_online_status !== false,
+        is_verified: isSelf ? false : !!other?.is_verified,
+        is_organization_verified: isSelf ? false : !!other?.is_organization_verified,
+        other_last_seen: isSelf ? null : (other?.last_seen || null),
+        other_show_online_status: isSelf ? false : (other?.show_online_status !== false),
       });
     }
   }, [id, user, isDraft]);
@@ -4540,6 +4544,15 @@ STRICT RULES:
                 <Ionicons name="videocam-outline" size={23} color={colors.text} />
               </TouchableOpacity>
             </>
+          )}
+          {chatInfo && (
+            <TouchableOpacity
+              style={st.headerAction}
+              hitSlop={8}
+              onPress={() => router.push("/(tabs)/search" as any)}
+            >
+              <Ionicons name="search-outline" size={21} color={colors.text} />
+            </TouchableOpacity>
           )}
           {chatInfo && (
             <TouchableOpacity style={st.headerAction} hitSlop={8} onPress={() => setShowChatOptions(true)}>

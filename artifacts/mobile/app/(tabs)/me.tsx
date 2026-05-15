@@ -299,7 +299,14 @@ export default function MeScreen() {
         other_user_id: user.id,
       });
       if (!error && chatId) {
-        router.push({ pathname: "/chat/[id]", params: { id: chatId } } as any);
+        router.push({
+          pathname: "/chat/[id]",
+          params: {
+            id: chatId,
+            otherId: user.id,
+            otherName: "My Notes",
+          },
+        } as any);
       }
     } finally {
       setNotesLoading(false);
