@@ -213,6 +213,7 @@ export default function MeScreen() {
   const { profile, isPremium, subscription, loading, user } = useAuth();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [hasCompanyPage, setHasCompanyPage] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(false);
   const [verifyBannerDismissed, setVerifyBannerDismissed] = useState(true);
   const [hasVerifApp, setHasVerifApp] = useState(false);
   const [isOrgPageVerified, setIsOrgPageVerified] = useState(false);
@@ -288,6 +289,22 @@ export default function MeScreen() {
       setVerifyBannerDismissed(val === "1");
     });
   }, [user?.id]);
+
+  async function openMyNotes() {
+    if (!user || notesLoading) return;
+    void Haptics.selectionAsync();
+    setNotesLoading(true);
+    try {
+      const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
+        other_user_id: user.id,
+      });
+      if (!error && chatId) {
+        router.push({ pathname: "/chat/[id]", params: { id: chatId } } as any);
+      }
+    } finally {
+      setNotesLoading(false);
+    }
+  }
 
   const dismissVerifyBanner = useCallback(() => {
     setVerifyBannerDismissed(true);
@@ -541,6 +558,7 @@ export default function MeScreen() {
         <View>
           <SectionLabel label="Account" colors={colors} />
           <MenuCard colors={colors}>
+            <MenuItem icon="bookmark-outline" iconColor={accent} label="My Notes" badge={notesLoading ? "…" : undefined} onPress={openMyNotes} showSeparator colors={colors} />
             <MenuItem icon="sparkles-outline" iconColor={colors.icon} label="Advanced Features" onPress={() => router.push("/advanced-features")} showSeparator colors={colors} />
             <MenuItem icon="settings-outline" iconColor={colors.icon} label="Settings" onPress={() => router.push("/settings")} showSeparator colors={colors} />
             <MenuItem icon="help-buoy-outline" iconColor={colors.icon} label="Support Center" onPress={() => router.push("/support" as any)} showSeparator colors={colors} />

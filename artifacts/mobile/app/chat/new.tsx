@@ -584,6 +584,7 @@ export default function NewChatScreen() {
                   phoneOnAfu={phoneOnAfu}
                   phoneNotAfu={phoneNotAfu}
                   onOpenChat={openChat}
+                  myUserId={user?.id || ""}
                 />
               }
               renderSectionHeader={({ section }) => (
@@ -719,6 +720,7 @@ function ListHeader({
   phoneOnAfu,
   phoneNotAfu,
   onOpenChat,
+  myUserId,
 }: {
   colors: any;
   accent: string;
@@ -735,6 +737,7 @@ function ListHeader({
   phoneOnAfu: AfuContact[];
   phoneNotAfu: NonAfuContact[];
   onOpenChat: (userId: string) => void;
+  myUserId: string;
 }) {
   return (
     <View>
@@ -745,6 +748,14 @@ function ListHeader({
           { backgroundColor: colors.surface, borderColor: colors.separator },
         ]}
       >
+        <QuickAction
+          icon="bookmark"
+          iconBg="#5856D6"
+          label="My Notes"
+          onPress={() => myUserId && onOpenChat(myUserId)}
+          colors={colors}
+        />
+        <Separator indent={58} />
         <QuickAction
           icon="people"
           iconBg="#007AFF"

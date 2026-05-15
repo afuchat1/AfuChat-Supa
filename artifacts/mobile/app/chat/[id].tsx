@@ -1289,6 +1289,7 @@ function ChatScreen() {
 
   const [chatInfo, setChatInfo] = useState<ChatInfo | null>(buildInitialChatInfo);
   const isAfuAiDirectChat = chatInfo?.other_id === AFUAI_BOT_ID;
+  const isSelfChat = !chatInfo?.is_group && !chatInfo?.is_channel && !!chatInfo?.other_id && chatInfo?.other_id === user?.id;
   const [phonebookName, setPhonebookName] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingMapRef = useRef<Map<string, string>>(new Map());
@@ -2780,8 +2781,12 @@ STRICT RULES:
       const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
         method: "POST",
         headers: edgeHeaders(),
-        body: JSON.stringify({ messages: [{ role: "system", content: systemPrompt + lensAddition }, ...conversationMessages] }),
+        body: JSON.stringify({
+          messages: [{ role: "system", content: systemPrompt + lensAddition }, ...conversationMessages],
+          max_tokens: 800,
+        }),
       });
+      if (!res.ok) throw new Error(`AI request failed: ${res.status}`);
       const data = await res.json();
       const rawReply = (data.reply || "Sorry, I couldn't process that. Please try again.").trim();
       const parsed = parseAfuAiTags(rawReply);
@@ -4149,8 +4154,10 @@ STRICT RULES:
 
   const headerTitle = chatInfo?.is_group || chatInfo?.is_channel
     ? chatInfo.name || "Group"
-    : (phonebookName || chatInfo?.other_name || "Chat");
-  const headerAvatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : chatInfo?.other_avatar;
+    : isSelfChat
+      ? "My Notes"
+      : (phonebookName || chatInfo?.other_name || "Chat");
+  const headerAvatar = chatInfo?.is_group || chatInfo?.is_channel ? chatInfo?.avatar_url : isSelfChat ? null : chatInfo?.other_avatar;
 
   const getMessageSpacing = useCallback((index: number): number => {
     if (index === 0) return 0;
@@ -4208,6 +4215,7 @@ STRICT RULES:
           style={st.headerProfile}
           activeOpacity={0.7}
           onPress={() => {
+            if (isSelfChat) return;
             if (chatInfo && !chatInfo.is_group && !chatInfo.is_channel && chatInfo.other_id) {
               router.push({ pathname: "/contact/[id]", params: { id: chatInfo.other_id } });
             } else if (chatInfo && (chatInfo.is_group || chatInfo.is_channel) && id) {
@@ -4371,13 +4379,27 @@ STRICT RULES:
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
           <View style={[st.emptyState, { paddingBottom: floatingInputHeight + 16 }]}>
-            <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "14" }]}>
-              <Ionicons name="chatbubbles-outline" size={48} color={BRAND} />
-            </View>
-            <Text style={[st.emptyTitle, { color: colors.text }]}>No messages yet</Text>
-            <Text style={[st.emptySub, { color: colors.textMuted }]}>
-              Say hello to start the conversation
-            </Text>
+            {isSelfChat ? (
+              <>
+                <View style={[st.emptyIconWrap, { backgroundColor: "#5856D614" }]}>
+                  <Ionicons name="bookmark-outline" size={48} color="#5856D6" />
+                </View>
+                <Text style={[st.emptyTitle, { color: colors.text }]}>My Notes</Text>
+                <Text style={[st.emptySub, { color: colors.textMuted }]}>
+                  Send yourself messages, links, ideas or reminders. Only you can see this.
+                </Text>
+              </>
+            ) : (
+              <>
+                <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "14" }]}>
+                  <Ionicons name="chatbubbles-outline" size={48} color={BRAND} />
+                </View>
+                <Text style={[st.emptyTitle, { color: colors.text }]}>No messages yet</Text>
+                <Text style={[st.emptySub, { color: colors.textMuted }]}>
+                  Say hello to start the conversation
+                </Text>
+              </>
+            )}
           </View>
         ) : (
           <View style={{ flex: 1 }}>
@@ -5282,7 +5304,7 @@ STRICT RULES:
               <View style={{ flex: 1 }}>
                 <Text style={[st.optionsName, { color: colors.text }]} numberOfLines={1}>{headerTitle}</Text>
                 <Text style={[st.optionsSub, { color: colors.textMuted }]}>
-                  {chatInfo?.is_channel ? "Channel" : chatInfo?.is_group ? "Group chat" : chatInfo?.other_id === AFUAI_BOT_ID ? "AI Assistant" : "Private chat"}
+                  {chatInfo?.is_channel ? "Channel" : chatInfo?.is_group ? "Group chat" : chatInfo?.other_id === AFUAI_BOT_ID ? "AI Assistant" : isSelfChat ? "Your private notes" : "Private chat"}
                 </Text>
               </View>
             </View>

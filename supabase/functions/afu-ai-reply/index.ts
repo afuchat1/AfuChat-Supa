@@ -56,11 +56,13 @@ async function chatWithGroq(
 ): Promise<string> {
   const models = [
     "llama-3.3-70b-versatile",
+    "llama-3.3-70b-specdec",
     "llama-3.1-70b-versatile",
     "llama-3.1-8b-instant",
     "llama3-70b-8192",
     "llama3-8b-8192",
     "gemma2-9b-it",
+    "llama-guard-3-8b",
   ];
   let lastError = "";
   for (const model of models) {
@@ -203,7 +205,14 @@ Deno.serve(async (req) => {
         : 2048;
 
   const GROQ_KEY = Deno.env.get("GROQ_API_KEY");
-  const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
+  const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
+
+  if (!GROQ_KEY && !GEMINI_KEY) {
+    console.error("AfuAI: No API keys configured. Set GROQ_API_KEY in Supabase Edge Function secrets.");
+    return json({
+      reply: "AfuAI isn't fully set up yet. Please ask the admin to configure the AI service keys.",
+    });
+  }
 
   // Try Groq first
   if (GROQ_KEY) {
