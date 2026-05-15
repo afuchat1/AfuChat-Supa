@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,13 +16,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "@/lib/haptics";
 import { useTheme } from "@/hooks/useTheme";
 import OfflineBanner from "@/components/ui/OfflineBanner";
-import Colors from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 
 const USAGE_KEY = "afu_app_usage";
-const { width: SW } = Dimensions.get("window");
-const TILE_WIDTH = Math.floor((SW - 16 * 2 - 12 * 2) / 4);
+const COLS = 4;
+const H_PAD = 16;
+const CARD_PAD = 8;
 
 type AppItem = {
   id: string;
@@ -158,7 +158,7 @@ const CATEGORIES: Category[] = [
         icon: "bookmark",
         gradient: ["#FF6B35", "#FF8C00"],
         route: "/saved-posts",
-        featuredSub: "Saved posts, starred messages, and your collections — all in one place.",
+        featuredSub: "Saved posts, starred messages, and your collections.",
       },
       {
         id: "collections",
@@ -220,7 +220,17 @@ function resolveGradient(gradient: [string, string], accent: string): [string, s
   return gradient.map((c) => (c === "#00BCD4" ? accent : c)) as [string, string];
 }
 
-function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) {
+function AppTile({
+  app,
+  tileWidth,
+  usageCount,
+  onTap,
+}: {
+  app: AppItem;
+  tileWidth: number;
+  usageCount?: number;
+  onTap: (id: string) => void;
+}) {
   const { colors, accent } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -237,160 +247,159 @@ function AppTile({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) 
   }
 
   return (
-    <Animated.View style={{ transform: [{ scale }], alignItems: "center", width: TILE_WIDTH }}>
+    <Animated.View style={[{ transform: [{ scale }], width: tileWidth, alignItems: "center" }]}>
       <Pressable
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={styles.appTile}
+        style={styles.tilePressable}
       >
-        <View style={styles.appIconWrapper}>
+        <View style={styles.iconWrapper}>
           <LinearGradient
             colors={resolveGradient(app.gradient, accent)}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.appIcon}
+            style={styles.iconGradient}
           >
             <Ionicons name={app.icon} size={28} color="#fff" />
           </LinearGradient>
-          {app.badge && (
-            <View style={styles.appBadge}>
-              <Text style={styles.appBadgeText}>{app.badge}</Text>
+          {app.badge ? (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{app.badge}</Text>
             </View>
-          )}
+          ) : null}
         </View>
-        <Text style={[styles.appLabel, { color: colors.textMuted }]} numberOfLines={1}>{app.label}</Text>
+        <Text style={[styles.tileLabel, { color: colors.textMuted }]} numberOfLines={1}>
+          {app.label}
+        </Text>
+        {usageCount && usageCount > 0 ? (
+          <Text style={[styles.usageText, { color: colors.textMuted }]}>
+            {usageCount > 99 ? "99+" : usageCount}
+            {"x"}
+          </Text>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
 }
 
+function AppGrid({
+  apps,
+  tileWidth,
+  usageCounts,
+  onTap,
+}: {
+  apps: AppItem[];
+  tileWidth: number;
+  usageCounts: Record<string, number>;
+  onTap: (id: string) => void;
+}) {
+  const padCount = apps.length % COLS === 0 ? 0 : COLS - (apps.length % COLS);
+  return (
+    <View style={styles.grid}>
+      {apps.map((app) => (
+        <AppTile
+          key={app.id}
+          app={app}
+          tileWidth={tileWidth}
+          usageCount={usageCounts[app.id]}
+          onTap={onTap}
+        />
+      ))}
+      {Array.from({ length: padCount }).map((_, i) => (
+        <View key={"pad-" + i} style={{ width: tileWidth }} />
+      ))}
+    </View>
+  );
+}
+
 function FeaturedBanner({ app, onTap }: { app: AppItem; onTap: (id: string) => void }) {
-  const { colors } = useTheme();
+  const { colors, accent } = useTheme();
+
   function handlePress() {
     Haptics.selectionAsync();
     onTap(app.id);
     router.push(app.route as any);
   }
+
   return (
     <Pressable
       onPress={handlePress}
-      style={[styles.featuredFlat, { borderBottomColor: colors.border }]}
-      android_ripple={{ color: (colors as any).hover ?? "rgba(0,0,0,0.04)", borderless: false }}
+      style={[styles.featuredCard, { marginHorizontal: H_PAD, marginBottom: 20 }]}
+      android_ripple={{ color: "rgba(0,0,0,0.08)", borderless: false }}
     >
-      <View style={[styles.featuredFlatIcon, { backgroundColor: colors.backgroundSecondary }]}>
-        <Ionicons name={app.icon} size={26} color={colors.text} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.featuredFlatTitle, { color: colors.text }]}>{app.label}</Text>
-        <Text style={[styles.featuredFlatSub, { color: colors.textMuted }]} numberOfLines={2}>
+      <LinearGradient
+        colors={resolveGradient(app.gradient, accent)}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.8 }}
+        style={styles.featuredGradient}
+      >
+        <View style={styles.featuredTop}>
+          <View style={styles.featuredIconWrap}>
+            <Ionicons name={app.icon} size={30} color="#fff" />
+          </View>
+          {app.badge ? (
+            <View style={styles.featuredBadge}>
+              <Text style={styles.featuredBadgeText}>{app.badge}</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.featuredTitle}>{app.label}</Text>
+        <Text style={styles.featuredSub} numberOfLines={2}>
           {app.featuredSub ?? app.label}
         </Text>
-      </View>
-      <View style={styles.featuredFlatCta}>
-        <Text style={[styles.featuredFlatCtaText, { color: colors.text }]}>Open</Text>
-        <Ionicons name="arrow-forward" size={15} color={colors.text} />
-      </View>
+        <View style={styles.featuredCtaRow}>
+          <Text style={styles.featuredCtaText}>Open</Text>
+          <Ionicons name="arrow-forward" size={14} color="rgba(255,255,255,0.9)" />
+        </View>
+      </LinearGradient>
     </Pressable>
   );
 }
 
 function TrendingSection({
   apps,
+  tileWidth,
   usageCounts,
   onTap,
   colors,
 }: {
   apps: AppItem[];
+  tileWidth: number;
   usageCounts: Record<string, number>;
   onTap: (id: string) => void;
   colors: any;
 }) {
   if (apps.length === 0) return null;
   return (
-    <View style={{ marginBottom: 8 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 20, marginBottom: 8 }}>
-        <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.textSecondary, letterSpacing: 0.5 }}>
-          TRENDING
-        </Text>
-        <Text style={{ fontSize: 14 }}>🔥</Text>
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>{"TRENDING"}</Text>
+        <Text style={{ fontSize: 14 }}>{"🔥"}</Text>
       </View>
-      <GlassCard style={[styles.categoryCard, { marginHorizontal: 16, borderRadius: 20, overflow: "hidden" }]} variant="medium">
-        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {apps.map((app) => (
-            <View key={app.id} style={{ width: TILE_WIDTH, alignItems: "center" }}>
-              <AppTileInner app={app} usageCount={usageCounts[app.id] ?? 0} onTap={onTap} colors={colors} />
-            </View>
-          ))}
-          {apps.length % 4 !== 0 &&
-            Array.from({ length: 4 - (apps.length % 4) }).map((_, i) => (
-              <View key={`pad-${i}`} style={{ width: TILE_WIDTH }} />
-            ))}
-        </View>
+      <GlassCard style={[styles.categoryCard, { marginHorizontal: H_PAD }]} variant="medium">
+        <AppGrid apps={apps} tileWidth={tileWidth} usageCounts={usageCounts} onTap={onTap} />
       </GlassCard>
     </View>
-  );
-}
-
-function AppTileInner({ app, usageCount, onTap, colors }: { app: AppItem; usageCount: number; onTap: (id: string) => void; colors: any }) {
-  const { accent } = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
-  function handlePressIn() {
-    Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
-  }
-  function handlePressOut() {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 8 }).start();
-  }
-  function handlePress() {
-    Haptics.selectionAsync();
-    onTap(app.id);
-    router.push(app.route as any);
-  }
-  return (
-    <Animated.View style={{ transform: [{ scale }], alignItems: "center", width: TILE_WIDTH }}>
-      <Pressable
-        onPress={handlePress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={styles.appTile}
-      >
-        <View style={styles.appIconWrapper}>
-          <LinearGradient
-            colors={resolveGradient(app.gradient, accent)}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.appIcon}
-          >
-            <Ionicons name={app.icon} size={28} color="#fff" />
-          </LinearGradient>
-          {app.badge && (
-            <View style={styles.appBadge}>
-              <Text style={styles.appBadgeText}>{app.badge}</Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.appLabel, { color: colors.textMuted }]} numberOfLines={1}>{app.label}</Text>
-        {usageCount > 0 && (
-          <Text style={{ fontSize: 9, color: colors.textMuted, fontFamily: "Inter_400Regular", marginTop: 1 }}>
-            {usageCount > 99 ? "99+" : usageCount}x
-          </Text>
-        )}
-      </Pressable>
-    </Animated.View>
   );
 }
 
 export default function AppsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: SW } = useWindowDimensions();
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({});
   const { isPremium, profile } = useAuth();
   const isAdmin = !!profile?.is_admin;
 
+  const tileWidth = Math.floor((SW - H_PAD * 2 - CARD_PAD * 2) / COLS);
+
   useEffect(() => {
     AsyncStorage.getItem(USAGE_KEY).then((raw) => {
       if (raw) {
-        try { setUsageCounts(JSON.parse(raw)); } catch {}
+        try {
+          setUsageCounts(JSON.parse(raw));
+        } catch (_) {}
       }
     });
   }, []);
@@ -421,49 +430,48 @@ export default function AppsScreen() {
     visibleApps[0];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <OfflineBanner />
       <ScrollView
-        style={{ flex: 1 }}
+        style={styles.scroll}
         contentContainerStyle={{
           paddingTop: insets.top + 8,
-          paddingBottom: insets.bottom + 90,
+          paddingBottom: insets.bottom + 100,
         }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Apps</Text>
-          {isPremium && (
-            <View style={styles.premiumPill}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{"Apps"}</Text>
+          {isPremium ? (
+            <View style={[styles.premiumPill, { backgroundColor: colors.backgroundSecondary }]}>
               <Ionicons name="diamond" size={11} color="#FFD60A" />
-              <Text style={styles.premiumPillText}>Premium</Text>
+              <Text style={styles.premiumPillText}>{"Premium"}</Text>
             </View>
-          )}
+          ) : null}
         </View>
 
-        {featuredApp && <FeaturedBanner app={featuredApp} onTap={trackTap} />}
+        {featuredApp ? <FeaturedBanner app={featuredApp} onTap={trackTap} /> : null}
+
         <TrendingSection
           apps={trendingApps}
+          tileWidth={tileWidth}
           usageCounts={usageCounts}
           onTap={trackTap}
           colors={colors}
         />
 
         {visibleCategories.map((cat) => (
-          <View key={cat.id} style={styles.category}>
-            <Text style={[styles.categoryTitle, { color: colors.textSecondary }]}>
+          <View key={cat.id} style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary, paddingHorizontal: H_PAD }]}>
               {cat.title.toUpperCase()}
             </Text>
-            <GlassCard style={[styles.categoryCard, { borderRadius: 20, overflow: "hidden" }]} variant="medium">
-              <View style={styles.appGrid}>
-                {cat.apps.map((app) => (
-                  <AppTile key={app.id} app={app} onTap={trackTap} />
-                ))}
-                {cat.apps.length % 4 !== 0 &&
-                  Array.from({ length: 4 - (cat.apps.length % 4) }).map((_, i) => (
-                    <View key={`pad-${i}`} style={{ width: TILE_WIDTH }} />
-                  ))}
-              </View>
+            <GlassCard style={[styles.categoryCard, { marginHorizontal: H_PAD }]} variant="medium">
+              <AppGrid
+                apps={cat.apps}
+                tileWidth={tileWidth}
+                usageCounts={usageCounts}
+                onTap={trackTap}
+              />
             </GlassCard>
           </View>
         ))}
@@ -473,13 +481,14 @@ export default function AppsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1 },
+  scroll: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingHorizontal: H_PAD,
+    paddingBottom: 16,
   },
   headerTitle: {
     fontSize: 34,
@@ -490,7 +499,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#1C1C1E",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 20,
@@ -500,82 +508,109 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
   },
-  featuredFlat: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 4,
+  featuredCard: {
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  featuredGradient: {
+    padding: 20,
+    paddingBottom: 16,
+  },
+  featuredTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-  featuredFlatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+  featuredIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
   },
-  featuredFlatTitle: {
-    fontSize: 16,
+  featuredBadge: {
+    backgroundColor: "rgba(255,255,255,0.25)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  featuredBadgeText: {
+    color: "#fff",
+    fontSize: 11,
     fontFamily: "Inter_700Bold",
-    marginBottom: 2,
   },
-  featuredFlatSub: {
-    fontSize: 13,
+  featuredTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+    marginBottom: 4,
+  },
+  featuredSub: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
-    lineHeight: 18,
+    lineHeight: 20,
+    marginBottom: 14,
   },
-  featuredFlatCta: {
+  featuredCtaRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
   },
-  featuredFlatCtaText: {
-    fontSize: 13,
+  featuredCtaText: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
     fontFamily: "Inter_600SemiBold",
   },
-  category: {
-    marginBottom: 12,
+  section: {
+    marginBottom: 16,
   },
-  categoryTitle: {
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: H_PAD,
+    marginBottom: 8,
+  },
+  sectionTitle: {
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.5,
-    paddingHorizontal: 20,
     marginBottom: 8,
   },
   categoryCard: {
-    marginHorizontal: 16,
+    borderRadius: 20,
+    overflow: "hidden",
     paddingVertical: 4,
+    paddingHorizontal: CARD_PAD,
   },
-  appGrid: {
+  grid: {
     flexDirection: "row",
     flexWrap: "wrap",
   },
-  appTile: {
+  tilePressable: {
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
+    width: "100%",
   },
-  appIconWrapper: {
+  iconWrapper: {
     position: "relative",
     marginBottom: 6,
   },
-  appIcon: {
-    width: 60,
-    height: 60,
+  iconGradient: {
+    width: 58,
+    height: 58,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
-  appBadge: {
+  badge: {
     position: "absolute",
     top: -4,
-    right: -4,
+    right: -6,
     backgroundColor: "#FF3B30",
     borderRadius: 6,
     paddingHorizontal: 5,
@@ -583,15 +618,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#fff",
   },
-  appBadgeText: {
+  badgeText: {
     color: "#fff",
     fontSize: 8,
     fontFamily: "Inter_700Bold",
   },
-  appLabel: {
+  tileLabel: {
     fontSize: 11,
     fontFamily: "Inter_500Medium",
     textAlign: "center",
-    maxWidth: 64,
+    maxWidth: 62,
+  },
+  usageText: {
+    fontSize: 9,
+    fontFamily: "Inter_400Regular",
+    marginTop: 1,
   },
 });
