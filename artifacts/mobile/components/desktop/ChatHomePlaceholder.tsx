@@ -55,7 +55,7 @@ export function ChatHomePlaceholder() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={styles.center}>
         <View style={[styles.logoWrap, { backgroundColor: tileBg }]}>
-          <Image source={afuLogo} style={styles.logo} resizeMode="contain" />
+          <Image source={afuLogo} style={styles.logo} resizeMode="contain" tintColor={colors.accent} />
         </View>
         <Text style={[styles.title, { color: colors.text }]}>AfuChat for desktop</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>

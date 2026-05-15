@@ -197,7 +197,7 @@ function PublicProfileScreen({ handle }: { handle: string }) {
 
         {/* Join AfuChat banner */}
         <View style={[pub.joinCard, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "25" }]}>
-          <Image source={afuSymbol} style={pub.joinLogo} resizeMode="contain" />
+          <Image source={afuSymbol} style={pub.joinLogo} resizeMode="contain" tintColor={colors.accent} />
           <View style={{ flex: 1 }}>
             <Text style={[pub.joinTitle, { color: Colors.brand }]}>Join AfuChat</Text>
             <Text style={[pub.joinSub, { color: colors.textMuted }]}>

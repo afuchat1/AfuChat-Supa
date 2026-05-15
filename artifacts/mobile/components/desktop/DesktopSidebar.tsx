@@ -167,7 +167,7 @@ function SidebarNavItem({
 
 export function DesktopSidebar() {
   const pathname = usePathname() || "/";
-  const { isDark, themeMode, setThemeMode } = useTheme();
+  const { isDark, themeMode, setThemeMode, accent } = useTheme();
   const { session } = useAuth();
 
   const isLoggedIn = !!session;
@@ -187,7 +187,7 @@ export function DesktopSidebar() {
     hoverBg: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
     activeBg: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
     divider: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
-    accent: "#00BCD4",
+    accent: accent,
     surface: isDark ? "#1a1a1a" : "#f8f8f8",
     inputBg: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
   };
@@ -205,7 +205,7 @@ export function DesktopSidebar() {
       >
         {/* Brand */}
         <View style={styles.brandRow}>
-          <Image source={afuSymbol} style={styles.brandLogo} />
+          <Image source={afuSymbol} style={styles.brandLogo} tintColor={accent} />
           <Text style={[styles.brandText, { color: theme.text }]}>AfuChat</Text>
         </View>
 
