@@ -249,8 +249,11 @@ export default function FreelanceScreen() {
 
   const loadAll = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchListings(), fetchOrders()]);
-    setLoading(false);
+    try {
+      await Promise.all([fetchListings(), fetchOrders()]);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [fetchListings, fetchOrders]);
 
   useEffect(() => { loadAll(); }, [loadAll]);

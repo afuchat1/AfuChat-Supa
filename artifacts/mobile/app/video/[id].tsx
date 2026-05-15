@@ -1578,7 +1578,7 @@ export default function VideoPlayerScreen() {
       if (seenBatch.length > 0) markVideosSeen(seenBatch).catch(() => {});
       // Preload more when 3 from end
       if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
-        fetchVideos(videoTabRef.current, cursorRef.current);
+        fetchVideos(videoTabRef.current, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
       }
     }
   }).current;
@@ -1797,7 +1797,7 @@ export default function VideoPlayerScreen() {
     scrollSettleRef.current = setTimeout(() => {
       const idx = Math.round(el.scrollTop / SCREEN_H);
       if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
-        fetchVideos(videoTabRef.current, cursorRef.current);
+        fetchVideos(videoTabRef.current, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
       }
     }, 150);
   }
@@ -1964,7 +1964,7 @@ export default function VideoPlayerScreen() {
           // End-reached
           onEndReached={() => {
             if (!loadingMoreRef.current && hasMore && cursorRef.current) {
-              fetchVideos(videoTab, cursorRef.current);
+              fetchVideos(videoTab, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
             }
           }}
           onEndReachedThreshold={2}

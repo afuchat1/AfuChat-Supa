@@ -470,26 +470,29 @@ function MatchesTab() {
 
   async function load() {
     if (!user) return;
-    const { data } = await supabase
-      .from("match_matches")
-      .select("id, user1_id, user2_id, matched_at, is_super_match")
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .order("matched_at", { ascending: false });
+    try {
+      const { data } = await supabase
+        .from("match_matches")
+        .select("id, user1_id, user2_id, matched_at, is_super_match")
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        .order("matched_at", { ascending: false });
 
-    if (!data) { setLoading(false); return; }
+      if (!data) { return; }
 
-    const enriched = await Promise.all(data.map(async (m: any) => {
-      const otherId = m.user1_id === user.id ? m.user2_id : m.user1_id;
-      const [{ data: mp }, { data: ph }, { data: lastMsg }] = await Promise.all([
-        supabase.from("match_profiles").select("user_id, name, date_of_birth, location_name, show_age").eq("user_id", otherId).maybeSingle(),
-        supabase.from("match_photos").select("url").eq("user_id", otherId).eq("is_primary", true).maybeSingle(),
-        supabase.from("match_messages").select("content, sent_at, sender_id").eq("match_id", m.id).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
-      ]);
-      return { ...m, other: { ...(mp ?? { user_id: otherId, name: "User" }), primary_photo: ph?.url ?? null, last_msg: lastMsg } };
-    }));
+      const enriched = await Promise.all(data.map(async (m: any) => {
+        const otherId = m.user1_id === user.id ? m.user2_id : m.user1_id;
+        const [{ data: mp }, { data: ph }, { data: lastMsg }] = await Promise.all([
+          supabase.from("match_profiles").select("user_id, name, date_of_birth, location_name, show_age").eq("user_id", otherId).maybeSingle(),
+          supabase.from("match_photos").select("url").eq("user_id", otherId).eq("is_primary", true).maybeSingle(),
+          supabase.from("match_messages").select("content, sent_at, sender_id").eq("match_id", m.id).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        return { ...m, other: { ...(mp ?? { user_id: otherId, name: "User" }), primary_photo: ph?.url ?? null, last_msg: lastMsg } };
+      }));
 
-    setMatches(enriched.filter((m) => m.other));
-    setLoading(false);
+      setMatches(enriched.filter((m) => m.other));
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }
 
   if (loading) return <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4].map(i => <ProfileSkeleton key={i} />)}</View>;
@@ -610,17 +613,20 @@ export default function MatchScreen() {
 
     if (!profileData) { setLoading(false); return; }
 
-    // Fetch photos for each candidate
-    const withPhotos = await Promise.all(
-      (profileData as any[]).map(async (p) => {
-        const { data: ph } = await supabase.from("match_photos").select("url, display_order").eq("user_id", p.user_id).order("display_order").limit(6);
-        return { ...p, photos: ph ?? [], interests: p.interests ?? [] };
-      })
-    );
+    try {
+      // Fetch photos for each candidate
+      const withPhotos = await Promise.all(
+        (profileData as any[]).map(async (p) => {
+          const { data: ph } = await supabase.from("match_photos").select("url, display_order").eq("user_id", p.user_id).order("display_order").limit(6);
+          return { ...p, photos: ph ?? [], interests: p.interests ?? [] };
+        })
+      );
 
-    // Filter out candidates with no photos
-    setCandidates(withPhotos.filter((c) => c.photos.length > 0));
-    setLoading(false);
+      // Filter out candidates with no photos
+      setCandidates(withPhotos.filter((c) => c.photos.length > 0));
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }
 
   async function recordSwipe(c: Candidate, direction: "like" | "nope" | "superlike") {

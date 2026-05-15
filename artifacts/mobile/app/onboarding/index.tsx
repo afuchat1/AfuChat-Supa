@@ -470,7 +470,15 @@ export default function OnboardingScreen() {
     }
 
     let avatarUrl: string | null = null;
-    if (avatarUri) avatarUrl = await uploadAvatar();
+    if (avatarUri) {
+      try {
+        avatarUrl = await uploadAvatar();
+      } catch (_) {
+        setLoading(false);
+        showAlert("Upload failed", "Could not upload your profile photo. Please try again.");
+        return;
+      }
+    }
 
     const fullPhone = selectedCountry ? `${selectedCountry.dial}${phoneNumber.replace(/\D/g, "")}` : null;
     if (fullPhone) {
