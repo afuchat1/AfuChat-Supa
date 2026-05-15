@@ -1,0 +1,107 @@
+-- Push Notification Database Webhooks Setup
+-- ============================================================
+-- Run this migration AFTER deploying the edge functions:
+--   supabase functions deploy push-notification-trigger
+--   supabase functions deploy send-push-notification
+--   supabase functions deploy register-push-token
+--
+-- OPTION A (recommended): Supabase Dashboard Webhooks
+-- ---------------------------------------------------
+-- Go to your Supabase project → Database → Webhooks → Create a new hook
+-- Create one webhook for each table below:
+--
+--   Name:   push_on_message_insert
+--   Table:  messages   (public schema)
+--   Events: INSERT
+--   Type:   Supabase Edge Functions
+--   Edge Function: push-notification-trigger
+--
+--   Name:   push_on_call_insert
+--   Table:  calls      (public schema)
+--   Events: INSERT
+--   Type:   Supabase Edge Functions
+--   Edge Function: push-notification-trigger
+--
+--   Name:   push_on_notification_insert
+--   Table:  notifications (public schema)
+--   Events: INSERT
+--   Type:   Supabase Edge Functions
+--   Edge Function: push-notification-trigger
+--
+-- OPTION B: pg_net extension (SQL-based, no dashboard needed)
+-- -----------------------------------------------------------
+-- Requires pg_net to be enabled: Database → Extensions → pg_net
+-- Replace YOUR_PROJECT_REF with your Supabase project ref.
+-- Replace YOUR_SERVICE_ROLE_KEY with your service_role secret.
+-- (Tip: store the key in Supabase Vault and reference it as a secret
+--  rather than hardcoding it here.)
+
+-- Enable pg_net (skip if already enabled)
+-- CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Helper: call the push-notification-trigger edge function
+-- CREATE OR REPLACE FUNCTION _private.call_push_trigger(payload jsonb)
+-- RETURNS void
+-- LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- BEGIN
+--   PERFORM net.http_post(
+--     url     := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/push-notification-trigger',
+--     headers := jsonb_build_object(
+--       'Content-Type',  'application/json',
+--       'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY'
+--     ),
+--     body    := payload
+--   );
+-- END;
+-- $$;
+
+-- Trigger: messages
+-- CREATE OR REPLACE FUNCTION _private.push_on_message_insert()
+-- RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- BEGIN
+--   PERFORM _private.call_push_trigger(
+--     jsonb_build_object('type','INSERT','table','messages','schema','public',
+--                        'record', to_jsonb(NEW), 'old_record', null)
+--   );
+--   RETURN NEW;
+-- END;
+-- $$;
+-- DROP TRIGGER IF EXISTS push_on_message_insert ON public.messages;
+-- CREATE TRIGGER push_on_message_insert
+--   AFTER INSERT ON public.messages
+--   FOR EACH ROW EXECUTE FUNCTION _private.push_on_message_insert();
+
+-- Trigger: calls
+-- CREATE OR REPLACE FUNCTION _private.push_on_call_insert()
+-- RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- BEGIN
+--   PERFORM _private.call_push_trigger(
+--     jsonb_build_object('type','INSERT','table','calls','schema','public',
+--                        'record', to_jsonb(NEW), 'old_record', null)
+--   );
+--   RETURN NEW;
+-- END;
+-- $$;
+-- DROP TRIGGER IF EXISTS push_on_call_insert ON public.calls;
+-- CREATE TRIGGER push_on_call_insert
+--   AFTER INSERT ON public.calls
+--   FOR EACH ROW EXECUTE FUNCTION _private.push_on_call_insert();
+
+-- Trigger: notifications
+-- CREATE OR REPLACE FUNCTION _private.push_on_notification_insert()
+-- RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- BEGIN
+--   PERFORM _private.call_push_trigger(
+--     jsonb_build_object('type','INSERT','table','notifications','schema','public',
+--                        'record', to_jsonb(NEW), 'old_record', null)
+--   );
+--   RETURN NEW;
+-- END;
+-- $$;
+-- DROP TRIGGER IF EXISTS push_on_notification_insert ON public.notifications;
+-- CREATE TRIGGER push_on_notification_insert
+--   AFTER INSERT ON public.notifications
+--   FOR EACH ROW EXECUTE FUNCTION _private.push_on_notification_insert();
+
+-- (No active SQL — all live DDL is in Option A / Option B comments above)
+SELECT 1;

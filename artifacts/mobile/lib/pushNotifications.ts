@@ -337,31 +337,25 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
-    // Primary: save via the always-running Express API server
-    // (/api/push/register-token uses the service role key server-side)
-    let savedViaApi = false;
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || "";
+    // Primary: save via Supabase Edge Function (uses service role key server-side)
+    let savedViaEdgeFn = false;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      if (accessToken && apiUrl) {
-        const res = await fetch(`${apiUrl}/api/push/register-token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ token }),
+      if (accessToken) {
+        const { error: fnErr } = await supabase.functions.invoke("register-push-token", {
+          body: { token },
+          headers: { Authorization: `Bearer ${accessToken}` },
         });
-        if (res.ok) savedViaApi = true;
-        else console.warn("[PushNotif] API token save failed:", res.status, await res.text().catch(() => ""));
+        if (!fnErr) savedViaEdgeFn = true;
+        else console.warn("[PushNotif] Edge function token save failed:", fnErr.message);
       }
-    } catch (apiErr: any) {
-      console.warn("[PushNotif] API server unreachable:", apiErr?.message);
+    } catch (fnCatchErr: any) {
+      console.warn("[PushNotif] Edge function unreachable:", fnCatchErr?.message);
     }
 
-    // Fallback: direct Supabase client update
-    if (!savedViaApi) {
+    // Fallback: direct Supabase client update (if edge function unavailable)
+    if (!savedViaEdgeFn) {
       const { error: dbError } = await supabase
         .from("profiles")
         .update({ expo_push_token: token })

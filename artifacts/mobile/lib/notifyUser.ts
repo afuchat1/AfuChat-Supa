@@ -1,10 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import { NOTIF_CATEGORY } from "@/lib/pushNotifications";
 
-// Push notifications are dispatched server-side by the always-running Express
-// API (pushWatcher.ts watches messages/calls/notifications via Supabase
-// realtime and posts to Expo directly). This avoids duplicate pushes and
-// ensures delivery even when the sender's app is closed.
+// Push notifications are dispatched via Supabase Edge Functions only.
+// The mobile client calls the `send-push-notification` edge function directly
+// for immediate delivery. Supabase Database Webhooks call the
+// `push-notification-trigger` edge function for true server-side dispatch
+// (fires even when the sender's app is closed).
 
 type NotifyParams = {
   userId: string;
@@ -21,14 +22,11 @@ type NotifyParams = {
 
 async function callNotify(params: NotifyParams) {
   const {
-    userId, notificationType, actorId,
-    postId, referenceId, referenceType,
+    userId, title, body, data, categoryIdentifier,
+    notificationType, actorId, postId, referenceId, referenceType,
   } = params;
 
-  // Push is dispatched server-side by the Express API's pushWatcher —
-  // no client-side Expo API call needed here.
-
-  // Insert in-app notification record
+  // ── Dedup check: skip if a matching notification was sent in the last 3 min ──
   if (notificationType) {
     try {
       const windowStart = new Date(Date.now() - 3 * 60 * 1000).toISOString();
@@ -39,17 +37,27 @@ async function callNotify(params: NotifyParams) {
         .eq("type", notificationType)
         .gte("created_at", windowStart)
         .limit(1);
-      if (actorId)      dupQuery = dupQuery.eq("actor_id", actorId);
-      else              dupQuery = dupQuery.is("actor_id", null);
-      if (postId)       dupQuery = dupQuery.eq("post_id", postId);
-      else              dupQuery = dupQuery.is("post_id", null);
-      if (referenceId)  dupQuery = dupQuery.eq("reference_id", referenceId);
-      else              dupQuery = dupQuery.is("reference_id", null);
+      if (actorId)     dupQuery = dupQuery.eq("actor_id", actorId);
+      else             dupQuery = dupQuery.is("actor_id", null);
+      if (postId)      dupQuery = dupQuery.eq("post_id", postId);
+      else             dupQuery = dupQuery.is("post_id", null);
+      if (referenceId) dupQuery = dupQuery.eq("reference_id", referenceId);
+      else             dupQuery = dupQuery.is("reference_id", null);
 
       const { data: existing } = await dupQuery;
       if (existing && existing.length > 0) return;
+    } catch (e) {
+      console.warn("[Notify] Dedup check failed:", e);
+    }
+  }
 
-      const record: any = {
+  // ── Insert in-app notification record ───────────────────────────────────────
+  // Supabase Database Webhooks on the `notifications` table will pick this up
+  // and call the `push-notification-trigger` edge function automatically,
+  // providing true server-side push even when the sender's app is closed.
+  if (notificationType) {
+    try {
+      const record: Record<string, unknown> = {
         user_id: userId,
         actor_id: actorId || null,
         type: notificationType,
@@ -62,6 +70,18 @@ async function callNotify(params: NotifyParams) {
     } catch (e) {
       console.warn("[Notify] DB insert failed:", e);
     }
+  }
+
+  // ── Client-side edge function call for immediate delivery ───────────────────
+  // Runs in the background — does not block the caller.
+  if (title && body) {
+    supabase.functions
+      .invoke("send-push-notification", {
+        body: { userId, title, body, data: data || {}, categoryIdentifier },
+      })
+      .catch((err: unknown) =>
+        console.warn("[Notify] Edge function call failed:", err),
+      );
   }
 }
 
