@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Animated,
   FlatList,
-  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,16 +15,18 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "@/lib/haptics";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { initiateCall } from "@/lib/callSignaling";
+import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 
-/* ─── Types ───────────────────────────────────────────────────────────────── */
+/* ─── Types ─────────────────────────────────────────────────────────────────── */
 
 type CallStatus = "ringing" | "active" | "ended" | "declined" | "missed" | "busy";
 type CallType   = "voice" | "video";
@@ -52,7 +53,7 @@ type CallEntry = {
 
 type StatCard = { label: string; value: string; icon: string; color: string };
 
-/* ─── Helpers ─────────────────────────────────────────────────────────────── */
+/* ─── Helpers ────────────────────────────────────────────────────────────────── */
 
 function fmtDuration(secs: number): string {
   if (secs < 60) return `${secs}s`;
@@ -123,28 +124,289 @@ function groupByDate(calls: CallEntry[]): Array<{ label: string; data: CallEntry
     .map(([label, data]) => ({ label, data }));
 }
 
-/* ─── Main screen ─────────────────────────────────────────────────────────── */
+/* ─── Swipeable delete action ───────────────────────────────────────────────── */
+
+function DeleteAction({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity style={st.swipeDelete} onPress={onPress} activeOpacity={0.85}>
+      <Ionicons name="trash-outline" size={22} color="#fff" />
+      <Text style={st.swipeDeleteText}>Delete</Text>
+    </TouchableOpacity>
+  );
+}
+
+/* ─── Call Row ───────────────────────────────────────────────────────────────── */
+
+function CallRow({
+  item,
+  accent,
+  colors,
+  isDark,
+  callingId,
+  onCallBack,
+  onDelete,
+  onNavigateToProfile,
+  onNavigateToChat,
+}: {
+  item: CallEntry;
+  accent: string;
+  colors: any;
+  isDark: boolean;
+  callingId: string | null;
+  onCallBack: (entry: CallEntry, type: CallType) => void;
+  onDelete: (id: string) => void;
+  onNavigateToProfile: (id: string) => void;
+  onNavigateToChat: (id: string) => void;
+}) {
+  const meta     = statusMeta(item);
+  const isMissed = item.status === "missed";
+  const isVideo  = item.call_type === "video";
+  const busy     = callingId === item.id;
+  const [expanded, setExpanded] = useState(false);
+  const expandAnim = useRef(new Animated.Value(0)).current;
+
+  function toggleExpand() {
+    Animated.spring(expandAnim, {
+      toValue: expanded ? 0 : 1,
+      useNativeDriver: false,
+      damping: 18,
+      stiffness: 200,
+    }).start();
+    setExpanded((v) => !v);
+  }
+
+  const VOICE_COLOR = "#34C759";
+  const VIDEO_COLOR = "#007AFF";
+
+  const directionIcon = item.direction === "outgoing" ? "arrow-up" : "arrow-down";
+  const directionColor = isMissed ? "#FF3B30" : item.direction === "outgoing" ? VOICE_COLOR : "#30D158";
+
+  return (
+    <Swipeable
+      renderRightActions={() => (
+        <DeleteAction onPress={() => onDelete(item.id)} />
+      )}
+      overshootRight={false}
+    >
+      <View style={[st.rowCard, { backgroundColor: isDark ? colors.surface : "#FFFFFF" }]}>
+        {/* Missed stripe */}
+        {isMissed && <View style={[st.missedStripe, { backgroundColor: "#FF3B30" }]} />}
+
+        {/* Main row */}
+        <TouchableOpacity
+          style={st.rowMain}
+          onPress={toggleExpand}
+          activeOpacity={0.78}
+        >
+          {/* Avatar + call type badge */}
+          <TouchableOpacity
+            onPress={() => onNavigateToProfile(item.other_id)}
+            activeOpacity={0.8}
+            style={st.avatarWrap}
+          >
+            <Avatar uri={item.other_avatar} name={item.other_name} size={52} />
+            <View
+              style={[
+                st.callTypeBadge,
+                { backgroundColor: isVideo ? VIDEO_COLOR : VOICE_COLOR },
+              ]}
+            >
+              <Ionicons
+                name={isVideo ? "videocam" : "call"}
+                size={9}
+                color="#fff"
+              />
+            </View>
+          </TouchableOpacity>
+
+          {/* Info */}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
+              <Text
+                style={[st.rowName, { color: isMissed ? "#FF3B30" : colors.text }]}
+                numberOfLines={1}
+              >
+                {item.other_name}
+              </Text>
+              {item.other_verified && <VerifiedBadge isVerified size={13} />}
+            </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Ionicons name={directionIcon as any} size={11} color={directionColor} />
+              <Text
+                style={[st.rowMeta, { color: isMissed ? "#FF3B30" : colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {isMissed ? "Missed" : item.direction === "outgoing" ? "Outgoing" : "Incoming"}
+                {" · "}
+                {isVideo ? "Video" : "Voice"}
+                {item.duration_seconds && item.duration_seconds > 0
+                  ? ` · ${fmtDuration(item.duration_seconds)}`
+                  : ""}
+              </Text>
+            </View>
+          </View>
+
+          {/* Time + chevron */}
+          <View style={{ alignItems: "flex-end", gap: 6 }}>
+            <Text style={[st.rowTime, { color: colors.textMuted }]}>
+              {formatTimestamp(item.started_at)}
+            </Text>
+            <Ionicons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={13}
+              color={colors.textMuted}
+            />
+          </View>
+        </TouchableOpacity>
+
+        {/* Quick call buttons */}
+        <View style={[st.callBtnRow, { borderTopColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
+          <TouchableOpacity
+            style={[st.callBtn, { backgroundColor: VOICE_COLOR + "15" }]}
+            onPress={() => onCallBack(item, "voice")}
+            disabled={!!callingId}
+            activeOpacity={0.75}
+          >
+            {busy && item.call_type === "voice" ? (
+              <ActivityIndicator size="small" color={VOICE_COLOR} />
+            ) : (
+              <>
+                <Ionicons name="call" size={16} color={VOICE_COLOR} />
+                <Text style={[st.callBtnLabel, { color: VOICE_COLOR }]}>Voice</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <View style={[st.callBtnDivider, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]} />
+          <TouchableOpacity
+            style={[st.callBtn, { backgroundColor: VIDEO_COLOR + "15" }]}
+            onPress={() => onCallBack(item, "video")}
+            disabled={!!callingId}
+            activeOpacity={0.75}
+          >
+            {busy && item.call_type === "video" ? (
+              <ActivityIndicator size="small" color={VIDEO_COLOR} />
+            ) : (
+              <>
+                <Ionicons name="videocam" size={16} color={VIDEO_COLOR} />
+                <Text style={[st.callBtnLabel, { color: VIDEO_COLOR }]}>Video</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Expandable detail panel */}
+        <Animated.View
+          style={[
+            st.expandPanel,
+            {
+              backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "#F7F7F7",
+              borderTopColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)",
+              maxHeight: expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 180] }),
+              opacity: expandAnim,
+              overflow: "hidden",
+            },
+          ]}
+        >
+          <View style={st.expandInner}>
+            <View style={st.expandRow}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
+              <Text style={[st.expandText, { color: colors.textSecondary }]}>
+                {formatFullTimestamp(item.started_at)}
+              </Text>
+            </View>
+            {item.duration_seconds && item.duration_seconds > 0 ? (
+              <View style={st.expandRow}>
+                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                <Text style={[st.expandText, { color: colors.textSecondary }]}>
+                  Duration: {fmtDuration(item.duration_seconds)}
+                </Text>
+              </View>
+            ) : null}
+            <View style={st.expandRow}>
+              <Ionicons
+                name={item.call_type === "video" ? "videocam-outline" : "call-outline"}
+                size={14}
+                color={colors.textMuted}
+              />
+              <Text style={[st.expandText, { color: colors.textSecondary }]}>
+                {item.call_type === "video" ? "Video call" : "Voice call"} · {meta.label}
+              </Text>
+            </View>
+
+            <View style={[st.expandActions, { borderTopColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)" }]}>
+              <TouchableOpacity
+                style={[st.expandBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => onNavigateToProfile(item.other_id)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="person-outline" size={14} color={colors.text} />
+                <Text style={[st.expandBtnText, { color: colors.text }]}>Profile</Text>
+              </TouchableOpacity>
+
+              {item.chat_id && (
+                <TouchableOpacity
+                  style={[st.expandBtn, { backgroundColor: accent + "15", borderColor: accent + "30" }]}
+                  onPress={() => onNavigateToChat(item.chat_id!)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chatbubble-outline" size={14} color={accent} />
+                  <Text style={[st.expandBtnText, { color: accent }]}>Message</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[st.expandBtn, { backgroundColor: "#FF3B3012", borderColor: "#FF3B3025" }]}
+                onPress={() => onDelete(item.id)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="trash-outline" size={14} color="#FF3B30" />
+                <Text style={[st.expandBtnText, { color: "#FF3B30" }]}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Swipeable>
+  );
+}
+
+/* ─── Stat Card ──────────────────────────────────────────────────────────────── */
+
+function StatPill({ card }: { card: StatCard }) {
+  return (
+    <View style={[st.statPill, { borderColor: card.color + "25", backgroundColor: card.color + "10" }]}>
+      <View style={[st.statPillIcon, { backgroundColor: card.color + "20" }]}>
+        <Ionicons name={card.icon as any} size={14} color={card.color} />
+      </View>
+      <View>
+        <Text style={[st.statPillValue, { color: card.color }]}>{card.value}</Text>
+        <Text style={st.statPillLabel}>{card.label}</Text>
+      </View>
+    </View>
+  );
+}
+
+/* ─── Main Screen ────────────────────────────────────────────────────────────── */
 
 export default function CallHistoryScreen() {
   const { user } = useAuth();
   const { colors, accent, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const headerTop = Platform.OS === "ios" ? insets.top : Math.max(insets.top, 16);
 
-  const [calls, setCalls]             = useState<CallEntry[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [refreshing, setRefreshing]   = useState(false);
-  const [filter, setFilter]           = useState<FilterTab>("all");
-  const [search, setSearch]           = useState("");
-  const [callingId, setCallingId]     = useState<string | null>(null);
-  const [expandedId, setExpandedId]   = useState<string | null>(null);
-  const [showSearch, setShowSearch]   = useState(false);
+  const [calls, setCalls]           = useState<CallEntry[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter]         = useState<FilterTab>("all");
+  const [search, setSearch]         = useState("");
+  const [callingId, setCallingId]   = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchRef = useRef<TextInput>(null);
 
   /* ── Fetch ── */
   const load = useCallback(async (bg = false) => {
     if (!user) return;
     if (!bg) setLoading(true);
-
     const { data } = await supabase
       .from("calls")
       .select(
@@ -182,14 +444,13 @@ export default function CallHistoryScreen() {
       });
       setCalls(mapped);
     }
-
     setLoading(false);
     setRefreshing(false);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
 
-  /* ── Callback ── */
+  /* ── Call back ── */
   async function callBack(entry: CallEntry, type: CallType) {
     if (!user || callingId) return;
     setCallingId(entry.id);
@@ -206,9 +467,9 @@ export default function CallHistoryScreen() {
     setCallingId(null);
   }
 
-  /* ── Delete a single call log entry ── */
-  async function deleteEntry(id: string) {
-    Alert.alert("Remove Entry", "Remove this call from your history?", [
+  /* ── Delete ── */
+  function deleteEntry(id: string) {
+    showAlert("Remove Entry", "Remove this call from your history?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Remove", style: "destructive",
@@ -220,9 +481,8 @@ export default function CallHistoryScreen() {
     ]);
   }
 
-  /* ── Clear all ── */
-  async function clearAll() {
-    Alert.alert("Clear All History", "This will remove all calls from your history permanently.", [
+  function clearAll() {
+    showAlert("Clear All History", "This will remove all calls from your history permanently.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Clear All", style: "destructive",
@@ -244,9 +504,8 @@ export default function CallHistoryScreen() {
     if (filter === "outgoing") result = result.filter((c) => c.direction === "outgoing");
     if (search.trim()) {
       const q = search.toLowerCase();
-      result = result.filter((c) =>
-        c.other_name.toLowerCase().includes(q) ||
-        c.other_handle.toLowerCase().includes(q)
+      result = result.filter(
+        (c) => c.other_name.toLowerCase().includes(q) || c.other_handle.toLowerCase().includes(q)
       );
     }
     return result;
@@ -264,308 +523,161 @@ export default function CallHistoryScreen() {
   const mostCalled = Object.values(mostCalledMap).sort((a, b) => b.count - a.count)[0];
 
   const stats: StatCard[] = [
-    { label: "Total Calls", value: String(calls.length), icon: "call", color: accent },
+    { label: "Total",     value: String(calls.length),  icon: "call",         color: accent },
     { label: "Talk Time", value: totalDuration > 0 ? fmtTotalDuration(totalDuration) : "—", icon: "time-outline", color: "#34C759" },
-    { label: "Missed", value: String(missedCount), icon: "call-outline", color: missedCount > 0 ? "#FF3B30" : colors.textMuted },
-    { label: "Most Called", value: mostCalled ? mostCalled.name.split(" ")[0] : "—", icon: "person-outline", color: "#007AFF" },
+    { label: "Missed",    value: String(missedCount),   icon: "call-outline", color: missedCount > 0 ? "#FF3B30" : colors.textMuted },
+    { label: "Top",       value: mostCalled ? mostCalled.name.split(" ")[0] : "—", icon: "person-outline", color: "#007AFF" },
   ];
 
-  const FILTER_TABS: Array<{ key: FilterTab; label: string }> = [
+  const FILTER_TABS: Array<{ key: FilterTab; label: string; badge?: number }> = [
     { key: "all",      label: "All" },
-    { key: "missed",   label: "Missed" },
+    { key: "missed",   label: "Missed",   badge: missedCount > 0 ? missedCount : undefined },
     { key: "incoming", label: "Incoming" },
     { key: "outgoing", label: "Outgoing" },
   ];
 
-  /* ─── Call Row ──────────────────────────────────────────────────────────── */
-  function CallRow({ item }: { item: CallEntry }) {
-    const meta     = statusMeta(item);
-    const isMissed = item.status === "missed";
-    const isVideo  = item.call_type === "video";
-    const busy     = callingId === item.id;
-    const expanded = expandedId === item.id;
+  const headerBg = isDark ? colors.background : "#F2F2F7";
+  const headerTop = insets.top;
 
-    const voiceColor = "#34C759";
-    const videoColor = "#007AFF";
+  return (
+    <View style={[st.root, { backgroundColor: isDark ? colors.background : "#F2F2F7" }]}>
 
-    return (
-      <View style={[styles.rowWrap, { backgroundColor: colors.surface }]}>
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => setExpandedId(expanded ? null : item.id)}
-          onLongPress={() => deleteEntry(item.id)}
-          activeOpacity={0.75}
-          delayLongPress={500}
-        >
-          {/* Missed call indicator stripe */}
-          {isMissed && (
-            <View style={[styles.missedStripe, { backgroundColor: "#FF3B30" }]} />
-          )}
-
-          {/* Avatar */}
-          <TouchableOpacity
-            onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.other_id } })}
-            activeOpacity={0.8}
-          >
-            <Avatar uri={item.other_avatar} name={item.other_name} size={48} />
+      {/* ── Gradient Header ── */}
+      <LinearGradient
+        colors={isDark
+          ? [colors.surface, colors.background]
+          : ["#FFFFFF", "#F2F2F7"]
+        }
+        style={[st.header, { paddingTop: headerTop + 8 }]}
+      >
+        <View style={st.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={st.headerIcon} hitSlop={10}>
+            <Ionicons name="chevron-back" size={26} color={colors.text} />
           </TouchableOpacity>
 
-          {/* Info */}
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text
-                style={[styles.rowName, { color: isMissed ? "#FF3B30" : colors.text }]}
-                numberOfLines={1}
-              >
-                {item.other_name}
-              </Text>
-              {item.other_verified && <VerifiedBadge isVerified size={13} />}
-            </View>
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-              {/* Direction arrow */}
-              <Ionicons
-                name={
-                  item.direction === "outgoing"
-                    ? "arrow-up-outline"
-                    : isMissed ? "arrow-down-outline" : "arrow-down-outline"
-                }
-                size={11}
-                color={isMissed ? "#FF3B30" : item.direction === "outgoing" ? "#34C759" : "#30D158"}
+          {showSearch ? (
+            <View style={[st.searchBox, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)", flex: 1 }]}>
+              <Ionicons name="search-outline" size={15} color={colors.textMuted} />
+              <TextInput
+                ref={searchRef}
+                style={[st.searchInput, { color: colors.text }]}
+                placeholder="Search by name or handle…"
+                placeholderTextColor={colors.textMuted}
+                value={search}
+                onChangeText={setSearch}
+                autoFocus
+                returnKeyType="search"
               />
-              <Ionicons
-                name={isVideo ? (isMissed ? "videocam" : "videocam-outline") : (isMissed ? "call" : "call-outline")}
-                size={12}
-                color={meta.color}
-              />
-              <Text style={[styles.rowMeta, { color: isMissed ? "#FF3B30" : colors.textMuted }]}>
-                {item.direction === "outgoing" ? "Outgoing" : meta.label}
-                {isVideo ? " · Video" : " · Voice"}
-                {item.duration_seconds && item.duration_seconds > 0
-                  ? ` · ${fmtDuration(item.duration_seconds)}`
-                  : ""}
-              </Text>
-            </View>
-
-            <Text style={[styles.rowTime, { color: colors.textMuted }]}>
-              {formatTimestamp(item.started_at)}
-            </Text>
-          </View>
-
-          {/* Quick call buttons */}
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            <TouchableOpacity
-              style={[styles.callBtn, { backgroundColor: voiceColor + "1A" }]}
-              onPress={() => callBack(item, "voice")}
-              disabled={!!callingId}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-            >
-              {busy && item.call_type === "voice"
-                ? <ActivityIndicator size="small" color={voiceColor} />
-                : <Ionicons name="call" size={17} color={voiceColor} />
-              }
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.callBtn, { backgroundColor: videoColor + "1A" }]}
-              onPress={() => callBack(item, "video")}
-              disabled={!!callingId}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-            >
-              {busy && item.call_type === "video"
-                ? <ActivityIndicator size="small" color={videoColor} />
-                : <Ionicons name="videocam" size={17} color={videoColor} />
-              }
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-
-        {/* Expanded detail panel */}
-        {expanded && (
-          <View style={[styles.expandedPanel, { backgroundColor: isDark ? colors.background : "#F9F9F9", borderTopColor: colors.border }]}>
-            <View style={styles.expandedRow}>
-              <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
-              <Text style={[styles.expandedText, { color: colors.textSecondary }]}>{formatFullTimestamp(item.started_at)}</Text>
-            </View>
-            {item.duration_seconds && item.duration_seconds > 0 ? (
-              <View style={styles.expandedRow}>
-                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                <Text style={[styles.expandedText, { color: colors.textSecondary }]}>Duration: {fmtDuration(item.duration_seconds)}</Text>
-              </View>
-            ) : null}
-            <View style={styles.expandedRow}>
-              <Ionicons name={item.direction === "outgoing" ? "arrow-up-outline" : "arrow-down-outline"} size={14} color={colors.textMuted} />
-              <Text style={[styles.expandedText, { color: colors.textSecondary }]}>
-                {item.direction === "outgoing" ? "You called" : "They called you"}
-              </Text>
-            </View>
-            <View style={styles.expandedRow}>
-              <Ionicons name={item.call_type === "video" ? "videocam-outline" : "call-outline"} size={14} color={colors.textMuted} />
-              <Text style={[styles.expandedText, { color: colors.textSecondary }]}>
-                {item.call_type === "video" ? "Video call" : "Voice call"} · {meta.label}
-              </Text>
-            </View>
-            <View style={[styles.expandedActions, { borderTopColor: colors.border }]}>
-              <TouchableOpacity
-                style={[styles.expandedBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                onPress={() => router.push({ pathname: "/contact/[id]", params: { id: item.other_id } })}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="person-outline" size={14} color={colors.text} />
-                <Text style={[styles.expandedBtnText, { color: colors.text }]}>Profile</Text>
-              </TouchableOpacity>
-              {item.chat_id && (
-                <TouchableOpacity
-                  style={[styles.expandedBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => router.push({ pathname: "/chat/[id]", params: { id: item.chat_id! } })}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="chatbubble-outline" size={14} color={accent} />
-                  <Text style={[styles.expandedBtnText, { color: accent }]}>Message</Text>
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
+                  <Ionicons name="close-circle" size={15} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
-              <TouchableOpacity
-                style={[styles.expandedBtn, { backgroundColor: "#FF3B3010", borderColor: "#FF3B3030" }]}
-                onPress={() => deleteEntry(item.id)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="trash-outline" size={14} color="#FF3B30" />
-                <Text style={[styles.expandedBtnText, { color: "#FF3B30" }]}>Remove</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  /* ─── Render ─────────────────────────────────────────────────────────────── */
-  return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: headerTop }]}>
-
-      {/* ── Header ── */}
-      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.headerBtn}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {showSearch ? "" : "Call History"}
-        </Text>
-        <View style={{ flexDirection: "row", gap: 0 }}>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => { setShowSearch((v) => !v); setSearch(""); }}
-            hitSlop={8}
-          >
-            <Ionicons name={showSearch ? "close" : "search-outline"} size={20} color={colors.text} />
-          </TouchableOpacity>
-          {calls.length > 0 && (
-            <TouchableOpacity style={styles.headerBtn} onPress={clearAll} hitSlop={8}>
-              <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-            </TouchableOpacity>
+          ) : (
+            <View style={{ flex: 1 }}>
+              <Text style={[st.headerTitle, { color: colors.text }]}>Recents</Text>
+              {calls.length > 0 && (
+                <Text style={[st.headerSub, { color: colors.textMuted }]}>
+                  {calls.length} call{calls.length !== 1 ? "s" : ""}
+                  {missedCount > 0 ? ` · ${missedCount} missed` : ""}
+                </Text>
+              )}
+            </View>
           )}
-        </View>
-      </View>
 
-      {/* ── Search bar ── */}
-      {showSearch && (
-        <View style={[styles.searchBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <View style={[styles.searchInner, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search by name or handle…"
-              placeholderTextColor={colors.textMuted}
-              value={search}
-              onChangeText={setSearch}
-              autoFocus
-              returnKeyType="search"
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
-                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            <TouchableOpacity
+              style={[st.headerIcon, showSearch && { backgroundColor: accent + "20" }]}
+              onPress={() => { setShowSearch((v) => !v); setSearch(""); }}
+              hitSlop={8}
+            >
+              <Ionicons
+                name={showSearch ? "close" : "search-outline"}
+                size={19}
+                color={showSearch ? accent : colors.text}
+              />
+            </TouchableOpacity>
+            {calls.length > 0 && !showSearch && (
+              <TouchableOpacity style={st.headerIcon} onPress={clearAll} hitSlop={8}>
+                <Ionicons name="trash-outline" size={18} color="#FF3B30" />
               </TouchableOpacity>
             )}
           </View>
         </View>
-      )}
 
-      {/* ── Stats cards (only when not searching and has calls) ── */}
-      {!showSearch && !loading && calls.length > 0 && (
+        {/* Stats pills */}
+        {!showSearch && !loading && calls.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={st.statsScroll}
+          >
+            {stats.map((s) => <StatPill key={s.label} card={s} />)}
+          </ScrollView>
+        )}
+
+        {/* Filter pills */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsScroll}
-          style={[styles.statsRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
+          contentContainerStyle={st.tabScroll}
         >
-          {stats.map((s) => (
-            <View key={s.label} style={[styles.statCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <View style={[styles.statIcon, { backgroundColor: s.color + "18" }]}>
-                <Ionicons name={s.icon as any} size={16} color={s.color} />
-              </View>
-              <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{s.value}</Text>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>{s.label}</Text>
-            </View>
-          ))}
+          {FILTER_TABS.map((t) => {
+            const active = filter === t.key;
+            return (
+              <TouchableOpacity
+                key={t.key}
+                style={[
+                  st.pill,
+                  active
+                    ? { backgroundColor: accent, borderColor: accent }
+                    : { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", borderColor: "transparent" },
+                ]}
+                onPress={() => setFilter(t.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[st.pillText, { color: active ? "#fff" : colors.textSecondary }]}>
+                  {t.label}
+                </Text>
+                {t.badge ? (
+                  <View style={st.pillBadge}>
+                    <Text style={st.pillBadgeText}>{t.badge > 99 ? "99+" : t.badge}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
-      )}
-
-      {/* ── Filter tabs ── */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabScroll}
-        style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
-      >
-        {FILTER_TABS.map((t) => {
-          const active = filter === t.key;
-          const badge = t.key === "missed" && missedCount > 0 ? missedCount : null;
-          return (
-            <TouchableOpacity
-              key={t.key}
-              style={[styles.tab, active && { borderBottomColor: accent, borderBottomWidth: 2.5 }]}
-              onPress={() => setFilter(t.key)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, { color: active ? accent : colors.textMuted, fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
-                {t.label}
-              </Text>
-              {badge ? (
-                <View style={[styles.tabBadge, { backgroundColor: "#FF3B30" }]}>
-                  <Text style={styles.tabBadgeText}>{badge > 99 ? "99+" : badge}</Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      </LinearGradient>
 
       {/* ── Content ── */}
       {loading ? (
-        <View style={styles.center}>
+        <View style={st.center}>
           <ActivityIndicator color={accent} size="large" />
+          <Text style={[st.loadingText, { color: colors.textMuted }]}>Loading your calls…</Text>
         </View>
       ) : groups.length === 0 ? (
-        <View style={styles.center}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: colors.surface }]}>
+        <View style={st.center}>
+          <View style={[st.emptyCircle, { backgroundColor: isDark ? colors.surface : "#fff" }]}>
             <Ionicons
-              name={filter === "missed" ? "call" : filter === "incoming" ? "arrow-down" : filter === "outgoing" ? "arrow-up" : "call-outline"}
-              size={34}
-              color={filter === "missed" ? "#FF3B30" : colors.textMuted}
+              name={filter === "missed" ? "call" : filter === "incoming" ? "arrow-down-outline" : filter === "outgoing" ? "arrow-up-outline" : "call-outline"}
+              size={38}
+              color={filter === "missed" ? "#FF3B30" : accent}
             />
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {search.trim()
-              ? "No results"
+          <Text style={[st.emptyTitle, { color: colors.text }]}>
+            {search.trim() ? "No results"
               : filter === "missed" ? "No missed calls"
               : filter === "incoming" ? "No incoming calls"
               : filter === "outgoing" ? "No outgoing calls"
-              : "No call history"}
+              : "No call history yet"}
           </Text>
-          <Text style={[styles.emptySub, { color: colors.textMuted }]}>
+          <Text style={[st.emptySub, { color: colors.textMuted }]}>
             {search.trim()
-              ? `No calls matching "${search}"`
+              ? `Nothing matches "${search}"`
               : filter === "missed" ? "You're all caught up!"
-              : "Your calls will appear here."}
+              : "Your calls will appear here once you start making them."}
           </Text>
         </View>
       ) : (
@@ -579,26 +691,44 @@ export default function CallHistoryScreen() {
               tintColor={accent}
             />
           }
-          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
           showsVerticalScrollIndicator={false}
           renderItem={({ item: group }) => (
-            <View>
+            <View style={{ marginTop: 20 }}>
               {/* Section header */}
-              <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
-                <Text style={[styles.sectionText, { color: colors.textMuted }]}>{group.label}</Text>
-                <View style={[styles.sectionLine, { backgroundColor: colors.border }]} />
-                <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{group.data.length}</Text>
+              <View style={st.sectionHeader}>
+                <Text style={[st.sectionLabel, { color: colors.textMuted }]}>
+                  {group.label.toUpperCase()}
+                </Text>
+                <View style={[st.sectionLine, { backgroundColor: colors.border }]} />
+                <View style={[st.sectionBadge, { backgroundColor: colors.border }]}>
+                  <Text style={[st.sectionCount, { color: colors.textMuted }]}>
+                    {group.data.length}
+                  </Text>
+                </View>
               </View>
 
               {/* Rows */}
-              {group.data.map((call, idx) => (
-                <View key={call.id}>
-                  <CallRow item={call} />
-                  {idx < group.data.length - 1 && (
-                    <View style={[styles.divider, { backgroundColor: colors.border, marginLeft: 76 }]} />
-                  )}
-                </View>
-              ))}
+              <View style={[st.groupCard, { backgroundColor: isDark ? colors.surface : "#fff", borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
+                {group.data.map((call, idx) => (
+                  <React.Fragment key={call.id}>
+                    <CallRow
+                      item={call}
+                      accent={accent}
+                      colors={colors}
+                      isDark={isDark}
+                      callingId={callingId}
+                      onCallBack={callBack}
+                      onDelete={deleteEntry}
+                      onNavigateToProfile={(id) => router.push({ pathname: "/contact/[id]", params: { id } })}
+                      onNavigateToChat={(id) => router.push({ pathname: "/chat/[id]", params: { id } })}
+                    />
+                    {idx < group.data.length - 1 && (
+                      <View style={[st.divider, { backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)", marginLeft: 80 }]} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </View>
             </View>
           )}
         />
@@ -607,100 +737,208 @@ export default function CallHistoryScreen() {
   );
 }
 
-/* ─── Styles ──────────────────────────────────────────────────────────────── */
+/* ─── Styles ──────────────────────────────────────────────────────────────────── */
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   root: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingHorizontal: 40 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 40 },
+  loadingText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 
+  /* Header */
   header: {
+    paddingBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 4,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center" },
-
-  searchBar: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  searchInner: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
-  searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", padding: 0 },
-
-  statsRow: { borderBottomWidth: StyleSheet.hairlineWidth },
-  statsScroll: { paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
-  statCard: {
-    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingBottom: 10,
     gap: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    minWidth: 90,
   },
-  statIcon: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  statValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center" },
-
-  tabBar: { borderBottomWidth: StyleSheet.hairlineWidth },
-  tabScroll: { paddingHorizontal: 8, gap: 0 },
-  tab: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: 2.5,
-    borderBottomColor: "transparent",
-  },
-  tabText: { fontSize: 14 },
-  tabBadge: { borderRadius: 9, minWidth: 18, height: 18, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
-  tabBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-
-  sectionHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  sectionText: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
-  sectionLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  sectionCount: { fontSize: 11, fontFamily: "Inter_400Regular" },
-
-  rowWrap: { overflow: "hidden" },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-    position: "relative",
-  },
-  missedStripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3, borderRadius: 2 },
-  rowName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  rowMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  rowTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
-
-  callBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
+  headerTitle: { fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
+  headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
 
-  expandedPanel: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginHorizontal: 4,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    padding: 0,
+  },
+
+  /* Stats */
+  statsScroll: { paddingHorizontal: 14, paddingBottom: 8, gap: 8 },
+  statPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  statPillIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  statPillValue: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  statPillLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: "#8E8E93" },
+
+  /* Filter pills */
+  tabScroll: { paddingHorizontal: 14, paddingBottom: 10, gap: 8 },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  pillText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  pillBadge: {
+    backgroundColor: "#FF3B30",
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  pillBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
+
+  /* Section headers */
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 6,
+    gap: 8,
+  },
+  sectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.6 },
+  sectionLine: { flex: 1, height: StyleSheet.hairlineWidth },
+  sectionBadge: { borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  sectionCount: { fontSize: 11, fontFamily: "Inter_500Medium" },
+
+  /* Group card */
+  groupCard: {
+    marginHorizontal: 14,
+    borderRadius: 18,
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+
+  /* Call row */
+  rowCard: { overflow: "hidden" },
+  missedStripe: { position: "absolute", left: 0, top: 0, bottom: 0, width: 3 },
+
+  rowMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  avatarWrap: { position: "relative" },
+  callTypeBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  rowName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  rowMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  rowTime: { fontSize: 12, fontFamily: "Inter_400Regular" },
+
+  /* Call buttons */
+  callBtnRow: {
+    flexDirection: "row",
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  expandedRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  expandedText: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  expandedActions: { flexDirection: "row", gap: 8, marginTop: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, flexWrap: "wrap" },
-  expandedBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1 },
-  expandedBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  callBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  callBtnLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  callBtnDivider: { width: StyleSheet.hairlineWidth },
+
+  /* Expand panel */
+  expandPanel: { borderTopWidth: StyleSheet.hairlineWidth },
+  expandInner: { padding: 14, gap: 8 },
+  expandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  expandText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  expandActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexWrap: "wrap",
+  },
+  expandBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  expandBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+
+  /* Swipe delete */
+  swipeDelete: {
+    backgroundColor: "#FF3B30",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 80,
+    gap: 4,
+  },
+  swipeDeleteText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
   divider: { height: StyleSheet.hairlineWidth },
 
-  emptyIconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
+  /* Empty state */
+  emptyCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  emptyTitle: { fontSize: 19, fontFamily: "Inter_700Bold", textAlign: "center", letterSpacing: -0.3 },
+  emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
 });

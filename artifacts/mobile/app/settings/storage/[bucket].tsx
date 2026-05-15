@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
-  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -24,6 +22,7 @@ import {
 import { bucketMeta } from "./index";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { GlassHeader } from "@/components/ui/GlassHeader";
+import { showAlert } from "@/lib/alert";
 
 const VIDEO_BUCKETS = new Set(["videos", "stories"]);
 const IMAGE_BUCKETS = new Set([
@@ -147,27 +146,16 @@ export default function StorageBucketScreen() {
           return next;
         });
         if (!ok) {
-          if (Platform.OS === "web") {
-            // eslint-disable-next-line no-alert
-            window.alert(err || "Could not delete this file.");
-          } else {
-            Alert.alert("Couldn't delete", err || "Please try again.");
-          }
+          showAlert("Couldn't delete", err || "Please try again.");
           return;
         }
-        // Optimistic UI update — remove the row.
         setFiles((prev) => prev.filter((f) => f.key !== file.key));
       };
 
-      if (Platform.OS === "web") {
-        // eslint-disable-next-line no-alert
-        if (window.confirm(bodyText)) doDelete();
-      } else {
-        Alert.alert("Delete file?", bodyText, [
-          { text: "Cancel", style: "cancel" },
-          { text: "Delete", style: "destructive", onPress: doDelete },
-        ]);
-      }
+      showAlert("Delete file?", bodyText, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: doDelete },
+      ]);
     },
     [],
   );
@@ -196,24 +184,14 @@ export default function StorageBucketScreen() {
         const msg = `Could not delete ${failures} ${
           failures === 1 ? "file" : "files"
         }. Pull down to refresh.`;
-        if (Platform.OS === "web") {
-          // eslint-disable-next-line no-alert
-          window.alert(msg);
-        } else {
-          Alert.alert("Some files remain", msg);
-        }
+        showAlert("Some files remain", msg);
       }
     };
 
-    if (Platform.OS === "web") {
-      // eslint-disable-next-line no-alert
-      if (window.confirm(bodyText)) run();
-    } else {
-      Alert.alert("Delete everything?", bodyText, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete all", style: "destructive", onPress: run },
-      ]);
-    }
+    showAlert("Delete everything?", bodyText, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete all", style: "destructive", onPress: run },
+    ]);
   }, [files, busy, meta.label, totalBytes]);
 
   const renderItem = ({ item }: { item: StoredFile }) => {
@@ -321,93 +299,76 @@ export default function StorageBucketScreen() {
     </View>
   );
 
-  const emptyEl = !loading ? (
-    <View style={styles.emptyWrap}>
-      <Ionicons
-        name={meta.icon}
-        size={42}
-        color={colors.textMuted}
-        style={{ opacity: 0.4 }}
-      />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        Nothing here yet
-      </Text>
-      <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-        You haven't uploaded any {meta.label.toLowerCase()} yet.
-      </Text>
-    </View>
-  ) : null;
-
-  const errorEl = error ? (
-    <View style={[styles.errorCard, { backgroundColor: colors.surface }]}>
-      <Ionicons
-        name="cloud-offline-outline"
-        size={28}
-        color={colors.textMuted}
-      />
-      <Text style={[styles.errorText, { color: colors.textMuted }]}>
-        {error}
-      </Text>
-      <TouchableOpacity
-        onPress={() => load("initial")}
-        style={[styles.retryBtn, { backgroundColor: colors.accent }]}
-      >
-        <Text style={styles.retryBtnText}>Try again</Text>
-      </TouchableOpacity>
-    </View>
-  ) : null;
-
   return (
-    <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <GlassHeader title={meta.label} />
+    <View
+      style={[
+        styles.root,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+        },
+      ]}
+    >
+      <GlassHeader
+        title={meta.label}
+        onBack={() => router.back()}
+      />
 
-      {loading && files.length === 0 && !error ? (
-        <>
-          {headerEl}
-          <View style={{ padding: 12, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>
-        </>
+      {loading ? (
+        <View style={styles.skeletonWrap}>
+          {[...Array(8)].map((_, i) => (
+            <ListRowSkeleton key={i} />
+          ))}
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+          <Text style={[styles.errorText, { color: colors.textMuted }]}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => load("initial")}
+            style={[styles.retryBtn, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.retryBtnText, { color: colors.text }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <FlatList
           data={files}
-          keyExtractor={(it) => it.key}
+          keyExtractor={(f) => f.key}
           renderItem={renderItem}
-          ListHeaderComponent={
-            <>
-              {headerEl}
-              {errorEl}
-            </>
+          ListHeaderComponent={headerEl}
+          ListEmptyComponent={
+            <View style={styles.center}>
+              <View style={[styles.emptyIconWrap, { backgroundColor: colors.surface }]}>
+                <Ionicons name={meta.icon} size={32} color={colors.textMuted} />
+              </View>
+              <Text style={[styles.emptyText, { color: colors.text }]}>No files yet</Text>
+              <Text style={[styles.emptySubText, { color: colors.textMuted }]}>
+                Files you upload to {meta.label.toLowerCase()} will appear here.
+              </Text>
+            </View>
           }
-          ListEmptyComponent={errorEl ? null : emptyEl}
           ItemSeparatorComponent={() => (
-            <View
-              style={{
-                height: StyleSheet.hairlineWidth,
-                backgroundColor: colors.border,
-                marginLeft: 80,
-              }}
-            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
           )}
-          contentContainerStyle={{
-            paddingBottom: insets.bottom + 40,
-          }}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={{ padding: 16, alignItems: "center" }}>
+                <ActivityIndicator color={colors.textMuted} size="small" />
+              </View>
+            ) : null
+          }
+          onEndReached={nextToken ? () => load("more") : undefined}
+          onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.accent}
+              tintColor={colors.textMuted}
             />
           }
-          onEndReachedThreshold={0.4}
-          onEndReached={() => {
-            if (nextToken && !loadingMore && !loading) load("more");
-          }}
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={{ paddingVertical: 16, alignItems: "center" }}>
-                <View style={{ width: 56, height: 4, borderRadius: 2, backgroundColor: "#E5E5EA" }} />
-              </View>
-            ) : null
-          }
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </View>
@@ -416,91 +377,49 @@ export default function StorageBucketScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  topbar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  backBtn: { width: 44, alignItems: "center" },
-  topbarTitle: {
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-    flex: 1,
-    textAlign: "center",
-  },
+  skeletonWrap: { flex: 1, paddingTop: 8 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 32 },
 
-  header: { paddingHorizontal: 16, paddingTop: 16 },
-  summaryCard: { padding: 14, borderRadius: 14 },
-  summaryRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  summaryTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  summarySub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
-  deleteAllBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  deleteAllBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
-
-  loadingWrap: { paddingVertical: 60, alignItems: "center" },
+  header: { padding: 16, paddingBottom: 8 },
+  summaryCard: { borderRadius: 16, padding: 16 },
+  summaryRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  iconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  summaryTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
+  summarySub: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  deleteAllBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  deleteAllBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
 
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 12,
   },
   thumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 8,
-    overflow: "hidden",
+    width: 48,
+    height: 48,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  rowName: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  rowMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  rowName: { fontSize: 14, fontFamily: "Inter_500Medium", marginBottom: 2 },
+  rowMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
   deleteBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-
-  emptyWrap: {
-    paddingVertical: 60,
+    width: 36,
+    height: 36,
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 24,
+    justifyContent: "center",
+    borderRadius: 18,
   },
-  emptyTitle: { fontSize: 16, fontFamily: "Inter_600SemiBold", marginTop: 6 },
-  emptySub: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 76 },
 
-  errorCard: {
-    margin: 16,
-    padding: 24,
-    borderRadius: 14,
-    alignItems: "center",
-    gap: 12,
-  },
   errorText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
-  retryBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 4,
-  },
-  retryBtnText: { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  retryBtn: { marginTop: 4, paddingHorizontal: 20, paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
+  retryBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+
+  emptyIconWrap: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  emptyText: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  emptySubText: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 },
 });

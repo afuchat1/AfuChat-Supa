@@ -26,6 +26,7 @@ import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastContainer } from "@/components/ui/ToastContainer";
+import AlertModal from "@/components/ui/AlertModal";
 import { initConnectivityToasts } from "@/lib/toast";
 
 SplashScreen.preventAutoHideAsync();
@@ -84,6 +85,7 @@ export default function RootLayout() {
                         <Stack.Screen name="+not-found" />
                       </Stack>
                       <ToastContainer />
+                      <AlertModal />
                     </ChatPreferencesProvider>
                   </AdvancedFeaturesProvider>
                 </LanguageProvider>
