@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Modal,
   Platform,
@@ -295,19 +296,57 @@ export default function MeScreen() {
     void Haptics.selectionAsync();
     setNotesLoading(true);
     try {
-      const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
-        other_user_id: user.id,
-      });
-      if (!error && chatId) {
+      const CACHE_KEY = `notes_chat_id_${user.id}`;
+      let notesId = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
+
+      if (!notesId) {
+        // Find all non-group, non-channel chats the user is in
+        const { data: memberRows } = await supabase
+          .from("chat_members")
+          .select("chat_id, chats!inner(id, is_group, is_channel)")
+          .eq("user_id", user.id)
+          .eq("chats.is_group" as any, false)
+          .eq("chats.is_channel" as any, false);
+
+        const candidateIds = (memberRows || []).map((r: any) => r.chat_id);
+
+        if (candidateIds.length > 0) {
+          // Among those, find one where the user is the ONLY member (self-chat)
+          const { data: allMemberRows } = await supabase
+            .from("chat_members")
+            .select("chat_id")
+            .in("chat_id", candidateIds);
+
+          const countMap: Record<string, number> = {};
+          for (const r of allMemberRows || []) {
+            countMap[r.chat_id] = (countMap[r.chat_id] || 0) + 1;
+          }
+          notesId = candidateIds.find((cid: string) => countMap[cid] === 1) ?? null;
+        }
+
+        if (!notesId) {
+          // No self-chat exists yet — create one with only the user as member
+          const { data: newChat, error: createErr } = await supabase
+            .from("chats")
+            .insert({ is_group: false, is_channel: false })
+            .select("id")
+            .single();
+          if (createErr || !newChat) throw new Error(createErr?.message || "Failed to create notes");
+          await supabase.from("chat_members").insert({ chat_id: newChat.id, user_id: user.id });
+          notesId = newChat.id;
+        }
+
+        await AsyncStorage.setItem(CACHE_KEY, notesId!).catch(() => {});
+      }
+
+      if (notesId) {
         router.push({
           pathname: "/chat/[id]",
-          params: {
-            id: chatId,
-            otherId: user.id,
-            otherName: "My Notes",
-          },
+          params: { id: notesId, otherId: user.id, otherName: "My Notes" },
         } as any);
       }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Could not open notes");
     } finally {
       setNotesLoading(false);
     }
