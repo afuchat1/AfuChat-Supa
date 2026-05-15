@@ -282,6 +282,7 @@ export default function CallScreen() {
           style={StyleSheet.absoluteFill}
           objectFit="cover"
           mirror={false}
+          zOrder={0}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.voiceBg]} />
@@ -357,6 +358,7 @@ export default function CallScreen() {
               style={styles.localVideo}
               objectFit="cover"
               mirror={true}
+              zOrder={1}
             />
           </View>
         ) : null}

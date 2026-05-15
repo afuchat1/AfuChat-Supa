@@ -18,19 +18,34 @@ const FALLBACK_ICE_SERVERS: IceServerConfig[] = [
   // Google STUN — worldwide, no auth required
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  // Cloudflare STUN (deduplicated — was listed twice before)
   { urls: "stun:stun.cloudflare.com:3478" },
-  // Cloudflare STUN
-  { urls: "stun:stun.cloudflare.com:3478" },
-  // OpenRelay free TURN (no SLA — for fallback only)
+  // Twilio STUN — reliable global anycast
+  { urls: "stun:global.stun.twilio.com:3478" },
+  // OpenRelay free TURN — UDP + TCP variants.
+  // TCP (port 443) works on cellular networks that block UDP.
+  // "turns:" uses TLS, which passes through almost every corporate/carrier firewall.
   {
     urls: [
       "turn:openrelay.metered.ca:80",
-      "turn:openrelay.metered.ca:443",
+      "turn:openrelay.metered.ca:80?transport=tcp",
       "turn:openrelay.metered.ca:443?transport=tcp",
       "turns:openrelay.metered.ca:443",
     ],
     username: "openrelayproject",
     credential: "openrelayproject",
+  },
+  // Metered.ca free anonymous TURN — acts as a second relay if OpenRelay is busy
+  {
+    urls: [
+      "turn:a.relay.metered.ca:80",
+      "turn:a.relay.metered.ca:80?transport=tcp",
+      "turn:a.relay.metered.ca:443?transport=tcp",
+      "turns:a.relay.metered.ca:443",
+    ],
+    username: "e499486ca6d94839c7443572",
+    credential: "LXjx1lkBjfHiFX1C",
   },
 ];
 

@@ -157,6 +157,33 @@ export function listenForIncomingCalls(
   userId: string,
   onCall: (call: CallRecord) => void
 ): () => void {
+  // Track calls we've already surfaced so reconnects don't duplicate them.
+  const seenCallIds = new Set<string>();
+
+  /**
+   * On mobile data the WebSocket can drop and reconnect, missing INSERT
+   * events that arrived during the gap. Every time the channel (re)subscribes
+   * we query for any "ringing" calls from the last 30 seconds so nothing slips
+   * through.
+   */
+  async function checkRecentRingingCalls() {
+    try {
+      const since = new Date(Date.now() - 30_000).toISOString();
+      const { data } = await supabase
+        .from("calls")
+        .select(`*, caller:caller_id(display_name, avatar_url, handle), callee:callee_id(display_name, avatar_url, handle)`)
+        .eq("callee_id", userId)
+        .eq("status", "ringing")
+        .gte("started_at", since);
+      for (const call of data ?? []) {
+        if (!seenCallIds.has(call.id)) {
+          seenCallIds.add(call.id);
+          onCall(call as CallRecord);
+        }
+      }
+    } catch (_) {}
+  }
+
   const channel = supabase
     .channel(`incoming_calls_${userId}`)
     .on(
@@ -169,13 +196,21 @@ export function listenForIncomingCalls(
       },
       async (payload) => {
         const call = payload.new as any;
-        if (call.status === "ringing") {
+        if (call.status === "ringing" && !seenCallIds.has(call.id)) {
+          seenCallIds.add(call.id);
           const full = await getCall(call.id);
           if (full) onCall(full);
         }
       }
     )
-    .subscribe();
+    .subscribe((status: string) => {
+      // Each time we (re)subscribe — including after a mobile data reconnect —
+      // poll for any ringing calls we might have missed during the gap.
+      if (status === "SUBSCRIBED") {
+        checkRecentRingingCalls();
+      }
+    });
+
   return () => {
     channel.unsubscribe();
   };
@@ -358,7 +393,11 @@ export class CallSession {
       { event: "offer" },
       async ({ payload }: any) => {
         if (!this.isCaller && this.pc) {
-          if (this.remoteDescSet) return; // ignore retransmits once we've answered
+          // Block duplicate retransmits of the initial offer once we've already
+          // answered. But ICE restart offers MUST be processed even after the
+          // initial exchange — failing to do so is what causes calls on mobile
+          // data to stay stuck in "reconnecting" forever.
+          if (this.remoteDescSet && !payload.iceRestart) return;
           try {
             await this.pc.setRemoteDescription(
               new RTCSessionDescription(payload.offer)
@@ -367,11 +406,16 @@ export class CallSession {
             await this.drainCandidates();
             const answer = await this.pc.createAnswer();
             await this.pc.setLocalDescription(answer);
-            await this.broadcast("answer", { answer: this.pc.localDescription });
-          } catch (e) {
-            // If the remote description is already set or in a bad state,
-            // ignore — the next ICE round will recover.
-          }
+            await this.broadcast("answer", {
+              answer: this.pc.localDescription,
+              iceRestart: !!payload.iceRestart,
+            });
+            // If this was an ICE restart, clear our in-progress flag too.
+            if (payload.iceRestart) {
+              this.iceRestartInProgress = false;
+              this.iceRestartAttempts = 0;
+            }
+          } catch (_) {}
         }
       }
     );
@@ -380,20 +424,32 @@ export class CallSession {
       "broadcast",
       { event: "answer" },
       async ({ payload }: any) => {
-        if (this.isCaller && this.pc && !this.answered) {
+        if (!this.isCaller || !this.pc) return;
+        // Accept the initial answer OR any answer completing an ICE restart.
+        // Previously this was `!this.answered` only, so ICE restart answers
+        // were silently dropped and the restart never completed.
+        const isInitial = !this.answered;
+        const isRestartAnswer = this.iceRestartInProgress;
+        if (!isInitial && !isRestartAnswer) return;
+
+        if (isInitial) {
           this.answered = true;
           this.stopOfferRetransmit();
-          try {
-            await this.pc.setRemoteDescription(
-              new RTCSessionDescription(payload.answer)
-            );
-            this.remoteDescSet = true;
-            await this.drainCandidates();
+        }
+        this.iceRestartInProgress = false;
+
+        try {
+          await this.pc.setRemoteDescription(
+            new RTCSessionDescription(payload.answer)
+          );
+          this.remoteDescSet = true;
+          await this.drainCandidates();
+          if (isInitial) {
             await updateCallStatus(this.callId, "active", {
               answered_at: new Date().toISOString(),
             });
-          } catch (_) {}
-        }
+          }
+        } catch (_) {}
       }
     );
 
@@ -469,11 +525,12 @@ export class CallSession {
       // cover the case where the callee subscribed after our first send.
       this.startOfferRetransmit();
     } else {
-      // Tell the caller we're listening. Retry a couple of times in case
-      // the caller's subscription wasn't ready when we sent it.
-      for (let i = 0; i < 5; i++) {
+      // Tell the caller we're listening. On mobile data, the WebSocket
+      // handshake can take several seconds — retry for ~10s (12 × 800ms)
+      // to cover slow cellular connections where 2.5s was too short.
+      for (let i = 0; i < 12; i++) {
         await this.broadcast("callee-ready", {});
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 800));
         if (this.remoteDescSet) break;
       }
     }
@@ -487,9 +544,9 @@ export class CallSession {
         if (settled) return;
         settled = true;
         // Don't reject — fall back to REST broadcast rather than failing
-        // the call entirely.
+        // the call entirely. Increased from 5s → 10s for mobile data.
         resolve();
-      }, 5000);
+      }, 10000);
       this.channel.subscribe((status: string) => {
         if (settled) return;
         if (status === "SUBSCRIBED") {
