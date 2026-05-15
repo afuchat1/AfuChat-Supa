@@ -61,7 +61,17 @@ ${platformContext}
 
 ${ACTION_ROUTES_GUIDE}
 
-When the user asks how to navigate somewhere or how to use a feature, give clear step-by-step guidance and use [ACTION:Button label:/route] tags so they can tap directly to the right screen.`,
+SEARCH CAPABILITY — trigger a pre-filled search when the user asks to find someone or something:
+  Use [ACTION:Search for X:/search?q=X] (replace spaces with +)
+  Example: [ACTION:Search for amkaweesi:/search?q=amkaweesi]
+
+PROFILE LOOKUP — link to any user's profile directly:
+  Use [ACTION:View @handle:/@handle]
+  Founder: [ACTION:View @amkaweesi:/@amkaweesi]
+  Any bought username also routes to its current owner's profile the same way.
+
+When the user asks how to navigate somewhere or how to use a feature, give clear step-by-step guidance and use [ACTION:...] tags so they can tap directly to the right screen.
+When the user mentions a @handle or asks about a specific person, always add a profile button and a search button.`,
     { fast: false, maxTokens: 800 }
   );
 }

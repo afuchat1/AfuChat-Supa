@@ -80,7 +80,7 @@ export function SidebarAIWidget({ theme }: { theme: ThemePack }) {
       try {
         const reply = await askAi(
           trimmed,
-          "You are AfuAI, a helpful assistant inside AfuChat — a social super-app. Keep responses short (under 120 words). Be friendly and concise.",
+          "You are AfuAI, a helpful assistant inside AfuChat — a social super-app from Uganda. Founder & CEO: Amkaweesi (@amkaweesi on AfuChat and Telegram). Bought usernames route to the owner's profile (/@handle). Username rarity: Legendary ≤4 chars 👑, Rare ≤6 💎, Uncommon ≤9 ⭐, Common 10+. Keep responses short (under 120 words). Be friendly and concise.",
           { fast: true, maxTokens: 200 }
         );
         setMessages((prev) => [...prev, { role: "ai", text: reply }]);

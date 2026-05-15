@@ -2237,13 +2237,18 @@ function ChatScreen() {
     const invoices: AiInvoiceData[] = [];
     let execAction: { actionType: string; params: Record<string, any> } | undefined;
     text = text.replace(/\[ACTION:([^\]:]+):([^\]]+)\]/g, (_, label, route) => {
+      const r = route.trim();
       let icon = "arrow-forward-circle";
-      if (route.includes("wallet")) icon = "wallet";
-      else if (route.includes("gift")) icon = "gift";
-      else if (route.includes("premium")) icon = "star";
-      else if (route.includes("profile")) icon = "person";
-      else if (route.includes("settings")) icon = "settings";
-      actions.push({ label: label.trim(), icon, action: "navigate", params: { route: route.trim() } });
+      if (r.includes("wallet")) icon = "wallet";
+      else if (r.includes("gift")) icon = "gift";
+      else if (r.includes("premium")) icon = "star";
+      else if (r.includes("profile") || r.startsWith("/@") || r.match(/^\/[a-z0-9_]+$/) && !r.includes("-")) icon = "person";
+      else if (r.includes("settings")) icon = "settings";
+      else if (r.includes("search") || r.includes("/search")) icon = "search";
+      else if (r.includes("username-market")) icon = "at";
+      else if (r.includes("chat")) icon = "chatbubble";
+      else if (r.includes("discover") || r.includes("user-discovery")) icon = "compass";
+      actions.push({ label: label.trim(), icon, action: "navigate", params: { route: r } });
       return "";
     });
     text = text.replace(/\[SUGGEST:([^\]]+)\]/g, (_, s) => {
@@ -2641,9 +2646,22 @@ SPECIAL TAGS — append these at the end of your response when relevant:
   · cancel_subscription: {}
   · convert_nexa: {"amount":100}
 
+SEARCH CAPABILITY — you can trigger a pre-filled search in the app:
+- When the user asks you to "search for X", "find @user", "look up a person", or "show me posts about X", use:
+  [ACTION:Search for X:/search?q=X]
+- Replace spaces in the query with + (e.g. "ugandan music" → /search?q=ugandan+music)
+- Examples: [ACTION:Search for amkaweesi:/search?q=amkaweesi]  [ACTION:Find cooking videos:/search?q=cooking]
+
+PROFILE LOOKUP — you can link directly to any user's profile:
+- When the user mentions a @handle or asks "who is @X" / "show me @X's profile", add:
+  [ACTION:View @handle:/@handle]
+- Founder's profile: [ACTION:View @amkaweesi:/@amkaweesi]
+- For bought/marketplace usernames: every handle always routes to its current owner's profile.
+
 STRICT RULES:
 - NEVER write raw route paths in your text body. If navigation is needed, use [ACTION:...] tags only.
 - When the user asks "how do I [feature]" or "where is [feature]", give clear step-by-step guidance AND add an [ACTION:...] button to navigate there directly.
+- When the user asks about a specific person by name or @handle, always add a [ACTION:View @handle:/@handle] button AND a [ACTION:Search for handle:/search?q=handle] button.
 - Answer like a knowledgeable professional — direct, clear, and genuinely helpful.
 - Use formatting for structured answers. Keep conversational replies as plain prose.
 - Only emit [EXEC:...] tags when the user explicitly requests an action. Never act without clear intent.

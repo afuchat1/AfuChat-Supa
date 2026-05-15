@@ -202,12 +202,55 @@ export const PLATFORM_FEATURES_GUIDE = `
 - **To buy airtime**: Go to Mini-Programs → Airtime
 `;
 
+// ── Platform identity & founder ──────────────────────────────────────────────
+export const FOUNDER_AND_IDENTITY = `
+## AFUCHAT PLATFORM IDENTITY & FOUNDER
+
+- **Platform**: AfuChat — Uganda's social super-app. Combines messaging, social networking, AI, digital wallet, freelance marketplace, e-commerce, mini-programs, and community tools in a single app.
+- **Founded in**: Uganda 🇺🇬 — built to serve Africa's social, payment, and communication needs.
+- **Founder & CEO**: **Amkaweesi** — the founder and CEO of AfuChat. AfuChat handle: @amkaweesi. Telegram: @amkaweesi (t.me/amkaweesi).
+  - To view the founder's profile use [ACTION:View @amkaweesi:/@amkaweesi]
+  - Amkaweesi built AfuChat to give Africans a home-grown super-app that rivals WeChat, WhatsApp, and TikTok combined.
+`;
+
+// ── Username marketplace knowledge ───────────────────────────────────────────
+export const USERNAME_MARKET_KNOWLEDGE = `
+## USERNAME MARKETPLACE & BOUGHT USERNAMES
+
+### What are bought usernames?
+Any handle acquired via the Username Market (/username-market) becomes a "bought username" owned by the buyer.  Every owned handle is an alias that points to the SAME profile — so @bestgamer and @john both lead to John's profile if John owns both.
+
+### Rarity tiers (by handle length)
+| Tier | Length | Badge |
+|---|---|---|
+| Legendary | ≤ 4 characters | 👑 |
+| Rare | ≤ 6 characters | 💎 |
+| Uncommon | 7–9 characters | ⭐ |
+| Common | 10+ characters | · |
+
+### Key rules
+- A user can own **multiple usernames** but has one active display handle at a time.
+- **Destination of any bought username** = the owner's profile page — navigate to /@handle to see who it belongs to.
+- Usernames are traded using ACoins. Sellers list them with a price; buyers pay and the handle is instantly transferred.
+- Purchased handles appear in Profile → Collections → Username Collection.
+
+### AI instructions for username questions
+- "Where does @handle go?" → use [ACTION:View @handle:/@handle] to show the profile that owns it.
+- "Who owns @handle?" → use [ACTION:Look up @handle:/@handle]
+- "Buy a username" → use [ACTION:Username Market:/username-market]
+- "Sell my username" → use [ACTION:Username Market:/username-market]
+`;
+
 /**
- * Returns a concise navigation-focused prompt segment for the AI to understand
- * platform structure, optimised to minimise token usage while maximising coverage.
+ * Returns the full platform knowledge block injected into every AfuAI system prompt.
  */
 export function buildNavigationContext(): string {
-  return PLATFORM_NAV_MAP + "\n\n" + PLATFORM_FEATURES_GUIDE;
+  return (
+    PLATFORM_NAV_MAP +
+    "\n\n" + PLATFORM_FEATURES_GUIDE +
+    "\n\n" + FOUNDER_AND_IDENTITY +
+    "\n\n" + USERNAME_MARKET_KNOWLEDGE
+  );
 }
 
 /**
@@ -225,6 +268,22 @@ Valid routes for [ACTION:Button label:/route] tags:
 /company | /company/manage | /freelance
 /mini-programs/airtime | /mini-programs/bills | /mini-programs/data-bundles | /mini-programs/hotels | /mini-programs/tickets | /mini-programs/transfer
 /support | /chat/new | /call-history | /qr-scanner | /digital-id | /language-settings
+
+SEARCH WITH PRE-FILLED QUERY — open the search screen with text already entered:
+  Syntax: [ACTION:Search for X:/search?q=X]
+  Examples:
+    [ACTION:Search for @amkaweesi:/search?q=amkaweesi]
+    [ACTION:Search "ugandan music":/search?q=ugandan+music]
+    [ACTION:Find people named John:/search?q=john]
+  Use whenever the user asks you to search for a person, post, video, hashtag, or keyword.
+
+PROFILE NAVIGATION — link directly to any user's profile:
+  Syntax: [ACTION:View @handle:/@handle]
+  Examples:
+    [ACTION:View @amkaweesi:/@amkaweesi]
+    [ACTION:View founder profile:/@amkaweesi]
+  Use whenever the user asks about a specific person or username destination.
+  Founder's handle: @amkaweesi — route: /@amkaweesi
 `;
 
 /**
