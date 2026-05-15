@@ -46,6 +46,8 @@ import {
 } from "libphonenumber-js";
 import { Avatar } from "@/components/ui/Avatar";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
+import { ReferralRewardModal } from "@/components/referral/ReferralRewardModal";
+import { sendPushNotification } from "@/lib/pushNotifications";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 
@@ -158,6 +160,11 @@ export default function OnboardingScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState("");
   const [referralAutoFilled, setReferralAutoFilled] = useState(false);
+  const [referralModal, setReferralModal] = useState<{
+    referrerName: string;
+    referrerHandle: string;
+    referrerAvatar: string | null;
+  } | null>(null);
 
   // Pre-fill referral code from deep-link if the user arrived via a referral URL
   useEffect(() => {
@@ -524,6 +531,34 @@ export default function OnboardingScreen() {
           console.warn("[referral] not rewarded:", rpcResult.reason);
         } else if (rpcResult?.ok) {
           console.log("[referral] referrer rewarded with 2000 XP:", rpcResult.referrer_id);
+
+          // Fetch referrer's profile so we can personalise the modal
+          let referrerName = "Your friend";
+          let referrerHandle = refHandle;
+          let referrerAvatar: string | null = null;
+          try {
+            const { data: rp } = await supabase
+              .from("profiles")
+              .select("display_name, handle, avatar_url")
+              .eq("id", rpcResult.referrer_id)
+              .single();
+            if (rp) {
+              referrerName   = rp.display_name  || "Your friend";
+              referrerHandle = rp.handle        || refHandle;
+              referrerAvatar = rp.avatar_url    || null;
+            }
+          } catch {}
+
+          // Notify the referrer via push notification
+          sendPushNotification({
+            userId: rpcResult.referrer_id,
+            title: "🎉 Someone joined using your referral!",
+            body: `You just earned +2,000 Nexa. Keep sharing your link to earn more!`,
+            data: { type: "referral", screen: "referral" },
+          }).catch(() => {});
+
+          // Queue the success modal — navigation happens on dismiss
+          setReferralModal({ referrerName, referrerHandle, referrerAvatar });
         }
       }
     } catch (referralErr) {
@@ -536,7 +571,17 @@ export default function OnboardingScreen() {
     await refreshProfile();
     ensureAfuAiChat(userId, displayName.trim()).catch(() => {});
     setLoading(false);
-    router.replace("/(tabs)");
+
+    // If a referral was found we show the celebration modal first;
+    // the modal's onDismiss handler navigates to /(tabs).
+    // Use a short timeout so state update & profile refresh settle first.
+    setTimeout(() => {
+      setReferralModal(prev => {
+        if (prev) return prev; // modal pending — navigation deferred to onDismiss
+        router.replace("/(tabs)");
+        return null;
+      });
+    }, 60);
   }
 
   // ── Derived display data ─────────────────────────────────────────────────────
@@ -1006,6 +1051,7 @@ export default function OnboardingScreen() {
   const stepRenderers = [renderStep1, renderStep2, renderStep3, renderStep4, renderStep5];
 
   return (
+    <React.Fragment>
     <KeyboardAvoidingView
       style={[st.root, { backgroundColor: colors.background }]}
       behavior="padding"
@@ -1072,6 +1118,21 @@ export default function OnboardingScreen() {
       {renderCountryPicker()}
       {renderDobPicker()}
     </KeyboardAvoidingView>
+
+    {/* ── Referral reward celebration modal (shown after onboarding completes) ── */}
+    {referralModal && (
+      <ReferralRewardModal
+        visible={!!referralModal}
+        referrerName={referralModal.referrerName}
+        referrerHandle={referralModal.referrerHandle}
+        referrerAvatar={referralModal.referrerAvatar}
+        onDismiss={() => {
+          setReferralModal(null);
+          router.replace("/(tabs)");
+        }}
+      />
+    )}
+    </React.Fragment>
   );
 }
 

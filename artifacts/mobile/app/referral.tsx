@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image as ExpoImage } from "expo-image";
+import { showToast } from "@/lib/toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ReferralEntry = {
@@ -570,6 +571,47 @@ export default function ReferralScreen() {
   }, [user]);
 
   useEffect(() => { loadReferrals(); }, [loadReferrals]);
+
+  // ── Realtime: watch for new referrals while this screen is open ───────────
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`referrals-rt:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "referrals",
+          filter: `referrer_id=eq.${user.id}`,
+        },
+        async (payload: any) => {
+          // Fetch the new referral's profile for a personalised toast
+          let friendName = "Someone";
+          try {
+            const referredId = payload.new?.referred_id;
+            if (referredId) {
+              const { data: p } = await supabase
+                .from("profiles")
+                .select("display_name, handle")
+                .eq("id", referredId)
+                .single();
+              if (p?.display_name) friendName = p.display_name;
+            }
+          } catch {}
+
+          showToast(
+            `🎉 ${friendName} just joined! You earned +2,000 Nexa`,
+            { type: "success", duration: 5000 },
+          );
+          loadReferrals();
+        },
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user, loadReferrals]);
 
   async function handleShare() {
     Haptics.selectionAsync();
