@@ -261,6 +261,14 @@ export default function LabScreen() {
   const [query,    setQuery]    = useState("");
   const [error,    setError]    = useState<string | null>(null);
 
+  // Ask More state — inline Q&A within the results sheet
+  const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
+  const [capturedMime,   setCapturedMime]   = useState<string>("image/jpeg");
+  const [lensHistory, setLensHistory] = useState<Array<{ q: string; a: string }>>([]);
+  const [moreQuery,   setMoreQuery]   = useState("");
+  const [moreLoading, setMoreLoading] = useState(false);
+  const moreInputRef = useRef<any>(null);
+
   // Bottom sheet animation
   const sheetY = useRef(new RNAnimated.Value(SH)).current;
 
@@ -272,6 +280,8 @@ export default function LabScreen() {
       setResult(null);
       setPreview(null);
       setError(null);
+      setLensHistory([]);
+      setMoreQuery("");
     });
   }
 
@@ -279,6 +289,9 @@ export default function LabScreen() {
     setLoading(true);
     setScanning(true);
     setError(null);
+    setCapturedBase64(base64);
+    setCapturedMime(mime);
+    setLensHistory([]);
 
     try {
       const body: Record<string, string> = { imageBase64: base64, mimeType: mime };
@@ -340,6 +353,35 @@ export default function LabScreen() {
       reader.readAsDataURL(file);
     };
     input.click();
+  }
+
+  async function askMoreInLens() {
+    const q = moreQuery.trim();
+    if (!q || !capturedBase64 || moreLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMoreLoading(true);
+    setMoreQuery("");
+    try {
+      const res = await fetch(`${getEdgeFnBase()}/ai-lens`, {
+        method:  "POST",
+        headers: edgeHeaders(),
+        body:    JSON.stringify({
+          imageBase64: capturedBase64,
+          mimeType:    capturedMime,
+          query:       q,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+      const answer = data.answer || data.description || "No specific answer found for that question.";
+      setLensHistory(prev => [...prev, { q, a: answer }]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      setLensHistory(prev => [...prev, { q, a: `Could not answer: ${e.message || "Please try again"}` }]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setMoreLoading(false);
+    }
   }
 
   const needsPermission = Platform.OS !== "web" && !permission?.granted;
@@ -542,7 +584,7 @@ export default function LabScreen() {
               <View style={styles.answerBox}>
                 <View style={styles.answerHeader}>
                   <Ionicons name="chatbubble-ellipses" size={14} color={BRAND} />
-                  <Text style={styles.answerHeaderText}>Your Question</Text>
+                  <Text style={styles.answerHeaderText}>Lens Analysis</Text>
                 </View>
                 <Text style={styles.answerText}>{result.answer}</Text>
               </View>
@@ -558,6 +600,72 @@ export default function LabScreen() {
                     <Text style={styles.factText}>{fact}</Text>
                   </View>
                 ))}
+              </View>
+            )}
+
+            {/* ── Q&A History ─────────────────────────────────────────────────── */}
+            {lensHistory.length > 0 && (
+              <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
+                <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Your Questions</Text>
+                {lensHistory.map((item, i) => (
+                  <View key={i} style={{
+                    marginBottom: 10, backgroundColor: BRAND_BG,
+                    borderRadius: 14, padding: 12,
+                    borderLeftWidth: 3, borderLeftColor: BRAND,
+                  }}>
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", marginBottom: 5 }}>
+                      <Ionicons name="help-circle-outline" size={14} color={BRAND} style={{ marginTop: 1 }} />
+                      <Text style={{ flex: 1, fontSize: 13, fontWeight: "700", color: BRAND }}>{item.q}</Text>
+                    </View>
+                    <Text style={{ fontSize: 13, lineHeight: 19, color: "#333", paddingLeft: 20 }}>{item.a}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* ── Ask More inline ──────────────────────────────────────────────── */}
+            {capturedBase64 && (
+              <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+                <Text style={[styles.sectionLabel, { marginBottom: 8 }]}>
+                  Ask more about this
+                </Text>
+                <View style={{
+                  flexDirection: "row", gap: 8, alignItems: "flex-end",
+                  backgroundColor: "rgba(255,107,53,0.06)", borderRadius: 16,
+                  borderWidth: 1.5, borderColor: BRAND + "40", paddingHorizontal: 14,
+                  paddingVertical: 6,
+                }}>
+                  <TextInput
+                    ref={moreInputRef}
+                    style={{
+                      flex: 1, fontSize: 14, color: "#222",
+                      paddingVertical: 8, maxHeight: 80, lineHeight: 20,
+                    }}
+                    placeholder={`e.g. "What is it made of?" or "Is it healthy?"`}
+                    placeholderTextColor="#999"
+                    value={moreQuery}
+                    onChangeText={setMoreQuery}
+                    multiline
+                    blurOnSubmit={false}
+                    onSubmitEditing={askMoreInLens}
+                    returnKeyType="send"
+                    editable={!moreLoading}
+                  />
+                  <TouchableOpacity
+                    onPress={askMoreInLens}
+                    disabled={!moreQuery.trim() || moreLoading}
+                    activeOpacity={0.75}
+                    style={{
+                      backgroundColor: (!moreQuery.trim() || moreLoading) ? "#ccc" : BRAND,
+                      borderRadius: 12, padding: 9, marginBottom: 2,
+                    }}
+                  >
+                    {moreLoading
+                      ? <ActivityIndicator size={16} color="#fff" />
+                      : <Ionicons name="arrow-up" size={16} color="#fff" />
+                    }
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -577,7 +685,7 @@ export default function LabScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.actionBtn}
+                style={[styles.actionBtn, { flex: 1 }]}
                 onPress={async () => {
                   if (!result) return;
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -586,12 +694,16 @@ export default function LabScreen() {
                     await AsyncStorage.setItem(
                       "afuai_lens_context",
                       JSON.stringify({
-                        title: result.title,
+                        title:       result.title,
                         description: result.description,
-                        category: result.category,
-                        facts: result.facts || [],
-                        answer: result.answer || "",
-                        expiresAt: Date.now() + 5 * 60 * 1000,
+                        category:    result.category,
+                        confidence:  result.confidence,
+                        facts:       result.facts || [],
+                        answer:      result.answer || "",
+                        history:     lensHistory,
+                        imagePreview: preview ?? undefined,
+                        searchQuery: result.searchQuery,
+                        expiresAt:   Date.now() + 30 * 60 * 1000,
                       })
                     );
                   } catch {}
@@ -603,7 +715,9 @@ export default function LabScreen() {
                 activeOpacity={0.85}
               >
                 <Ionicons name="sparkles-outline" size={16} color={BRAND} />
-                <Text style={[styles.actionBtnText, { color: BRAND }]}>Ask AfuAI</Text>
+                <Text style={[styles.actionBtnText, { color: BRAND }]}>
+                  {lensHistory.length > 0 ? "Continue in AfuAI" : "Ask AfuAI"}
+                </Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

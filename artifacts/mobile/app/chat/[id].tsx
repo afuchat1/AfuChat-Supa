@@ -136,6 +136,18 @@ type Message = {
   _aiSuggestions?: string[];
   _aiInvoices?: AiInvoiceData[];
   _aiExecAction?: AiExecAction;
+  _isLensCard?: boolean;
+  _lensData?: {
+    title: string;
+    description: string;
+    category: string;
+    confidence: string;
+    facts: string[];
+    answer?: string;
+    history?: Array<{ q: string; a: string }>;
+    imagePreview?: string;
+    searchQuery?: string;
+  };
 };
 
 type ChatInfo = {
@@ -584,6 +596,158 @@ function AiConfirmationCard({ exec: ea, colors: c, onConfirm, onCancel }: { exec
 }
 
 const SWIPE_THRESHOLD = 60;
+
+function LensContextCard({ msg, onSuggestionTap }: {
+  msg: Message;
+  onSuggestionTap?: (text: string) => void;
+}) {
+  const { colors } = useTheme();
+  const BRAND_C = colors.accent;
+  const ctx = msg._lensData;
+  if (!ctx) return null;
+
+  const catIconMap: Record<string, string> = {
+    food: "restaurant", plant: "leaf", animal: "paw",
+    place: "location", product: "bag-handle", person: "person",
+    artwork: "image", text: "document-text", object: "cube",
+  };
+  const catIcon = (catIconMap[ctx.category] ?? "help-circle") as any;
+  const confColor = ctx.confidence === "high" ? "#34C759"
+    : ctx.confidence === "medium" ? "#FF9F0A" : "#FF453A";
+
+  const suggestions = [
+    `Tell me more about ${ctx.title}`,
+    ctx.history?.length ? `What else should I know about this?` : `How is this used?`,
+    `What are interesting facts about ${ctx.title}?`,
+  ];
+
+  return (
+    <View style={{ paddingHorizontal: 10, marginBottom: 4, marginTop: 6 }}>
+      <View style={{
+        backgroundColor: colors.surface, borderRadius: 20, overflow: "hidden",
+        borderWidth: 1, borderColor: BRAND_C + "30",
+        shadowColor: BRAND_C, shadowOpacity: 0.1, shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 }, elevation: 4,
+      }}>
+        {/* Header */}
+        <View style={{
+          flexDirection: "row", alignItems: "center", gap: 8,
+          paddingHorizontal: 14, paddingVertical: 11,
+          backgroundColor: BRAND_C + "12",
+          borderBottomWidth: 1, borderBottomColor: BRAND_C + "25",
+        }}>
+          <View style={{ backgroundColor: BRAND_C + "25", padding: 6, borderRadius: 10 }}>
+            <Ionicons name="scan" size={15} color={BRAND_C} />
+          </View>
+          <Text style={{ flex: 1, fontSize: 12, fontWeight: "700", color: BRAND_C, letterSpacing: 0.9, textTransform: "uppercase" }}>
+            AI Lens Scan
+          </Text>
+          <View style={{
+            flexDirection: "row", alignItems: "center", gap: 4,
+            backgroundColor: confColor + "20", borderRadius: 10,
+            paddingHorizontal: 8, paddingVertical: 3,
+          }}>
+            <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: confColor }} />
+            <Text style={{ fontSize: 11, fontWeight: "600", color: confColor, textTransform: "capitalize" }}>{ctx.confidence}</Text>
+          </View>
+        </View>
+
+        {/* Image preview */}
+        {!!ctx.imagePreview && (
+          <Image source={{ uri: ctx.imagePreview }} style={{ width: "100%", height: 180 }} resizeMode="cover" />
+        )}
+
+        {/* Title + Category */}
+        <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <Ionicons name={catIcon} size={13} color={BRAND_C} />
+            <Text style={{ fontSize: 12, color: BRAND_C, fontWeight: "600", textTransform: "capitalize" }}>{ctx.category}</Text>
+          </View>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: colors.text, marginBottom: 7 }}>{ctx.title}</Text>
+          <Text style={{ fontSize: 14, color: colors.textSecondary, lineHeight: 21 }}>{ctx.description}</Text>
+        </View>
+
+        {/* Lens Analysis (initial answer) */}
+        {!!ctx.answer && (
+          <View style={{
+            marginHorizontal: 14, marginBottom: 10,
+            backgroundColor: BRAND_C + "10", borderRadius: 12,
+            padding: 12, borderWidth: 1, borderColor: BRAND_C + "22",
+          }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 5 }}>
+              <Ionicons name="chatbubble-ellipses" size={12} color={BRAND_C} />
+              <Text style={{ fontSize: 11, color: BRAND_C, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" }}>
+                Lens Analysis
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: colors.text, lineHeight: 21 }}>{ctx.answer}</Text>
+          </View>
+        )}
+
+        {/* Q&A history from Lab */}
+        {ctx.history && ctx.history.length > 0 && (
+          <View style={{ marginHorizontal: 14, marginBottom: 10 }}>
+            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 }}>
+              Questions from Lab
+            </Text>
+            {ctx.history.map((item, i) => (
+              <View key={i} style={{
+                marginBottom: 8,
+                backgroundColor: (colors as any).inputBg ?? colors.surface + "BB",
+                borderRadius: 12, padding: 10,
+                borderLeftWidth: 3, borderLeftColor: BRAND_C + "60",
+              }}>
+                <View style={{ flexDirection: "row", gap: 6, marginBottom: 4, alignItems: "flex-start" }}>
+                  <Ionicons name="help-circle-outline" size={13} color={BRAND_C} style={{ marginTop: 1 }} />
+                  <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.text }}>{item.q}</Text>
+                </View>
+                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18, paddingLeft: 19 }}>{item.a}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Key Facts */}
+        {ctx.facts && ctx.facts.length > 0 && (
+          <View style={{ marginHorizontal: 14, marginBottom: 14 }}>
+            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: "600", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 8 }}>
+              Key Facts
+            </Text>
+            {ctx.facts.map((fact, i) => (
+              <View key={i} style={{ flexDirection: "row", gap: 8, marginBottom: 6 }}>
+                <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: BRAND_C, marginTop: 7 }} />
+                <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{fact}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Timestamp */}
+        <View style={{ paddingHorizontal: 14, paddingBottom: 12, flexDirection: "row", justifyContent: "flex-end" }}>
+          <Text style={{ fontSize: 11, color: colors.textMuted }}>{formatMsgTime(msg.sent_at)}</Text>
+        </View>
+      </View>
+
+      {/* Suggestion chips */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+        {suggestions.map((s, i) => (
+          <TouchableOpacity
+            key={i}
+            onPress={() => onSuggestionTap?.(s)}
+            activeOpacity={0.7}
+            style={{
+              paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16,
+              borderWidth: 1, borderColor: BRAND_C + "50",
+              backgroundColor: BRAND_C + "08",
+            }}
+          >
+            <Text style={{ fontSize: 13, color: BRAND_C }}>{s}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function MessageBubble({ msg, isMe, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, isPremiumSender, onConfirmExec, onCancelExec, onSuggestionTap, onSenderPress, onReactionPress }: {
   msg: Message;
@@ -1393,6 +1557,12 @@ function ChatScreen() {
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const autoSentInitialRef = useRef(false);
   const lensInjectedRef = useRef(false);
+  const lensContextRef = useRef<{
+    title: string; description: string; category: string;
+    confidence: string; facts: string[]; answer?: string;
+    history?: Array<{ q: string; a: string }>;
+    imagePreview?: string; searchQuery?: string;
+  } | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recLocked, setRecLocked] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -2189,8 +2359,8 @@ function ChatScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, user, chatInfo?.other_id, initialMessage]);
 
-  // AI Lens → Chat: immediately inject a rich AI intro message so the user
-  // arrives in a chat that already has AI-generated content about their scan.
+  // AI Lens → Chat: show a rich LensContextCard message, then trigger an
+  // AfuAI response that dives deep into the scanned subject.
   useEffect(() => {
     if (!lensIntro || lensIntro !== "true") return;
     if (!user || loading || lensInjectedRef.current) return;
@@ -2202,35 +2372,107 @@ function ChatScreen() {
         const ctx = JSON.parse(raw);
         if (!ctx.expiresAt || ctx.expiresAt <= Date.now()) return;
         AsyncStorage.removeItem("afuai_lens_context").catch(() => {});
-        const factsBlock = ctx.facts?.length
-          ? `\n\nKey facts:\n${(ctx.facts as string[]).map((f) => `• ${f}`).join("\n")}`
-          : "";
-        const answerBlock = ctx.answer ? `\n\n${ctx.answer}` : "";
-        const suggestions = [
-          `[SUGGEST:Tell me more about ${ctx.title}]`,
-          `[SUGGEST:How is this used?]`,
-          `[SUGGEST:What else should I know?]`,
-        ].join("");
-        const content =
-          `**${ctx.title}**\n\n${ctx.description}${factsBlock}${answerBlock}${suggestions}`;
-        const introMsg: Message = {
-          id: `lens_intro_${Date.now()}`,
+        // Persist in ref so every subsequent AI reply keeps the lens context
+        lensContextRef.current = ctx;
+        const cardMsg: Message = {
+          id: `lens_card_${Date.now()}`,
           chat_id: id as string,
           sender_id: AFUAI_BOT_ID,
-          encrypted_content: content,
+          encrypted_content: ctx.title,
           sent_at: new Date().toISOString(),
           sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
           reactions: [],
           _isAi: true,
+          _isLensCard: true,
+          _lensData: ctx,
         };
         setMessages((prev) => {
-          if (prev.some((m) => m.id === introMsg.id)) return prev;
-          return [...prev, introMsg];
+          if (prev.some((m) => m.id === cardMsg.id)) return prev;
+          return [...prev, cardMsg];
         });
+        // Immediately generate a rich AfuAI response about the scanned item
+        setTimeout(() => handleAfuAiLensIntro(ctx, id as string), 700);
       } catch {}
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, user, chatInfo?.other_id, lensIntro]);
+
+  async function handleAfuAiLensIntro(ctx: NonNullable<typeof lensContextRef.current>, chatId: string) {
+    setIsAfuAiTyping(true);
+    const thinkingId = `lens_thinking_${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: thinkingId,
+      chat_id: chatId,
+      sender_id: AFUAI_BOT_ID,
+      encrypted_content: "…",
+      sent_at: new Date().toISOString(),
+      sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+      reactions: [],
+      _isAi: true,
+      _pending: true,
+    }]);
+    const contextLines = [
+      `Title: ${ctx.title}`,
+      `Category: ${ctx.category}`,
+      `Description: ${ctx.description}`,
+      ctx.facts?.length ? `Key facts: ${ctx.facts.join("; ")}` : null,
+      ctx.answer ? `Initial lens analysis: ${ctx.answer}` : null,
+      ctx.history?.length
+        ? `Questions the user already asked in the Lab session:\n${ctx.history.map(h => `  Q: ${h.q}\n  A: ${h.a}`).join("\n")}`
+        : null,
+    ].filter(Boolean).join("\n");
+    try {
+      const res = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
+        method: "POST",
+        headers: edgeHeaders(),
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content: `You are AfuAI. The user scanned something with AI Lens and has brought the result into this conversation. Give a rich, expert, engaging introduction to the subject. Be informative, warm and enthusiastic. Highlight the most interesting aspects. End by inviting the user to ask more. Use up to 3 [SUGGEST:...] tags for great follow-up questions.`,
+            },
+            {
+              role: "user",
+              content: `I scanned this with AfuChat AI Lens:\n\n${contextLines}\n\nGive me a detailed, expert breakdown with the most fascinating details.`,
+            },
+          ],
+          max_tokens: 700,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const rawReply = (data.reply || "I've reviewed your scan. What would you like to know?").trim();
+        const parsed = parseAfuAiTags(rawReply);
+        let savedId: string | null = null;
+        try {
+          const { data: rpcId } = await supabase.rpc("insert_afuai_message", { p_chat_id: chatId, p_content: rawReply });
+          if (typeof rpcId === "string") savedId = rpcId;
+        } catch {}
+        setMessages(prev => {
+          const filtered = prev.filter(m => m.id !== thinkingId);
+          return [...filtered, {
+            id: savedId || `lens_reply_${Date.now()}`,
+            chat_id: chatId,
+            sender_id: AFUAI_BOT_ID,
+            encrypted_content: parsed.text || rawReply,
+            sent_at: new Date().toISOString(),
+            sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
+            reactions: [],
+            _isAi: true,
+            _aiSuggestions: parsed.suggestions.length > 0 ? parsed.suggestions : [
+              `Tell me more about ${ctx.title}`,
+              `What are the main uses of ${ctx.title}?`,
+              `Any interesting history or origin?`,
+            ],
+          }];
+        });
+      }
+    } catch {
+      setMessages(prev => prev.filter(m => m.id !== thinkingId));
+    } finally {
+      setIsAfuAiTyping(false);
+    }
+  }
 
   function handleSmartReply(text: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -2753,23 +2995,21 @@ STRICT RULES:
 - Keep your tone professional and warm. Never be dismissive or overly promotional.`;
 
       let lensAddition = "";
-      try {
-        const lensRaw = await AsyncStorage.getItem("afuai_lens_context");
-        if (lensRaw) {
-          const ctx = JSON.parse(lensRaw);
-          if (ctx.expiresAt && ctx.expiresAt > Date.now()) {
-            lensAddition =
-              `\n\n[AI LENS SCAN CONTEXT]\nThe user just scanned something with AI Lens. Give a rich, engaging, conversational response about it — as if you are an expert guide who knows everything about this topic.\n` +
-              `Title: ${ctx.title}\n` +
-              `Description: ${ctx.description}\n` +
-              `Category: ${ctx.category}` +
-              (ctx.facts?.length ? `\nKey facts:\n${ctx.facts.map((f: string) => `• ${f}`).join("\n")}` : "") +
-              (ctx.answer ? `\nInitial analysis: ${ctx.answer}` : "") +
-              `\n\nExpand on this with interesting details, history, context, and any helpful tips. Make the conversation feel natural and informative.`;
-          }
-          await AsyncStorage.removeItem("afuai_lens_context");
-        }
-      } catch {}
+      const lensCtx = lensContextRef.current;
+      if (lensCtx) {
+        lensAddition =
+          `\n\n[AI LENS CONTEXT — active for this conversation]\n` +
+          `The user scanned something with AI Lens. Use this context for all answers about the subject:\n` +
+          `Title: ${lensCtx.title}\n` +
+          `Category: ${lensCtx.category}\n` +
+          `Description: ${lensCtx.description}` +
+          (lensCtx.facts?.length ? `\nKey facts:\n${lensCtx.facts.map(f => `• ${f}`).join("\n")}` : "") +
+          (lensCtx.answer ? `\nInitial analysis: ${lensCtx.answer}` : "") +
+          (lensCtx.history?.length
+            ? `\nPrevious Q&A from Lab:\n${lensCtx.history.map(h => `  Q: ${h.q}\n  A: ${h.a}`).join("\n")}`
+            : "") +
+          `\n\nBe specific, expert and genuinely helpful. The user may ask multiple questions about this item.`;
+      }
 
       const conversationMessages = currentMessages
         .filter(m => !m._pending)
@@ -4180,26 +4420,33 @@ STRICT RULES:
             </View>
           </View>
         )}
-        <MessageBubble
-          msg={item}
-          isMe={isMe}
-          showTail={shouldShowTail(index)}
-          showName={shouldShowName(index)}
-          onLongPress={(m) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowReactions(m); }}
-          onReply={(m) => { setReplyTo(m); setTimeout(() => chatInputRef.current?.focus(), 50); }}
-          replyPreview={getReplyPreview(item.reply_to_message_id)}
-          onTapReply={item.reply_to_message_id ? () => scrollToMessage(item.reply_to_message_id!) : undefined}
-          isHighlighted={item.id === highlightedMsgId}
-          onTapEnvelope={handleTapEnvelope}
-          onTapGift={handleTapGift}
-          onImageTap={imgViewer.openViewer}
-          isPremiumSender={isMe && isPremium}
-          onConfirmExec={handleConfirmAiExec}
-          onCancelExec={handleCancelAiExec}
-          onSuggestionTap={(text) => sendMessage(text)}
-          onSenderPress={advancedFeatures.mini_profile_popup && !isMe ? (id) => setMiniProfileUserId(id) : undefined}
-          onReactionPress={addReaction}
-        />
+        {item._isLensCard ? (
+          <LensContextCard
+            msg={item}
+            onSuggestionTap={(text) => sendMessage(text)}
+          />
+        ) : (
+          <MessageBubble
+            msg={item}
+            isMe={isMe}
+            showTail={shouldShowTail(index)}
+            showName={shouldShowName(index)}
+            onLongPress={(m) => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowReactions(m); }}
+            onReply={(m) => { setReplyTo(m); setTimeout(() => chatInputRef.current?.focus(), 50); }}
+            replyPreview={getReplyPreview(item.reply_to_message_id)}
+            onTapReply={item.reply_to_message_id ? () => scrollToMessage(item.reply_to_message_id!) : undefined}
+            isHighlighted={item.id === highlightedMsgId}
+            onTapEnvelope={handleTapEnvelope}
+            onTapGift={handleTapGift}
+            onImageTap={imgViewer.openViewer}
+            isPremiumSender={isMe && isPremium}
+            onConfirmExec={handleConfirmAiExec}
+            onCancelExec={handleCancelAiExec}
+            onSuggestionTap={(text) => sendMessage(text)}
+            onSenderPress={advancedFeatures.mini_profile_popup && !isMe ? (id) => setMiniProfileUserId(id) : undefined}
+            onReactionPress={addReaction}
+          />
+        )}
       </View>
     );
   }, [messages, user, colors, highlightedMsgId, scrollToMessage, advancedFeatures.mini_profile_popup]);
