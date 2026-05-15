@@ -297,38 +297,37 @@ export default function MeScreen() {
     setNotesLoading(true);
     try {
       const CACHE_KEY = `notes_chat_id_${user.id}`;
+      const NOTES_NAME = `notes:${user.id}`;
+
+      // Try cache first, but always verify it's still the right chat
       let notesId = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
 
+      if (notesId) {
+        // Validate: confirm this chat is still a self-chat (name matches our marker)
+        const { data: existing } = await supabase
+          .from("chats")
+          .select("id, name")
+          .eq("id", notesId)
+          .eq("name", NOTES_NAME)
+          .maybeSingle();
+        if (!existing) notesId = null; // cache was stale — re-lookup
+      }
+
       if (!notesId) {
-        // Find all non-group, non-channel chats the user is in
-        const { data: memberRows } = await supabase
-          .from("chat_members")
-          .select("chat_id, chats!inner(id, is_group, is_channel)")
-          .eq("user_id", user.id)
-          .eq("chats.is_group" as any, false)
-          .eq("chats.is_channel" as any, false);
+        // Look up by the unique name marker we set on creation
+        const { data: found } = await supabase
+          .from("chats")
+          .select("id")
+          .eq("name", NOTES_NAME)
+          .maybeSingle();
 
-        const candidateIds = (memberRows || []).map((r: any) => r.chat_id);
-
-        if (candidateIds.length > 0) {
-          // Among those, find one where the user is the ONLY member (self-chat)
-          const { data: allMemberRows } = await supabase
-            .from("chat_members")
-            .select("chat_id")
-            .in("chat_id", candidateIds);
-
-          const countMap: Record<string, number> = {};
-          for (const r of allMemberRows || []) {
-            countMap[r.chat_id] = (countMap[r.chat_id] || 0) + 1;
-          }
-          notesId = candidateIds.find((cid: string) => countMap[cid] === 1) ?? null;
-        }
-
-        if (!notesId) {
-          // No self-chat exists yet — create one with only the user as member
+        if (found) {
+          notesId = found.id;
+        } else {
+          // First time: create the notes chat with a unique name marker
           const { data: newChat, error: createErr } = await supabase
             .from("chats")
-            .insert({ is_group: false, is_channel: false })
+            .insert({ is_group: false, is_channel: false, name: NOTES_NAME })
             .select("id")
             .single();
           if (createErr || !newChat) throw new Error(createErr?.message || "Failed to create notes");
@@ -339,12 +338,10 @@ export default function MeScreen() {
         await AsyncStorage.setItem(CACHE_KEY, notesId!).catch(() => {});
       }
 
-      if (notesId) {
-        router.push({
-          pathname: "/chat/[id]",
-          params: { id: notesId, otherId: user.id, otherName: "My Notes" },
-        } as any);
-      }
+      router.push({
+        pathname: "/chat/[id]",
+        params: { id: notesId, otherId: user.id, otherName: "My Notes" },
+      } as any);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Could not open notes");
     } finally {
