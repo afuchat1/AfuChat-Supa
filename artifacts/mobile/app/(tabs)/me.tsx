@@ -327,10 +327,16 @@ export default function MeScreen() {
           // First time: create the notes chat with a unique name marker
           const { data: newChat, error: createErr } = await supabase
             .from("chats")
-            .insert({ is_group: false, is_channel: false, name: NOTES_NAME })
+            .insert({
+              is_group: false,
+              is_channel: false,
+              name: NOTES_NAME,
+              created_by: user.id,
+              user_id: user.id,
+            })
             .select("id")
             .single();
-          if (createErr || !newChat) throw new Error(createErr?.message || "Failed to create notes");
+          if (createErr || !newChat) throw new Error(createErr?.message || "Failed to create notes chat");
           await supabase.from("chat_members").insert({ chat_id: newChat.id, user_id: user.id });
           notesId = newChat.id;
         }
