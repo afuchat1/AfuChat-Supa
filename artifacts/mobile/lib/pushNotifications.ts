@@ -337,30 +337,31 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData.data;
 
-    // Primary: save via edge function (service role key)
-    let savedViaEdge = false;
+    // Primary: save via the always-running Express API server
+    // (/api/push/register-token uses the service role key server-side)
+    let savedViaApi = false;
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || "";
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      if (accessToken && supabaseUrl) {
-        const res = await fetch(`${supabaseUrl}/functions/v1/register-push-token`, {
+      if (accessToken && apiUrl) {
+        const res = await fetch(`${apiUrl}/api/push/register-token`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "apikey": supabaseAnonKey,
             "Authorization": `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ token }),
         });
-        if (res.ok) savedViaEdge = true;
-        else console.warn("[PushNotif] Edge function token save failed:", await res.text());
+        if (res.ok) savedViaApi = true;
+        else console.warn("[PushNotif] API token save failed:", res.status, await res.text().catch(() => ""));
       }
-    } catch (edgeErr: any) {
-      console.warn("[PushNotif] Edge function unreachable:", edgeErr?.message);
+    } catch (apiErr: any) {
+      console.warn("[PushNotif] API server unreachable:", apiErr?.message);
     }
 
     // Fallback: direct Supabase client update
-    if (!savedViaEdge) {
+    if (!savedViaApi) {
       const { error: dbError } = await supabase
         .from("profiles")
         .update({ expo_push_token: token })

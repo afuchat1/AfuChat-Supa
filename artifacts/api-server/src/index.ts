@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { loadAppSettings } from "./lib/bootstrap";
 import { startRealtimeWatcher } from "./services/realtimeWatcher";
+import { startPushWatcher } from "./services/pushWatcher";
 import { startVideoEncoder } from "./services/videoEncoder";
 import { startStoriesCleanup } from "./services/storiesCleanup";
 
@@ -33,6 +34,11 @@ app.listen(port, (err) => {
 
   // Start background Supabase realtime watcher for email notifications
   startRealtimeWatcher();
+
+  // Start server-side push notification watcher — dispatches Expo pushes
+  // from the always-running server so they fire even when the sender's app
+  // is closed. Watches messages, calls, and notifications tables.
+  startPushWatcher();
 
   // Start the video encoding worker (no-op if SUPABASE_SERVICE_ROLE_KEY
   // is missing or VIDEO_WORKER_ENABLED=false).
