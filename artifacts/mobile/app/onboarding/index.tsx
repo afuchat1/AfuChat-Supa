@@ -495,23 +495,26 @@ export default function OnboardingScreen() {
       if (stored) {
         await AsyncStorage.removeItem("referrer_handle");
         const refHandle = stored.trim().toLowerCase();
-        if (refHandle !== cleanHandle) {
-          const { data: referrer } = await supabase.from("profiles").select("id, xp").eq("handle", refHandle).single();
-          if (referrer && referrer.id !== userId) {
-            const { data: existingRef } = await supabase.from("referrals").select("id").eq("referred_id", userId).limit(1).maybeSingle();
-            if (!existingRef) {
-              await supabase.from("referrals").insert({ referrer_id: referrer.id, referred_id: userId, reward_given: true });
-              await supabase.from("profiles").update({ xp: (referrer.xp || 0) + 2000 }).eq("id", referrer.id);
-              const { data: platinumPlan } = await supabase.from("subscription_plans").select("id").ilike("name", "%platinum%").eq("is_active", true).limit(1).single();
-              if (platinumPlan) {
-                const expiresAt = new Date(); expiresAt.setDate(expiresAt.getDate() + 7);
-                await supabase.from("user_subscriptions").upsert({ user_id: userId, plan_id: platinumPlan.id, started_at: new Date().toISOString(), expires_at: expiresAt.toISOString(), is_active: true, acoin_paid: 0 });
-              }
-            }
+        // Call the SECURITY DEFINER SQL function — it runs as postgres,
+        // bypasses RLS so it can update the referrer's XP from the invitee's
+        // session, uses the correct column names, and is fully atomic.
+        if (refHandle && refHandle !== cleanHandle) {
+          const { data: rpcResult, error: rpcError } = await supabase.rpc(
+            "handle_referral_reward",
+            { p_referrer_handle: refHandle, p_referred_id: userId },
+          );
+          if (rpcError) {
+            console.warn("[referral] rpc error:", rpcError.message);
+          } else if (rpcResult && !rpcResult.ok) {
+            console.warn("[referral] not rewarded:", rpcResult.reason);
+          } else if (rpcResult?.ok) {
+            console.log("[referral] referrer rewarded with 2000 XP:", rpcResult.referrer_id);
           }
         }
       }
-    } catch (_) {}
+    } catch (referralErr) {
+      console.warn("[referral] unexpected error:", referralErr);
+    }
 
     try { const { rewardXp } = await import("../../lib/rewardXp"); await rewardXp("profile_completed"); } catch (_) {}
     try { await supabase.from("chat_preferences").upsert({ user_id: userId, chat_theme: selectedTheme }, { onConflict: "user_id" }); } catch (_) {}

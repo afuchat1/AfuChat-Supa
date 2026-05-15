@@ -1,7 +1,3 @@
-[project]
-organization_id = ""
-project_id = ""
-
 [api]
 enabled = true
 port = 54321
@@ -24,3 +20,6 @@ verify_jwt = true
 
 [functions.register-push-token]
 verify_jwt = true
+
+[functions.push-notification-trigger]
+verify_jwt = false
