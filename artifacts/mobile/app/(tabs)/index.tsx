@@ -15,6 +15,8 @@ import {
   View,
 } from "react-native";
 import { FlashList } from "@shopify/flash-list";
+// FlashList v2 produces text-node errors on React Native Web — fall back to FlatList.
+const SafeFlashList = Platform.OS === "web" ? (FlatList as any) : FlashList;
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, router, useFocusEffect, useNavigation, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1504,7 +1506,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                       </Text>
                     </View>
                   ) : (
-                    <FlashList
+                    <SafeFlashList
                       data={pageChats}
                       keyExtractor={(item) => item.id}
                       estimatedItemSize={72}
@@ -1576,7 +1578,7 @@ function ChatsScreen({ panelMode = false }: { panelMode?: boolean } = {}) {
                 </Text>
               </View>
             ) : (
-              <FlashList
+              <SafeFlashList
                 data={filtered}
                 keyExtractor={(item) => item.id}
                 estimatedItemSize={72}

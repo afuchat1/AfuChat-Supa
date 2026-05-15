@@ -33,10 +33,6 @@ args = "Start application"
 task = "workflow.run"
 args = "Mockup Preview Server"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start Backend"
-
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -46,7 +42,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && EXPO_NO_LAZY=1 EXPO_OFFLINE=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_EXPO_DEV_DOMAIN CI=1 ./node_modules/.bin/expo start --port 5000 --offline"
+args = "cd artifacts/mobile && EXPO_NO_LAZY=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN ./node_modules/.bin/expo start --web --port 5000"
 waitForPort = 5000
 
 [[workflows.workflow]]
@@ -61,18 +57,6 @@ isCanvasWorkflow = true
 task = "shell.exec"
 args = "cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ pnpm exec vite"
 waitForPort = 8000
-
-[[workflows.workflow]]
-name = "Start Backend"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm install --prefer-offline 2>&1 | tail -3 && cd artifacts/api-server && pnpm run build && PORT=3000 node --enable-source-maps ./dist/index.mjs"
-waitForPort = 3000
 
 [[ports]]
 localPort = 3000
