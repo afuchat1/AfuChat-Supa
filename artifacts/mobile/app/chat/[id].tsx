@@ -4546,15 +4546,6 @@ STRICT RULES:
             </>
           )}
           {chatInfo && (
-            <TouchableOpacity
-              style={st.headerAction}
-              hitSlop={8}
-              onPress={() => router.push("/(tabs)/search" as any)}
-            >
-              <Ionicons name="search-outline" size={21} color={colors.text} />
-            </TouchableOpacity>
-          )}
-          {chatInfo && (
             <TouchableOpacity style={st.headerAction} hitSlop={8} onPress={() => setShowChatOptions(true)}>
               <Ionicons name="ellipsis-vertical" size={22} color={colors.text} />
             </TouchableOpacity>
