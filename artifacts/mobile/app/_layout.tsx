@@ -5,7 +5,7 @@ enableScreens(true);
 
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Linking, Platform, StyleSheet } from "react-native";
+import { Linking, Platform, StyleSheet, Text, TextInput } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -29,6 +29,11 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import AlertModal from "@/components/ui/AlertModal";
 import { initConnectivityToasts } from "@/lib/toast";
+
+// Lock out system-level font scaling so the app always renders at its
+// intended sizes regardless of the device's accessibility font-size setting.
+(Text as any).defaultProps = { ...((Text as any).defaultProps ?? {}), allowFontScaling: false };
+(TextInput as any).defaultProps = { ...((TextInput as any).defaultProps ?? {}), allowFontScaling: false };
 
 SplashScreen.preventAutoHideAsync();
 
