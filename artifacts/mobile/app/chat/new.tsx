@@ -109,6 +109,9 @@ type SearchResult = Contact & { _searching?: boolean };
 
 type Section = { title: string; data: Contact[] };
 
+type GroupItem = { id: string; name: string; avatar_url: string | null };
+type ChannelItem = { id: string; name: string; avatar_url: string | null; is_verified?: boolean };
+
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
 
 function groupByLetter(contacts: Contact[]): Section[] {
@@ -147,6 +150,8 @@ export default function NewChatScreen() {
   const [phoneNotAfu, setPhoneNotAfu] = useState<NonAfuContact[]>([]);
   const [selected, setSelected] = useState<Map<string, Contact>>(new Map());
   const [starting, setStarting] = useState(false);
+  const [groups, setGroups] = useState<GroupItem[]>([]);
+  const [channels, setChannels] = useState<ChannelItem[]>([]);
 
   const sectionListRef = useRef<SectionList<Contact, Section>>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -229,11 +234,48 @@ export default function NewChatScreen() {
     );
   }, [user]);
 
+  const loadGroupsAndChannels = useCallback(async () => {
+    if (!user) return;
+    const [{ data: memberRows }, { data: subRows }, { data: ownedRows }] = await Promise.all([
+      supabase
+        .from("chat_members")
+        .select("chat_id, chats(id, name, avatar_url, is_group)")
+        .eq("user_id", user.id),
+      supabase
+        .from("channel_subscriptions")
+        .select("channel_id, channels(id, name, avatar_url, is_verified)")
+        .eq("user_id", user.id),
+      supabase
+        .from("channels")
+        .select("id, name, avatar_url, is_verified")
+        .eq("owner_id", user.id),
+    ]);
+
+    const groupItems: GroupItem[] = (memberRows || []).flatMap((m: any) => {
+      const chat = Array.isArray(m.chats) ? m.chats[0] : m.chats;
+      if (!chat || !chat.is_group) return [];
+      return [{ id: chat.id, name: chat.name || "Group", avatar_url: chat.avatar_url || null }];
+    });
+    setGroups(groupItems);
+
+    const subChannels: ChannelItem[] = (subRows || []).flatMap((s: any) => {
+      const ch = Array.isArray(s.channels) ? s.channels[0] : s.channels;
+      if (!ch) return [];
+      return [{ id: ch.id, name: ch.name || "Channel", avatar_url: ch.avatar_url || null, is_verified: !!ch.is_verified }];
+    });
+    const subIds = new Set(subChannels.map((c) => c.id));
+    const ownedChannels: ChannelItem[] = (ownedRows || [])
+      .filter((ch: any) => !subIds.has(ch.id))
+      .map((ch: any) => ({ id: ch.id, name: ch.name || "Channel", avatar_url: ch.avatar_url || null, is_verified: !!ch.is_verified }));
+    setChannels([...subChannels, ...ownedChannels]);
+  }, [user]);
+
   useEffect(() => {
     loadContacts();
     loadRecents();
+    loadGroupsAndChannels();
     setTimeout(() => inputRef.current?.focus(), 300);
-  }, [loadContacts, loadRecents]);
+  }, [loadContacts, loadRecents, loadGroupsAndChannels]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -590,7 +632,10 @@ export default function NewChatScreen() {
                   phoneOnAfu={phoneOnAfu}
                   phoneNotAfu={phoneNotAfu}
                   onOpenChat={openChat}
-                  myUserId={user?.id || ""}
+                  groups={groups}
+                  channels={channels}
+                  onGroupPress={(g) => router.push({ pathname: "/chat/[id]", params: { id: g.id } } as any)}
+                  onChannelPress={(c) => router.push({ pathname: "/channel/[id]", params: { id: c.id } } as any)}
                 />
               }
               renderSectionHeader={({ section }) => (
@@ -726,7 +771,10 @@ function ListHeader({
   phoneOnAfu,
   phoneNotAfu,
   onOpenChat,
-  myUserId,
+  groups,
+  channels,
+  onGroupPress,
+  onChannelPress,
 }: {
   colors: any;
   accent: string;
@@ -743,7 +791,10 @@ function ListHeader({
   phoneOnAfu: AfuContact[];
   phoneNotAfu: NonAfuContact[];
   onOpenChat: (userId: string) => void;
-  myUserId: string;
+  groups: GroupItem[];
+  channels: ChannelItem[];
+  onGroupPress: (g: GroupItem) => void;
+  onChannelPress: (c: ChannelItem) => void;
 }) {
   return (
     <View>
@@ -754,14 +805,6 @@ function ListHeader({
           { backgroundColor: colors.surface, borderColor: colors.separator },
         ]}
       >
-        <QuickAction
-          icon="bookmark"
-          iconBg="#5856D6"
-          label="My Notes"
-          onPress={() => myUserId && onOpenChat(myUserId)}
-          colors={colors}
-        />
-        <Separator indent={58} />
         <QuickAction
           icon="people"
           iconBg="#007AFF"
@@ -778,6 +821,65 @@ function ListHeader({
           colors={colors}
         />
       </View>
+
+      {/* Groups */}
+      {groups.length > 0 && (
+        <View>
+          <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: accent }]}>GROUPS</Text>
+          </View>
+          {groups.map((g, i) => (
+            <View key={g.id}>
+              <TouchableOpacity
+                style={[styles.contactRow, { backgroundColor: colors.surface }]}
+                onPress={() => onGroupPress(g)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.avatarWrap}>
+                  <Avatar uri={g.avatar_url} name={g.name} size={48} square />
+                </View>
+                <View style={styles.contactContent}>
+                  <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{g.name}</Text>
+                  <Text style={[styles.contactHandle, { color: colors.textMuted }]}>Group</Text>
+                </View>
+                <Ionicons name="chatbubbles-outline" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+              {i < groups.length - 1 && <Separator indent={70} />}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Channels */}
+      {channels.length > 0 && (
+        <View>
+          <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: accent }]}>CHANNELS</Text>
+          </View>
+          {channels.map((c, i) => (
+            <View key={c.id}>
+              <TouchableOpacity
+                style={[styles.contactRow, { backgroundColor: colors.surface }]}
+                onPress={() => onChannelPress(c)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.avatarWrap}>
+                  <Avatar uri={c.avatar_url} name={c.name} size={48} square />
+                </View>
+                <View style={styles.contactContent}>
+                  <View style={styles.nameRow}>
+                    <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{c.name}</Text>
+                    {c.is_verified && <VerifiedBadge isVerified size={13} />}
+                  </View>
+                  <Text style={[styles.contactHandle, { color: colors.textMuted }]}>Channel</Text>
+                </View>
+                <Ionicons name="megaphone-outline" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+              {i < channels.length - 1 && <Separator indent={70} />}
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Skeleton */}
       {loading && (
