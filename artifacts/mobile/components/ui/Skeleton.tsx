@@ -79,10 +79,12 @@ export function PostSkeleton() {
           <Skeleton width={60} height={10} style={{ marginTop: 6 }} />
         </View>
       </View>
-      <Skeleton width="100%" height={14} style={{ marginTop: 12 }} />
-      <Skeleton width="80%" height={14} style={{ marginTop: 6 }} />
-      <Skeleton width="60%" height={14} style={{ marginTop: 6 }} />
-      <View style={sk.postActions}>
+      <View style={{ paddingLeft: 50 }}>
+        <Skeleton width="100%" height={14} style={{ marginTop: 12 }} />
+        <Skeleton width="80%" height={14} style={{ marginTop: 6 }} />
+        <Skeleton width="60%" height={14} style={{ marginTop: 6 }} />
+      </View>
+      <View style={[sk.postActions, { paddingLeft: 44 }]}>
         <Skeleton width={50} height={20} borderRadius={10} />
         <Skeleton width={50} height={20} borderRadius={10} />
         <Skeleton width={50} height={20} borderRadius={10} />

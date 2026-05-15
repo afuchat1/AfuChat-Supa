@@ -136,9 +136,10 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
 
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   const effectiveW = colWidth ?? screenW;
-  // 16px padding on each side so images never touch card edges
-  const singleImgW = effectiveW - 32;
-  const multiImgW = (effectiveW - 44) / 2;
+  // Left indent: 16 card padding + 40 avatar + 10 gap = 66px (Twitter-style alignment under author name)
+  const CONTENT_INDENT = 66;
+  const singleImgW = effectiveW - CONTENT_INDENT - 16;
+  const multiImgW = (effectiveW - CONTENT_INDENT - 28) / 2;
   const imgW = allImages.length === 1 ? singleImgW : multiImgW;
 
   useEffect(() => {
@@ -396,7 +397,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               <TouchableOpacity
                 activeOpacity={0.9}
                 onPress={(e) => { e.stopPropagation(); onImagePress?.(allImages, 0); }}
-                style={{ marginHorizontal: 16 }}
+                style={{ marginLeft: CONTENT_INDENT, marginRight: 16 }}
               >
                 <ExpoImage
                   source={{ uri: allImages[0] }}
@@ -413,7 +414,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={{ marginTop: 6 }}
-                  contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}
+                  contentContainerStyle={{ gap: 6, paddingLeft: CONTENT_INDENT, paddingRight: 16 }}
                   onScrollBeginDrag={() => { horizontalScrollActive.value = true; }}
                   onScrollEndDrag={() => { horizontalScrollActive.value = false; }}
                   onMomentumScrollEnd={() => { horizontalScrollActive.value = false; }}
@@ -1916,17 +1917,19 @@ const styles = StyleSheet.create({
   cardContent: {
     fontSize: 15,
     fontFamily: "Inter_400Regular",
-    paddingHorizontal: 16,
+    paddingLeft: 66,
+    paddingRight: 16,
     paddingBottom: 12,
     lineHeight: 23,
   },
-  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 16, marginBottom: 8 },
+  translatedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 66, paddingRight: 16, marginBottom: 8 },
   translatedText: { fontSize: 11, fontFamily: "Inter_400Regular" },
   images: { marginBottom: 8 },
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingLeft: 60,
+    paddingRight: 14,
     paddingVertical: 10,
     paddingBottom: 12,
     gap: 2,
@@ -1948,7 +1951,7 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   viewCount: { flexDirection: "row", alignItems: "center", gap: 4 },
   viewText: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  videoCard: { marginHorizontal: 16, marginBottom: 2 },
+  videoCard: { marginLeft: 66, marginRight: 16, marginBottom: 2 },
   videoThumb: {
     height: 220,
     backgroundColor: "#0a0a0a",
@@ -1981,7 +1984,8 @@ const styles = StyleSheet.create({
   },
   videoBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   articleCard: {
-    marginHorizontal: 16,
+    marginLeft: 66,
+    marginRight: 16,
     marginVertical: 4,
     borderRadius: 14,
     overflow: "hidden",
