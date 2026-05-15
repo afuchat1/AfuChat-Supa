@@ -113,14 +113,17 @@ export default function SupportDashboard() {
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
-    const query = supabase
-      .from("support_tickets")
-      .select("*, user:profiles!support_tickets_user_id_fkey(display_name, handle, avatar_url)")
-      .order("updated_at", { ascending: false });
-    if (filterStatus !== "all") query.eq("status", filterStatus);
-    const { data } = await query;
-    setTickets((data || []) as Ticket[]);
-    setLoading(false);
+    try {
+      const query = supabase
+        .from("support_tickets")
+        .select("*, user:profiles!support_tickets_user_id_fkey(display_name, handle, avatar_url)")
+        .order("updated_at", { ascending: false });
+      if (filterStatus !== "all") query.eq("status", filterStatus);
+      const { data } = await query;
+      setTickets((data || []) as Ticket[]);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [filterStatus]);
 
   const openThread = useCallback(async (ticket: Ticket) => {

@@ -41,22 +41,26 @@ export default function BillsScreen() {
     }
 
     setLoading(true);
-    const result = await processServiceTransaction(user.id, "bill_payment", numAmount, {
-      bill_type: billType,
-      bill_name: selectedBill?.name,
-      account_number: accountNumber,
-      bill_amount: numAmount,
-    });
-    setLoading(false);
-
-    if (result.success) {
-      Haptics.notificationAsync("success");
-      showAlert("Success", `${selectedBill?.name} bill of ${numAmount} ACoins paid successfully`, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } else {
-      Haptics.notificationAsync("error");
-      showAlert("Failed", result.error || "Payment failed");
+    try {
+      const result = await processServiceTransaction(user.id, "bill_payment", numAmount, {
+        bill_type: billType,
+        bill_name: selectedBill?.name,
+        account_number: accountNumber,
+        bill_amount: numAmount,
+      });
+      if (result.success) {
+        Haptics.notificationAsync("success");
+        showAlert("Success", `${selectedBill?.name} bill of ${numAmount} ACoins paid successfully`, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Haptics.notificationAsync("error");
+        showAlert("Failed", result.error || "Payment failed");
+      }
+    } catch (_) {
+      showAlert("Error", "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 

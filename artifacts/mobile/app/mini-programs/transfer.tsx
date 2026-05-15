@@ -31,21 +31,25 @@ export default function TransferScreen() {
     }
 
     setLoading(true);
-    const result = await processServiceTransaction(user.id, "money_transfer", numAmount, {
-      recipient_identifier: recipient,
-      transfer_amount: numAmount,
-      note: note || undefined,
-    });
-    setLoading(false);
-
-    if (result.success) {
-      Haptics.notificationAsync("success");
-      showAlert("Transfer Sent!", `${numAmount} ACoins sent to ${recipient}`, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } else {
-      Haptics.notificationAsync("error");
-      showAlert("Failed", result.error || "Transfer failed");
+    try {
+      const result = await processServiceTransaction(user.id, "money_transfer", numAmount, {
+        recipient_identifier: recipient,
+        transfer_amount: numAmount,
+        note: note || undefined,
+      });
+      if (result.success) {
+        Haptics.notificationAsync("success");
+        showAlert("Transfer Sent!", `${numAmount} ACoins sent to ${recipient}`, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Haptics.notificationAsync("error");
+        showAlert("Failed", result.error || "Transfer failed");
+      }
+    } catch (_) {
+      showAlert("Error", "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 

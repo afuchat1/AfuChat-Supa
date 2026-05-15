@@ -47,23 +47,27 @@ export default function DataBundlesScreen() {
     }
 
     setLoading(true);
-    const result = await processServiceTransaction(user.id, "data_bundle", bundle.price, {
-      provider,
-      phone_number: phone,
-      data_amount: bundle.data,
-      validity: bundle.validity,
-      bundle_id: bundle.id,
-    });
-    setLoading(false);
-
-    if (result.success) {
-      Haptics.notificationAsync("success");
-      showAlert("Success", `${bundle.data} data bundle activated for ${phone}`, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } else {
-      Haptics.notificationAsync("error");
-      showAlert("Failed", result.error || "Transaction failed");
+    try {
+      const result = await processServiceTransaction(user.id, "data_bundle", bundle.price, {
+        provider,
+        phone_number: phone,
+        data_amount: bundle.data,
+        validity: bundle.validity,
+        bundle_id: bundle.id,
+      });
+      if (result.success) {
+        Haptics.notificationAsync("success");
+        showAlert("Success", `${bundle.data} data bundle activated for ${phone}`, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Haptics.notificationAsync("error");
+        showAlert("Failed", result.error || "Transaction failed");
+      }
+    } catch (_) {
+      showAlert("Error", "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -56,37 +56,40 @@ export default function PaidCommunitiesScreen() {
 
   const loadCommunities = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("paid_communities")
-      .select(`
-        id, name, description, emoji, price, member_count, creator_id, tags,
-        profiles!paid_communities_creator_id_fkey(display_name, handle)
-      `)
-      .order("member_count", { ascending: false })
-      .limit(30);
+    try {
+      const { data } = await supabase
+        .from("paid_communities")
+        .select(`
+          id, name, description, emoji, price, member_count, creator_id, tags,
+          profiles!paid_communities_creator_id_fkey(display_name, handle)
+        `)
+        .order("member_count", { ascending: false })
+        .limit(30);
 
-    if (data) {
-      let memberSet = new Set<string>();
-      if (user) {
-        const { data: memberships } = await supabase
-          .from("community_members")
-          .select("community_id")
-          .eq("user_id", user.id);
-        memberSet = new Set((memberships || []).map((m: any) => m.community_id));
+      if (data) {
+        let memberSet = new Set<string>();
+        if (user) {
+          const { data: memberships } = await supabase
+            .from("community_members")
+            .select("community_id")
+            .eq("user_id", user.id);
+          memberSet = new Set((memberships || []).map((m: any) => m.community_id));
+        }
+
+        const mapped: Community[] = data.map((c: any) => ({
+          id: c.id, name: c.name, description: c.description, emoji: c.emoji || "🏰",
+          price: c.price, member_count: c.member_count || 0, creator_id: c.creator_id,
+          creator_name: c.profiles?.display_name || "Creator",
+          creator_handle: c.profiles?.handle || "creator",
+          is_member: memberSet.has(c.id),
+          tags: c.tags || [],
+        }));
+        setCommunities(mapped);
+        setMyCommunities(mapped.filter((c) => c.creator_id === user?.id || c.is_member));
       }
-
-      const mapped: Community[] = data.map((c: any) => ({
-        id: c.id, name: c.name, description: c.description, emoji: c.emoji || "🏰",
-        price: c.price, member_count: c.member_count || 0, creator_id: c.creator_id,
-        creator_name: c.profiles?.display_name || "Creator",
-        creator_handle: c.profiles?.handle || "creator",
-        is_member: memberSet.has(c.id),
-        tags: c.tags || [],
-      }));
-      setCommunities(mapped);
-      setMyCommunities(mapped.filter((c) => c.creator_id === user?.id || c.is_member));
+    } catch (_) {} finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user]);
 
   useEffect(() => { loadCommunities(); }, [loadCommunities]);

@@ -47,23 +47,27 @@ export default function TicketsScreen() {
     }
 
     setLoading(true);
-    const result = await processServiceTransaction(user.id, "event_ticket", basePrice, {
-      event_name: event.name,
-      event_date: event.date,
-      event_location: event.location,
-      ticket_type: ticket.name,
-      quantity,
-    });
-    setLoading(false);
-
-    if (result.success) {
-      Haptics.notificationAsync("success");
-      showAlert("Ticket Purchased!", `${quantity}× ${ticket.name} for ${event.name}`, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } else {
-      Haptics.notificationAsync("error");
-      showAlert("Failed", result.error || "Purchase failed");
+    try {
+      const result = await processServiceTransaction(user.id, "event_ticket", basePrice, {
+        event_name: event.name,
+        event_date: event.date,
+        event_location: event.location,
+        ticket_type: ticket.name,
+        quantity,
+      });
+      if (result.success) {
+        Haptics.notificationAsync("success");
+        showAlert("Ticket Purchased!", `${quantity}× ${ticket.name} for ${event.name}`, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Haptics.notificationAsync("error");
+        showAlert("Failed", result.error || "Purchase failed");
+      }
+    } catch (_) {
+      showAlert("Error", "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 

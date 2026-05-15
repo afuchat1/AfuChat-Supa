@@ -67,31 +67,34 @@ export default function DigitalEventsScreen() {
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("digital_events")
-      .select(`id, title, description, emoji, price, event_date, capacity, tickets_sold, creator_id, category, profiles!digital_events_creator_id_fkey(display_name, handle)`)
-      .gte("event_date", new Date().toISOString())
-      .order("event_date", { ascending: true })
-      .limit(30);
+    try {
+      const { data } = await supabase
+        .from("digital_events")
+        .select(`id, title, description, emoji, price, event_date, capacity, tickets_sold, creator_id, category, profiles!digital_events_creator_id_fkey(display_name, handle)`)
+        .gte("event_date", new Date().toISOString())
+        .order("event_date", { ascending: true })
+        .limit(30);
 
-    if (data) {
-      let ticketSet = new Set<string>();
-      if (user) {
-        const { data: tickets } = await supabase.from("event_tickets").select("event_id").eq("user_id", user.id);
-        ticketSet = new Set((tickets || []).map((t: any) => t.event_id));
+      if (data) {
+        let ticketSet = new Set<string>();
+        if (user) {
+          const { data: tickets } = await supabase.from("event_tickets").select("event_id").eq("user_id", user.id);
+          ticketSet = new Set((tickets || []).map((t: any) => t.event_id));
+        }
+        const mapped: DigitalEvent[] = data.map((e: any) => ({
+          id: e.id, title: e.title, description: e.description, emoji: e.emoji || "🎫",
+          price: e.price, event_date: e.event_date, capacity: e.capacity || 0,
+          tickets_sold: e.tickets_sold || 0, creator_id: e.creator_id, category: e.category || "Online",
+          creator_name: e.profiles?.display_name || "Organizer",
+          creator_handle: e.profiles?.handle || "organizer",
+          has_ticket: ticketSet.has(e.id),
+        }));
+        setEvents(mapped);
+        setMyEvents(mapped.filter((e) => e.creator_id === user?.id || e.has_ticket));
       }
-      const mapped: DigitalEvent[] = data.map((e: any) => ({
-        id: e.id, title: e.title, description: e.description, emoji: e.emoji || "🎫",
-        price: e.price, event_date: e.event_date, capacity: e.capacity || 0,
-        tickets_sold: e.tickets_sold || 0, creator_id: e.creator_id, category: e.category || "Online",
-        creator_name: e.profiles?.display_name || "Organizer",
-        creator_handle: e.profiles?.handle || "organizer",
-        has_ticket: ticketSet.has(e.id),
-      }));
-      setEvents(mapped);
-      setMyEvents(mapped.filter((e) => e.creator_id === user?.id || e.has_ticket));
+    } catch (_) {} finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user]);
 
   useEffect(() => { loadEvents(); }, [loadEvents]);

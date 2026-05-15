@@ -152,11 +152,14 @@ export default function RequestsScreen() {
       : supabase.from("transaction_requests")
           .select("*, owner:profiles!transaction_requests_owner_id_fkey(handle, display_name, avatar_url, is_verified)")
           .eq("requester_id", user.id).order("created_at", { ascending: false }).limit(50);
-    const { data, error } = await query;
-    if (error) console.warn("Failed to load requests:", error.message);
-    setRequests((data as TransactionRequest[]) || []);
-    setLoading(false);
-    setRefreshing(false);
+    try {
+      const { data, error } = await query;
+      if (error) console.warn("Failed to load requests:", error.message);
+      setRequests((data as TransactionRequest[]) || []);
+    } catch (_) {} finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user, tab]);
 
   useEffect(() => { setLoading(true); loadRequests(); }, [loadRequests]);

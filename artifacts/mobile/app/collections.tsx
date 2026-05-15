@@ -231,13 +231,16 @@ export default function CollectionsScreen() {
   const loadCollections = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("collections")
-      .select("id, name, emoji, color, item_count, created_at, is_private")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    setCollections(data || []);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("collections")
+        .select("id, name, emoji, color, item_count, created_at, is_private")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      setCollections(data || []);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [user]);
 
   const loadOwnedUsernames = useCallback(async () => {

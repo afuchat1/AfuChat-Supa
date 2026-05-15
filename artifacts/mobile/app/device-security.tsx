@@ -210,37 +210,39 @@ export default function DeviceSecurityScreen() {
   const loadAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    await registerCurrentDevice();
+    try {
+      await registerCurrentDevice();
 
-    const [{ data: prefData }, { data: sessionData }] = await Promise.all([
-      supabase.from("security_preferences").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("device_sessions").select("*").eq("user_id", user.id)
-        .order("is_current", { ascending: false }).order("last_seen", { ascending: false }),
-    ]);
-
-    if (prefData) setPrefs({ ...defaults, ...prefData });
-
-    const localPinSet = await hasPIN();
-    const localBioEnabled = await isBiometricEnabled();
-    setPrefs((p) => ({
-      ...p,
-      ...(prefData || {}),
-      require_pin: localPinSet,
-      biometric_lock: localBioEnabled,
-    }));
-
-    setSessions(sessionData || []);
-
-    if (LocalAuthentication) {
-      const [supported, enrolled] = await Promise.all([
-        LocalAuthentication.hasHardwareAsync(),
-        LocalAuthentication.isEnrolledAsync(),
+      const [{ data: prefData }, { data: sessionData }] = await Promise.all([
+        supabase.from("security_preferences").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("device_sessions").select("*").eq("user_id", user.id)
+          .order("is_current", { ascending: false }).order("last_seen", { ascending: false }),
       ]);
-      setBioSupported(supported);
-      setBioEnrolled(enrolled);
-    }
 
-    setLoading(false);
+      if (prefData) setPrefs({ ...defaults, ...prefData });
+
+      const localPinSet = await hasPIN();
+      const localBioEnabled = await isBiometricEnabled();
+      setPrefs((p) => ({
+        ...p,
+        ...(prefData || {}),
+        require_pin: localPinSet,
+        biometric_lock: localBioEnabled,
+      }));
+
+      setSessions(sessionData || []);
+
+      if (LocalAuthentication) {
+        const [supported, enrolled] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+        ]);
+        setBioSupported(supported);
+        setBioEnrolled(enrolled);
+      }
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [user, registerCurrentDevice]);
 
   useEffect(() => { loadAll(); }, [loadAll]);

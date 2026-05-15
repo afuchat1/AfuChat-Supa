@@ -28,7 +28,7 @@ type FollowUser = {
   bio: string | null;
   is_verified: boolean;
   is_organization_verified: boolean;
-  current_grade: string;
+  acoin: number;
   follower_count: number;
 };
 
@@ -73,82 +73,81 @@ export default function FollowersScreen() {
   const loadPrivacyAndUsers = async () => {
     setLoading(true);
     setUsers([]);
+    try {
+      const followCol = type === "followers" ? "following_id" : "follower_id";
+      const joinCol = type === "followers" ? "follower_id" : "following_id";
 
-    const followCol = type === "followers" ? "following_id" : "follower_id";
-    const joinCol = type === "followers" ? "follower_id" : "following_id";
-
-    const { data: followRows } = await supabase
-      .from("follows")
-      .select(joinCol)
-      .eq(followCol, userId);
-
-    if (!followRows || followRows.length === 0) {
-      setUsers([]);
-      setLoading(false);
-      return;
-    }
-
-    const userIds = followRows.map((r: any) => r[joinCol]);
-
-    let blockedIds: string[] = [];
-    if (user) {
-      const { data: blocked } = await supabase
-        .from("blocked_users")
-        .select("blocked_id, blocker_id")
-        .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
-      if (blocked) {
-        blockedIds = blocked.map((b: any) =>
-          b.blocker_id === user.id ? b.blocked_id : b.blocker_id
-        );
-      }
-    }
-
-    const visibleIds = userIds.filter((id: string) => !blockedIds.includes(id));
-
-    if (visibleIds.length === 0) {
-      setUsers([]);
-      setLoading(false);
-      return;
-    }
-
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, current_grade, follower_count")
-      .in("id", visibleIds);
-
-    if (profiles) {
-      setUsers(profiles as FollowUser[]);
-    }
-
-    if (user) {
-      const { data: myFollowing } = await supabase
+      const { data: followRows } = await supabase
         .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id)
-        .in("following_id", visibleIds);
-      if (myFollowing) {
-        setFollowingIds(new Set(myFollowing.map((f: any) => f.following_id)));
+        .select(joinCol)
+        .eq(followCol, userId);
+
+      if (!followRows || followRows.length === 0) {
+        setUsers([]);
+        return;
       }
 
-      // For the "following" list we also need to know which of those users
-      // follow us back, so we can show "Friends" vs "Following".
-      // For "followers" list they all follow us by definition.
-      if (type === "following") {
-        const { data: theyFollow } = await supabase
-          .from("follows")
-          .select("follower_id")
-          .eq("following_id", user.id)
-          .in("follower_id", visibleIds);
-        if (theyFollow) {
-          setMyFollowerIds(new Set(theyFollow.map((f: any) => f.follower_id)));
+      const userIds = followRows.map((r: any) => r[joinCol]);
+
+      let blockedIds: string[] = [];
+      if (user) {
+        const { data: blocked } = await supabase
+          .from("blocked_users")
+          .select("blocked_id, blocker_id")
+          .or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
+        if (blocked) {
+          blockedIds = blocked.map((b: any) =>
+            b.blocker_id === user.id ? b.blocked_id : b.blocker_id
+          );
         }
-      } else {
-        // "followers" list — every entry is someone who follows us
-        setMyFollowerIds(new Set(visibleIds));
       }
-    }
 
-    setLoading(false);
+      const visibleIds = userIds.filter((id: string) => !blockedIds.includes(id));
+
+      if (visibleIds.length === 0) {
+        setUsers([]);
+        return;
+      }
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, acoin, follower_count")
+        .in("id", visibleIds);
+
+      if (profiles) {
+        setUsers(profiles as FollowUser[]);
+      }
+
+      if (user) {
+        const { data: myFollowing } = await supabase
+          .from("follows")
+          .select("following_id")
+          .eq("follower_id", user.id)
+          .in("following_id", visibleIds);
+        if (myFollowing) {
+          setFollowingIds(new Set(myFollowing.map((f: any) => f.following_id)));
+        }
+
+        // For the "following" list we also need to know which of those users
+        // follow us back, so we can show "Friends" vs "Following".
+        // For "followers" list they all follow us by definition.
+        if (type === "following") {
+          const { data: theyFollow } = await supabase
+            .from("follows")
+            .select("follower_id")
+            .eq("following_id", user.id)
+            .in("follower_id", visibleIds);
+          if (theyFollow) {
+            setMyFollowerIds(new Set(theyFollow.map((f: any) => f.follower_id)));
+          }
+        } else {
+          // "followers" list — every entry is someone who follows us
+          setMyFollowerIds(new Set(visibleIds));
+        }
+      }
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   };
 
   const toggleFollow = useCallback(async (targetId: string) => {
@@ -215,7 +214,7 @@ export default function FollowersScreen() {
                 <Ionicons name="business" size={10} color={colors.accent} />
               </View>
             )}
-            <PrestigeBadge grade={item.current_grade} size="sm" />
+            <PrestigeBadge acoin={item.acoin ?? 0} size="sm" />
           </View>
           <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>
             @{item.handle}

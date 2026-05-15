@@ -50,24 +50,28 @@ export default function HotelsScreen() {
     }
 
     setLoading(true);
-    const result = await processServiceTransaction(user.id, "hotel_booking", basePrice, {
-      hotel_name: hotel.name,
-      hotel_location: hotel.location,
-      room_type: room.name,
-      nights: numNights,
-      guests: parseInt(guests) || 1,
-      check_in: new Date().toISOString().split("T")[0],
-    });
-    setLoading(false);
-
-    if (result.success) {
-      Haptics.notificationAsync("success");
-      showAlert("Booked!", `${hotel.name} - ${room.name} room for ${numNights} night(s)`, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } else {
-      Haptics.notificationAsync("error");
-      showAlert("Failed", result.error || "Booking failed");
+    try {
+      const result = await processServiceTransaction(user.id, "hotel_booking", basePrice, {
+        hotel_name: hotel.name,
+        hotel_location: hotel.location,
+        room_type: room.name,
+        nights: numNights,
+        guests: parseInt(guests) || 1,
+        check_in: new Date().toISOString().split("T")[0],
+      });
+      if (result.success) {
+        Haptics.notificationAsync("success");
+        showAlert("Booked!", `${hotel.name} - ${room.name} room for ${numNights} night(s)`, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Haptics.notificationAsync("error");
+        showAlert("Failed", result.error || "Booking failed");
+      }
+    } catch (_) {
+      showAlert("Error", "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 

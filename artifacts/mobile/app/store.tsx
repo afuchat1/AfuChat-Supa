@@ -147,33 +147,36 @@ export default function MarketplaceScreen() {
     if (offset === 0) { isRefresh ? setRefreshing(true) : setLoading(true); }
     else setLoadingMore(true);
 
-    let query = supabase
-      .from("shop_products")
-      .select("*, shops!shop_products_shop_id_fkey(id, name, logo_url, banner_url, category, rating, total_sales, seller_id, pin_to_profile, profiles!shops_seller_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified))")
-      .eq("is_available", true)
-      .order("sales_count", { ascending: false })
-      .range(offset, offset + PAGE - 1);
+    try {
+      let query = supabase
+        .from("shop_products")
+        .select("*, shops!shop_products_shop_id_fkey(id, name, logo_url, banner_url, category, rating, total_sales, seller_id, pin_to_profile, profiles!shops_seller_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified))")
+        .eq("is_available", true)
+        .order("sales_count", { ascending: false })
+        .range(offset, offset + PAGE - 1);
 
-    if (activeCategory !== "All") {
-      const catMap: Record<string, string> = {
-        "Fashion": "Fashion", "Electronics": "Electronics", "Beauty": "Beauty", "Home": "Home & Garden",
-        "Food": "Food & Drink", "Digital": "Digital Goods", "Sports": "Sports", "Art": "Art & Crafts",
-        "Books": "Books", "Services": "Services", "Other": "Other"
-      };
-      query = query.eq("category", catMap[activeCategory] || activeCategory);
+      if (activeCategory !== "All") {
+        const catMap: Record<string, string> = {
+          "Fashion": "Fashion", "Electronics": "Electronics", "Beauty": "Beauty", "Home": "Home & Garden",
+          "Food": "Food & Drink", "Digital": "Digital Goods", "Sports": "Sports", "Art": "Art & Crafts",
+          "Books": "Books", "Services": "Services", "Other": "Other"
+        };
+        query = query.eq("category", catMap[activeCategory] || activeCategory);
+      }
+      if (debouncedSearch.trim()) {
+        query = query.ilike("name", `%${debouncedSearch.trim()}%`);
+      }
+
+      const { data } = await query;
+      const rows = (data || []) as ProductWithShop[];
+
+      if (offset === 0) setProducts(rows);
+      else setProducts(prev => [...prev, ...rows]);
+
+      setHasMore(rows.length === PAGE);
+    } catch (_) {} finally {
+      setLoading(false); setRefreshing(false); setLoadingMore(false);
     }
-    if (debouncedSearch.trim()) {
-      query = query.ilike("name", `%${debouncedSearch.trim()}%`);
-    }
-
-    const { data } = await query;
-    const rows = (data || []) as ProductWithShop[];
-
-    if (offset === 0) setProducts(rows);
-    else setProducts(prev => [...prev, ...rows]);
-
-    setHasMore(rows.length === PAGE);
-    setLoading(false); setRefreshing(false); setLoadingMore(false);
   }, [activeCategory, debouncedSearch]);
 
   const loadStores = useCallback(async () => {

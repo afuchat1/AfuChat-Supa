@@ -36,9 +36,12 @@ export default function CartScreen() {
   const loadCart = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const data = await getOrCreateCart(user.id);
-    setItems(data);
-    setLoading(false);
+    try {
+      const data = await getOrCreateCart(user.id);
+      setItems(data);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { loadCart(); }, [loadCart]);

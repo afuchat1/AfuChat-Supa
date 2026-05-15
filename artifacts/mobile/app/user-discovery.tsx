@@ -315,57 +315,60 @@ export default function UserDiscoveryScreen() {
   const loadDiscoverUsers = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    let query = supabase
-      .from("profiles")
-      .select(
-        "id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, country, interests, follower_count, following_count, last_seen"
-      )
-      .neq("id", user.id)
-      .eq("onboarding_completed", true)
-      .eq("is_banned", false)
-      .eq("account_deleted", false)
-      .order("follower_count", { ascending: false })
-      .limit(60);
+    try {
+      let query = supabase
+        .from("profiles")
+        .select(
+          "id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, country, interests, follower_count, following_count, last_seen"
+        )
+        .neq("id", user.id)
+        .eq("onboarding_completed", true)
+        .eq("is_banned", false)
+        .eq("account_deleted", false)
+        .order("follower_count", { ascending: false })
+        .limit(60);
 
-    if (selectedInterest !== "All") {
-      query = query.contains("interests", [selectedInterest.toLowerCase()]);
+      if (selectedInterest !== "All") {
+        query = query.contains("interests", [selectedInterest.toLowerCase()]);
+      }
+
+      const [{ data }, followSet] = await Promise.all([query, loadFollowSet()]);
+
+      setFollowing(followSet);
+
+      const mutualIds = new Set<string>();
+      if (data && data.length > 0) {
+        const ids = (data as any[]).map((u) => u.id);
+        const { data: mutuals } = await supabase
+          .from("follows")
+          .select("follower_id")
+          .in("follower_id", ids)
+          .eq("following_id", user.id);
+        (mutuals || []).forEach((m: any) => mutualIds.add(m.follower_id));
+      }
+
+      setUsers(
+        ((data || []) as any[]).map((u) => ({
+          id: u.id,
+          display_name: u.display_name || `@${u.handle}`,
+          handle: u.handle,
+          avatar_url: u.avatar_url,
+          bio: u.bio,
+          is_verified: u.is_verified,
+          is_organization_verified: u.is_organization_verified,
+          country: u.country,
+          interests: u.interests || [],
+          follower_count: u.follower_count || 0,
+          following_count: u.following_count || 0,
+          is_following: followSet.has(u.id),
+          is_mutual: followSet.has(u.id) && mutualIds.has(u.id),
+          last_seen: u.last_seen,
+          is_online: isRecentlyActive(u.last_seen),
+        }))
+      );
+    } catch (_) {} finally {
+      setLoading(false);
     }
-
-    const [{ data }, followSet] = await Promise.all([query, loadFollowSet()]);
-
-    setFollowing(followSet);
-
-    const mutualIds = new Set<string>();
-    if (data && data.length > 0) {
-      const ids = (data as any[]).map((u) => u.id);
-      const { data: mutuals } = await supabase
-        .from("follows")
-        .select("follower_id")
-        .in("follower_id", ids)
-        .eq("following_id", user.id);
-      (mutuals || []).forEach((m: any) => mutualIds.add(m.follower_id));
-    }
-
-    setUsers(
-      ((data || []) as any[]).map((u) => ({
-        id: u.id,
-        display_name: u.display_name || `@${u.handle}`,
-        handle: u.handle,
-        avatar_url: u.avatar_url,
-        bio: u.bio,
-        is_verified: u.is_verified,
-        is_organization_verified: u.is_organization_verified,
-        country: u.country,
-        interests: u.interests || [],
-        follower_count: u.follower_count || 0,
-        following_count: u.following_count || 0,
-        is_following: followSet.has(u.id),
-        is_mutual: followSet.has(u.id) && mutualIds.has(u.id),
-        last_seen: u.last_seen,
-        is_online: isRecentlyActive(u.last_seen),
-      }))
-    );
-    setLoading(false);
   }, [user, selectedInterest]);
 
   const requestLocation = useCallback(async () => {

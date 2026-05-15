@@ -54,13 +54,16 @@ export default function GiftVaultScreen() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [gifts, converted] = await Promise.all([
-      getReceivedMatchGifts(user.id),
-      getConvertedGiftIds(user.id),
-    ]);
-    setAllGifts(gifts);
-    setConvertedIds(converted);
-    setLoading(false);
+    try {
+      const [gifts, converted] = await Promise.all([
+        getReceivedMatchGifts(user.id),
+        getConvertedGiftIds(user.id),
+      ]);
+      setAllGifts(gifts);
+      setConvertedIds(converted);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { load(); }, [load]);

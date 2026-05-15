@@ -44,21 +44,25 @@ export default function AirtimeScreen() {
     }
 
     setLoading(true);
-    const result = await processServiceTransaction(user.id, "airtime", numAmount, {
-      provider,
-      phone_number: phone,
-      airtime_amount: numAmount,
-    });
-    setLoading(false);
-
-    if (result.success) {
-      Haptics.notificationAsync("success");
-      showAlert("Success", `${numAmount} ACoins airtime sent to ${phone}`, [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    } else {
-      Haptics.notificationAsync("error");
-      showAlert("Failed", result.error || "Transaction failed");
+    try {
+      const result = await processServiceTransaction(user.id, "airtime", numAmount, {
+        provider,
+        phone_number: phone,
+        airtime_amount: numAmount,
+      });
+      if (result.success) {
+        Haptics.notificationAsync("success");
+        showAlert("Success", `${numAmount} ACoins airtime sent to ${phone}`, [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } else {
+        Haptics.notificationAsync("error");
+        showAlert("Failed", result.error || "Transaction failed");
+      }
+    } catch (_) {
+      showAlert("Error", "An error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -201,16 +201,19 @@ export default function ChatSearchScreen() {
       });
     }
 
-    await Promise.all([
-      searchChats(trimmed),
-      searchPeople(trimmed),
-      searchChannels(trimmed),
-      searchGroups(trimmed),
-      hasPremiumMessages ? searchMessages(trimmed) : Promise.resolve(),
-      searchMedia(trimmed),
-      searchLinks(trimmed),
-    ]);
-    setLoading(false);
+    try {
+      await Promise.all([
+        searchChats(trimmed),
+        searchPeople(trimmed),
+        searchChannels(trimmed),
+        searchGroups(trimmed),
+        hasPremiumMessages ? searchMessages(trimmed) : Promise.resolve(),
+        searchMedia(trimmed),
+        searchLinks(trimmed),
+      ]);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, [user, hasPremiumMessages]);
 
   async function searchChats(q: string) {

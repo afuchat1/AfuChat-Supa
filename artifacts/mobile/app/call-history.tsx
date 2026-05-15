@@ -408,45 +408,48 @@ export default function CallHistoryScreen() {
   const load = useCallback(async (bg = false) => {
     if (!user) return;
     if (!bg) setLoading(true);
-    const { data } = await supabase
-      .from("calls")
-      .select(
-        "id, call_type, status, started_at, answered_at, ended_at, duration_seconds, caller_id, callee_id, chat_id, " +
-        "caller:caller_id(id, display_name, handle, avatar_url, is_verified), " +
-        "callee:callee_id(id, display_name, handle, avatar_url, is_verified)"
-      )
-      .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
-      .not("status", "eq", "ringing")
-      .order("started_at", { ascending: false })
-      .limit(300);
+    try {
+      const { data } = await supabase
+        .from("calls")
+        .select(
+          "id, call_type, status, started_at, answered_at, ended_at, duration_seconds, caller_id, callee_id, chat_id, " +
+          "caller:caller_id(id, display_name, handle, avatar_url, is_verified), " +
+          "callee:callee_id(id, display_name, handle, avatar_url, is_verified)"
+        )
+        .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
+        .not("status", "eq", "ringing")
+        .order("started_at", { ascending: false })
+        .limit(300);
 
-    if (data) {
-      const mapped: CallEntry[] = (data as any[]).map((c) => {
-        const isCaller = c.caller_id === user.id;
-        const other    = isCaller ? c.callee : c.caller;
-        return {
-          id: c.id,
-          call_type: c.call_type,
-          status: c.status,
-          started_at: c.started_at,
-          answered_at: c.answered_at || null,
-          ended_at: c.ended_at || null,
-          duration_seconds: c.duration_seconds || null,
-          caller_id: c.caller_id,
-          callee_id: c.callee_id,
-          chat_id: c.chat_id || null,
-          other_id: isCaller ? c.callee_id : c.caller_id,
-          other_name: other?.display_name || "Unknown",
-          other_handle: other?.handle || "",
-          other_avatar: other?.avatar_url || null,
-          other_verified: !!other?.is_verified,
-          direction: isCaller ? "outgoing" : "incoming",
-        };
-      });
-      setCalls(mapped);
+      if (data) {
+        const mapped: CallEntry[] = (data as any[]).map((c) => {
+          const isCaller = c.caller_id === user.id;
+          const other    = isCaller ? c.callee : c.caller;
+          return {
+            id: c.id,
+            call_type: c.call_type,
+            status: c.status,
+            started_at: c.started_at,
+            answered_at: c.answered_at || null,
+            ended_at: c.ended_at || null,
+            duration_seconds: c.duration_seconds || null,
+            caller_id: c.caller_id,
+            callee_id: c.callee_id,
+            chat_id: c.chat_id || null,
+            other_id: isCaller ? c.callee_id : c.caller_id,
+            other_name: other?.display_name || "Unknown",
+            other_handle: other?.handle || "",
+            other_avatar: other?.avatar_url || null,
+            other_verified: !!other?.is_verified,
+            direction: isCaller ? "outgoing" : "incoming",
+          };
+        });
+        setCalls(mapped);
+      }
+    } catch (_) {} finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-    setLoading(false);
-    setRefreshing(false);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);

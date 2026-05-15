@@ -275,31 +275,34 @@ export default function UsernameMarketScreen() {
 
   const loadListings = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("username_listings")
-      .select(
-        "id, username, price, seller_id, description, is_active, views, created_at, profiles!username_listings_seller_id_fkey(display_name, handle)"
-      )
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(80);
+    try {
+      const { data } = await supabase
+        .from("username_listings")
+        .select(
+          "id, username, price, seller_id, description, is_active, views, created_at, profiles!username_listings_seller_id_fkey(display_name, handle)"
+        )
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(80);
 
-    if (data) {
-      const mapped: Listing[] = data.map((l: any) => ({
-        id: l.id,
-        username: l.username,
-        price: l.price,
-        seller_id: l.seller_id,
-        description: l.description || "",
-        is_active: l.is_active,
-        views: l.views || 0,
-        created_at: l.created_at,
-        seller_name: l.profiles?.display_name || "Seller",
-        seller_handle: l.profiles?.handle || "",
-      }));
-      setListings(mapped);
+      if (data) {
+        const mapped: Listing[] = data.map((l: any) => ({
+          id: l.id,
+          username: l.username,
+          price: l.price,
+          seller_id: l.seller_id,
+          description: l.description || "",
+          is_active: l.is_active,
+          views: l.views || 0,
+          created_at: l.created_at,
+          seller_name: l.profiles?.display_name || "Seller",
+          seller_handle: l.profiles?.handle || "",
+        }));
+        setListings(mapped);
+      }
+    } catch (_) {} finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const loadOwnedUsernames = useCallback(async () => {

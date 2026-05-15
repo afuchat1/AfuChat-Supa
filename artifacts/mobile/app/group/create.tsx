@@ -47,17 +47,20 @@ export default function CreateGroupScreen() {
   const loadFollowing = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("follows")
-      .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
-      .eq("follower_id", user.id);
+    try {
+      const { data } = await supabase
+        .from("follows")
+        .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
+        .eq("follower_id", user.id);
 
-    if (data) {
-      setFollowedUsers(
-        data.map((f: any) => f.profiles).filter(Boolean)
-      );
+      if (data) {
+        setFollowedUsers(
+          data.map((f: any) => f.profiles).filter(Boolean)
+        );
+      }
+    } catch (_) {} finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [user]);
 
   useEffect(() => { loadFollowing(); }, [loadFollowing]);

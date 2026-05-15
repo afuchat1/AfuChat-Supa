@@ -48,9 +48,12 @@ export default function OAuthProvidersScreen() {
 
   const fetchIdentities = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.auth.getUserIdentities();
-    if (!error && data?.identities) setIdentities(data.identities);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.auth.getUserIdentities();
+      if (!error && data?.identities) setIdentities(data.identities);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchIdentities(); }, [fetchIdentities]);

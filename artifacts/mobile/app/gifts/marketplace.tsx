@@ -89,55 +89,57 @@ export default function GiftMarketplaceScreen() {
   const [filterRarity, setFilterRarity] = useState<string>("all");
 
   const loadListings = useCallback(async () => {
-    let query = supabase
-      .from("gift_marketplace")
-      .select("id, seller_id, user_gift_id, gift_id, asking_price, status, listed_at, gifts(id, name, emoji, rarity, image_url, base_xp_cost, description)")
-      .eq("status", "listed")
-      .order("listed_at", { ascending: false });
-
-    if (filterRarity !== "all") {
-      query = query.eq("gifts.rarity", filterRarity);
-    }
-
-    const { data } = await query;
-
-    if (data) {
-      const sellerIds = [...new Set(data.map((l: any) => l.seller_id))];
-      let sellerMap: Record<string, { name: string; avatar: string | null; is_verified: boolean; is_organization_verified: boolean }> = {};
-
-      if (sellerIds.length > 0) {
-        const { data: sellers } = await supabase
-          .from("profiles")
-          .select("id, display_name, avatar_url, is_verified, is_organization_verified")
-          .in("id", sellerIds);
-
-        if (sellers) {
-          sellers.forEach((s: any) => {
-            sellerMap[s.id] = { name: s.display_name || "Anonymous", avatar: s.avatar_url, is_verified: !!s.is_verified, is_organization_verified: !!s.is_organization_verified };
-          });
-        }
-      }
-
-      const mapped = data
-        .filter((l: any) => l.gifts)
-        .map((l: any) => ({
-          ...l,
-          gift: l.gifts,
-          seller_name: sellerMap[l.seller_id]?.name || "Anonymous",
-          seller_avatar: sellerMap[l.seller_id]?.avatar || null,
-          seller_is_verified: sellerMap[l.seller_id]?.is_verified || false,
-          seller_is_organization_verified: sellerMap[l.seller_id]?.is_organization_verified || false,
-        }));
+    try {
+      let query = supabase
+        .from("gift_marketplace")
+        .select("id, seller_id, user_gift_id, gift_id, asking_price, status, listed_at, gifts(id, name, emoji, rarity, image_url, base_xp_cost, description)")
+        .eq("status", "listed")
+        .order("listed_at", { ascending: false });
 
       if (filterRarity !== "all") {
-        setListings(mapped.filter((l: MarketplaceListing) => l.gift.rarity === filterRarity));
-      } else {
-        setListings(mapped);
+        query = query.eq("gifts.rarity", filterRarity);
       }
-    }
 
-    setLoading(false);
-    setRefreshing(false);
+      const { data } = await query;
+
+      if (data) {
+        const sellerIds = [...new Set(data.map((l: any) => l.seller_id))];
+        let sellerMap: Record<string, { name: string; avatar: string | null; is_verified: boolean; is_organization_verified: boolean }> = {};
+
+        if (sellerIds.length > 0) {
+          const { data: sellers } = await supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url, is_verified, is_organization_verified")
+            .in("id", sellerIds);
+
+          if (sellers) {
+            sellers.forEach((s: any) => {
+              sellerMap[s.id] = { name: s.display_name || "Anonymous", avatar: s.avatar_url, is_verified: !!s.is_verified, is_organization_verified: !!s.is_organization_verified };
+            });
+          }
+        }
+
+        const mapped = data
+          .filter((l: any) => l.gifts)
+          .map((l: any) => ({
+            ...l,
+            gift: l.gifts,
+            seller_name: sellerMap[l.seller_id]?.name || "Anonymous",
+            seller_avatar: sellerMap[l.seller_id]?.avatar || null,
+            seller_is_verified: sellerMap[l.seller_id]?.is_verified || false,
+            seller_is_organization_verified: sellerMap[l.seller_id]?.is_organization_verified || false,
+          }));
+
+        if (filterRarity !== "all") {
+          setListings(mapped.filter((l: MarketplaceListing) => l.gift.rarity === filterRarity));
+        } else {
+          setListings(mapped);
+        }
+      }
+    } catch (_) {} finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [filterRarity]);
 
   useEffect(() => { loadListings(); }, [loadListings]);
