@@ -1,15 +1,9 @@
 /**
  * AfuChat AI chat edge function.
  *
- * Acts as a thin proxy to Groq for both text chat and audio transcription.
- * Originally imported `https://deno.land/std@0.168.0/http/server.ts`, which
- * the current Supabase Edge Runtime can no longer load — that produced a
- * BOOT_ERROR and the AI stopped responding. The rewrite below uses
- * `Deno.serve` only (no third-party imports) so it boots cleanly.
- *
- * IMPORTANT: the public API contract is unchanged — same request shape,
- * same response shape — so the existing API server route and mobile
- * client work without any modification.
+ * Handles text chat and audio transcription.
+ * Provider chain: Groq (6 models) → Gemini (3 models)
+ * so a single provider outage never silences the chat.
  */
 
 const corsHeaders = {
@@ -26,7 +20,7 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-// ── GROQ voice transcription ─────────────────────────────────────────────────
+// ── Groq voice transcription ─────────────────────────────────────────────────
 async function transcribeWithGroq(
   audioUrl: string,
   apiKey: string,
@@ -54,9 +48,7 @@ async function transcribeWithGroq(
   return data.text || "";
 }
 
-// ── Groq text chat with model fallback ───────────────────────────────────────
-// Falls through the model list whenever a model is rate-limited or errors,
-// so a single overloaded model doesn't take down the whole feature.
+// ── Groq text chat with per-model fallback ───────────────────────────────────
 async function chatWithGroq(
   messages: any[],
   maxTokens: number,
@@ -64,9 +56,11 @@ async function chatWithGroq(
 ): Promise<string> {
   const models = [
     "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
     "llama-3.1-8b-instant",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
     "gemma2-9b-it",
-    "mixtral-8x7b-32768",
   ];
   let lastError = "";
   for (const model of models) {
@@ -83,17 +77,18 @@ async function chatWithGroq(
             model,
             messages,
             max_tokens: maxTokens,
-            temperature: 0.3,
+            temperature: 0.7,
           }),
         },
       );
-      if (res.status === 429) {
-        lastError = `${model} rate limited`;
-        console.log(`${model} rate limited, trying next...`);
+      if (res.status === 429 || res.status === 503) {
+        lastError = `${model} unavailable (${res.status})`;
+        console.log(`${model} unavailable, trying next...`);
         continue;
       }
       if (!res.ok) {
-        lastError = `${model} error: ${res.status}`;
+        const errText = await res.text().catch(() => "");
+        lastError = `${model} error ${res.status}: ${errText}`;
         console.error(lastError);
         continue;
       }
@@ -108,7 +103,58 @@ async function chatWithGroq(
       console.error(lastError);
     }
   }
-  throw new Error(lastError || "All models failed");
+  throw new Error(lastError || "All Groq models failed");
+}
+
+// ── Gemini fallback ──────────────────────────────────────────────────────────
+async function chatWithGemini(
+  messages: any[],
+  maxTokens: number,
+  apiKey: string,
+): Promise<string> {
+  const systemMsg = messages.find((m) => m.role === "system");
+  const chatMsgs = messages.filter((m) => m.role !== "system");
+
+  const contents = chatMsgs.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+
+  const reqBody: any = {
+    contents,
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
+  };
+  if (systemMsg) {
+    reqBody.systemInstruction = { parts: [{ text: systemMsg.content }] };
+  }
+
+  const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"];
+  let lastError = "";
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody),
+        },
+      );
+      if (!res.ok) {
+        lastError = `Gemini ${model} ${res.status}`;
+        console.error(lastError);
+        continue;
+      }
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (text) return text;
+      lastError = `Gemini ${model} empty response`;
+    } catch (err) {
+      lastError = `Gemini ${model} threw: ${err instanceof Error ? err.message : String(err)}`;
+      console.error(lastError);
+    }
+  }
+  throw new Error(lastError || "All Gemini models failed");
 }
 
 Deno.serve(async (req) => {
@@ -149,15 +195,6 @@ Deno.serve(async (req) => {
     return json({ error: "messages array is required" }, 400);
   }
 
-  const GROQ_KEY = Deno.env.get("GROQ_API_KEY");
-  if (!GROQ_KEY) {
-    console.error("GROQ_API_KEY not configured");
-    return json({
-      reply:
-        "AI service is not configured. Please set the GROQ_API_KEY secret in Supabase.",
-    });
-  }
-
   const tokenLimit =
     typeof max_tokens === "number" && max_tokens > 0
       ? max_tokens
@@ -165,16 +202,38 @@ Deno.serve(async (req) => {
         ? 300
         : 2048;
 
-  try {
-    console.log(`Groq chat: ${messages.length} messages, ${tokenLimit} tokens`);
-    const reply = await chatWithGroq(messages, tokenLimit, GROQ_KEY);
-    console.log("Groq chat succeeded");
-    return json({ reply });
-  } catch (e: any) {
-    console.error("Groq chat failed:", e?.message || e);
-    return json({
-      reply:
-        "I'm having trouble connecting to my AI systems right now. Please try again in a moment.",
-    });
+  const GROQ_KEY = Deno.env.get("GROQ_API_KEY");
+  const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
+
+  // Try Groq first
+  if (GROQ_KEY) {
+    try {
+      console.log(`Groq chat: ${messages.length} messages, ${tokenLimit} tokens`);
+      const reply = await chatWithGroq(messages, tokenLimit, GROQ_KEY);
+      console.log("Groq chat succeeded");
+      return json({ reply });
+    } catch (e: any) {
+      console.error("All Groq models failed, trying Gemini:", e?.message || e);
+    }
+  } else {
+    console.warn("GROQ_API_KEY not set — skipping Groq");
   }
+
+  // Gemini fallback
+  if (GEMINI_KEY) {
+    try {
+      console.log("Gemini fallback chat...");
+      const reply = await chatWithGemini(messages, tokenLimit, GEMINI_KEY);
+      console.log("Gemini fallback succeeded");
+      return json({ reply });
+    } catch (e: any) {
+      console.error("Gemini fallback also failed:", e?.message || e);
+    }
+  } else {
+    console.warn("GEMINI_API_KEY not set — no fallback available");
+  }
+
+  return json({
+    reply: "I'm having a bit of trouble right now. Please try again in a moment!",
+  });
 });

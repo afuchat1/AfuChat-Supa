@@ -579,13 +579,31 @@ export default function LabScreen() {
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => {
-                  setQuery(`Tell me more about: ${result.title}`);
+                  if (!result) return;
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   hideSheet();
+                  const facts = result.facts?.length
+                    ? `\n\nKey facts:\n${result.facts.map((f: string) => `• ${f}`).join("\n")}`
+                    : "";
+                  const answer = result.answer
+                    ? `\n\nInitial answer: ${result.answer}`
+                    : "";
+                  const context =
+                    `I just scanned something with AI Lens and got these results:\n\n` +
+                    `**${result.title}**\n${result.description}` +
+                    `\nCategory: ${result.category}` +
+                    facts +
+                    answer +
+                    `\n\nCan you tell me more about this?`;
+                  router.push({
+                    pathname: "/ai",
+                    params: { q: context },
+                  } as any);
                 }}
                 activeOpacity={0.85}
               >
-                <Ionicons name="chatbubble-outline" size={16} color={BRAND} />
-                <Text style={[styles.actionBtnText, { color: BRAND }]}>Ask More</Text>
+                <Ionicons name="sparkles-outline" size={16} color={BRAND} />
+                <Text style={[styles.actionBtnText, { color: BRAND }]}>Ask AfuAI</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

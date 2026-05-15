@@ -1197,6 +1197,7 @@ function ChatScreen() {
     isChannel,
     chatName,
     chatAvatar,
+    initialMessage,
   } = useLocalSearchParams<{
     id: string;
     contactId?: string;
@@ -1209,6 +1210,7 @@ function ChatScreen() {
     isChannel?: string;
     chatName?: string;
     chatAvatar?: string;
+    initialMessage?: string;
   }>();
   const isDraft = id === "new";
   const { user, profile, isPremium, subscription, refreshProfile } = useAuth();
@@ -1365,6 +1367,7 @@ function ChatScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const oldestCursorRef = useRef<string | null>(null);
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
+  const autoSentInitialRef = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recLocked, setRecLocked] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -2147,6 +2150,19 @@ function ChatScreen() {
       AsyncStorage.getItem(`chat_draft_${id}`).then((draft) => { if (draft) setInput(draft); }).catch(() => {});
     }
   }, [id, user?.id]);
+
+  // Auto-send a pre-filled message (e.g. from AI Lens "Ask AfuAI" button).
+  // Fires once after the chat finishes loading and only for AfuAI direct chats.
+  useEffect(() => {
+    if (!initialMessage || !user || loading || autoSentInitialRef.current) return;
+    if (chatInfo?.other_id !== AFUAI_BOT_ID) return;
+    autoSentInitialRef.current = true;
+    const t = setTimeout(() => {
+      sendMessage(decodeURIComponent(initialMessage as string));
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, user, chatInfo?.other_id, initialMessage]);
 
   function handleSmartReply(text: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
