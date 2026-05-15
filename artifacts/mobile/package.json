@@ -60,7 +60,7 @@
     "@nkzw/create-context-hook": "^1.1.0",
     "@react-native-community/netinfo": "~11.4.1",
     "@react-native-google-signin/google-signin": "^16.1.2",
-    "@shopify/flash-list": "^2.3.1",
+    "@shopify/flash-list": "^2.0.2",
     "@supabase/supabase-js": "^2.99.3",
     "@telegram-apps/sdk": "^3.11.8",
     "@telegram-apps/sdk-react": "^3.3.9",
