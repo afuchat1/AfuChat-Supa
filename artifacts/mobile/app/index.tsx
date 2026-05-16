@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import LandingPage from "@/components/landing/LandingPage";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
-// Flat brand-colour splash shown while auth resolves.
-// No gradients, no shadows — clean flat UI per branding guidelines.
+// Native-only flat brand splash shown while auth resolves.
 function SplashBrand() {
   return (
     <View style={s.root}>
@@ -32,7 +32,11 @@ export default function IndexScreen() {
         router.replace("/(tabs)");
       }
     } else {
-      router.replace("/(tabs)/discover");
+      // On web: don't redirect — show landing page below
+      // On native: go to discover
+      if (Platform.OS !== "web") {
+        router.replace("/(tabs)/discover");
+      }
     }
   }
 
@@ -53,9 +57,10 @@ export default function IndexScreen() {
     );
   }, [session, profile, loading, handle]);
 
-  // Instant fallback — if auth hasn't resolved within 1.5 s, go straight to
-  // the public discover feed. Auth context will redirect again once ready.
+  // Native fallback — if auth hasn't resolved within 1.5 s, go to discover.
+  // On web we stay on the landing page, so no timeout redirect needed.
   useEffect(() => {
+    if (Platform.OS === "web") return;
     const timeout = setTimeout(() => {
       if (!redirected.current) {
         redirected.current = true;
@@ -69,6 +74,18 @@ export default function IndexScreen() {
     return () => clearTimeout(timeout);
   }, [handle]);
 
+  // ── Web: authenticated → redirect to tabs; unauthenticated → landing page ──
+  if (Platform.OS === "web") {
+    if (!loading && session) {
+      // Already logged in — redirect to app
+      router.replace("/(tabs)");
+      return null;
+    }
+    // Show landing page (also shown during the brief loading moment on web)
+    return <LandingPage />;
+  }
+
+  // ── Native: show brand splash while auth resolves ──
   return <SplashBrand />;
 }
 
@@ -82,10 +99,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     gap: 0,
   },
-  logo: {
-    width: 110,
-    height: 110,
-  },
+  logo: { width: 110, height: 110 },
   wordmark: {
     marginTop: 18,
     color: "#fff",

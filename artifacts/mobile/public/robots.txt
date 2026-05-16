@@ -1,6 +1,7 @@
 User-agent: *
 Allow: /
 Allow: /discover
+Allow: /about
 Allow: /terms
 Allow: /privacy
 
