@@ -100,6 +100,8 @@ export default function Root({ children }: PropsWithChildren) {
                       "addressRegion": "Central Uganda",
                       "addressCountry": "UG"
                     },
+                    "telephone": "+256703464913",
+                    "email": "support@afuchat.com",
                     "areaServed": "Worldwide",
                     "foundingLocation": "Entebbe, Uganda",
                     "sameAs": [

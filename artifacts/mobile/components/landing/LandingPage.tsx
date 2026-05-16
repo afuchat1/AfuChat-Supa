@@ -857,17 +857,27 @@ export default function LandingPage() {
             </View>
           </View>
 
-          {/* ── Newsletter / contact strip ── */}
-          <View style={[ft.contactStrip, !isDesktop && { flexDirection: "column", gap: 10, alignItems: "flex-start" }]}>
+          {/* ── Contact strip ── */}
+          <View style={[ft.contactStrip, !isDesktop && { flexDirection: "column", gap: 14, alignItems: "flex-start" }]}>
+            {/* Email */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="mail-outline" size={16} color={C.brand} />
-              <Text style={ft.contactLabel}>Have questions? Reach us at</Text>
+              <Ionicons name="mail-outline" size={15} color={C.brand} />
+              <Text style={ft.contactLabel}>Email:</Text>
               <TouchableOpacity onPress={() => Linking.openURL("mailto:support@afuchat.com")} activeOpacity={0.7}>
                 <Text style={ft.contactEmail}>support@afuchat.com</Text>
               </TouchableOpacity>
             </View>
+            {/* Phone */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.35)" />
+              <Ionicons name="call-outline" size={15} color={C.brand} />
+              <Text style={ft.contactLabel}>Call / WhatsApp:</Text>
+              <TouchableOpacity onPress={() => Linking.openURL("tel:+256703464913")} activeOpacity={0.7}>
+                <Text style={ft.contactEmail}>+256 703 464 913</Text>
+              </TouchableOpacity>
+            </View>
+            {/* Location */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="location-outline" size={15} color="rgba(255,255,255,0.35)" />
               <Text style={ft.contactMeta}>Entebbe, Uganda · Available Worldwide</Text>
             </View>
           </View>
