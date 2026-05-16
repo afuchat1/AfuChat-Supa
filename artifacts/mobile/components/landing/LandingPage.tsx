@@ -50,10 +50,10 @@ const FEATURES = [
 ];
 
 const STATS = [
-  { value: "50K+",  label: "Active Users" },
-  { value: "5M+",   label: "Messages Sent" },
-  { value: "10+",   label: "Countries" },
-  { value: "4.8 ★", label: "App Rating" },
+  { value: "Free",          label: "No subscription ever" },
+  { value: "AfuAI",         label: "Built-in AI assistant" },
+  { value: "Worldwide",     label: "No country limits" },
+  { value: "Android + Web", label: "Cross-platform" },
 ];
 
 const NAV_LINKS = ["Features", "About", "Download"];
@@ -394,7 +394,6 @@ type FooterLink = { label: string; path?: any; url?: string };
 
 function FooterLinkCol({ heading, items }: { heading: string; items: FooterLink[] }) {
   const [hoveredIdx, setHoveredIdx] = useState(-1);
-  const router = useRouter();
   return (
     <View style={{ minWidth: 140, gap: 16 }}>
       <Text style={ft.colHeading}>{heading}</Text>
@@ -722,7 +721,7 @@ export default function LandingPage() {
                     <Ionicons key={i} name="star" size={13} color="#FFD700" />
                   ))}
                 </View>
-                <Text style={dl.proofText}>Loved by 50,000+ users across Africa</Text>
+                <Text style={dl.proofText}>Available worldwide · Free for everyone</Text>
               </View>
 
               {/* Icon */}
@@ -801,7 +800,7 @@ export default function LandingPage() {
 
               {/* Description */}
               <Text style={ft.desc}>
-                The all-in-one super app for real-time messaging, AI assistance, social discovery, and payments. Built for everyone, everywhere.
+                AfuChat Technologies Limited — the all-in-one super app for real-time messaging, AI assistance, social discovery, and more. Available worldwide, free for everyone.
               </Text>
 
               {/* Mini Play badge */}
@@ -869,7 +868,7 @@ export default function LandingPage() {
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.35)" />
-              <Text style={ft.contactMeta}>Entebbe, Uganda · Serving Africa & Beyond</Text>
+              <Text style={ft.contactMeta}>Entebbe, Uganda · Available Worldwide</Text>
             </View>
           </View>
 
@@ -879,7 +878,7 @@ export default function LandingPage() {
           {/* ── Copyright bar ── */}
           <View style={[ft.bottomBar, !isDesktop && { flexDirection: "column", alignItems: "flex-start", gap: 16 }]}>
             <Text style={ft.copyright}>
-              © {new Date().getFullYear()} AfuChat. All rights reserved.
+              © {new Date().getFullYear()} AfuChat Technologies Limited. All rights reserved.
             </Text>
 
             {/* Legal links */}

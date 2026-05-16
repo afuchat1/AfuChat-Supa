@@ -12,16 +12,16 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, shrink-to-fit=no, viewport-fit=cover"
         />
 
-        <title>AfuChat — Chat, AI, Payments & Community | Super App for Africa</title>
+        <title>AfuChat — Chat, AI & Community | Super App for Everyone</title>
 
         <meta name="application-name" content="AfuChat" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="AfuChat" />
-        <meta name="description" content="AfuChat is the all-in-one super app for messaging, AI assistance, social discovery, payments, and community — built in Uganda for everyone. Download free on Android or open on the web." />
+        <meta name="description" content="AfuChat Technologies Limited — the all-in-one super app for real-time messaging, AI assistance, social discovery, and community. Available worldwide, free on Android and the web." />
         <meta name="theme-color" content="#00BCD4" />
-        <meta name="keywords" content="AfuChat, messaging app, secure chat, communication platform, mobile messaging, web messaging platform, super app, Uganda chat, Africa messaging, AI chat assistant, group chats, voice notes, social app Africa, chat app download, free messaging" />
-        <meta name="author" content="AfuChat — Entebbe, Uganda" />
+        <meta name="keywords" content="AfuChat, AfuChat Technologies Limited, messaging app, secure chat, communication platform, mobile messaging, web messaging platform, super app, AI chat assistant, group chats, voice notes, social app, chat app download, free messaging, worldwide chat app" />
+        <meta name="author" content="AfuChat Technologies Limited — Entebbe, Uganda" />
         <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
         <meta name="googlebot" content="index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1" />
 
@@ -34,8 +34,8 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* Open Graph */}
         <meta property="og:site_name" content="AfuChat" />
-        <meta property="og:title" content="AfuChat — The All-in-One Super App for Everyone" />
-        <meta property="og:description" content="Real-time messaging, AI assistance, social discovery, and payments — all in one beautiful app. Free to download on Android or use on the web." />
+        <meta property="og:title" content="AfuChat Technologies Limited — The All-in-One Super App" />
+        <meta property="og:description" content="Real-time messaging, AI assistance, social discovery, and community — all in one beautiful app by AfuChat Technologies Limited. Free worldwide on Android and the web." />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://afuchat.com" />
         <meta property="og:image" content="https://afuchat.com/logo.png" />
@@ -49,8 +49,8 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:site" content="@afuchat" />
         <meta name="twitter:creator" content="@afuchat" />
-        <meta name="twitter:title" content="AfuChat — The All-in-One Super App" />
-        <meta name="twitter:description" content="Real-time messaging, AI assistance, social discovery, and payments in one beautiful app. Free on Android & web." />
+        <meta name="twitter:title" content="AfuChat Technologies Limited — The All-in-One Super App" />
+        <meta name="twitter:description" content="Real-time messaging, AI assistance, social discovery, and community in one beautiful app. Free worldwide on Android & web — AfuChat Technologies Limited." />
         <meta name="twitter:image" content="https://afuchat.com/logo.png" />
 
         {/* PWA */}
@@ -74,29 +74,24 @@ export default function Root({ children }: PropsWithChildren) {
                   "@id": "https://afuchat.com/#app",
                   "name": "AfuChat",
                   "url": "https://afuchat.com",
-                  "description": "AfuChat is the all-in-one super app — real-time messaging, AI assistant, social discovery, and payments built for Uganda and Africa.",
+                  "description": "AfuChat Technologies Limited — the all-in-one super app for real-time messaging, AI assistance, social discovery, and community. Available worldwide, free for everyone.",
                   "applicationCategory": "CommunicationApplication",
-                  "operatingSystem": "Android, iOS, Web",
-                  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "UGX" },
+                  "operatingSystem": "Android, Web",
+                  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
                   "featureList": [
                     "Real-time messaging",
-                    "AI-powered chat assistant",
+                    "AI-powered chat assistant (AfuAI)",
                     "Group chats and channels",
-                    "Voice notes and media sharing",
-                    "Cross-platform (Android, iOS, Web)"
+                    "Voice notes and rich media sharing",
+                    "Cross-platform: Android and Web",
+                    "Available worldwide — no country limits"
                   ],
                   "screenshot": "https://afuchat.com/logo.png",
                   "softwareVersion": "2.0",
                   "downloadUrl": "https://play.google.com/store/apps/details?id=com.afuchat.app",
-                  "aggregateRating": {
-                    "@type": "AggregateRating",
-                    "ratingValue": "4.8",
-                    "ratingCount": "1200",
-                    "bestRating": "5"
-                  },
                   "author": {
                     "@type": "Organization",
-                    "name": "AfuChat",
+                    "name": "AfuChat Technologies Limited",
                     "url": "https://afuchat.com",
                     "logo": "https://afuchat.com/logo.png",
                     "address": {
@@ -105,10 +100,13 @@ export default function Root({ children }: PropsWithChildren) {
                       "addressRegion": "Central Uganda",
                       "addressCountry": "UG"
                     },
-                    "areaServed": ["UG", "KE", "TZ", "RW", "NG", "GH", "Africa"],
+                    "areaServed": "Worldwide",
                     "foundingLocation": "Entebbe, Uganda",
                     "sameAs": [
-                      "https://play.google.com/store/apps/details?id=com.afuchat.app"
+                      "https://play.google.com/store/apps/details?id=com.afuchat.app",
+                      "https://twitter.com/afuchat",
+                      "https://facebook.com/afuchat",
+                      "https://instagram.com/afuchat"
                     ]
                   }
                 },
