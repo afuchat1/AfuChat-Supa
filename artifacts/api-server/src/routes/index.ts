@@ -10,6 +10,7 @@ import videosRouter from "./videos";
 import uploadsRouter from "./uploads";
 import paymentsRouter from "./payments";
 import dataExportRouter from "./data-export";
+import subscribeRouter from "./subscribe";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(videosRouter);
 router.use(uploadsRouter);
 router.use(paymentsRouter);
 router.use(dataExportRouter);
+router.use(subscribeRouter);
 
 export default router;

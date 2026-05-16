@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Image,
   Linking,
@@ -8,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -16,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.afuchat.app";
 
@@ -477,6 +480,33 @@ export default function LandingPage() {
   const goRegister = () => isLoggedIn ? router.replace("/(tabs)/discover" as any) : router.push("/(auth)/register" as any);
   const goDiscover = () => isLoggedIn ? router.replace("/(tabs)/discover" as any) : router.push("/(auth)/register" as any);
 
+  // ── Newsletter subscription ──
+  const [subEmail, setSubEmail]     = useState("");
+  const [subLoading, setSubLoading] = useState(false);
+  const [subMsg, setSubMsg]         = useState<{ text: string; ok: boolean } | null>(null);
+
+  const handleSubscribe = async () => {
+    const email = subEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setSubMsg({ text: "Please enter a valid email address.", ok: false });
+      return;
+    }
+    setSubLoading(true);
+    setSubMsg(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("newsletter-subscribe", {
+        body: { email, source: "landing_page" },
+      });
+      if (error) throw error;
+      setSubMsg({ text: data?.message ?? "Subscribed! Check your inbox.", ok: true });
+      setSubEmail("");
+    } catch {
+      setSubMsg({ text: "Could not subscribe. Please try again.", ok: false });
+    } finally {
+      setSubLoading(false);
+    }
+  };
+
   const scrollToDownload = () => {
     scrollRef.current?.scrollToEnd({ animated: true });
   };
@@ -786,6 +816,70 @@ export default function LandingPage() {
         </Animated.View>
 
         {/* ═══════════════════════════════════════════════════
+            NEWSLETTER SIGNUP
+        ═══════════════════════════════════════════════════ */}
+        <View style={ns.section}>
+          <View style={[ns.inner, isDesktop && { flexDirection: "row", alignItems: "center", gap: 48 }]}>
+            {/* Left: copy */}
+            <View style={[ns.copy, isDesktop && { flex: 1 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Ionicons name="mail-outline" size={18} color={C.brand} />
+                <Text style={ns.eyebrow}>STAY IN THE LOOP</Text>
+              </View>
+              <Text style={ns.heading}>Get AfuChat updates{"\n"}straight to your inbox</Text>
+              <Text style={ns.sub}>
+                New features, tips, and occasional news — no spam, ever. Unsubscribe anytime.
+              </Text>
+            </View>
+
+            {/* Right: form */}
+            <View style={[ns.formWrap, isDesktop && { flex: 1 }]}>
+              {subMsg?.ok ? (
+                <View style={ns.successBox}>
+                  <Ionicons name="checkmark-circle" size={22} color="#34C759" />
+                  <Text style={ns.successText}>{subMsg.text}</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={ns.inputRow}>
+                    <TextInput
+                      style={ns.input}
+                      placeholder="your@email.com"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      value={subEmail}
+                      onChangeText={setSubEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="send"
+                      onSubmitEditing={handleSubscribe}
+                      editable={!subLoading}
+                    />
+                    <TouchableOpacity
+                      onPress={handleSubscribe}
+                      activeOpacity={0.85}
+                      style={[ns.submitBtn, subLoading && { opacity: 0.6 }]}
+                      disabled={subLoading}
+                    >
+                      {subLoading
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={ns.submitText}>Subscribe</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                  {subMsg && !subMsg.ok && (
+                    <Text style={ns.errorText}>{subMsg.text}</Text>
+                  )}
+                  <Text style={ns.privacy}>
+                    By subscribing you agree to receive emails from AfuChat Technologies Limited. No spam.
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* ═══════════════════════════════════════════════════
             FOOTER
         ═══════════════════════════════════════════════════ */}
         <View style={ft.footer}>
@@ -1076,6 +1170,103 @@ const ft = StyleSheet.create({
   copyright: { fontSize: 13, color: "rgba(255,255,255,0.28)", fontWeight: "500" },
   bottomLink: { fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: "500" },
   madeIn: { fontSize: 13, color: "rgba(255,255,255,0.28)" },
+});
+
+// ── Newsletter signup styles ──────────────────────────────────
+const ns = StyleSheet.create({
+  section: {
+    backgroundColor: "#071424",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,188,212,0.15)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,188,212,0.10)",
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  inner: {
+    maxWidth: 960,
+    alignSelf: "center",
+    width: "100%",
+  },
+  copy: {
+    marginBottom: 32,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.brand,
+    letterSpacing: 1.5,
+  },
+  heading: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#fff",
+    lineHeight: 36,
+    marginBottom: 12,
+  },
+  sub: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.55)",
+    lineHeight: 22,
+  },
+  formWrap: {},
+  inputRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  input: {
+    flex: 1,
+    height: 50,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(0,188,212,0.35)",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: "#fff",
+  },
+  submitBtn: {
+    height: 50,
+    paddingHorizontal: 24,
+    backgroundColor: C.brand,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 110,
+  },
+  submitText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  errorText: {
+    fontSize: 13,
+    color: "#FF6B6B",
+    marginBottom: 8,
+  },
+  privacy: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.3)",
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  successBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(52,199,89,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(52,199,89,0.3)",
+    borderRadius: 12,
+    padding: 16,
+  },
+  successText: {
+    fontSize: 15,
+    color: "#34C759",
+    fontWeight: "600",
+    flex: 1,
+  },
 });
 
 const dm = StyleSheet.create({
