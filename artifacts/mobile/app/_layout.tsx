@@ -8,7 +8,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Linking, Platform, StyleSheet, Text, TextInput } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import * as SplashScreen from "expo-splash-screen";
 import * as Font from "expo-font";
 import { handleIncomingUrl } from "@/lib/deepLinkHandler";
 import {
@@ -35,8 +34,6 @@ import { initConnectivityToasts } from "@/lib/toast";
 (Text as any).defaultProps = { ...((Text as any).defaultProps ?? {}), allowFontScaling: false };
 (TextInput as any).defaultProps = { ...((TextInput as any).defaultProps ?? {}), allowFontScaling: false };
 
-SplashScreen.preventAutoHideAsync();
-
 export default function RootLayout() {
   const [fontsLoaded, fontError] = Font.useFonts({
     Inter_400Regular,
@@ -44,12 +41,6 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
-
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
 
   useEffect(() => {
     initConnectivityToasts();
