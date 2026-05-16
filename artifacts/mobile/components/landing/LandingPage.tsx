@@ -387,6 +387,58 @@ function WebAppBadge({ large = false, light = false, onPress }: { large?: boolea
 }
 
 // ─────────────────────────────────────────────────────────────
+//  FOOTER HELPERS
+// ─────────────────────────────────────────────────────────────
+
+type FooterLink = { label: string; path?: any; url?: string };
+
+function FooterLinkCol({ heading, items }: { heading: string; items: FooterLink[] }) {
+  const [hoveredIdx, setHoveredIdx] = useState(-1);
+  const router = useRouter();
+  return (
+    <View style={{ minWidth: 140, gap: 16 }}>
+      <Text style={ft.colHeading}>{heading}</Text>
+      <View style={{ gap: 14 }}>
+        {items.map((item, i) => (
+          <Pressable
+            key={item.label}
+            onHoverIn={() => setHoveredIdx(i)}
+            onHoverOut={() => setHoveredIdx(-1)}
+            onPress={() => {
+              if (item.url) Linking.openURL(item.url);
+              else if (item.path) router.push(item.path);
+            }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+          >
+            <Text style={[ft.colLink, hoveredIdx === i && ft.colLinkHovered]}>
+              {item.label}
+            </Text>
+            {hoveredIdx === i && (
+              <Ionicons name="arrow-forward" size={11} color={C.brand} />
+            )}
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function SocialBtn({ icon, url, label }: { icon: string; url: string; label: string }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Pressable
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      onPress={() => Linking.openURL(url)}
+      accessibilityLabel={label}
+      style={[ft.socialBtn, hovered && ft.socialBtnHovered]}
+    >
+      <Ionicons name={icon as any} size={17} color={hovered ? C.brand : "rgba(255,255,255,0.65)"} />
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 //  MAIN EXPORT
 // ─────────────────────────────────────────────────────────────
 export default function LandingPage() {
@@ -648,29 +700,82 @@ export default function LandingPage() {
         </Section>
 
         {/* ═══════════════════════════════════════════════════
-            DOWNLOAD CTA
+            DOWNLOAD CTA  (enhanced)
         ═══════════════════════════════════════════════════ */}
         <Animated.View style={{ opacity: ctaAnim }}>
-          <LinearGradient colors={[C.navy, C.navy2, C.brandDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={dl.section}>
-            <View style={{ position: "absolute", top: -40, right: -40, width: 240, height: 240, borderRadius: 120, backgroundColor: C.brand + "15", pointerEvents: "none" as any }} />
-            <View style={{ position: "absolute", bottom: -60, left: 0, width: 200, height: 200, borderRadius: 100, backgroundColor: C.brand + "10", pointerEvents: "none" as any }} />
+          <LinearGradient
+            colors={["#0D2340", "#0F2F50", "#00515A"]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={dl.section}
+          >
+            {/* Decorative blobs */}
+            <View style={{ position: "absolute", top: -100, right: -100, width: 500, height: 500, borderRadius: 250, backgroundColor: C.brand + "12", pointerEvents: "none" as any }} />
+            <View style={{ position: "absolute", bottom: -80, left: -80, width: 380, height: 380, borderRadius: 190, backgroundColor: "#007AFF18", pointerEvents: "none" as any }} />
+            <View style={{ position: "absolute", top: "40%", left: "30%", width: 200, height: 200, borderRadius: 100, backgroundColor: C.brand + "08", pointerEvents: "none" as any }} />
 
-            <View style={{ alignItems: "center", maxWidth: 600, alignSelf: "center" }}>
-              <View style={dl.icon}>
-                <Image source={afuLogo} style={{ width: 40, height: 40 }} tintColor="#fff" resizeMode="contain" />
+            <View style={{ alignItems: "center", maxWidth: 680, alignSelf: "center", width: "100%" }}>
+
+              {/* Social proof */}
+              <View style={dl.proof}>
+                <View style={{ flexDirection: "row", gap: 3 }}>
+                  {[1,2,3,4,5].map(i => (
+                    <Ionicons key={i} name="star" size={13} color="#FFD700" />
+                  ))}
+                </View>
+                <Text style={dl.proofText}>Loved by 50,000+ users across Africa</Text>
               </View>
-              <Text style={[dl.heading, !isDesktop && { fontSize: 28 }]}>
-                Start Connecting Today
+
+              {/* Icon */}
+              <View style={dl.iconCircle}>
+                <Image source={afuLogo} style={{ width: 44, height: 44 }} tintColor="#fff" resizeMode="contain" />
+              </View>
+
+              {/* Heading */}
+              <Text style={[dl.heading, !isDesktop && { fontSize: 30 }]}>
+                Your All-in-One Super App{"\n"}
+                <Text style={{ color: C.brand }}>Is Ready for You</Text>
               </Text>
+
+              {/* Sub */}
               <Text style={dl.sub}>
-                Join thousands of people who use AfuChat every day to chat, share, and stay connected. Download the app or open it in your browser — free forever.
+                Join thousands already using AfuChat to chat, discover, and stay connected — completely free, forever. No hidden fees, no limits.
               </Text>
-              <View style={[dl.badges, !isDesktop && { flexDirection: "column", width: "100%" }]}>
+
+              {/* Feature pills */}
+              <View style={[dl.pills, !isDesktop && { flexWrap: "wrap", justifyContent: "center" }]}>
+                {[
+                  { icon: "sparkles-outline", label: "Built-in AI" },
+                  { icon: "shield-checkmark-outline", label: "End-to-End Secure" },
+                  { icon: "people-outline", label: "Groups & Channels" },
+                  { icon: "globe-outline", label: "Works on Web" },
+                ].map((p, i) => (
+                  <View key={i} style={dl.pill}>
+                    <Ionicons name={p.icon as any} size={13} color={C.brand} />
+                    <Text style={dl.pillText}>{p.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Badges */}
+              <View style={[dl.badges, !isDesktop && { flexDirection: "column", width: "100%", maxWidth: 300, alignSelf: "center" }]}>
                 <PlayStoreBadge large light />
                 <WebAppBadge large light onPress={goDiscover} />
               </View>
-              <TouchableOpacity onPress={goRegister} activeOpacity={0.85} style={dl.signupLink}>
-                <Text style={dl.signupText}>Create a free account →</Text>
+
+              {/* Trust line */}
+              <View style={dl.trust}>
+                {["Free forever", "No credit card", "Available everywhere"].map((t, i) => (
+                  <React.Fragment key={t}>
+                    {i > 0 && <View style={dl.trustDot} />}
+                    <Text style={dl.trustText}>{t}</Text>
+                  </React.Fragment>
+                ))}
+              </View>
+
+              {/* Sign-up link */}
+              <TouchableOpacity onPress={goRegister} activeOpacity={0.8} style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 24 }}>
+                <Text style={dl.signupPlain}>Don't have an account?</Text>
+                <Text style={dl.signupCta}>Create one for free →</Text>
               </TouchableOpacity>
             </View>
           </LinearGradient>
@@ -679,52 +784,119 @@ export default function LandingPage() {
         {/* ═══════════════════════════════════════════════════
             FOOTER
         ═══════════════════════════════════════════════════ */}
-        <View style={[ft.footer, !isDesktop && { flexDirection: "column", gap: 32 }]}>
-          {/* Brand */}
-          <View style={{ flex: isDesktop ? 1 : undefined }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <View style={ft.logoBox}>
-                <Image source={afuLogo} style={{ width: 18, height: 18 }} tintColor="#fff" resizeMode="contain" />
+        <View style={ft.footer}>
+
+          {/* ── Top grid: brand col + link columns ── */}
+          <View style={[ft.mainRow, !isDesktop && { flexDirection: "column", gap: 40 }]}>
+
+            {/* Brand column */}
+            <View style={ft.brandCol}>
+              {/* Logo */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <View style={ft.logoBox}>
+                  <Image source={afuLogo} style={{ width: 20, height: 20 }} tintColor="#fff" resizeMode="contain" />
+                </View>
+                <Text style={ft.logoText}>AfuChat</Text>
               </View>
-              <Text style={ft.logoText}>AfuChat</Text>
+
+              {/* Description */}
+              <Text style={ft.desc}>
+                The all-in-one super app for real-time messaging, AI assistance, social discovery, and payments. Built for everyone, everywhere.
+              </Text>
+
+              {/* Mini Play badge */}
+              <TouchableOpacity
+                onPress={() => Linking.openURL(PLAY_STORE_URL)}
+                activeOpacity={0.8}
+                style={ft.miniBadge}
+              >
+                <Ionicons name="logo-google-playstore" size={15} color={C.brand} />
+                <View style={{ marginLeft: 8 }}>
+                  <Text style={ft.miniBadgeSub}>GET IT ON</Text>
+                  <Text style={ft.miniBadgeMain}>Google Play</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Social icons */}
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 22 }}>
+                <SocialBtn icon="logo-twitter"          url="https://twitter.com/afuchat"           label="Twitter / X" />
+                <SocialBtn icon="logo-facebook"         url="https://facebook.com/afuchat"          label="Facebook" />
+                <SocialBtn icon="logo-instagram"        url="https://instagram.com/afuchat"         label="Instagram" />
+                <SocialBtn icon="logo-youtube"          url="https://youtube.com/@afuchat"          label="YouTube" />
+              </View>
             </View>
-            <Text style={ft.tagline}>The All-in-One Super App.{"\n"}Built for everyone, everywhere.</Text>
-            <View style={{ flexDirection: "row", gap: 12, marginTop: 16 }}>
-              {[
-                { icon: "logo-google-playstore", url: PLAY_STORE_URL },
-              ].map((s, i) => (
-                <TouchableOpacity key={i} onPress={() => Linking.openURL(s.url)} style={ft.socialBtn} activeOpacity={0.7}>
-                  <Ionicons name={s.icon as any} size={16} color={C.brand} />
+
+            {/* Link columns */}
+            <View style={[ft.colsGrid, !isDesktop && { width: "100%", flexWrap: "wrap", gap: 32 }]}>
+              <FooterLinkCol
+                heading="Quick Links"
+                items={[
+                  { label: "Features",        path: undefined },
+                  { label: "About AfuChat",   path: "/about" as any },
+                  { label: "Download App",    url: PLAY_STORE_URL },
+                  { label: "Open Web App",    path: "/(tabs)/discover" as any },
+                ]}
+              />
+              <FooterLinkCol
+                heading="Company"
+                items={[
+                  { label: "About Us",        path: "/about" as any },
+                  { label: "Contact Us",      url: "mailto:support@afuchat.com" },
+                  { label: "Help & Support",  url: "mailto:support@afuchat.com" },
+                  { label: "Community",       path: "/(tabs)/discover" as any },
+                ]}
+              />
+              <FooterLinkCol
+                heading="Legal"
+                items={[
+                  { label: "Privacy Policy",  path: "/privacy" as any },
+                  { label: "Terms of Service",path: "/terms" as any },
+                  { label: "Cookie Policy",   path: "/privacy" as any },
+                  { label: "Security",        path: "/about" as any },
+                ]}
+              />
+            </View>
+          </View>
+
+          {/* ── Newsletter / contact strip ── */}
+          <View style={[ft.contactStrip, !isDesktop && { flexDirection: "column", gap: 10, alignItems: "flex-start" }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="mail-outline" size={16} color={C.brand} />
+              <Text style={ft.contactLabel}>Have questions? Reach us at</Text>
+              <TouchableOpacity onPress={() => Linking.openURL("mailto:support@afuchat.com")} activeOpacity={0.7}>
+                <Text style={ft.contactEmail}>support@afuchat.com</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.35)" />
+              <Text style={ft.contactMeta}>Entebbe, Uganda · Serving Africa & Beyond</Text>
+            </View>
+          </View>
+
+          {/* ── Divider ── */}
+          <View style={ft.divider} />
+
+          {/* ── Copyright bar ── */}
+          <View style={[ft.bottomBar, !isDesktop && { flexDirection: "column", alignItems: "flex-start", gap: 16 }]}>
+            <Text style={ft.copyright}>
+              © {new Date().getFullYear()} AfuChat. All rights reserved.
+            </Text>
+
+            {/* Legal links */}
+            <View style={{ flexDirection: "row", gap: 20, flexWrap: "wrap" }}>
+              {([
+                { label: "Privacy Policy",   path: "/privacy" as any },
+                { label: "Terms of Service", path: "/terms" as any },
+                { label: "Cookies",          path: "/privacy" as any },
+              ] as FooterLink[]).map((link, i) => (
+                <TouchableOpacity key={i} onPress={() => router.push(link.path)} activeOpacity={0.7}>
+                  <Text style={ft.bottomLink}>{link.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </View>
 
-          {/* Links */}
-          <View style={[ft.linksRow, !isDesktop && { width: "100%", justifyContent: "space-between" }]}>
-            {[
-              { heading: "Product",  links: [{ label: "Features",  path: undefined }, { label: "Download",  url: PLAY_STORE_URL }, { label: "Web App",   path: "/(tabs)/discover" as any }] },
-              { heading: "Company",  links: [{ label: "About",     path: "/about" as any }, { label: "Privacy",   path: "/privacy" as any }, { label: "Terms",     path: "/terms" as any }] },
-            ].map((col) => (
-              <View key={col.heading} style={{ gap: 8 }}>
-                <Text style={ft.colHeading}>{col.heading}</Text>
-                {col.links.map((link) => (
-                  <TouchableOpacity key={link.label} activeOpacity={0.7} onPress={() => {
-                    if ("url" in link && link.url) Linking.openURL(link.url);
-                    else if ("path" in link && link.path) router.push(link.path);
-                  }}>
-                    <Text style={ft.colLink}>{link.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
+            <Text style={ft.madeIn}>🇺🇬 Made in Uganda</Text>
           </View>
-        </View>
-
-        {/* Copyright */}
-        <View style={ft.copyright}>
-          <Text style={ft.copyrightText}>© {new Date().getFullYear()} AfuChat. All rights reserved.</Text>
-          <Text style={ft.copyrightText}>Built in Entebbe, Uganda 🇺🇬</Text>
         </View>
 
       </ScrollView>
@@ -829,28 +1001,67 @@ const as = StyleSheet.create({
 });
 
 const dl = StyleSheet.create({
-  section: { paddingVertical: 88, paddingHorizontal: 24, alignItems: "center", overflow: "hidden" },
-  icon: { width: 80, height: 80, borderRadius: 24, backgroundColor: C.brand, alignItems: "center", justifyContent: "center", marginBottom: 24, shadowColor: C.brand, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 24 },
-  heading: { fontSize: 40, fontWeight: "800", color: "#fff", textAlign: "center", letterSpacing: -1, marginBottom: 16 },
-  sub: { fontSize: 17, color: "rgba(255,255,255,0.7)", textAlign: "center", lineHeight: 27, marginBottom: 40, maxWidth: 520 },
+  section: { paddingVertical: 100, paddingHorizontal: 24, alignItems: "center", overflow: "hidden" },
+  proof: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(255,255,255,0.07)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 30, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", marginBottom: 32 },
+  proofText: { fontSize: 13, color: "rgba(255,255,255,0.75)", fontWeight: "600" },
+  iconCircle: { width: 88, height: 88, borderRadius: 26, backgroundColor: C.brand, alignItems: "center", justifyContent: "center", marginBottom: 28, shadowColor: C.brand, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.5, shadowRadius: 28 },
+  heading: { fontSize: 42, fontWeight: "800", color: "#fff", textAlign: "center", letterSpacing: -1, marginBottom: 18, lineHeight: 52 },
+  sub: { fontSize: 17, color: "rgba(255,255,255,0.68)", textAlign: "center", lineHeight: 28, marginBottom: 32, maxWidth: 540 },
+  pills: { flexDirection: "row", gap: 10, marginBottom: 40 },
+  pill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(0,188,212,0.3)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 30 },
+  pillText: { fontSize: 13, color: "rgba(255,255,255,0.8)", fontWeight: "600" },
   badges: { flexDirection: "row", gap: 16, flexWrap: "wrap", justifyContent: "center" },
-  signupLink: { marginTop: 24 },
-  signupText: { fontSize: 15, color: "rgba(255,255,255,0.65)", fontWeight: "600" },
-  primaryBtn: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.brand, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
-  primaryBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
+  trust: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 28 },
+  trustDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.25)" },
+  trustText: { fontSize: 13, color: "rgba(255,255,255,0.45)", fontWeight: "500" },
+  signupPlain: { fontSize: 15, color: "rgba(255,255,255,0.45)", fontWeight: "500" },
+  signupCta: { fontSize: 15, color: C.brand, fontWeight: "700" },
 });
 
 const ft = StyleSheet.create({
-  footer: { flexDirection: "row", backgroundColor: C.navy, paddingVertical: 56, paddingHorizontal: 32, gap: 48, flexWrap: "wrap" },
-  logoBox: { width: 32, height: 32, borderRadius: 9, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
-  logoText: { fontSize: 18, fontWeight: "800", color: "#fff" },
-  tagline: { fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 22 },
-  socialBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
-  linksRow: { flexDirection: "row", gap: 48 },
-  colHeading: { fontSize: 13, fontWeight: "700", color: "#fff", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 },
-  colLink: { fontSize: 14, color: "rgba(255,255,255,0.55)", fontWeight: "500" },
-  copyright: { backgroundColor: C.navy, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)", paddingVertical: 20, paddingHorizontal: 32, flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 8 },
-  copyrightText: { fontSize: 13, color: "rgba(255,255,255,0.35)" },
+  // Outer shell
+  footer: { backgroundColor: "#07152A", paddingTop: 72, paddingHorizontal: 32, paddingBottom: 0 },
+
+  // Top content row
+  mainRow: { flexDirection: "row", gap: 56, flexWrap: "wrap", paddingBottom: 56 },
+
+  // Brand column
+  brandCol: { flex: 1, minWidth: 220, maxWidth: 280 },
+  logoBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.brand, alignItems: "center", justifyContent: "center" },
+  logoText: { fontSize: 20, fontWeight: "800", color: "#fff", letterSpacing: -0.3 },
+  desc: { fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 23, marginBottom: 20 },
+
+  // Mini Play badge
+  miniBadge: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.07)", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, alignSelf: "flex-start" },
+  miniBadgeSub: { fontSize: 9, fontWeight: "700", color: "rgba(255,255,255,0.4)", letterSpacing: 0.8, textTransform: "uppercase" },
+  miniBadgeMain: { fontSize: 13, fontWeight: "700", color: "#fff" },
+
+  // Social buttons
+  socialBtn: { width: 38, height: 38, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.07)", borderWidth: 1, borderColor: "rgba(255,255,255,0.09)", alignItems: "center", justifyContent: "center" },
+  socialBtnHovered: { backgroundColor: "rgba(0,188,212,0.15)", borderColor: "rgba(0,188,212,0.4)" },
+
+  // Link columns grid
+  colsGrid: { flexDirection: "row", gap: 48, flex: 1 },
+
+  // Each column
+  colHeading: { fontSize: 11, fontWeight: "800", color: "rgba(255,255,255,0.9)", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 4 },
+  colLink: { fontSize: 14, color: "rgba(255,255,255,0.48)", fontWeight: "500", lineHeight: 20 },
+  colLinkHovered: { color: "rgba(255,255,255,0.9)" },
+
+  // Contact strip
+  contactStrip: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14, marginBottom: 36, gap: 12 },
+  contactLabel: { fontSize: 14, color: "rgba(255,255,255,0.5)", fontWeight: "500" },
+  contactEmail: { fontSize: 14, color: C.brand, fontWeight: "700" },
+  contactMeta: { fontSize: 13, color: "rgba(255,255,255,0.3)", fontWeight: "500" },
+
+  // Divider
+  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.07)", marginHorizontal: -32 },
+
+  // Copyright bar
+  bottomBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 22, flexWrap: "wrap", gap: 12 },
+  copyright: { fontSize: 13, color: "rgba(255,255,255,0.28)", fontWeight: "500" },
+  bottomLink: { fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: "500" },
+  madeIn: { fontSize: 13, color: "rgba(255,255,255,0.28)" },
 });
 
 const dm = StyleSheet.create({
