@@ -9,6 +9,14 @@ export default function IndexScreen() {
   const redirected = useRef(false);
   const { handle } = useLocalSearchParams<{ handle?: string }>();
 
+  // ── Web: always show the landing page — no auto-redirects ──
+  // Logged-in users navigate via the "Open App" button in the navbar.
+  if (Platform.OS === "web") {
+    return <LandingPage />;
+  }
+
+  // ── Native only below this point ──
+
   function doRedirect(hasSession: boolean, profileReady: boolean, profileOnboarded: boolean, userId?: string) {
     if (redirected.current) return;
     redirected.current = true;
@@ -19,11 +27,7 @@ export default function IndexScreen() {
         router.replace("/(tabs)");
       }
     } else {
-      // On web: don't redirect — show landing page below
-      // On native: go to discover
-      if (Platform.OS !== "web") {
-        router.replace("/(tabs)/discover");
-      }
+      router.replace("/(tabs)/discover");
     }
   }
 
@@ -45,9 +49,7 @@ export default function IndexScreen() {
   }, [session, profile, loading, handle]);
 
   // Native fallback — if auth hasn't resolved within 1.5 s, go to discover.
-  // On web we stay on the landing page, so no timeout redirect needed.
   useEffect(() => {
-    if (Platform.OS === "web") return;
     const timeout = setTimeout(() => {
       if (!redirected.current) {
         redirected.current = true;
@@ -61,17 +63,6 @@ export default function IndexScreen() {
     return () => clearTimeout(timeout);
   }, [handle]);
 
-  // ── Web: authenticated → redirect to tabs; unauthenticated → landing page ──
-  if (Platform.OS === "web") {
-    if (!loading && session) {
-      // Already logged in — redirect to app
-      router.replace("/(tabs)");
-      return null;
-    }
-    // Show landing page (also shown during the brief loading moment on web)
-    return <LandingPage />;
-  }
-
-  // ── Native: render nothing while auth resolves (redirect fires in useEffect) ──
+  // Native: render nothing while auth resolves (redirect fires in useEffect)
   return null;
 }

@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useAuth } from "@/context/AuthContext";
 
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.afuchat.app";
 
@@ -265,8 +266,8 @@ function FeatureCard({ icon, color, title, desc, anim }: { icon: string; color: 
 // ─────────────────────────────────────────────────────────────
 //  NAV BAR
 // ─────────────────────────────────────────────────────────────
-function NavBar({ scrolled, isDesktop, menuOpen, setMenuOpen, onLogin, onDownload }: {
-  scrolled: boolean; isDesktop: boolean; menuOpen: boolean; setMenuOpen: (v: boolean) => void; onLogin: () => void; onDownload: () => void;
+function NavBar({ scrolled, isDesktop, menuOpen, setMenuOpen, onLogin, onDownload, loginLabel }: {
+  scrolled: boolean; isDesktop: boolean; menuOpen: boolean; setMenuOpen: (v: boolean) => void; onLogin: () => void; onDownload: () => void; loginLabel?: string;
 }) {
   const [hoverIdx, setHoverIdx] = useState(-1);
   return (
@@ -301,7 +302,7 @@ function NavBar({ scrolled, isDesktop, menuOpen, setMenuOpen, onLogin, onDownloa
 
         {/* Login */}
         <TouchableOpacity onPress={onLogin} activeOpacity={0.85} style={nb.loginBtn}>
-          <Text style={nb.loginText}>Login</Text>
+          <Text style={nb.loginText}>{loginLabel ?? "Login"}</Text>
         </TouchableOpacity>
 
         {/* Mobile hamburger */}
@@ -321,7 +322,7 @@ function NavBar({ scrolled, isDesktop, menuOpen, setMenuOpen, onLogin, onDownloa
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={nb.dropLoginBtn} onPress={() => { setMenuOpen(false); onLogin(); }}>
-            <Text style={nb.dropLoginText}>Login to AfuChat</Text>
+            <Text style={nb.dropLoginText}>{loginLabel ?? "Login to AfuChat"}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -469,9 +470,12 @@ export default function LandingPage() {
     ]).start();
   }, []);
 
-  const goLogin    = () => router.push("/(auth)/login" as any);
-  const goRegister = () => router.push("/(auth)/register" as any);
-  const goDiscover = () => router.push("/(tabs)/discover" as any);
+  const { session } = useAuth();
+  const isLoggedIn = !!session;
+
+  const goLogin    = () => isLoggedIn ? router.replace("/(tabs)" as any) : router.push("/(auth)/login" as any);
+  const goRegister = () => isLoggedIn ? router.replace("/(tabs)/discover" as any) : router.push("/(auth)/register" as any);
+  const goDiscover = () => isLoggedIn ? router.replace("/(tabs)/discover" as any) : router.push("/(auth)/register" as any);
 
   const scrollToDownload = () => {
     scrollRef.current?.scrollToEnd({ animated: true });
@@ -490,6 +494,7 @@ export default function LandingPage() {
           setMenuOpen={setMenuOpen}
           onLogin={goLogin}
           onDownload={scrollToDownload}
+          loginLabel={isLoggedIn ? "Open App" : "Login"}
         />
       </View>
 
