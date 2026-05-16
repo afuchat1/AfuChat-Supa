@@ -15,6 +15,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 import { useTheme } from "@/hooks/useTheme";
+import { useAppAccent } from "@/context/AppAccentContext";
 
 const afuSymbol = require("@/assets/images/afu-symbol.png");
 
@@ -107,6 +108,7 @@ function FaqItem({ item }: { item: { q: string; a: string } }) {
 
 export default function AboutScreen() {
   const { colors, isDark } = useTheme();
+  const { accent } = useAppAccent();
   const insets = useSafeAreaInsets();
   const openLink = useOpenLink();
 
@@ -125,11 +127,11 @@ export default function AboutScreen() {
 
         {/* Hero */}
         <LinearGradient
-          colors={isDark ? ["#0D2137", "#0A1A2E"] : ["#00BCD4", "#007D8A"]}
+          colors={isDark ? ["#0D2137", "#0A1A2E"] : [accent, accent + "CC"]}
           style={st.hero}
         >
           <View style={st.heroLogo}>
-            <Ionicons name="chatbubble-ellipses" size={40} color="#fff" />
+            <Image source={afuSymbol} style={{ width: 56, height: 56 }} resizeMode="contain" tintColor="#fff" />
           </View>
           <Text style={st.heroTitle}>AfuChat</Text>
           <Text style={st.heroTagline}>Connect with everyone, everywhere.</Text>
