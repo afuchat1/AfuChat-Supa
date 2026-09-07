@@ -166,6 +166,8 @@ type ChatItem = {
   muted_until?: string | null;
 };
 
+let chatListMemberChannelSequence = 0;
+
 function isNotificationsChatItem(item: ChatItem): boolean {
   return [item.other_handle, item.other_display_name, item.name]
     .some((value) => value?.trim().toLowerCase() === "notifications");
@@ -971,6 +973,12 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     return request;
   }, [user, hasVerifiedSession, loadChatsImpl]);
 
+  // Realtime effects must not recreate their channels every time the chat
+  // loader callback changes identity. Keep the latest loader behind a ref so
+  // the member-insert channel has one lifecycle per authenticated user.
+  const loadChatsRef = useRef(loadChats);
+  loadChatsRef.current = loadChats;
+
   useEffect(() => { loadChats(); }, [loadChats]);
   useFocusEffect(useCallback(() => { loadChats(true); }, [loadChats]));
 
@@ -1258,21 +1266,23 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    const userId = user?.id;
+    if (!userId) return;
     // Listen for new chats being created (new chat_member rows for this user).
-    // Use a unique channel name per mount so Supabase's internal registry never
-    // returns an already-subscribed channel (which would throw "cannot add
-    // postgres_changes callbacks after subscribe()").
+    // Keep this effect keyed only to the authenticated user. Re-running it
+    // whenever loadChats changes can race Supabase's async removeChannel()
+    // cleanup and return an already-subscribed channel from the registry.
+    const channelName = `chatlist-member-inserts:${userId}:${++chatListMemberChannelSequence}`;
     const memberChannel = supabase
-      .channel(`chatlist-member-inserts:${user.id}:${Date.now()}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_members", filter: `user_id=eq.${user.id}` },
-        () => loadChats(true)
+        { event: "INSERT", schema: "public", table: "chat_members", filter: `user_id=eq.${userId}` },
+        () => { void loadChatsRef.current(true); },
       )
       .subscribe();
-    return () => { supabase.removeChannel(memberChannel); };
-  }, [user, loadChats]);
+    return () => { void supabase.removeChannel(memberChannel); };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
