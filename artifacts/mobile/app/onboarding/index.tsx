@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Image as RNImage,
   Keyboard,
@@ -15,6 +14,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
@@ -44,7 +44,6 @@ import { checkUsernameAvailability, usernamePurchasePrompt } from "@/lib/usernam
 import OnboardingBackdrop, { ONBOARDING_THEME } from "@/components/onboarding/OnboardingBackdrop";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const SCREEN_WIDTH = Dimensions.get("window").width;
 const TOTAL_STEPS  = 5;
 
 const INTERESTS = [
@@ -123,6 +122,7 @@ export default function OnboardingScreen() {
   const { user, refreshProfile } = useAuth();
   const { appTheme, setAppTheme } = useAppAccent();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{ userId?: string }>();
 
   // ── Form state (identical to original) ──────────────────────────────────────
@@ -162,8 +162,8 @@ export default function OnboardingScreen() {
 
   // Scroll to the current step whenever it changes
   useEffect(() => {
-    pagerRef.current?.scrollTo({ x: (step - 1) * SCREEN_WIDTH, animated: true });
-  }, [step]);
+    pagerRef.current?.scrollTo({ x: (step - 1) * screenWidth, animated: true });
+  }, [step, screenWidth]);
 
   // ── Navigation helpers ────────────────────────────────────────────────────────
   function goNext() {
@@ -182,7 +182,7 @@ export default function OnboardingScreen() {
 
   // Handle native swipe gestures from the pagingEnabled ScrollView
   function handlePagerSwipeEnd(contentOffsetX: number) {
-    const swipedPage = Math.round(contentOffsetX / SCREEN_WIDTH);
+    const swipedPage = Math.round(contentOffsetX / screenWidth);
     const swipedStep = swipedPage + 1;
     if (swipedStep === step) return;
     if (swipedStep > step) {
@@ -191,7 +191,7 @@ export default function OnboardingScreen() {
         setStep(swipedStep);
       } else {
         // Snap back — user can't advance yet
-        pagerRef.current?.scrollTo({ x: (step - 1) * SCREEN_WIDTH, animated: true });
+        pagerRef.current?.scrollTo({ x: (step - 1) * screenWidth, animated: true });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
     } else {
@@ -992,12 +992,12 @@ export default function OnboardingScreen() {
           keyboardShouldPersistTaps="handled"
           onMomentumScrollEnd={(e) => handlePagerSwipeEnd(e.nativeEvent.contentOffset.x)}
           style={{ flex: 1 }}
-          contentContainerStyle={{ width: SCREEN_WIDTH * TOTAL_STEPS }}
+          contentContainerStyle={{ width: screenWidth * TOTAL_STEPS }}
         >
           {stepRenderers.map((renderFn, i) => (
             <ScrollView
               key={i}
-              style={{ width: SCREEN_WIDTH }}
+              style={{ width: screenWidth }}
               contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 140 }]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -1045,6 +1045,9 @@ const st = StyleSheet.create({
 
   // Header
   topBar: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexDirection:  "row",
     alignItems:     "center",
     justifyContent: "space-between",
@@ -1070,7 +1073,13 @@ const st = StyleSheet.create({
   pagerOuter: { flex: 1 },
 
   // Per-step scroll
-  scrollContent: { paddingHorizontal: 24, paddingTop: 24 },
+  scrollContent: {
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
 
   // Step content layout
   stepContent: { gap: 28 },
@@ -1155,8 +1164,9 @@ const st = StyleSheet.create({
     right:   0,
     paddingHorizontal: 24,
     paddingTop: 12,
+    alignItems: "center",
   },
-  nextBtn:     { height: 52, borderRadius: 999, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  nextBtn:     { width: "100%", maxWidth: 560, height: 52, borderRadius: 999, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   nextBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
 
   // Modals

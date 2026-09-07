@@ -373,7 +373,10 @@ const s = StyleSheet.create({
 
   topBar: {
     position: "absolute",
-    top: 0, left: 0, right: 0,
+    top: 0,
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -456,6 +459,9 @@ const s = StyleSheet.create({
 
   card: {
     flex: 1,
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
     justifyContent: "flex-end",
     paddingHorizontal: 26,
     paddingTop: 24,
