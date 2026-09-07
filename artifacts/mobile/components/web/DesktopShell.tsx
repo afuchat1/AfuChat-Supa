@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -65,6 +65,7 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
   const { colors, isDark } = useTheme();
   const { user, session, profile } = useAuth();
   const { t } = useLanguage();
+  const [isNavExpanded, setIsNavExpanded] = useState(true);
 
   const isDesktop = width >= DESKTOP_BREAKPOINT;
   const isSignedIn = !!session?.user || !!user;
@@ -85,19 +86,42 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
       <View
         style={[
           styles.sidebar,
+            isNavExpanded ? styles.sidebarExpanded : styles.sidebarCollapsed,
           {
             backgroundColor: isDark ? colors.surface : colors.card,
-            borderRightColor: colors.border,
+              borderColor: colors.border,
           },
         ]}
       >
-        <View style={styles.brandRow}>
-          <View style={[styles.brandMark, { backgroundColor: colors.accent }]}>
-            <Ionicons name="chatbubble-ellipses" size={22} color="#fff" />
+        <View style={[styles.brandRow, !isNavExpanded && styles.brandRowCollapsed]}>
+          <View style={styles.brandIdentity}>
+            <View style={[styles.brandMark, { backgroundColor: colors.accent }]}>
+              <Ionicons name="chatbubble-ellipses" size={22} color="#fff" />
+            </View>
+            {isNavExpanded && (
+              <Text style={[styles.brandName, { color: colors.text }]}>
+                Afu<Text style={{ color: colors.accent }}>Chat</Text>
+              </Text>
+            )}
           </View>
-          <Text style={[styles.brandName, { color: colors.text }]}>
-            Afu<Text style={{ color: colors.accent }}>Chat</Text>
-          </Text>
+          <Pressable
+            onPress={() => setIsNavExpanded((expanded) => !expanded)}
+            accessibilityRole="button"
+            accessibilityLabel={isNavExpanded ? t("Collapse navigation") : t("Expand navigation")}
+            accessibilityState={{ expanded: isNavExpanded }}
+            style={({ hovered, pressed }) => [
+              styles.collapseButton,
+              { backgroundColor: colors.backgroundSecondary },
+              hovered && { backgroundColor: colors.accent + "18" },
+              pressed && { opacity: 0.72 },
+            ]}
+          >
+            <Ionicons
+              name={isNavExpanded ? "chevron-back-outline" : "chevron-forward-outline"}
+              size={17}
+              color={colors.textSecondary}
+            />
+          </Pressable>
         </View>
 
         <ScrollView
@@ -105,7 +129,9 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
           contentContainerStyle={styles.navContent}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>WORKSPACE</Text>
+          {isNavExpanded && (
+            <Text style={[styles.navEyebrow, { color: colors.textMuted }]}>WORKSPACE</Text>
+          )}
           {NAV_ITEMS.map((item) => {
             const isActive = activeRoute === item.route;
             return (
@@ -117,6 +143,7 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
                 accessibilityState={{ selected: isActive }}
                 style={({ hovered, pressed }) => [
                   styles.navItem,
+                  !isNavExpanded && styles.navItemCollapsed,
                   isActive && { backgroundColor: colors.accent + "18" },
                   hovered && !isActive && { backgroundColor: colors.backgroundSecondary },
                   pressed && { opacity: 0.72 },
@@ -134,17 +161,19 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
                     color={isActive ? "#fff" : colors.textSecondary}
                   />
                 </View>
-                <Text
-                  style={[
-                    styles.navLabel,
-                    { color: isActive ? colors.accent : colors.textSecondary },
-                    isActive && styles.navLabelActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {t(item.label)}
-                </Text>
-                {item.route === "/(tabs)/chats" && (
+                {isNavExpanded && (
+                  <Text
+                    style={[
+                      styles.navLabel,
+                      { color: isActive ? colors.accent : colors.textSecondary },
+                      isActive && styles.navLabelActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t(item.label)}
+                  </Text>
+                )}
+                {isNavExpanded && item.route === "/(tabs)/chats" && (
                   <View style={[styles.liveDot, { backgroundColor: colors.accent }]} />
                 )}
               </Pressable>
@@ -152,7 +181,7 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
           })}
         </ScrollView>
 
-        <View style={[styles.sidebarFooter, { borderTopColor: colors.border }]}>
+        <View style={[styles.sidebarFooter, !isNavExpanded && styles.sidebarFooterCollapsed, { borderTopColor: colors.border }]}>
           <Pressable
             onPress={() => safeRouter.navigate("/(tabs)/me" as any)}
             accessibilityRole="button"
@@ -169,22 +198,28 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
               size={36}
               userId={user?.id}
             />
-            <View style={styles.profileCopy}>
-              <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
-                {profile?.display_name || "Your profile"}
-              </Text>
-              <Text style={[styles.profileStatus, { color: colors.textMuted }]} numberOfLines={1}>
-                @{profile?.handle || "you"}
+            {isNavExpanded && (
+              <>
+                <View style={styles.profileCopy}>
+                  <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
+                    {profile?.display_name || "Your profile"}
+                  </Text>
+                  <Text style={[styles.profileStatus, { color: colors.textMuted }]} numberOfLines={1}>
+                    @{profile?.handle || "you"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </>
+            )}
+          </Pressable>
+          {isNavExpanded && (
+            <View style={styles.connectionRow}>
+              <View style={[styles.connectionDot, { backgroundColor: "#27B77A" }]} />
+              <Text style={[styles.connectionText, { color: colors.textMuted }]}>
+                Connected across your devices
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-          <View style={styles.connectionRow}>
-            <View style={[styles.connectionDot, { backgroundColor: "#27B77A" }]} />
-            <Text style={[styles.connectionText, { color: colors.textMuted }]}>
-              Connected across your devices
-            </Text>
-          </View>
+          )}
         </View>
       </View>
 
@@ -251,17 +286,35 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
 const styles = StyleSheet.create({
   shell: { flex: 1, minHeight: 0, flexDirection: "row", minWidth: 980 },
   sidebar: {
-    width: 232,
     flexShrink: 0,
-    borderRightWidth: 0.5,
-    paddingTop: 26,
+    marginVertical: 18,
+    marginLeft: 18,
+    borderWidth: 0.5,
+    borderRadius: 20,
+    paddingTop: 14,
+    overflow: "hidden",
+    ...({ transition: "width 180ms ease" } as any),
+    ...({ boxShadow: "0 12px 30px rgba(0,0,0,0.20)" } as any),
   },
+  sidebarExpanded: { width: 232 },
+  sidebarCollapsed: { width: 76 },
   brandRow: {
     height: 48,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 24,
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    gap: 8,
+  },
+  brandRowCollapsed: {
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  brandIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    minWidth: 0,
   },
   brandMark: {
     width: 36,
@@ -271,6 +324,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   brandName: { fontSize: 21, lineHeight: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  collapseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer" as any,
+    flexShrink: 0,
+  },
   navScroll: { flex: 1, minHeight: 0, marginTop: 30 },
   navContent: { paddingHorizontal: 14, paddingBottom: 20 },
   navEyebrow: {
@@ -290,6 +352,10 @@ const styles = StyleSheet.create({
     gap: 11,
     cursor: "pointer" as any,
   },
+  navItemCollapsed: {
+    justifyContent: "center",
+    paddingHorizontal: 0,
+  },
   navIconWrap: {
     width: 32,
     height: 32,
@@ -301,6 +367,7 @@ const styles = StyleSheet.create({
   navLabelActive: { fontFamily: "Inter_700Bold" },
   liveDot: { width: 6, height: 6, borderRadius: 3, marginRight: 3 },
   sidebarFooter: { borderTopWidth: 0.5, padding: 16 },
+  sidebarFooterCollapsed: { paddingHorizontal: 10, alignItems: "center" },
   profileRow: {
     borderRadius: 12,
     padding: 6,
