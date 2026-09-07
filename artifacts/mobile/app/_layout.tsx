@@ -51,6 +51,21 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 
+// The offline web preview can leave Expo's font observer pending until its
+// 12-second rejection. WebGlobalStyles already provides a system-font fallback,
+// so do not start the native font loader on web. Native builds still load the
+// bundled Inter files normally.
+const APP_FONTS = (
+  Platform.OS === "web"
+    ? {}
+    : {
+        Inter_400Regular,
+        Inter_500Medium,
+        Inter_600SemiBold,
+        Inter_700Bold,
+      }
+) as Parameters<typeof Font.useFonts>[0];
+
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CallProvider } from "@/context/CallContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -459,12 +474,7 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
 
 export default function RootLayout() {
   const rootNavigationState = useRootNavigationState();
-  const [fontsLoaded, fontError] = Font.useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
+  const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
   const [webFontTimeout, setWebFontTimeout] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
 
