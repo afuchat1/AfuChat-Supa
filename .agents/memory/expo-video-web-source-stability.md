@@ -19,6 +19,9 @@ reach the app's global error UI even though playback itself is recoverable.
 
 **How to apply:** For feeds, previews, and story players, prefer
 `useVideoPlayer({ uri })` on web, remove redundant `replaceAsync` calls, and
-let a caught `safePlay()` call handle user/background playback. Keep source
-resolution and native replacement behavior unchanged unless the native player
-has a separate lifecycle issue.
+let the shared `safePlay`/`safePause` helpers serialize web playback changes.
+Expo's web adapter returns void from `play()`/`pause()` and discards the
+underlying HTML promise, so `safePause` must wait for a pending play request to
+reach `playingChange` before pausing. Keep source resolution and native
+replacement behavior unchanged unless the native player has a separate
+lifecycle issue.

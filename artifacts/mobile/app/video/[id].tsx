@@ -74,6 +74,7 @@ import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
 import { getPreferredVideoHeight, isOffline as checkIsOffline, subscribeToNetworkChanges } from "@/lib/networkQuality";
+import { safePause, safePlay } from "@/lib/safeMedia";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
 import {
@@ -565,11 +566,7 @@ const VideoItem = React.memo(function VideoItem({
   // (the play/pause effect already paused the player; without this guard
   // any foreground AppState event would restart audio behind other screens).
   const safelyPlay = () => {
-    try {
-      // The native type is void, while the web implementation may return a
-      // thenable. Promise.resolve handles both without exposing interruptions.
-      Promise.resolve((player.play() as any)).catch(() => {});
-    } catch {}
+    safePlay(player);
   };
 
   useEffect(() => {
@@ -636,12 +633,12 @@ const VideoItem = React.memo(function VideoItem({
     // deallocated or enters an unrecoverable error state (rapid swipes,
     // background audio session conflicts, etc.).
     try {
-      if (!shouldMountVideo) { player.pause(); return; }
+      if (!shouldMountVideo) { safePause(player); return; }
       if (!sourceReadyRef.current) return;
       // When PiP is active honour the paused state — this lets the native
       // PiP play/pause button work correctly instead of being overridden.
-      if (inPip) { if (paused) { player.pause(); } else { safelyPlay(); } return; }
-      if (!isActive || paused || preloadOnly || !tabFocused) { player.pause(); } else { safelyPlay(); }
+      if (inPip) { if (paused) { safePause(player); } else { safelyPlay(); } return; }
+      if (!isActive || paused || preloadOnly || !tabFocused) { safePause(player); } else { safelyPlay(); }
     } catch {}
   }, [isActive, paused, preloadOnly, tabFocused, shouldMountVideo, inPip]);
 
@@ -774,7 +771,7 @@ const VideoItem = React.memo(function VideoItem({
             const wasPlaying = (() => { try { return player.playing; } catch { return false; } })();
             pausedRef.current = !wasPlaying;
             setPaused(!wasPlaying);
-            try { player.pause(); } catch {}
+            safePause(player);
           }}
         />
       ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />}
