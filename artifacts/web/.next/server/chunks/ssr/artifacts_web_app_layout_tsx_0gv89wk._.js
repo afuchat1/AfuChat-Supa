@@ -1,0 +1,3 @@
+module.exports=[97652,a=>{"use strict";var b=a.i(15722);a.s(["default",0,function({children:a}){return(0,b.jsx)("html",{lang:"en",children:(0,b.jsx)("body",{children:a})})},"metadata",0,{title:"AfuChat",description:"AfuChat — a social home for everyone.",icons:{icon:"/images/icon.png"},robots:{index:!1,follow:!1}}])},98846,function(a){a.n(a.i(97652))}];
+
+//# sourceMappingURL=artifacts_web_app_layout_tsx_0gv89wk._.js.map

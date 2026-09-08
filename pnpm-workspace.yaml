@@ -1,5 +1,6 @@
 packages:
   - artifacts/mobile
+  - artifacts/web
 
 autoInstallPeers: false
 
