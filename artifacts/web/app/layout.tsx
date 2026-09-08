@@ -4,8 +4,14 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "AfuChat",
   description: "AfuChat — a social home for everyone.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://afuchat.com"),
   icons: { icon: "/images/icon.png" },
-  robots: { index: false, follow: false }
+  openGraph: {
+    title: "AfuChat",
+    description: "AfuChat — a social home for everyone.",
+    type: "website"
+  },
+  twitter: { card: "summary_large_image", title: "AfuChat", description: "AfuChat — a social home for everyone." }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

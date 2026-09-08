@@ -1,0 +1,4 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+export const metadata: Metadata = { title: "Child safety | AfuChat", description: "Learn about child safety on AfuChat." };
+export default function ChildSafetyPage() { return <main className="legal-page"><header className="public-header"><Link href="/" className="public-logo"><img src="/images/white-logo-bold.png" alt="" width={30} height={30} />AfuChat</Link><nav><Link href="/discover">Discover</Link><Link href="/login">Sign in</Link></nav></header><article><p className="eyebrow">Safety at AfuChat</p><h1>Child safety</h1><p>AfuChat does not tolerate child sexual abuse or exploitation. We work to keep people safe, encourage reporting, and remove violating content and accounts.</p><p>If you see something unsafe, report it through the app or contact the AfuChat safety team.</p><Link className="back-link" href="/">← Back to welcome</Link></article></main>; }

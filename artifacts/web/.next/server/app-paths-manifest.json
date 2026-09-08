@@ -1,6 +1,21 @@
 {
+  "/[handle]/page": "app/[handle]/page.js",
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/about/page": "app/about/page.js",
+  "/article/[id]/page": "app/article/[id]/page.js",
+  "/channel/[id]/page": "app/channel/[id]/page.js",
+  "/child-safety/page": "app/child-safety/page.js",
+  "/contact/[id]/page": "app/contact/[id]/page.js",
+  "/discover/page": "app/discover/page.js",
+  "/group/[id]/page": "app/group/[id]/page.js",
+  "/id/[afuId]/page": "app/id/[afuId]/page.js",
   "/login/page": "app/login/page.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/post/[id]/page": "app/post/[id]/page.js",
+  "/privacy/page": "app/privacy/page.js",
+  "/robots.txt/route": "app/robots.txt/route.js",
+  "/sitemap.xml/route": "app/sitemap.xml/route.js",
+  "/terms/page": "app/terms/page.js",
+  "/video/[id]/page": "app/video/[id]/page.js"
 }

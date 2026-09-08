@@ -1,6 +1,21 @@
 {
+  "/[handle]/page": "/[handle]",
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
+  "/about/page": "/about",
+  "/article/[id]/page": "/article/[id]",
+  "/channel/[id]/page": "/channel/[id]",
+  "/child-safety/page": "/child-safety",
+  "/contact/[id]/page": "/contact/[id]",
+  "/discover/page": "/discover",
+  "/group/[id]/page": "/group/[id]",
+  "/id/[afuId]/page": "/id/[afuId]",
   "/login/page": "/login",
-  "/page": "/"
+  "/page": "/",
+  "/post/[id]/page": "/post/[id]",
+  "/privacy/page": "/privacy",
+  "/robots.txt/route": "/robots.txt",
+  "/sitemap.xml/route": "/sitemap.xml",
+  "/terms/page": "/terms",
+  "/video/[id]/page": "/video/[id]"
 }
