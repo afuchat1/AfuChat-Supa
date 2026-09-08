@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PUBLIC_SITE_URL } from "../lib/site";
 
 export const metadata: Metadata = {
   title: "AfuChat",
   description: "AfuChat — a social home for everyone.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://afuchat.com"),
+  metadataBase: new URL(PUBLIC_SITE_URL),
   icons: { icon: "/images/icon.png" },
   openGraph: {
     title: "AfuChat",

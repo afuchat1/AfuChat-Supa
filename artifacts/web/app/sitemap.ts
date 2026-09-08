@@ -1,15 +1,19 @@
 import type { MetadataRoute } from "next";
-import { getPublicPosts } from "../lib/public-data";
+import { getPublicPosts, getPublicProfiles } from "../lib/public-data";
+import { PUBLIC_SITE_URL } from "../lib/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = "https://afuchat.com";
+  const base = PUBLIC_SITE_URL;
   const staticRoutes = ["", "/discover", "/about", "/privacy", "/terms", "/child-safety"].map((path) => ({
     url: `${base}${path}`,
     changeFrequency: "weekly" as const,
     priority: path === "" ? 1 : 0.7
   }));
 
-  const posts = await getPublicPosts(100).catch(() => []);
+  const [posts, profiles] = await Promise.all([
+    getPublicPosts(1000).catch(() => []),
+    getPublicProfiles(1000).catch(() => [])
+  ]);
   const contentRoutes = posts.flatMap((post) => {
     const routes = [{ url: `${base}/post/${post.id}`, lastModified: new Date(post.created_at) }];
     if (post.post_type === "video") routes.push({ url: `${base}/video/${post.id}`, lastModified: new Date(post.created_at) });
@@ -18,5 +22,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return routes;
   });
 
-  return [...staticRoutes, ...contentRoutes];
+  const profileRoutes = profiles.map((profile) => ({
+    url: `${base}/${profile.handle}`,
+    changeFrequency: "daily" as const,
+    priority: 0.6
+  }));
+
+  return [...staticRoutes, ...profileRoutes, ...contentRoutes];
 }

@@ -77,6 +77,14 @@ export async function getPublicPosts(limit = 30) {
   });
 }
 
+export async function getPublicProfiles(limit = 1000) {
+  return supabaseGet<Pick<PublicProfile, "id" | "handle">[]>("profiles", {
+    select: "id,handle",
+    order: "handle.asc",
+    limit: String(limit)
+  });
+}
+
 export async function getPublicProfile(handle: string) {
   const profiles = await supabaseGet<PublicProfile[]>("profiles", {
     select: "id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country",
