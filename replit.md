@@ -1,6 +1,6 @@
-# AfuChat Android app
+# AfuChat Android + web apps
 
-AfuChat is an Android-first React Native application built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat includes an Android-first React Native application and a separate SEO-focused Next.js web app. The Android app is built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture. Both apps connect to the existing AfuChat product and branding.
 
 ## Quick start on Replit
 
@@ -14,22 +14,18 @@ pnpm install
 
 This installs all packages and runs the `postinstall` script that patches native modules for the build environment.
 
-### 2. Start Metro
+### 2. Start the web preview
 
-Click **Run** or start the **Start application** workflow. Metro bundler launches automatically:
+Click **Run** or start the **Start application** workflow. The Next.js web artifact launches on port 5000:
 
 ```
-EXPO_OFFLINE=1 EXPO_NO_LAZY=1 \
-  EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN \
-  EXPO_PUBLIC_REPL_ID=$REPL_ID \
-  EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN \
-  REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_EXPO_DEV_DOMAIN \
-  pnpm exec expo start --go --web --port 5000
+cd artifacts/web
+pnpm dev
 ```
 
-### 3. Open on device
+### 3. Open the Android app
 
-Scan the QR code shown in the workflow output with **Expo Go** on an Android (or iOS) device. The web preview at port 5000 also works for visual inspection.
+To run the native app, use the EAS workflows or start Expo from `artifacts/mobile`. The web app is in `artifacts/web` and is the Replit preview surface.
 
 ## Environment variables and secrets
 
@@ -49,6 +45,9 @@ To set Replit secrets (for EAS builds): use the **Secrets** panel (environment-s
 ## Project layout
 
 ```
+artifacts/web/
+  app/          Next.js App Router pages and SEO metadata
+  public/       AfuChat brand assets, robots.txt, and sitemap.xml
 artifacts/mobile/
   app/          Expo Router screens (chat, call, discover, profile, …)
   components/   Shared React Native UI components
@@ -72,10 +71,17 @@ The `supabase/` directory is part of the existing backend. Do not modify its mig
 ## Verification
 
 ```bash
-cd artifacts/mobile
+cd artifacts/web
 
-# TypeScript check
+# TypeScript check and production build
 pnpm run typecheck
+pnpm run build
+```
+
+Native verification remains:
+
+```bash
+cd artifacts/mobile
 
 # Export bundle (requires network for Expo CLI)
 pnpm exec expo export --platform android
@@ -85,7 +91,7 @@ pnpm exec expo export --platform android
 
 - Use `EXPO_OFFLINE=1` in Replit workflows — `CI=1` breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
-- Do not add web routes, web layouts, or a server layer — the app is native Android.
+- Keep the web and mobile apps as separate artifacts. Do not force Next.js pages through React Native Web.
 - All DB writes go through Supabase RLS-protected routes or Edge Functions.
 - ACoin deductions must use the `deduct_acoin` RPC (not direct `.update()`).
 - Direct PostgreSQL connections from Replit fail (IPv4 blocked); use the Supabase JS admin client (HTTPS) for all DB ops.

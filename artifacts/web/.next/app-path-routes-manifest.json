@@ -1,0 +1,8 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/chat/page": "/chat",
+  "/discover/page": "/discover",
+  "/page": "/",
+  "/privacy/page": "/privacy"
+}
