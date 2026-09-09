@@ -44,6 +44,32 @@ if (typeof console !== "undefined" && typeof console.error === "function") {
 }
 
 const isWeb = Platform.OS === "web";
+const isStaticRender = isWeb && typeof window === "undefined";
+
+// Expo Router's static export evaluates the app in Node to generate HTML.
+// Supabase Realtime only needs a WebSocket when a browser/native client
+// subscribes, but its constructor still requires a WebSocket implementation
+// during server evaluation. Keep static rendering offline while preserving the
+// real browser/native transport.
+class StaticRenderWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readonly readyState = StaticRenderWebSocket.CLOSED;
+  onopen: (() => void) | null = null;
+  onmessage: ((event: unknown) => void) | null = null;
+  onclose: ((event: unknown) => void) | null = null;
+  onerror: ((event: unknown) => void) | null = null;
+
+  constructor(_url: string | URL, _protocols?: string | string[]) {}
+
+  addEventListener(_type: string, _listener: (...args: unknown[]) => void) {}
+  removeEventListener(_type: string, _listener: (...args: unknown[]) => void) {}
+  send(_data: string) {}
+  close() {}
+}
 
 const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
 const fetchWithTimeout: typeof fetch = async (input, init) => {
@@ -91,5 +117,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
     heartbeatIntervalMs: 15_000,
     reconnectAfterMs: (tries: number) => Math.min(500 * tries, 5_000),
+    ...(isStaticRender ? { transport: StaticRenderWebSocket } : {}),
   },
 });

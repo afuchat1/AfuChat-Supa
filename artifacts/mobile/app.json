@@ -211,7 +211,7 @@
     "owner": "afuchat-2",
     "web": {
       "bundler": "metro",
-      "output": "single",
+      "output": "static",
       "favicon": "./assets/images/icon.png"
     },
     "ios": {

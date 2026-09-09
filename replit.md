@@ -1,6 +1,6 @@
-# AfuChat mobile app with a Next.js public web surface
+# AfuChat mobile app with an Expo web surface
 
-AfuChat is an Expo application built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture. Its public web pages are served by Next.js from the same mobile workspace, using the existing Expo web experience as the source of truth. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat is an Expo application built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
 
 ## Quick start on Replit
 
@@ -14,18 +14,19 @@ pnpm install
 
 This installs all packages and runs the `postinstall` script that patches native modules for the build environment.
 
-### 2. Start the Next.js public web preview
+### 2. Start the Expo web preview
 
-Click **Run** or start the **Start application** workflow. The converted web app launches on port 5000:
+Click **Run** or start the **Start application** workflow. The Expo web app launches on port 5000:
 
 ```
 cd artifacts/mobile
-pnpm run web:start
+EXPO_OFFLINE=1 EXPO_NO_LAZY=1 pnpm exec expo export -p web --output-dir dist
+node scripts/serve-static-web.mjs
 ```
 
 ### 3. Open on device
 
-Use the EAS workflows or start Expo from `artifacts/mobile` for the native app. The Next.js web port is the Replit preview surface.
+Use the EAS workflows or start Expo from `artifacts/mobile` for the native app. The Expo static web export is the Replit preview surface.
 
 ## Environment variables and secrets
 
@@ -52,7 +53,7 @@ artifacts/mobile/
   hooks/        Reusable React hooks
   lib/          Supabase client, native services, storage, call engine
   modules/      Native mini-app modules
-  web/          Next.js public routes, components, data access, and assets
+  web/          Legacy public web surface retained during the Expo web migration
   supabase/     Existing Supabase migrations and Edge Function source
   scripts/      postinstall.sh — patches native modules for New Arch
 ```
@@ -71,9 +72,8 @@ The `supabase/` directory is part of the existing backend. Do not modify its mig
 ```bash
 cd artifacts/mobile
 
-# Next.js typecheck and production build
-pnpm run typecheck:web
-pnpm run web:build
+# Expo static web export
+pnpm exec expo export -p web
 
 # Native typecheck
 pnpm run typecheck
@@ -83,7 +83,7 @@ pnpm run typecheck
 
 - Use `EXPO_OFFLINE=1` in Replit workflows — `CI=1` breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
-- Keep the Next.js web port faithful to the existing Expo flows. Do not replace it with unrelated marketing pages or mock product content.
+- Keep the Expo web export identical to the native Expo flows. Do not create a separate web-only product surface or mock product content.
 - All DB writes go through Supabase RLS-protected routes or Edge Functions.
 - ACoin deductions must use the `deduct_acoin` RPC (not direct `.update()`).
 - Direct PostgreSQL connections from Replit fail (IPv4 blocked); use the Supabase JS admin client (HTTPS) for all DB ops.

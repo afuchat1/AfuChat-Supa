@@ -1,10 +1,10 @@
 ---
-name: Expo to Next.js web port
-description: The web artifact is a faithful Next.js port of Expo web flows, not a separate marketing recreation.
+name: Expo static web surface
+description: Expo Router is the canonical web UI; static export keeps native parity while making route HTML crawlable.
 ---
 
-The Next.js public web surface lives inside the mobile artifact at `artifacts/mobile/web`; there is no separate web workspace. It should port the existing Expo web experience screen by screen, beginning with the real onboarding language selection, onboarding slides, and authentication routes.
+The mobile artifact's Expo Router app is the canonical web surface. Use `web.output: "static"` and serve the generated `dist` export with clean-URL routing so the browser and crawlers receive the same screens and route structure as native.
 
-**Why:** The requested change is a runtime conversion from Expo web to Next.js without creating a second artifact, so user-visible behavior and product copy should come from the existing mobile source rather than invented web content.
+**Why:** A separate Next.js recreation drifted from the mobile UI and feature set. Expo already contains the complete shared screens, navigation, translations, and behavior; static rendering solves discoverability without duplicating the product.
 
-**How to apply:** Keep the Next app under the mobile workspace, reuse its bundled assets, translations, colors, and route intent, and keep the preview/deployment commands rooted at `artifacts/mobile`. Add live Supabase behavior as each screen is ported; do not substitute static marketing sections for app screens.
+**How to apply:** Build with `expo export -p web`, deploy `dist` as static output, and map extensionless paths to generated HTML. During Node static rendering, Supabase Realtime needs a no-op transport because Node 20 has no native WebSocket; preserve the real transport in browser/native runtimes.
