@@ -1,4 +1,0 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-export const metadata: Metadata = { title: "Terms | AfuChat", description: "Read the AfuChat terms of service." };
-export default function TermsPage() { return <main className="legal-page"><header className="public-header"><Link href="/" className="public-logo"><img src="/images/white-logo-bold.png" alt="" width={30} height={30} />AfuChat</Link><nav><Link href="/discover">Discover</Link><Link href="/login">Sign in</Link></nav></header><article><p className="eyebrow">AfuChat policies</p><h1>Terms of service</h1><p>Use AfuChat to connect, create, and belong. Keep your activity lawful, respectful, and safe for the communities you join.</p><p>Account-specific terms and controls are available after signing in.</p><Link className="back-link" href="/">← Back to welcome</Link></article></main>; }

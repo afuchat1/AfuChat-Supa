@@ -1,4 +1,0 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-export const metadata: Metadata = { title: "About AfuChat | Social home for everyone", description: "Learn about AfuChat, a social home for conversations, communities, ideas, and everyday moments." };
-export default function AboutPage() { return <main className="legal-page"><header className="public-header"><Link href="/" className="public-logo"><img src="/images/white-logo-bold.png" alt="" width={30} height={30} />AfuChat</Link><nav><Link href="/discover">Discover</Link><Link href="/login">Sign in</Link></nav></header><article><p className="eyebrow">About AfuChat</p><h1>A social home for everyone.</h1><p>AfuChat brings conversations, communities, short videos, and everyday moments into one human space.</p><Link className="primary-link" href="/discover">Explore Discover</Link></article></main>; }

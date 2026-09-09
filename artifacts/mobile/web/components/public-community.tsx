@@ -1,6 +1,0 @@
-import Link from "next/link";
-import type { PublicCommunity } from "../lib/public-data";
-
-export function PublicCommunityPage({ community, kind }: { community: PublicCommunity; kind: "channel" | "group" }) {
-  return <main className="profile-page"><header className="public-header"><Link href="/" className="public-logo"><img src="/images/white-logo-bold.png" alt="" width={30} height={30} />AfuChat</Link><nav><Link href="/discover">Discover</Link><Link href="/login">Sign in</Link></nav></header><section className="profile-hero"><div className="profile-avatar-wrap">{community.avatar_url ? <img className="profile-avatar" src={community.avatar_url} alt="" width={104} height={104} /> : <div className="profile-avatar profile-avatar-fallback">{(community.name || kind).slice(0, 1).toUpperCase()}</div>}</div><div className="profile-copy"><p className="eyebrow">Public {kind}</p><h1>{community.name || community.handle || kind}</h1>{community.handle ? <p className="profile-handle">@{community.handle}</p> : null}{community.description ? <p className="profile-bio">{community.description}</p> : null}<div className="profile-meta"><span>Public on AfuChat</span><Link className="primary-link" href="/login">Join AfuChat</Link></div></div></section></main>;
-}

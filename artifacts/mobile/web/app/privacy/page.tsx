@@ -1,4 +1,0 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-export const metadata: Metadata = { title: "Privacy | AfuChat", description: "Read the AfuChat privacy information." };
-export default function PrivacyPage() { return <main className="legal-page"><header className="public-header"><Link href="/" className="public-logo"><img src="/images/white-logo-bold.png" alt="" width={30} height={30} />AfuChat</Link><nav><Link href="/discover">Discover</Link><Link href="/login">Sign in</Link></nav></header><article><p className="eyebrow">AfuChat policies</p><h1>Privacy</h1><p>AfuChat is designed around control, clarity, and respectful connection. Your account and content settings determine how your information is used and who can see it.</p><p>For account-specific privacy controls, sign in to AfuChat and open Settings.</p><Link className="back-link" href="/">← Back to welcome</Link></article></main>; }

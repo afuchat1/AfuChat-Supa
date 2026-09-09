@@ -97,4 +97,3 @@ timeoutMs = 120000
 deploymentTarget = "static"
 build = ["pnpm", "--dir", "artifacts/mobile", "exec", "expo", "export", "-p", "web"]
 publicDir = "artifacts/mobile/dist"
-run = ["pnpm", "--dir", "artifacts/mobile", "run", "web:start"]

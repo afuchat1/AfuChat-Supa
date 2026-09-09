@@ -5,10 +5,6 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "EXPO_OFFLINE=1 EXPO_NO_LAZY=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_EXPO_DEV_DOMAIN pnpm exec expo start --go --port 8000",
-    "web:dev": "pnpm exec next dev web --hostname 0.0.0.0 --port 5000",
-    "web:build": "pnpm exec next build web",
-    "web:start": "pnpm exec next start web --hostname 0.0.0.0 --port 5000",
-    "typecheck:web": "pnpm exec tsc -p web/tsconfig.json --noEmit",
     "build:apk": "bash scripts/eas-build.sh",
     "audit:i18n": "node scripts/audit-localization.js",
     "audit:i18n:strict": "node scripts/audit-localization.js --strict-literals",
@@ -91,7 +87,6 @@
     "expo-video": "~55.0.17",
     "expo-video-thumbnails": "~55.0.15",
     "libphonenumber-js": "^1.12.42",
-    "next": "16.3.4",
     "qrcode": "^1.5.4",
     "react-native-compressor": "^1.6.0",
     "react-native-mmkv": "^3.2.0",
