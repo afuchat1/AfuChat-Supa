@@ -1,6 +1,7 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { injectMeta, publicProfileSummaries, profileContent } from "./public-crawler.mjs";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 
@@ -83,8 +84,29 @@ async function htmlFiles(directory) {
 }
 
 const files = await htmlFiles(root);
-let updated = 0;
+let generatedProfiles = 0;
+try {
+  const template = await readFile(join(root, "[handle].html"), "utf8");
+  const profiles = await publicProfileSummaries();
+  for (const profile of Array.isArray(profiles) ? profiles : []) {
+    const handle = String(profile?.handle || "").trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(handle)) continue;
+    if (routeCopy[`/${handle}`] || handle === "index") continue;
+    const content = profileContent({
+      profile,
+      followers: null,
+      following: null,
+      posts: null,
+      grid: [],
+    });
+    await writeFile(join(root, `${handle}.html`), injectMeta(template, content));
+    generatedProfiles += 1;
+  }
+} catch (error) {
+  console.warn(`[static-web] profile prerender skipped: ${error?.message || error}`);
+}
 
+let updated = 0;
 for (const filePath of files) {
   const html = await readFile(filePath, "utf8");
   if (html.includes('id="afuchat-nojs-content"')) continue;
@@ -115,4 +137,4 @@ for (const filePath of files) {
   updated += 1;
 }
 
-console.log(`[static-web] added crawlable fallback content to ${updated} HTML routes`);
+console.log(`[static-web] added crawlable fallback content to ${updated} HTML routes and prerendered ${generatedProfiles} public profiles`);

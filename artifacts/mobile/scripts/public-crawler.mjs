@@ -1,5 +1,5 @@
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "https://rhnsjqqtdzlkvqazfcbg.supabase.co";
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY";
 const CACHE_TTL_MS = 60_000;
 const cache = new Map();
 
@@ -159,7 +159,7 @@ async function profileByHandle(handle) {
   return null;
 }
 
-function profileContent(data) {
+export function profileContent(data) {
   const p = data.profile;
   const displayName = text(p.display_name || p.handle || "AfuChat profile");
   const privateNotice = p.is_private
@@ -197,6 +197,18 @@ function profileContent(data) {
       ${postsMarkup ? `<h2>Public posts</h2>${postsMarkup}` : ""}
     `,
   };
+}
+
+export async function publicProfileSummaries() {
+  return rows(
+    "profiles",
+    "id,display_name,handle,avatar_url,banner_url,bio,is_verified,is_organization_verified,is_business_mode,is_private,country,website_url,current_grade,created_at",
+    [
+      ["handle", "not.is.null"],
+      ["or", "(is_private.eq.false,is_private.is.null)"],
+      ["limit", "5000"],
+    ],
+  );
 }
 
 async function postById(id, requiredType = null) {
@@ -341,7 +353,7 @@ async function contentForPath(pathname) {
   return null;
 }
 
-function injectMeta(html, content) {
+export function injectMeta(html, content) {
   const title = escapeHtml(content.title);
   const description = escapeHtml(content.description);
   const metadata = `
@@ -355,9 +367,21 @@ function injectMeta(html, content) {
       ${content.html}
     </section>
   `;
-  return html
-    .replace("</head>", `${metadata}</head>`)
-    .replace("</body>", `${crawlerSection}</body>`);
+  const noScript = `
+    <noscript>
+      <main id="afuchat-nojs-content" aria-label="${title}">
+        ${content.html}
+      </main>
+    </noscript>
+  `;
+  const withMetadata = html
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
+    .replace(/<meta\s+name=["']description["'][^>]*>/i, `<meta name="description" content="${description}">`)
+    .replace("</head>", `${metadata}</head>`);
+  const withNoScript = withMetadata.includes('id="afuchat-nojs-content"')
+    ? withMetadata.replace(/<main id="afuchat-nojs-content"[^>]*>[\s\S]*?<\/main>/i, noScript.trim())
+    : withMetadata.replace("</body>", `${noScript}</body>`);
+  return withNoScript.replace("</body>", `${crawlerSection}</body>`);
 }
 
 export async function decoratePublicHtml(pathname, html) {
