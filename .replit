@@ -88,12 +88,17 @@ externalPort = 5000
 localPort = 5001
 externalPort = 80
 
+[[ports]]
+localPort = 5100
+externalPort = 3000
+
 
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
 
 [deployment]
-deploymentTarget = "static"
+deploymentTarget = "autoscale"
 build = ["pnpm", "--dir", "artifacts/mobile", "exec", "expo", "export", "-p", "web"]
 publicDir = "artifacts/mobile/dist"
+run = ["node", "artifacts/mobile/scripts/serve-static-web.mjs"]

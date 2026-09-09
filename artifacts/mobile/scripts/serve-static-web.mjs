@@ -1,8 +1,9 @@
 import { createReadStream } from "node:fs";
-import { access, stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, posix } from "node:path";
 import { fileURLToPath } from "node:url";
+import { decoratePublicHtml } from "./public-crawler.mjs";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 const port = Number(process.env.PORT || 5000);
@@ -108,7 +109,18 @@ createServer(async (request, response) => {
     }
 
     const fileType = contentTypes[extname(filePath)] || "application/octet-stream";
-    response.writeHead(filePath.endsWith(".html") ? 200 : 200, {
+    if (filePath.endsWith(".html")) {
+      const html = await readFile(filePath, "utf8");
+      const enhancedHtml = await decoratePublicHtml(pathname, html);
+      response.writeHead(200, {
+        "Cache-Control": "public, max-age=60",
+        "Content-Type": "text/html; charset=utf-8",
+      });
+      response.end(enhancedHtml);
+      return;
+    }
+
+    response.writeHead(200, {
       "Cache-Control": filePath.endsWith(".html") ? "public, max-age=60" : "public, max-age=31536000, immutable",
       "Content-Type": fileType,
     });
