@@ -100,3 +100,4 @@
 - [Native-only Google auth](native-only-google-auth.md) — keep Supabase Google enabled; mobile sends native Google ID tokens, with no web One Tap or Google redirects.
 - [Username marketplace schema drift](username-marketplace-schema-drift.md) — production owned_usernames uses acquired_at; marketplace RPCs must match it instead of assuming created_at.
 - [Expo static web surface](expo-next-web-port.md) — Expo Router is canonical for web; static export plus clean URLs gives crawlers HTML without duplicating the mobile UI.
+- [Vercel Babel workspace dependencies](vercel-babel-workspace-deps.md) — clean Vercel pnpm installs may need Babel packages declared at the workspace root for react-native-worklets.
