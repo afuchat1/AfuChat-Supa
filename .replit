@@ -77,12 +77,16 @@ args = "cd artifacts/mobile && pnpm exec next start web --hostname 0.0.0.0 --por
 waitForPort = 5000
 
 [[ports]]
-localPort = 5000
-externalPort = 80
+localPort = 3000
+externalPort = 3001
 
 [[ports]]
-localPort = 8000
-externalPort = 8000
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 5001
+externalPort = 80
 
 
 [postMerge]
