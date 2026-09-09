@@ -25,16 +25,13 @@ export default function HomePage() {
   const [language, setLanguage] = useState<string | null>(null);
   const [languageComplete, setLanguageComplete] = useState(false);
   const [slide, setSlide] = useState(0);
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("afuchat_language");
     setLanguage(stored);
     setLanguageComplete(Boolean(stored));
-    setReady(true);
   }, []);
 
-  if (!ready) return <main className="screen" />;
   if (!language || !languageComplete) {
     return (
       <main className="screen">

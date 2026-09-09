@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getPublicPosts, type PublicPost } from "../../lib/public-data";
+import { PublicMentionText } from "../../components/public-text";
 
 export const metadata: Metadata = {
   title: "Discover public posts | AfuChat",
   description: "Explore public conversations, ideas, videos, and communities on AfuChat.",
+  alternates: { canonical: "/discover" },
   openGraph: {
     title: "Discover public posts | AfuChat",
     description: "Explore public conversations, ideas, videos, and communities on AfuChat",
-    type: "website"
+    type: "website",
+    url: "/discover"
   }
 };
 
@@ -83,7 +86,7 @@ function PublicPostCard({ post }: { post: PublicPost }) {
           <span>@{profile?.handle || "user"} · {relativeTime(post.created_at)}</span>
         </div>
       </div>
-      {post.content ? <p className="post-content">{post.content}</p> : null}
+      {post.content ? <p className="post-content"><PublicMentionText>{post.content}</PublicMentionText></p> : null}
       {post.article_title ? <h3 className="post-title">{post.article_title}</h3> : null}
       {post.image_url ? <img className="post-media" src={post.image_url} alt={post.article_title || "Public AfuChat post"} width={720} height={480} loading="lazy" /> : null}
       <div className="post-stats"><span>♡ {post.like_count || 0}</span><span>◉ {post.view_count || 0} views</span><span>{post.post_type || "post"}</span></div>

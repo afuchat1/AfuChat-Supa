@@ -17,6 +17,8 @@ export type PublicProfile = {
   is_verified: boolean;
   is_organization_verified: boolean;
   country: string | null;
+  follower_count?: number | null;
+  following_count?: number | null;
 };
 
 export type PublicPost = {
@@ -68,26 +70,49 @@ async function supabaseRpc<T>(name: string, body: Record<string, string>) {
   return response.json() as Promise<T>;
 }
 
-export async function getPublicPosts(limit = 30) {
-  return supabaseGet<PublicPost[]>("posts", {
-    select: "id,author_id,content,image_url,created_at,view_count,like_count,visibility,post_type,article_title,profiles!posts_author_id_fkey(id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country)",
+export async function getPublicPosts(limit = 30, offset = 0) {
+  const params: Record<string, string> = {
+    select: "id,author_id,content,image_url,created_at,view_count,like_count,visibility,post_type,article_title,profiles!posts_author_id_fkey(id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country,follower_count,following_count)",
     visibility: "eq.public",
     order: "created_at.desc",
     limit: String(limit)
-  });
+  };
+  if (offset > 0) params.offset = String(offset);
+  return supabaseGet<PublicPost[]>("posts", params);
 }
 
-export async function getPublicProfiles(limit = 1000) {
-  return supabaseGet<Pick<PublicProfile, "id" | "handle">[]>("profiles", {
+export async function getPublicProfiles(limit = 1000, offset = 0) {
+  const params: Record<string, string> = {
     select: "id,handle",
     order: "handle.asc",
     limit: String(limit)
-  });
+  };
+  if (offset > 0) params.offset = String(offset);
+  return supabaseGet<Pick<PublicProfile, "id" | "handle">[]>( "profiles", params);
+}
+
+async function getAllPages<T>(loadPage: (limit: number, offset: number) => Promise<T[]>) {
+  const pageSize = 1000;
+  const all: T[] = [];
+  for (let offset = 0; offset < 100_000; offset += pageSize) {
+    const page = await loadPage(pageSize, offset);
+    all.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return all;
+}
+
+export function getAllPublicPosts() {
+  return getAllPages((limit, offset) => getPublicPosts(limit, offset));
+}
+
+export function getAllPublicProfiles() {
+  return getAllPages((limit, offset) => getPublicProfiles(limit, offset));
 }
 
 export async function getPublicProfile(handle: string) {
   const profiles = await supabaseGet<PublicProfile[]>("profiles", {
-    select: "id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country",
+    select: "id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country,follower_count,following_count",
     handle: `ilike.${handle}`,
     limit: "1"
   });
@@ -96,7 +121,7 @@ export async function getPublicProfile(handle: string) {
 
 export async function getPublicProfileById(id: string) {
   const profiles = await supabaseGet<PublicProfile[]>("profiles", {
-    select: "id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country",
+    select: "id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country,follower_count,following_count",
     id: `eq.${id}`,
     limit: "1"
   });
@@ -122,7 +147,7 @@ export async function getProfilePosts(authorId: string, limit = 24) {
 
 export async function getPublicPost(id: string) {
   const posts = await supabaseGet<PublicPost[]>("posts", {
-    select: "id,author_id,content,image_url,created_at,view_count,like_count,visibility,post_type,article_title,profiles!posts_author_id_fkey(id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country)",
+    select: "id,author_id,content,image_url,created_at,view_count,like_count,visibility,post_type,article_title,profiles!posts_author_id_fkey(id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,country,follower_count,following_count)",
     id: `eq.${id}`,
     visibility: "eq.public",
     limit: "1"

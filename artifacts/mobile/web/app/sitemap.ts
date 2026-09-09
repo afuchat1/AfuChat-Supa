@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getPublicPosts, getPublicProfiles } from "../lib/public-data";
+import { getAllPublicPosts, getAllPublicProfiles } from "../lib/public-data";
 import { PUBLIC_SITE_URL } from "../lib/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -11,8 +11,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const [posts, profiles] = await Promise.all([
-    getPublicPosts(1000).catch(() => []),
-    getPublicProfiles(1000).catch(() => [])
+    getAllPublicPosts().catch(() => []),
+    getAllPublicProfiles().catch(() => [])
   ]);
   const contentRoutes = posts.flatMap((post) => {
     const routes = [{ url: `${base}/post/${post.id}`, lastModified: new Date(post.created_at) }];
@@ -28,5 +28,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6
   }));
 
-  return [...staticRoutes, ...profileRoutes, ...contentRoutes];
+  return [...new Map([...staticRoutes, ...profileRoutes, ...contentRoutes].map((route) => [route.url, route])).values()];
 }
