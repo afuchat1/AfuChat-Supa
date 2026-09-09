@@ -71,28 +71,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      '@afuchat1/engagera':
-        specifier: 0.1.5
-        version: 0.1.5
-      '@babel/generator':
-        specifier: 7.29.7
-        version: 7.29.7
-      '@babel/types':
-        specifier: 7.29.7
-        version: 7.29.7
-      '@react-native-google-signin/google-signin':
-        specifier: ^16.1.4
-        version: 16.1.4(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
-      expo-notifications:
-        specifier: ~55.0.26
-        version: 55.0.26(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
-      expo-share-intent:
-        specifier: ^6.1.1
-        version: 6.1.1(expo-constants@55.0.17)(expo-linking@55.0.16)(expo@55.0.28)(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
-      react-native-compressor:
-        specifier: 1.6.0
-        version: 1.6.0(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0)
     devDependencies:
       typescript:
         specifier: ~5.9.2
@@ -3436,12 +3414,6 @@ packages:
   react-native-compressor@1.19.4:
     resolution: {integrity: sha512-xRFgCHtGLxwHpf2WyyVqPWuYQvawrhBNPVf59GT6kpzRtA4IYSk87Q6wHq8boEqrlX/e8ENOvAxxEaY+823aAA==}
     engines: {node: '>= 22.11.0'}
-    peerDependencies:
-      react: '*'
-      react-native: '*'
-
-  react-native-compressor@1.6.0:
-    resolution: {integrity: sha512-v6HkV0syvq7FRNXM7nz1YDAWZEChRYjCLA1NHE5kaBVHL1KvpS/qZ+Z+pARQPZKHaleyUcV9Tj25hRhRqxZQZw==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -7831,11 +7803,6 @@ snapshots:
   react-is@19.2.8: {}
 
   react-native-compressor@1.19.4(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0):
-    dependencies:
-      react: 19.2.0
-      react-native: 0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0)
-
-  react-native-compressor@1.6.0(react-native@0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0))(react@19.2.0):
     dependencies:
       react: 19.2.0
       react-native: 0.83.10(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.0)

@@ -1,6 +1,6 @@
 {
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm exec expo export -p web && mkdir -p dist/.well-known && cp well-known/assetlinks.json dist/.well-known/assetlinks.json && cp well-known/apple-app-site-association dist/.well-known/apple-app-site-association",
+  "buildCommand": "pnpm run build:web && mkdir -p dist/.well-known && cp well-known/assetlinks.json dist/.well-known/assetlinks.json && cp well-known/apple-app-site-association dist/.well-known/apple-app-site-association",
   "outputDirectory": "dist",
   "cleanUrls": true,
   "headers": [

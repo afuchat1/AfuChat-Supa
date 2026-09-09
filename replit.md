@@ -20,7 +20,7 @@ Click **Run** or start the **Start application** workflow. The Expo web app laun
 
 ```
 cd artifacts/mobile
-EXPO_OFFLINE=1 EXPO_NO_LAZY=1 pnpm exec expo export -p web --output-dir dist
+pnpm run build:web
 node scripts/serve-static-web.mjs
 ```
 
@@ -72,8 +72,8 @@ The `supabase/` directory is part of the existing backend. Do not modify its mig
 ```bash
 cd artifacts/mobile
 
-# Expo static web export
-pnpm exec expo export -p web
+# Expo static web export with crawlable no-JavaScript fallbacks
+pnpm run build:web
 
 # Native typecheck
 pnpm run typecheck
