@@ -1,6 +1,8 @@
 {
-  "buildCommand": "npx expo export -p web && mkdir -p dist/.well-known && cp well-known/assetlinks.json dist/.well-known/assetlinks.json",
-  "outputDirectory": "dist",
+  "framework": "nextjs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm run web:build",
+  "outputDirectory": "web/.next",
   "headers": [
     {
       "source": "/.well-known/assetlinks.json",
@@ -14,12 +16,6 @@
           "value": "public, max-age=300"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
     }
   ]
 }
