@@ -1,6 +1,6 @@
-# AfuChat Android + Next.js web apps
+# AfuChat mobile app with a Next.js public web surface
 
-AfuChat is an Android-first React Native application built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture, plus a separate Next.js web port of the Expo web experience. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat is an Expo application built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture. Its public web pages are served by Next.js from the same mobile workspace, using the existing Expo web experience as the source of truth. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
 
 ## Quick start on Replit
 
@@ -14,13 +14,13 @@ pnpm install
 
 This installs all packages and runs the `postinstall` script that patches native modules for the build environment.
 
-### 2. Start the Next.js web preview
+### 2. Start the Next.js public web preview
 
 Click **Run** or start the **Start application** workflow. The converted web app launches on port 5000:
 
 ```
-cd artifacts/web
-pnpm start
+cd artifacts/mobile
+pnpm run web:start
 ```
 
 ### 3. Open on device
@@ -45,9 +45,6 @@ To set Replit secrets (for EAS builds): use the **Secrets** panel (environment-s
 ## Project layout
 
 ```
-artifacts/web/
-  app/          Next.js port of Expo web entry/auth flows
-  public/       Shared AfuChat logos and illustrations
 artifacts/mobile/
   app/          Expo Router screens (chat, call, discover, profile, …)
   components/   Shared React Native UI components
@@ -55,6 +52,7 @@ artifacts/mobile/
   hooks/        Reusable React hooks
   lib/          Supabase client, native services, storage, call engine
   modules/      Native mini-app modules
+  web/          Next.js public routes, components, data access, and assets
   supabase/     Existing Supabase migrations and Edge Function source
   scripts/      postinstall.sh — patches native modules for New Arch
 ```
@@ -71,20 +69,14 @@ The `supabase/` directory is part of the existing backend. Do not modify its mig
 ## Verification
 
 ```bash
-cd artifacts/web
-
-# TypeScript check and production build
-pnpm run typecheck
-pnpm run build
-```
-
-Native verification remains:
-
-```bash
 cd artifacts/mobile
 
-# Export bundle (requires network for Expo CLI)
-pnpm exec expo export --platform android
+# Next.js typecheck and production build
+pnpm run typecheck:web
+pnpm run web:build
+
+# Native typecheck
+pnpm run typecheck
 ```
 
 ## Important conventions

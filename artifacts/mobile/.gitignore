@@ -36,5 +36,6 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 .vercel
+web/.next/
 
 .env

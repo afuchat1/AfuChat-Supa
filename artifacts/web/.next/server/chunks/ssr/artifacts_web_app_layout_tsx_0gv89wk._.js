@@ -1,3 +1,0 @@
-module.exports=[97652,a=>{"use strict";var b=a.i(15722);let c={title:"AfuChat",description:"AfuChat — a social home for everyone.",metadataBase:new URL((process.env.NEXT_PUBLIC_SITE_URL||"https://afuchat.com").replace(/\/$/,"")),icons:{icon:"/images/icon.png"},openGraph:{title:"AfuChat",description:"AfuChat — a social home for everyone.",type:"website"},twitter:{card:"summary_large_image",title:"AfuChat",description:"AfuChat — a social home for everyone."}};a.s(["default",0,function({children:a}){return(0,b.jsx)("html",{lang:"en",children:(0,b.jsx)("body",{children:a})})},"metadata",0,c],97652)},98846,function(a){a.n(a.i(97652))}];
-
-//# sourceMappingURL=artifacts_web_app_layout_tsx_0gv89wk._.js.map

@@ -73,7 +73,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/web && pnpm exec next start --hostname 0.0.0.0 --port 5000"
+args = "cd artifacts/mobile && pnpm exec next start web --hostname 0.0.0.0 --port 5000"
 waitForPort = 5000
 
 [[ports]]
@@ -90,6 +90,7 @@ path = "scripts/post-merge.sh"
 timeoutMs = 120000
 
 [deployment]
-deploymentTarget = "static"
-build = ["bash", "-c", "cd artifacts/mobile && npx expo export -p web"]
-publicDir = "artifacts/mobile/dist"
+deploymentTarget = "autoscale"
+build = ["pnpm", "--dir", "artifacts/mobile", "run", "web:build"]
+publicDir = "artifacts/mobile/web/.next"
+run = ["pnpm", "--dir", "artifacts/mobile", "run", "web:start"]
