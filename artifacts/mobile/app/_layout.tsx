@@ -293,8 +293,6 @@ function ThemedStatusBar() {
       style={statusBarStyle}
       hidden={isImmersiveRoute}
       hideTransitionAnimation="none"
-      translucent
-      backgroundColor="transparent"
       animated
     />
   );

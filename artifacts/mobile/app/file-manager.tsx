@@ -15,7 +15,6 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -29,6 +28,17 @@ import { isExpoGo } from "@/lib/expoEnvironment";
 
 type FileType = "image" | "video" | "audio" | "document";
 type Filter = "all" | "image" | "video" | "audio";
+type MediaLibraryModule = typeof import("expo-media-library/legacy");
+
+let mediaLibraryModule: MediaLibraryModule | null = null;
+
+function getMediaLibrary(): MediaLibraryModule | null {
+  if (Platform.OS === "web") return null;
+  if (!mediaLibraryModule) {
+    mediaLibraryModule = require("expo-media-library/legacy") as MediaLibraryModule;
+  }
+  return mediaLibraryModule;
+}
 
 type FileItem = {
   id: string;
@@ -160,6 +170,8 @@ export default function FileManagerScreen() {
     }
     setGalleryLoading(true);
     try {
+      const MediaLibrary = getMediaLibrary();
+      if (!MediaLibrary) return;
       const current = await MediaLibrary.getPermissionsAsync();
       const hasAccess = current.granted || current.status === "granted";
       setGalleryCanAskAgain(current.canAskAgain !== false);
@@ -214,12 +226,15 @@ export default function FileManagerScreen() {
   }, [filter, loadGallery]);
 
   const requestGalleryAccess = useCallback(async () => {
-    if (galleryPermission === "denied" && !galleryCanAskAgain && Platform.OS !== "web") {
+    if (Platform.OS === "web") return;
+    if (galleryPermission === "denied" && !galleryCanAskAgain) {
       await Linking.openSettings();
       return;
     }
     setGalleryLoading(true);
     try {
+      const MediaLibrary = getMediaLibrary();
+      if (!MediaLibrary) return;
       const result = await MediaLibrary.requestPermissionsAsync();
       setGalleryCanAskAgain(result.canAskAgain !== false);
       if (result.granted || result.status === "granted") {
@@ -265,6 +280,8 @@ export default function FileManagerScreen() {
   const resolveLocalUri = useCallback(async (file: FileItem): Promise<FileItem> => {
     if (Platform.OS === "web" || !file.assetId) return file;
     try {
+      const MediaLibrary = getMediaLibrary();
+      if (!MediaLibrary) return file;
       const info = await MediaLibrary.getAssetInfoAsync(file.assetId, {
         shouldDownloadFromNetwork: false,
       });
@@ -286,6 +303,8 @@ export default function FileManagerScreen() {
     let prepared = selectedFile;
     if (Platform.OS !== "web" && selectedFile.assetId) {
       try {
+        const MediaLibrary = getMediaLibrary();
+        if (!MediaLibrary) return;
         const info = await MediaLibrary.getAssetInfoAsync(selectedFile.assetId);
         const localUri = (info as any).localUri || selectedFile.uri;
         let resolvedSize = Number((info as any).fileSize);
@@ -603,7 +622,7 @@ const styles = StyleSheet.create({
   gridTile: { flex: 1, aspectRatio: 1, margin: 1, position: "relative", overflow: "hidden", borderRadius: 4, backgroundColor: "#222" },
   gridImage: { width: "100%", height: "100%" },
   gridVideo: { flex: 1, alignItems: "center", justifyContent: "center" },
-  gridVideoShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.24)" },
+  gridVideoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.24)" },
   selectionBadge: { position: "absolute", top: 7, right: 7, width: 23, height: 23, borderRadius: 12, borderWidth: 2, borderColor: "#fff", backgroundColor: "rgba(0,0,0,0.25)", alignItems: "center", justifyContent: "center" },
   sendBar: { flex: 1, minHeight: 52, borderRadius: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, gap: 9 },
   sendBarText: { fontSize: 14, fontFamily: "Inter_700Bold" },
@@ -612,7 +631,7 @@ const styles = StyleSheet.create({
   fmNav: { height: 56, width: "100%", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", overflow: "hidden" },
   fmNavTab: { flex: 1, minWidth: 0, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   fmNavIcon: { width: 44, height: 30, alignItems: "center", justifyContent: "center", position: "relative" },
-  fmNavActiveOval: { ...StyleSheet.absoluteFillObject, borderRadius: 9999 },
+  fmNavActiveOval: { ...StyleSheet.absoluteFill, borderRadius: 9999 },
   fmNavLabel: { width: "100%", fontSize: 9, lineHeight: 10, fontFamily: "Inter_700Bold", fontWeight: "700", textAlign: "center", marginTop: 0, includeFontPadding: false },
   previewRoot: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
   previewHeader: { position: "absolute", top: 50, left: 16, right: 16, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

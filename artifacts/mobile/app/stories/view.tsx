@@ -1002,9 +1002,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_500Medium",
   },
-  media: { ...StyleSheet.absoluteFillObject },
+  media: { ...StyleSheet.absoluteFill },
   downloadOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
@@ -1016,7 +1016,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   mediaErrorOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
@@ -1052,7 +1052,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   progressBg: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(255,255,255,0.28)",
     borderRadius: 1.5,
   },

@@ -833,7 +833,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",
     zIndex: 200,

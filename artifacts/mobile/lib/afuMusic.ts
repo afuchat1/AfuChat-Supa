@@ -102,7 +102,7 @@ async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
     request,
     supabase.from("music_purchases").select("track_id").eq("buyer_id", userId),
     supabase.from("profiles").select("id,display_name,handle").limit(1000),
-    getOfflineMusicEntries(),
+    getOfflineMusicEntries(userId),
   ]);
   if (error) throw error;
 
@@ -135,7 +135,8 @@ async function accessToken() {
 }
 
 export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string | null> {
-  const cached = await getOfflineMusicUri(track.id);
+  const userId = await currentUserId();
+  const cached = await getOfflineMusicUri(userId, track.id);
   if (cached) return cached;
   if (track.audioUrl?.startsWith("file://")) return track.audioUrl;
   if (!track.storagePath) return track.audioUrl ?? null;
@@ -145,19 +146,25 @@ export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string 
 }
 
 export async function cacheMusicTrackOffline(track: AfuMusicTrack) {
+  const userId = await currentUserId();
+  if (track.price > 0 && track.creatorId !== userId && !track.isOwned) {
+    throw new Error("Purchase this track before saving it offline.");
+  }
   const remoteUri = await getMusicPlaybackUri({ ...track, audioUrl: undefined });
   if (!remoteUri) throw new Error("This track is not available for offline playback.");
-  await cacheMusicFile(track, remoteUri);
+  await cacheMusicFile(userId, track, remoteUri);
 }
 
 export async function listOfflineMusicTracks() {
-  const entries = await getOfflineMusicEntries();
+  const userId = await currentUserId();
+  const entries = await getOfflineMusicEntries(userId);
   return entries.map((entry) => entry.track);
 }
 
 export async function removeMusicTrackOffline(track: AfuMusicTrack) {
+  const userId = await currentUserId();
   const { removeOfflineMusic } = await import("./musicCache");
-  await removeOfflineMusic(track.id);
+  await removeOfflineMusic(userId, track.id);
 }
 
 function audioExtension(name: string, mimeType: string) {

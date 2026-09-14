@@ -787,7 +787,7 @@ export default function SignInScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const sc = StyleSheet.create({
-  panel: { ...StyleSheet.absoluteFillObject, backgroundColor: "transparent" },
+  panel: { ...StyleSheet.absoluteFill, backgroundColor: "transparent" },
 
   logoRing: {
     width: 100,

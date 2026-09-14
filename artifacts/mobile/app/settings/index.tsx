@@ -360,7 +360,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   body: { paddingHorizontal: 16, paddingTop: 12, gap: 0 },
 
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", zIndex: 100 },
+  overlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", zIndex: 100 },
   overlayCard: {
     borderRadius: 24, padding: 32, alignItems: "center", gap: 14, minWidth: 240,
   },

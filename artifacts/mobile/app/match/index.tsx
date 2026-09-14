@@ -439,7 +439,7 @@ function MatchModal({ match, onClose, onMessage }: { match: MatchRecord; onClose
 }
 
 const matchStyles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.88)", alignItems: "center", justifyContent: "center", zIndex: 200 },
+  overlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.88)", alignItems: "center", justifyContent: "center", zIndex: 200 },
   floatingHeart: { position: "absolute" },
   card: { borderRadius: 28, overflow: "hidden" },
   headerGrad: { alignItems: "center", paddingTop: 28, paddingBottom: 16, paddingHorizontal: 24, gap: 6 },

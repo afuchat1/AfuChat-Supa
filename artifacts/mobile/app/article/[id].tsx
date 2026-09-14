@@ -368,7 +368,7 @@ const st = StyleSheet.create({
   topBarBtn:  { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   heroWrap:   { width: "100%", height: 260, backgroundColor: "#111" },
   heroImage:  { width: "100%", height: 260 },
-  heroScrim:  { ...StyleSheet.absoluteFillObject, backgroundColor: "transparent" },
+  heroScrim:  { ...StyleSheet.absoluteFill, backgroundColor: "transparent" },
   heroActions:{ position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 8 },
   heroBtn:    { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
   body:       { paddingHorizontal: 20, paddingTop: 20 },

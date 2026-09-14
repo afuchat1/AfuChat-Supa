@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
   reactionChip: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 3 },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  reactionOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.3)" },
+  reactionOverlay: { ...StyleSheet.absoluteFill, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.3)" },
   reactionPicker: { flexDirection: "row", borderRadius: 32, paddingHorizontal: 12, paddingVertical: 10, gap: 4 },
   reactionPickerItem: { padding: 4 },
   reactionPickerEmoji: { fontSize: 26 },

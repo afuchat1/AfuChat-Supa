@@ -752,7 +752,7 @@ export default function EmojiStickerPicker({
         {/* Tab pill */}
         <BlurView intensity={isDark ? 60 : 80} tint={isDark ? "dark" : "light"}
           style={[s.pill, { borderColor: glass.border }, GLASS.shadow.darkSoft as any]}>
-          <View style={[StyleSheet.absoluteFillObject, {
+          <View style={[StyleSheet.absoluteFill, {
             backgroundColor: isDark ? "rgba(30,30,35,0.85)" : "rgba(255,255,255,0.90)",
             borderRadius: GLASS.radius.pill,
           }]} />
@@ -779,7 +779,7 @@ export default function EmojiStickerPicker({
         {/* ⌫ circle */}
         <BlurView intensity={isDark ? 60 : 80} tint={isDark ? "dark" : "light"}
           style={[s.deleteCircle, { borderColor: glass.border }, GLASS.shadow.darkSoft as any]}>
-          <View style={[StyleSheet.absoluteFillObject, {
+          <View style={[StyleSheet.absoluteFill, {
             backgroundColor: isDark ? "rgba(30,30,35,0.85)" : "rgba(255,255,255,0.90)",
             borderRadius: 20,
           }]} />
@@ -853,7 +853,7 @@ const s = StyleSheet.create({
   },
 
   activeChip: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: GLASS.radius.pill,
     marginHorizontal: 4,
     marginVertical: 6,

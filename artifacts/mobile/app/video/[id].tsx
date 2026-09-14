@@ -50,7 +50,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from "expo-video";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
-import * as MediaLibrary from "expo-media-library";
+import * as MediaLibrary from "expo-media-library/legacy";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { supabase } from "@/lib/supabase";
@@ -998,7 +998,7 @@ const VS_SHADOW = Platform.select({
 });
 const vStyles = StyleSheet.create({
   item: { backgroundColor: "#000", overflow: "hidden" },
-  centerOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  centerOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   doubleTapHeart: {
     position: "absolute",
     width: 110,

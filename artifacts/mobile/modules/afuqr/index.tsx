@@ -201,7 +201,7 @@ const s = StyleSheet.create({
   permSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 21, marginBottom: 16 },
   permBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 14 },
   permBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  overlay: { ...StyleSheet.absoluteFillObject, flexDirection: "column" },
+  overlay: { ...StyleSheet.absoluteFill, flexDirection: "column" },
   topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10 },
   topBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 20 },
   topTitle: { flex: 1, alignItems: "center" },

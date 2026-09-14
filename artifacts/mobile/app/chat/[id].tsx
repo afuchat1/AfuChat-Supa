@@ -10171,7 +10171,7 @@ const st = StyleSheet.create({
   recPauseBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
-  sheetOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  sheetOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" },
   sheetContent: { position: "absolute", bottom: 0, left: 8, right: 8, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, gap: 14 },
   sheetHandle: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#CCC", alignSelf: "center", marginBottom: 8 },
   desktopSheetOverlay: { backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },

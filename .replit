@@ -51,7 +51,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=$EXPO_TOKEN npx --yes eas-cli@latest build --platform android --profile production --non-interactive --no-wait"
+args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=$EXPO_ACCESS_TOKEN npx --yes eas-cli@latest build --platform android --profile production --non-interactive --no-wait"
 
 [[workflows.workflow]]
 name = "EAS Preview Build"
@@ -62,7 +62,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=$EXPO_TOKEN npx --yes eas-cli@latest build --platform android --profile preview --non-interactive --no-wait"
+args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=$EXPO_ACCESS_TOKEN npx --yes eas-cli@latest build --platform android --profile preview --non-interactive --no-wait"
 
 [[workflows.workflow]]
 name = "Start application"

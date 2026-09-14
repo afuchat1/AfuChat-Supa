@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   photoCell: { aspectRatio: 3 / 4, borderRadius: 12, overflow: "hidden", position: "relative" },
   photoThumb: { width: "100%", height: "100%" },
-  photoUploading: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
+  photoUploading: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center" },
   primaryBadge: { position: "absolute", bottom: 6, left: 6, backgroundColor: BRAND, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   primaryText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   photoRemove: { position: "absolute", top: 4, right: 4 },

@@ -353,7 +353,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
   videoWrap: { width: SW, height: SW * 0.58, backgroundColor: "#111", position: "relative" },
   video: { width: SW, height: SW * 0.58 },
-  videoLoadOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  videoLoadOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   infoRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
   infoBadge: { flexDirection: "row", alignItems: "center", gap: 5 },
   infoTime: { fontSize: 14, fontFamily: "Inter_600SemiBold" },

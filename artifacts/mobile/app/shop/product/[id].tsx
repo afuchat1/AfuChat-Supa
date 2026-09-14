@@ -540,7 +540,7 @@ const st = StyleSheet.create({
   },
   dot: { height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.5)" },
   outOfStockOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.4)",
     alignItems: "center",
     justifyContent: "center",

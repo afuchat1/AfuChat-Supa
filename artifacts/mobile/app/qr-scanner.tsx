@@ -449,7 +449,7 @@ export default function QRScannerScreen() {
     <View style={[s.root, { backgroundColor: "#000" }]}>
       {/* Camera */}
       <CameraView
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         facing="back"
         enableTorch={torch}
         onBarcodeScanned={scanned ? undefined : handleScanned}
@@ -457,7 +457,7 @@ export default function QRScannerScreen() {
       />
 
       {/* Dark overlay with cutout */}
-      <View style={[StyleSheet.absoluteFillObject, { pointerEvents: "none" } as any]}>
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" } as any]}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)" }} />
         <View style={{ flexDirection: "row", height: FRAME_SIZE }}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)" }} />

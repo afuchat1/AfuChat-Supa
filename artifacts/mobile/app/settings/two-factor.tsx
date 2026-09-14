@@ -918,7 +918,7 @@ const s = StyleSheet.create({
   ackText:   { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },
 
   otpContainer:    { position: "relative" },
-  otpOverlayInput: { ...StyleSheet.absoluteFillObject, opacity: 0, zIndex: 10 },
+  otpOverlayInput: { ...StyleSheet.absoluteFill, opacity: 0, zIndex: 10 },
   errorRow:  { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 8 },
   errorText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: "#FF3B30", lineHeight: 18 },
   codeHint:  { fontSize: 11.5, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 10, lineHeight: 17 },

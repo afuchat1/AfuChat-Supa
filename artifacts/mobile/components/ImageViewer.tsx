@@ -868,7 +868,7 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose} hardwareAccelerated>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
       <View style={styles.root}>
         {/* Ambient blurred background */}
         <Image
@@ -984,7 +984,7 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <StatusBar style="light" translucent />
+      <StatusBar style="light" />
       <View style={styles.root}>
         <Image
           source={{ uri: images[index] }}

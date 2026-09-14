@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   activeIconOval: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 9999,
   },
   label: {

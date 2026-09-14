@@ -2,17 +2,14 @@
   "expo": {
     "name": "AfuChat",
     "slug": "afuchat-personal",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "icon": "./assets/images/icon.png",
     "scheme": "afuchat",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
-    "jsEngine": "hermes",
-    "newArchEnabled": true,
     "backgroundColor": "#FFFFFF",
     "android": {
       "package": "com.afuchat.mobile",
-      "supportsRtl": false,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
@@ -79,7 +76,7 @@
           ]
         }
       ],
-      "versionCode": 4
+      "versionCode": 5
     },
     "plugins": [
       [
@@ -200,7 +197,8 @@
       ],
       [
         "@react-native-google-signin/google-signin"
-      ]
+      ],
+      "expo-sharing"
     ],
     "updates": {
       "enabled": false
@@ -217,7 +215,7 @@
     "ios": {
       "bundleIdentifier": "com.afuchat.mobile",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "0.0.3",
+      "buildNumber": "0.0.4",
       "infoPlist": {
         "NSCameraUsageDescription": "AfuChat uses the camera to take photos and videos for stories and messages.",
         "NSMicrophoneUsageDescription": "AfuChat uses the microphone to record voice messages and video with audio.",

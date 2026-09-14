@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   textButton: { alignItems: "center", paddingVertical: 13 },
   textButtonText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   scannerWrap: { height: 430, backgroundColor: "#000", alignItems: "center", justifyContent: "center", overflow: "hidden" },
-  camera: { ...StyleSheet.absoluteFillObject },
+  camera: { ...StyleSheet.absoluteFill },
   scanFrame: { width: 250, height: 250, position: "relative" },
   corner: { width: 30, height: 30, position: "absolute", borderWidth: 3 },
   cornerTopLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },

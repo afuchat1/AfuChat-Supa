@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
-import * as MediaLibrary from "expo-media-library";
+import * as MediaLibrary from "expo-media-library/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
@@ -417,7 +417,7 @@ const s = StyleSheet.create({
   },
 
   selOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 3, borderRadius: 2,
   },
   selBadge: {
@@ -428,7 +428,7 @@ const s = StyleSheet.create({
   selNum: { color: "#fff", fontSize: 12, fontFamily: "Inter_700Bold" },
 
   dimOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.35)",
   },
 });

@@ -3,6 +3,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "strict": true,
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": [
         "./*"
