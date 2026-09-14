@@ -104,6 +104,10 @@ externalPort = 3000
 localPort = 8000
 externalPort = 8000
 
+[[ports]]
+localPort = 8001
+externalPort = 3002
+
 
 [postMerge]
 path = "scripts/post-merge.sh"

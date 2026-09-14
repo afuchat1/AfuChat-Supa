@@ -26,7 +26,7 @@ node scripts/serve-static-web.mjs
 
 ### 3. Open on device
 
-Start the **Expo Go** workflow and scan its QR code with Expo Go SDK 57. The Expo static web export is the Replit preview surface. The EAS workflows remain available separately for Android cloud builds.
+Start the **Expo Go** workflow and scan its QR code with Expo Go SDK 57. This workflow uses an Expo tunnel so the device can reach Metro without relying on the Replit proxy. The Expo static web export is the Replit preview surface. The EAS workflows remain available separately for Android cloud builds.
 
 ## Environment variables and secrets
 
@@ -81,7 +81,9 @@ pnpm run typecheck
 
 ## Important conventions
 
-- Use `EXPO_OFFLINE=1` in Replit workflows — `CI=1` breaks native bundle serving.
+- The Expo Go workflow uses `--tunnel`; do not force `EXPO_OFFLINE=1` there because the tunnel needs Expo network access.
+- Keep `NODE_OPTIONS=--max-old-space-size=4096` on the Expo Go workflow because this route graph exceeds Node's default heap during Metro startup.
+- Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
 - Keep the Expo web export identical to the native Expo flows. Do not create a separate web-only product surface or mock product content.
 - All DB writes go through Supabase RLS-protected routes or Edge Functions.

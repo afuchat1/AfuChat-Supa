@@ -1,21 +1,18 @@
 ---
-name: Expo Go + Replit workflow flags
-description: Required env flags for the Start application workflow to make Expo Go work on Replit
+name: Expo Go tunnel workflow
+description: Reliable Expo Go startup and public bundle delivery from this Replit workspace
 ---
 
 ## Rule
-Always include `EXPO_OFFLINE=1` and the explicit `--offline` CLI flag in the Start application workflow command.
+Use Expo's public tunnel for Expo Go device testing:
 
-**Why:** Without offline mode, Expo triggers an expo.dev auth/update check that fails in Replit's network environment. In this workspace, the environment variable alone can still produce `ApiV2Error: The bearer token is invalid`; the explicit CLI flag prevents that startup request.
+```
+NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000
+```
+
+**Why:** The Replit `.expo.worf.replit.dev` host can return 502 even while Metro is healthy locally. The Expo tunnel's `exp.direct` URL served the Android loading endpoint successfully.
+
+**How to apply:** Keep `--go` and `--tunnel` in the Expo Go workflow. Do not set `EXPO_OFFLINE=1` for this command because the tunnel needs Expo network access. Keep the 4 GB Node heap because this Expo Router graph exceeds the default heap during startup.
 
 **Do NOT use `CI=1`:** CI=1 breaks native bundle serving — every Expo Go connection produces a CommandError and the native bundle is never served.
 
-## How to apply
-The Start application command must include:
-```
-EXPO_OFFLINE=1 EXPO_NO_LAZY=1 EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_EXPO_DEV_DOMAIN EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN EXPO_PUBLIC_REPL_ID=$REPL_ID pnpm exec expo start --go --web --offline --port 5000
-
-Use `--go` to force Expo Go mode (without it, Expo defaults to dev client and Expo Go gets rejected). `--web --port 5000` keeps the Replit webview preview alive alongside native.
-```
-
-The `@react-native+debugger-shell libglib-2.0.so.0` error that appears in logs is harmless — it's a missing system lib for the DevTools debugger only, not the app bundler.

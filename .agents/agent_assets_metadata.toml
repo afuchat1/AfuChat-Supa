@@ -89,3 +89,17 @@ mtime_ms = 1789390805005
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/f343c0c3-47a0-495c-a35d-b0be5d32090a/d10cc08d-fb87-4d87-8058-0d1b21f3bb1f"
 storage_version_token = "1789390805539857"
 content_type = "image/png"
+
+[[outputs]]
+id = "sEgk474fiWmZvfau8lGla"
+uri = "file://screenshots/expo-go-tunnel-qr.png"
+type = "image"
+title = "Expo Go QR code"
+description = "Scan this QR code in Expo Go SDK 57. It uses the verified Expo tunnel URL and avoids the Replit proxy 502."
+logical_id = "e2878175-7555-40d1-8472-659c459185f7"
+content_hash = "sha256:4aeab066e9cccc9ae0b652ba81bc5790bcf95e36fc1c25c8644d3fb20adfc2c8"
+size = 6728
+mtime_ms = 1789391946061
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/e2878175-7555-40d1-8472-659c459185f7/aa618fe1-0499-4a01-bab2-0a6e20d56a69"
+storage_version_token = "1789391952992746"
+content_type = "image/png"

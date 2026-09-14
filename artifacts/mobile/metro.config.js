@@ -65,10 +65,9 @@ config.resolver = {
 };
 
 /**
- * EXPO_NO_LAZY=1 is set in the workflow env so Metro never uses multipart/mixed
- * streaming responses. This prevents the "Error while reading multipart response"
- * crash that Expo Go on Android shows when the bundle download is interrupted by
- * the Replit tunnel proxy.
+ * Expo Go uses the normal Metro response mode. Keeping lazy bundling enabled is
+ * important for this large Expo Router app because the complete web/server
+ * route graph can exceed Node's default heap during startup.
  *
  * Additional hardening here:
  *  - Increased socket timeout to handle proxy latency

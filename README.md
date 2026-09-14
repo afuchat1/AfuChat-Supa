@@ -21,12 +21,8 @@ Start the configured Android workflow in Replit, or run:
 
 ```bash
 cd artifacts/mobile
-EXPO_OFFLINE=1 EXPO_NO_LAZY=1 \
-  EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN \
-  EXPO_PUBLIC_REPL_ID=$REPL_ID \
-  EXPO_PACKAGER_PROXY_URL=https://$REPLIT_EXPO_DEV_DOMAIN \
-  REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_EXPO_DEV_DOMAIN \
-  pnpm exec expo start --port 8000
+NODE_OPTIONS=--max-old-space-size=4096 \
+  pnpm exec expo start --go --tunnel --port 8000
 ```
 
 Scan the Expo Go QR code with an Android device.
