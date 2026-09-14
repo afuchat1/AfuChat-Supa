@@ -11,57 +11,81 @@ id = "irsPN81pmpqSxtk8C59Id"
 uri = "file://ANDROID_CRASH_AUDIT.md"
 type = "text"
 title = "AfuChat Android Startup Crash Audit"
+logical_id = "9e35d044-aca5-488e-8e40-bbebbc410224"
 
 [[outputs]]
 id = "mS7sIUqDmlxuyK3EwL12t"
 uri = "file://attached_assets/il_messaging.png"
 type = "image"
 title = "Slide 1 — Messaging"
+logical_id = "25b21914-d018-429a-a36d-1e4682baa0ad"
 
 [[outputs]]
 id = "J4CtUhk0bm8pIZMaPdBVY"
 uri = "file://attached_assets/il_community.png"
 type = "image"
 title = "Slide 2 — Community"
+logical_id = "e05dcd8c-0eb8-4ce8-81fd-fea7e714e69c"
 
 [[outputs]]
 id = "oGDlmcOckK5iHWfZyR3MF"
 uri = "file://attached_assets/il_ai.png"
 type = "image"
 title = "Slide 3 — AI Features"
+logical_id = "3880481f-1f08-4dfd-ade8-1279b0ab751a"
 
 [[outputs]]
 id = "B3xhez5anAinS5j6qcOyb"
 uri = "file://attached_assets/il_wallet.png"
 type = "image"
 title = "Slide 4 — Wallet"
+logical_id = "73ea4ff6-3b2b-42b2-beb9-585c52891857"
 
 [[outputs]]
 id = "LGCzeUw7tOWPhkQZo0Oo8"
 uri = "file://artifacts/mobile/assets/illustrations/messaging.png"
 type = "image"
 title = "Messaging — AfuChat chat UI"
+logical_id = "6d836fd2-4f92-4345-8344-ebb3c8340375"
 
 [[outputs]]
 id = "UCIZjbu0BDNQweTVv7mPH"
 uri = "file://artifacts/mobile/assets/illustrations/community.png"
 type = "image"
 title = "Community — AfuChat feed UI"
+logical_id = "c8cb8ec7-53b8-4fc8-98f8-573577cc0bbf"
 
 [[outputs]]
 id = "-TJN45oJT7o8LNLZJSTO0"
 uri = "file://artifacts/mobile/assets/illustrations/ai.png"
 type = "image"
 title = "AI — AfuAI assistant UI"
+logical_id = "dbbdb6b5-a2d1-4397-932d-ab6900f735f0"
 
 [[outputs]]
 id = "Irktt1zRobFhLjm031hCq"
 uri = "file://artifacts/mobile/assets/illustrations/wallet.png"
 type = "image"
 title = "Wallet — AfuPay UI"
+logical_id = "0d951e8e-26ef-4a40-aca2-9114b2ced577"
 
 [[outputs]]
 id = "u1Mg8g7hzNc7jxBS1ejNx"
 uri = "file://artifacts/mobile/assets/illustrations/community_new.png"
 type = "image"
 title = "AfuChat Community — Find your tribe"
+logical_id = "5fb638b3-0436-424d-8fe5-295e57a8b1eb"
+
+[[outputs]]
+id = "ehCC-qaRAHsTacAp4GwjJ"
+uri = "file://screenshots/expo-go-qr.png"
+type = "image"
+title = "AfuChat Expo Go QR code"
+description = "Scan this QR code in Expo Go SDK 57 while the Expo Go workflow is running."
+logical_id = "f343c0c3-47a0-495c-a35d-b0be5d32090a"
+content_hash = "sha256:116d497c8b895ab164f21dbc7806b1ff3b64e221b6d2f872705b6488ea81eef3"
+size = 5323
+mtime_ms = 1789390805005
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/f343c0c3-47a0-495c-a35d-b0be5d32090a/d10cc08d-fb87-4d87-8058-0d1b21f3bb1f"
+storage_version_token = "1789390805539857"
+content_type = "image/png"
