@@ -15,6 +15,38 @@ create table if not exists public.music_tracks (
   created_at timestamptz not null default now()
 );
 
+-- The project previously had a small public music_tracks table. Keep its rows
+-- readable while adding the private AfuMusic contract for new uploads.
+alter table public.music_tracks add column if not exists creator_id uuid references public.profiles(id) on delete cascade;
+alter table public.music_tracks add column if not exists price_acoin integer;
+alter table public.music_tracks add column if not exists storage_path text;
+alter table public.music_tracks add column if not exists mime_type text;
+alter table public.music_tracks add column if not exists file_size bigint;
+alter table public.music_tracks add column if not exists play_count integer;
+alter table public.music_tracks add column if not exists status text;
+alter table public.music_tracks add column if not exists artist text;
+alter table public.music_tracks add column if not exists audio_url text;
+alter table public.music_tracks add column if not exists usage_count integer;
+alter table public.music_tracks add column if not exists is_featured boolean;
+
+update public.music_tracks
+set price_acoin = coalesce(price_acoin, 0),
+    file_size = coalesce(file_size, 0),
+    play_count = coalesce(play_count, usage_count, 0),
+    mime_type = coalesce(mime_type, 'audio/mpeg'),
+    status = coalesce(status, 'published')
+where price_acoin is null
+   or file_size is null
+   or play_count is null
+   or mime_type is null
+   or status is null;
+
+alter table public.music_tracks alter column price_acoin set default 0;
+alter table public.music_tracks alter column file_size set default 0;
+alter table public.music_tracks alter column play_count set default 0;
+alter table public.music_tracks alter column mime_type set default 'audio/mpeg';
+alter table public.music_tracks alter column status set default 'published';
+
 create index if not exists music_tracks_discover_idx
   on public.music_tracks (status, created_at desc);
 create index if not exists music_tracks_creator_idx
@@ -52,6 +84,11 @@ drop policy if exists "music published tracks are readable" on public.music_trac
 create policy "music published tracks are readable"
   on public.music_tracks for select
   using (status = 'published' or creator_id = auth.uid());
+
+drop policy if exists "music creators publish tracks" on public.music_tracks;
+create policy "music creators publish tracks"
+  on public.music_tracks for insert
+  with check (creator_id = auth.uid());
 
 drop policy if exists "music owners manage tracks" on public.music_tracks;
 create policy "music owners manage tracks"
@@ -99,7 +136,7 @@ create policy "music purchasers read"
       left join public.music_purchases p
         on p.track_id = t.id and p.buyer_id = auth.uid()
       where t.storage_path = name
-        and (t.creator_id = auth.uid() or p.id is not null)
+        and (t.creator_id = auth.uid() or t.price_acoin = 0 or p.id is not null)
     )
   );
 

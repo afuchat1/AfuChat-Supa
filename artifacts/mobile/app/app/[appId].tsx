@@ -1,6 +1,6 @@
 import React from "react";
 import { Platform } from "react-native";
-import { Redirect, useLocalSearchParams } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
@@ -46,9 +46,11 @@ import {
   cacheMusicTrackOffline,
   getMusicPlaybackUri,
   listMusicTracks,
+  listOfflineMusicTracks,
   publishMusicTrack,
   purchaseMusicTrack,
   removeMusicTrack,
+  removeMusicTrackOffline,
   searchMusicTracks,
 } from "@/lib/afuMusic";
 import { useAuth } from "@/context/AuthContext";
@@ -168,6 +170,7 @@ export default function FullAppRoute() {
 
 function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
   const { profile } = useAuth();
+  const router = useRouter();
   return (
     <AfuMusicApp
       initialSection={(initialSection as any) || "discover"}
@@ -176,9 +179,12 @@ function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
       onSearch={searchMusicTracks}
       onPurchase={(track) => purchaseMusicTrack(track.id)}
       onCache={cacheMusicTrackOffline}
+      onRemoveCache={removeMusicTrackOffline}
+      onListOffline={listOfflineMusicTracks}
       onResolveAudio={getMusicPlaybackUri}
       onUpload={publishMusicTrack}
       onDeleteUpload={removeMusicTrack}
+      onOpenWallet={() => router.push("/app/afupay")}
     />
   );
 }

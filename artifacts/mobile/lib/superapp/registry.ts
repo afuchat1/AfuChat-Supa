@@ -86,6 +86,17 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     keepAlive: false,
   },
   {
+    id: "afumusic",
+    name: "Music",
+    description: "Discover independent sounds and keep your library offline.",
+    version: "1.0.0",
+    icon: "musical-notes",
+    gradient: ["#19172F", "#F06451"] as const,
+    keepAlive: false,
+    nativeOnly: true,
+    badge: "NEW",
+  },
+  {
     id: "afucollections",
     name: "Collections",
     description: "Curate and share themed collections.",

@@ -13,9 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AudioPlayer from "@/components/AudioPlayer";
@@ -50,6 +48,8 @@ export type AfuMusicCallbacks = {
   onSearch?: (query: string) => Promise<AfuMusicTrack[]>;
   onPurchase?: (track: AfuMusicTrack) => Promise<void>;
   onCache?: (track: AfuMusicTrack) => Promise<void>;
+  onRemoveCache?: (track: AfuMusicTrack) => Promise<void>;
+  onListOffline?: () => Promise<AfuMusicTrack[]>;
   onResolveAudio?: (track: AfuMusicTrack) => Promise<string | null>;
   onPlay?: (track: AfuMusicTrack) => void | Promise<void>;
   onUpload?: (input: {
@@ -62,13 +62,13 @@ export type AfuMusicCallbacks = {
     fileSize?: number;
   }) => Promise<AfuMusicTrack | void>;
   onDeleteUpload?: (track: AfuMusicTrack) => Promise<void>;
+  onOpenWallet?: () => void;
 };
 
 type Props = AfuMusicCallbacks & {
   initialSection?: MusicSection;
 };
 
-const STORAGE_KEY = "afumusic:cached-track-ids";
 const INK = "#19172F";
 const CORAL = "#F06451";
 const COBALT = "#1018D8";
@@ -397,10 +397,13 @@ export default function AfuMusicApp({
   onSearch,
   onPurchase,
   onCache,
+  onRemoveCache,
+  onListOffline,
   onResolveAudio,
   onPlay,
   onUpload,
   onDeleteUpload,
+  onOpenWallet,
   acoinBalance,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
@@ -412,6 +415,7 @@ export default function AfuMusicApp({
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [cachedIds, setCachedIds] = useState<string[]>([]);
+  const [offlineTracks, setOfflineTracks] = useState<AfuMusicTrack[]>([]);
   const [ownedIds, setOwnedIds] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<AfuMusicTrack | null>(null);
   const [purchaseTrack, setPurchaseTrack] = useState<AfuMusicTrack | null>(null);
@@ -437,15 +441,23 @@ export default function AfuMusicApp({
     }
   }, [onBrowse]);
 
+  const syncOffline = useCallback(async () => {
+    if (!onListOffline) return;
+    try {
+      const result = await onListOffline();
+      setOfflineTracks(result);
+      setCachedIds(result.map((track) => track.id));
+      setOwnedIds((ids) => Array.from(new Set([...ids, ...result.map((track) => track.id)])));
+    } catch {
+      setOfflineTracks([]);
+      setCachedIds([]);
+    }
+  }, [onListOffline]);
+
   useEffect(() => {
     loadTracks();
-    AsyncStorage.getItem(STORAGE_KEY).then((value) => {
-      if (value) {
-        const parsed = JSON.parse(value);
-        if (Array.isArray(parsed)) setCachedIds(parsed);
-      }
-    }).catch(() => {});
-  }, [loadTracks]);
+    void syncOffline();
+  }, [loadTracks, syncOffline]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -455,7 +467,8 @@ export default function AfuMusicApp({
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return tracks.filter((track) => {
+    const source = section === "offline" && onListOffline ? offlineTracks : tracks;
+    return source.filter((track) => {
       const matchesGenre = genre === "All" || track.genre === genre;
       const matchesQuery = !normalized ||
         `${track.title} ${track.artist} ${track.genre}`.toLowerCase().includes(normalized);
@@ -466,7 +479,14 @@ export default function AfuMusicApp({
         true;
       return matchesGenre && matchesQuery && matchesSection;
     });
-  }, [cachedIds, genre, ownedIds, query, section, tracks]);
+  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, query, section, tracks]);
+
+  const featuredTracks = useMemo(() => (
+    tracks
+      .filter((track) => track.isFeatured || (track.plays ?? 0) > 0)
+      .sort((left, right) => (right.plays ?? 0) - (left.plays ?? 0))
+      .slice(0, 4)
+  ), [tracks]);
 
   const handleSearch = useCallback(async (value: string) => {
     setQuery(value);
@@ -505,20 +525,26 @@ export default function AfuMusicApp({
   }, [onPlay, onResolveAudio]);
 
   const handleCache = useCallback(async (track: AfuMusicTrack) => {
-    if (cachedIds.includes(track.id)) return;
     try {
-      if (onCache) {
-        await onCache(track);
-      } else if (track.audioUrl && track.audioUrl.startsWith("http") && FileSystem.documentDirectory) {
-        await FileSystem.downloadAsync(track.audioUrl, `${FileSystem.documentDirectory}afumusic-${track.id}.mp3`);
+      if (cachedIds.includes(track.id)) {
+        if (!onRemoveCache) throw new Error("Offline removal is unavailable.");
+        await onRemoveCache(track);
+        setCachedIds((ids) => ids.filter((id) => id !== track.id));
+        setOfflineTracks((current) => current.filter((item) => item.id !== track.id));
+        return;
       }
-      const next = [...cachedIds, track.id];
-      setCachedIds(next);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
+      if (!onCache) throw new Error("Offline saving is unavailable.");
+      await onCache(track);
+      setCachedIds((ids) => ids.includes(track.id) ? ids : [...ids, track.id]);
+      setOfflineTracks((current) => [{ ...track, isCached: true }, ...current.filter((item) => item.id !== track.id)]);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Offline removal is unavailable.") {
+        showAlert("Could not remove offline copy", "Try again in a moment.");
+        return;
+      }
       showAlert("Could not save offline", "Try again when you have a stronger connection.");
     }
-  }, [cachedIds, onCache]);
+  }, [cachedIds, onCache, onRemoveCache]);
 
   const handleDeleteUpload = useCallback((track: AfuMusicTrack) => {
     showAlert("Remove this track?", "Listeners will no longer see it in AfuMusic.", [
@@ -540,6 +566,18 @@ export default function AfuMusicApp({
 
   const confirmPurchase = useCallback(async () => {
     if (!purchaseTrack) return;
+    const price = Math.max(0, purchaseTrack.price);
+    if (price > 0 && typeof acoinBalance === "number" && acoinBalance < price) {
+      showAlert(
+        "Not enough ACoin",
+        `You need ${price} ACoin, but your balance is ${Math.floor(acoinBalance)} ACoin.`,
+        [
+          { text: "Not now", style: "cancel" },
+          ...(onOpenWallet ? [{ text: "Open AfuPay", onPress: onOpenWallet }] : []),
+        ],
+      );
+      return;
+    }
     setPurchasing(true);
     try {
       if (onPurchase) await onPurchase(purchaseTrack);
@@ -548,20 +586,12 @@ export default function AfuMusicApp({
         track.id === purchaseTrack.id ? { ...track, isOwned: true } : track
       )));
       setPurchaseTrack(null);
-      if (onCache) {
-        try {
-          await onCache(purchaseTrack);
-          setCachedIds((ids) => ids.includes(purchaseTrack.id) ? ids : [...ids, purchaseTrack.id]);
-        } catch {
-          showAlert("Unlocked, but not saved offline", "You can save this track from your library when you are back online.");
-        }
-      }
     } catch {
       showAlert("Purchase could not be completed", "Your ACoin balance was not changed. Try again.");
     } finally {
       setPurchasing(false);
     }
-  }, [onPurchase, purchaseTrack]);
+  }, [acoinBalance, onOpenWallet, onPurchase, purchaseTrack]);
 
   const pickAudio = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -692,6 +722,27 @@ export default function AfuMusicApp({
         </View>
       ) : null}
 
+      {section === "discover" && !query && featuredTracks.length > 0 ? (
+        <View style={styles.featuredBlock}>
+          <View style={styles.featuredHeader}>
+            <View>
+              <Text style={styles.sectionEyebrow}>EDITOR'S PICKS</Text>
+              <Text style={styles.featuredTitle}>Featured this week</Text>
+            </View>
+            <Ionicons name="headset-outline" size={19} color={CORAL} />
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>
+            {featuredTracks.map((track) => (
+              <Pressable key={track.id} onPress={() => { void openTrack(track); }} style={({ pressed }) => [styles.featuredCard, pressed && styles.pressed]}>
+                <TrackArt track={track} size={78} radius={18} />
+                <Text style={styles.featuredCardTitle} numberOfLines={1}>{track.title}</Text>
+                <Text style={styles.featuredCardArtist} numberOfLines={1}>{track.artist}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
       <View style={styles.contentHeader}>
         <View>
           <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : "YOUR NEXT LISTEN"}</Text>
@@ -751,7 +802,24 @@ export default function AfuMusicApp({
             <View style={styles.purchaseRule} />
             <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>One-time access</Text><Text style={styles.purchaseValue}>{purchaseTrack?.price} ACoin</Text></View>
             <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
-            <Pressable onPress={confirmPurchase} disabled={purchasing} style={({ pressed }) => [styles.purchaseButton, pressed && styles.purchaseButtonPressed]}>
+            {typeof acoinBalance === "number" ? (
+              <View style={styles.balanceRow}>
+                <Text style={styles.purchaseLabel}>Your balance</Text>
+                <Text style={[styles.purchaseValue, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
+              </View>
+            ) : null}
+            {typeof acoinBalance === "number" && acoinBalance < (purchaseTrack?.price ?? 0) ? (
+              <Text style={styles.insufficientText}>Top up in AfuPay to unlock this track.</Text>
+            ) : null}
+            <Pressable
+              onPress={confirmPurchase}
+              disabled={purchasing || (typeof acoinBalance === "number" && acoinBalance < (purchaseTrack?.price ?? 0))}
+              style={({ pressed }) => [
+                styles.purchaseButton,
+                (purchasing || (typeof acoinBalance === "number" && acoinBalance < (purchaseTrack?.price ?? 0))) && styles.purchaseButtonDisabled,
+                pressed && styles.purchaseButtonPressed,
+              ]}
+            >
               {purchasing ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="flash" size={16} color={PAPER} /><Text style={styles.purchaseButtonText}>Unlock for {purchaseTrack?.price} AC</Text></>}
             </Pressable>
             <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={styles.cancelText}>Not now</Text></Pressable>
@@ -818,6 +886,13 @@ const styles = StyleSheet.create({
   contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 22, marginBottom: 10 },
   sectionEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25, marginBottom: 4 },
   sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.65 },
+  featuredBlock: { marginTop: 20 },
+  featuredHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, marginBottom: 10 },
+  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4, marginTop: 3 },
+  featuredRail: { paddingHorizontal: 20, gap: 12 },
+  featuredCard: { width: 112, paddingBottom: 5 },
+  featuredCardTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginTop: 8 },
+  featuredCardArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
   addButton: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: CORAL, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
   addButtonPressed: { backgroundColor: INK },
   addButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 11 },
@@ -865,7 +940,11 @@ const styles = StyleSheet.create({
   purchaseRow: { alignSelf: "stretch", flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   purchaseLabel: { color: "#645C55", fontFamily: "Inter_600SemiBold", fontSize: 12 },
   purchaseValue: { color: INK, fontFamily: "Inter_700Bold", fontSize: 13 },
+  balanceRow: { alignSelf: "stretch", flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  insufficientValue: { color: CORAL },
+  insufficientText: { alignSelf: "stretch", color: CORAL, fontFamily: "Inter_600SemiBold", fontSize: 11, marginBottom: 8 },
   purchaseButton: { height: 49, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COBALT, borderRadius: 15, marginTop: 7 },
+  purchaseButtonDisabled: { backgroundColor: "#B9B2AA" },
   purchaseButtonPressed: { backgroundColor: INK, transform: [{ scale: 0.985 }] },
   purchaseButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 13 },
   cancelButton: { padding: 14 },

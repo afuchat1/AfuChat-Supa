@@ -102,3 +102,4 @@
 - [Expo static web surface](expo-next-web-port.md) — Expo Router is canonical for web; static export plus clean URLs gives crawlers HTML without duplicating the mobile UI.
 - [Vercel Babel workspace dependencies](vercel-babel-workspace-deps.md) — clean Vercel pnpm installs may need Babel packages declared at the workspace root for react-native-worklets.
 - [Vercel public profile prerendering](vercel-public-profile-prerender.md) — static Vercel hosting needs per-handle HTML files so profiles are readable before JavaScript runs.
+- [AfuMusic schema drift](afumusic-schema-drift.md) — Supabase may already contain a legacy public music_tracks table; apply the private AfuMusic schema additively.

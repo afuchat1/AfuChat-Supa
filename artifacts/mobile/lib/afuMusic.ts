@@ -11,15 +11,19 @@ const AUDIO_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wa
 
 type MusicRow = {
   id: string;
-  creator_id: string;
+  creator_id: string | null;
   title: string;
+  artist?: string | null;
+  audio_url?: string | null;
   genre: string;
-  price_acoin: number;
-  storage_path: string;
-  mime_type: string;
-  file_size: number;
+  price_acoin: number | null;
+  storage_path: string | null;
+  mime_type: string | null;
+  file_size: number | null;
   duration_seconds: number | null;
-  play_count: number;
+  play_count: number | null;
+  usage_count?: number | null;
+  is_featured?: boolean | null;
   created_at: string;
   creator?: { display_name?: string | null; handle?: string | null } | null;
 };
@@ -51,25 +55,27 @@ function rowToTrack(
   currentUserId?: string,
 ): AfuMusicTrack {
   const [coverColor, accentColor] = colorsFor(row.id);
-  const artist = row.creator?.display_name?.trim() || row.creator?.handle?.trim() || "AfuMusic creator";
+  const artist = row.creator?.display_name?.trim() || row.creator?.handle?.trim() || row.artist?.trim() || "AfuMusic creator";
   const handle = row.creator?.handle ? `@${row.creator.handle.replace(/^@/, "")}` : undefined;
   return {
     id: row.id,
-    creatorId: row.creator_id,
+    creatorId: row.creator_id ?? undefined,
     title: row.title,
     artist,
     handle,
     genre: row.genre,
     duration: formatDuration(row.duration_seconds),
-    plays: row.play_count ?? 0,
+    plays: row.play_count ?? row.usage_count ?? 0,
     price: Math.max(0, row.price_acoin ?? 0),
     isOwned: ownedIds.has(row.id) || row.creator_id === currentUserId,
     isCached: cachedIds.has(row.id),
     coverColor,
     accentColor,
-    storagePath: row.storage_path,
-    mimeType: row.mime_type,
-    fileSize: row.file_size,
+    storagePath: row.storage_path ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+    fileSize: row.file_size ?? undefined,
+    audioUrl: row.audio_url ?? null,
+    isFeatured: row.is_featured ?? false,
     createdAt: row.created_at,
   };
 }
@@ -84,7 +90,7 @@ async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
   const userId = await currentUserId();
   let request = supabase
     .from("music_tracks")
-    .select("id,creator_id,title,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,created_at")
+    .select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,created_at")
     .eq("status", "published")
     .order("created_at", { ascending: false })
     .limit(100);
@@ -142,6 +148,16 @@ export async function cacheMusicTrackOffline(track: AfuMusicTrack) {
   const remoteUri = await getMusicPlaybackUri({ ...track, audioUrl: undefined });
   if (!remoteUri) throw new Error("This track is not available for offline playback.");
   await cacheMusicFile(track, remoteUri);
+}
+
+export async function listOfflineMusicTracks() {
+  const entries = await getOfflineMusicEntries();
+  return entries.map((entry) => entry.track);
+}
+
+export async function removeMusicTrackOffline(track: AfuMusicTrack) {
+  const { removeOfflineMusic } = await import("./musicCache");
+  await removeOfflineMusic(track.id);
 }
 
 function audioExtension(name: string, mimeType: string) {
@@ -206,17 +222,22 @@ export async function publishMusicTrack(input: {
   const { data, error } = await supabase.from("music_tracks").insert({
     creator_id: creatorId,
     title: input.title.trim(),
+    audio_url: path,
     genre: input.genre,
     price_acoin: Math.floor(input.price),
     storage_path: path,
     mime_type: mimeType,
     file_size: fileSize,
-  }).select("id,creator_id,title,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,created_at").single();
+  }).select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,created_at").single();
   if (error) {
     await supabase.storage.from(MUSIC_BUCKET).remove([path]).catch(() => {});
     throw error;
   }
-  return rowToTrack(data as MusicRow, new Set([data.id]), new Set(), creatorId);
+  return {
+    ...rowToTrack(data as MusicRow, new Set([data.id]), new Set(), creatorId),
+    artist: "You",
+    handle: "@you",
+  };
 }
 
 export async function removeMusicTrack(track: AfuMusicTrack) {
@@ -226,4 +247,7 @@ export async function removeMusicTrack(track: AfuMusicTrack) {
     .eq("id", track.id)
     .eq("creator_id", await currentUserId());
   if (error) throw error;
+  if (track.storagePath) {
+    await supabase.storage.from(MUSIC_BUCKET).remove([track.storagePath]).catch(() => {});
+  }
 }
