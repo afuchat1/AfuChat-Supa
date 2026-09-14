@@ -56,9 +56,6 @@ config.resolver = {
     // date-fns _lib dir missing in pnpm virtual store — exclude to prevent ENOENT watcher crash
     /node_modules[\\/]\.pnpm[\\/]date-fns[^/]*[\\/]node_modules[\\/]date-fns[\\/]_lib.*/,
   ],
-  // Enable symlink following so Metro resolves pnpm's content-addressed store
-  // correctly on Android (pnpm creates symlinks that Metro doesn't follow by default).
-  unstable_enableSymlinks: true,
   // Explicit node_modules search paths: mobile-local first, then workspace root.
   // This ensures packages hoisted by pnpm to the workspace root are found.
   nodeModulesPaths: [

@@ -32,15 +32,11 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "EAS AAB Build"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "EAS Preview Build"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Start application"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Expo Go"
 
 [[workflows.workflow]]
 name = "EAS AAB Build"
@@ -76,6 +72,18 @@ task = "shell.exec"
 args = "cd artifacts/mobile && pnpm run build:web && PORT=5000 node scripts/serve-static-web.mjs"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "Expo Go"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/mobile && pnpm run dev"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 3000
 externalPort = 3001
@@ -91,6 +99,10 @@ externalPort = 80
 [[ports]]
 localPort = 5100
 externalPort = 3000
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
 
 
 [postMerge]

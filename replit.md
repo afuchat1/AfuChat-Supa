@@ -1,6 +1,6 @@
 # AfuChat mobile app with an Expo web surface
 
-AfuChat is an Expo application built with Expo SDK 55, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
 
 ## Quick start on Replit
 
@@ -26,7 +26,7 @@ node scripts/serve-static-web.mjs
 
 ### 3. Open on device
 
-Use the EAS workflows or start Expo from `artifacts/mobile` for the native app. The Expo static web export is the Replit preview surface.
+Start the **Expo Go** workflow and scan its QR code with Expo Go SDK 57. The Expo static web export is the Replit preview surface. The EAS workflows remain available separately for Android cloud builds.
 
 ## Environment variables and secrets
 
