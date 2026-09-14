@@ -17,7 +17,8 @@ export type FullAppId =
   | "afucollections"
   | "afuusernames"
   | "afuqr"
-  | "afusaved";
+  | "afusaved"
+  | "afumusic";
 
 const NAV: Record<FullAppId, AppNavItem[]> = {
   afupay: [
@@ -84,6 +85,12 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
   afusaved: [
     { key: "saved", label: "Saved", icon: "bookmark-outline", href: "/app/afusaved" },
   ],
+  afumusic: [
+    { key: "discover", label: "Discover", icon: "sparkles-outline", href: "/app/afumusic" },
+    { key: "library", label: "Library", icon: "albums-outline", href: "/app/afumusic?section=library" },
+    { key: "offline", label: "Offline", icon: "arrow-down-circle-outline", href: "/app/afumusic?section=offline" },
+    { key: "studio", label: "Studio", icon: "mic-outline", href: "/app/afumusic?section=studio" },
+  ],
 };
 
 // App modules own their in-flow header and back control. The shell remains
@@ -118,7 +125,8 @@ export default function AppPageShell({ appId, activeKey, showNav = true, childre
     appId === "afumarket" ||
     appId === "afubusiness" ||
     appId === "afugifts" ||
-    appId === "afuevents"
+    appId === "afuevents" ||
+    appId === "afumusic"
   );
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

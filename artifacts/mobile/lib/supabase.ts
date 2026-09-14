@@ -117,6 +117,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
     heartbeatIntervalMs: 15_000,
     reconnectAfterMs: (tries: number) => Math.min(500 * tries, 5_000),
-    ...(isStaticRender ? { transport: StaticRenderWebSocket } : {}),
+    ...(isStaticRender ? { transport: StaticRenderWebSocket as any } : {}),
   },
 });

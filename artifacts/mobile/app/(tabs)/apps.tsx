@@ -9,6 +9,7 @@ import {
   View,
   TextInput,
 } from "react-native";
+import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { safeRouter } from "@/lib/navUtils";
 import { Ionicons } from "@expo/vector-icons";
@@ -70,6 +71,16 @@ const CATEGORIES: Category[] = [
         gradient: ["#FF3B30", "#FF6B35"],
          route: "/app/afugames",
         featuredSub: "Play mini games and compete with friends.",
+      },
+      {
+        id: "afumusic",
+        label: "Music",
+        icon: "musical-notes",
+        gradient: ["#19172F", "#F06451"],
+        route: "/app/afumusic",
+        badge: "NEW",
+        nativeOnly: true,
+        featuredSub: "Discover independent sounds and keep your library offline.",
       },
       {
         id: "afubusiness",
@@ -365,6 +376,7 @@ export default function AppsScreen() {
 
   function isVisible(a: PlatformPage) {
     if (a.orgOnly && !isOrgVerified) return false;
+    if (a.nativeOnly && Platform.OS === "web") return false;
     return true;
   }
 

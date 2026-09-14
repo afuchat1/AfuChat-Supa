@@ -1,5 +1,6 @@
 import React from "react";
-import { useLocalSearchParams } from "expo-router";
+import { Platform } from "react-native";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
@@ -40,12 +41,23 @@ import HotelsScreen from "@/app/mini-programs/hotels";
 import TicketsScreen from "@/app/mini-programs/tickets";
 import TransferScreen from "@/app/mini-programs/transfer";
 import MoneyRequestScreen from "@/app/wallet/request";
+import AfuMusicApp from "@/modules/afumusic";
+import {
+  cacheMusicTrackOffline,
+  getMusicPlaybackUri,
+  listMusicTracks,
+  publishMusicTrack,
+  purchaseMusicTrack,
+  removeMusicTrack,
+  searchMusicTracks,
+} from "@/lib/afuMusic";
+import { useAuth } from "@/context/AuthContext";
 
 const APP_IDS: FullAppId[] = [
   "afupay", "afumarket", "afugames", "afubusiness", "afusearch",
   "afufreelance", "afufiles", "afugifts",
   "afuevents", "afumatch", "afucollections", "afuusernames",
-  "afuqr", "afusaved",
+  "afuqr", "afusaved", "afumusic",
 ];
 
 function isAppId(value: string): value is FullAppId {
@@ -124,6 +136,8 @@ function AppContent({
       return <QRScannerScreen />;
     case "afusaved":
       return <AfuSavedApp />;
+    case "afumusic":
+      return <ConnectedAfuMusic initialSection={section} />;
   }
 }
 
@@ -144,9 +158,27 @@ export default function FullAppRoute() {
     }),
   ) as Record<string, string>;
   if (!rawId || !isAppId(rawId)) return null;
+  if (rawId === "afumusic" && Platform.OS === "web") return <Redirect href="/" />;
   return (
-    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)}>
+    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afumusic"}>
       <AppContent appId={rawId} section={section} params={routeParams} />
     </AppPageShell>
+  );
+}
+
+function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
+  const { profile } = useAuth();
+  return (
+    <AfuMusicApp
+      initialSection={(initialSection as any) || "discover"}
+      acoinBalance={profile?.acoin}
+      onBrowse={listMusicTracks}
+      onSearch={searchMusicTracks}
+      onPurchase={(track) => purchaseMusicTrack(track.id)}
+      onCache={cacheMusicTrackOffline}
+      onResolveAudio={getMusicPlaybackUri}
+      onUpload={publishMusicTrack}
+      onDeleteUpload={removeMusicTrack}
+    />
   );
 }
