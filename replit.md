@@ -81,7 +81,7 @@ pnpm run typecheck
 
 ## Important conventions
 
-- The Expo Go workflow uses `--tunnel`; do not force `EXPO_OFFLINE=1` there because the tunnel needs Expo network access.
+- The Expo Go workflow uses `EXPO_OFFLINE=1 --tunnel`; this skips EAS development code-signing/account prompts while the local ngrok tunnel provides device access. Do not add the separate `--offline` CLI flag because Expo rejects it together with `--tunnel`.
 - Keep `NODE_OPTIONS=--max-old-space-size=4096` on the Expo Go workflow because this route graph exceeds Node's default heap during Metro startup.
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).

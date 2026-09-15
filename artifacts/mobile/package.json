@@ -14,7 +14,7 @@
   },
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000",
+    "dev": "EXPO_OFFLINE=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000",
     "build:web": "EXPO_OFFLINE=1 EXPO_NO_LAZY=1 expo export -p web --output-dir dist && node scripts/prepare-static-web.mjs",
     "build:apk": "bash scripts/eas-build.sh",
     "audit:i18n": "node scripts/audit-localization.js",

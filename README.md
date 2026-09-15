@@ -21,7 +21,7 @@ Start the configured Android workflow in Replit, or run:
 
 ```bash
 cd artifacts/mobile
-NODE_OPTIONS=--max-old-space-size=4096 \
+EXPO_OFFLINE=1 NODE_OPTIONS=--max-old-space-size=4096 \
   pnpm exec expo start --go --tunnel --port 8000
 ```
 
