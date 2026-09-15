@@ -14,5 +14,7 @@ NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port
 
 **How to apply:** Keep `--go` and `--tunnel` in the Expo Go workflow. Do not set `EXPO_OFFLINE=1` for this command because the tunnel needs Expo network access. Keep the 4 GB Node heap because this Expo Router graph exceeds the default heap during startup.
 
+The first Android bundle can take roughly a minute on a cold Metro cache; after it completes, the same 21 MB bundle is served in about two seconds. Prewarm it before testing Expo Go.
+
 **Do NOT use `CI=1`:** CI=1 breaks native bundle serving — every Expo Go connection produces a CommandError and the native bundle is never served.
 

@@ -103,3 +103,17 @@ mtime_ms = 1789391946061
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/e2878175-7555-40d1-8472-659c459185f7/aa618fe1-0499-4a01-bab2-0a6e20d56a69"
 storage_version_token = "1789391952992746"
 content_type = "image/png"
+
+[[outputs]]
+id = "mNHobx3nJxTMWsmSTDoKi"
+uri = "file://screenshots/expo-go-tunnel-qr-current.png"
+type = "image"
+title = "Fresh Expo Go QR code"
+description = "The Android Metro bundle is now prebuilt and the tunnel is running. Scan this QR code in Expo Go."
+logical_id = "6cc38b9e-d900-4c3c-8580-d73f1dbff6b7"
+content_hash = "sha256:4aeab066e9cccc9ae0b652ba81bc5790bcf95e36fc1c25c8644d3fb20adfc2c8"
+size = 6728
+mtime_ms = 1789430977122
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/6cc38b9e-d900-4c3c-8580-d73f1dbff6b7/56b1a38b-9481-4393-99cd-c39bb90c74d8"
+storage_version_token = "1789430985837440"
+content_type = "image/png"
