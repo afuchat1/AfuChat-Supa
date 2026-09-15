@@ -76,13 +76,13 @@ waitForPort = 5000
 name = "Expo Go"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/mobile && pnpm run dev"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/mobile && NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000"
+waitForPort = 8000
 
 [[ports]]
 localPort = 3000
