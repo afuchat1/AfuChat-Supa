@@ -81,7 +81,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000"
+args = "cd artifacts/mobile && EXPO_NO_REDIRECT_PAGE=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000"
 waitForPort = 8000
 
 [[ports]]
