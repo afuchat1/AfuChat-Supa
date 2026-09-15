@@ -6,7 +6,6 @@
 //   POST   /uploads/upload   → proxied upload (bytes → R2 server-side)
 //   GET    /uploads/usage    → storage usage stats for the caller
 //   GET    /uploads/list     → list user files in a bucket
-//   POST   /uploads/backfill → copy legacy Supabase Storage object to R2
 //   DELETE /uploads/object   → delete an R2 object
 //
 // Supabase secrets used (set via Dashboard → Settings → Edge Functions):
@@ -26,8 +25,8 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   ListObjectsV2Command,
-  HeadObjectCommand,
 } from "npm:@aws-sdk/client-s3";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner";
 
@@ -110,6 +109,10 @@ function buildKey(logicalBucket: string, callerPath: string): string {
   // Strip leading slashes so we never double-slash.
   const bucket = logicalBucket.replace(/^\/+/, "").replace(/\/+$/, "");
   const path = callerPath.replace(/^\/+/, "");
+  const parts = path.split("/").filter(Boolean);
+  if (!bucket || !parts.length || parts.some((part) => part === "." || part === "..")) {
+    throw new Error("Invalid storage path");
+  }
   return `${bucket}/${path}`;
 }
 
@@ -174,6 +177,60 @@ Deno.serve(async (req: Request) => {
 
       console.log(`[uploads/sign] userId=${userId} key=${key}`);
       return json({ uploadUrl, publicUrl: cdnUrl, key });
+    }
+
+    // ── POST /uploads/read ───────────────────────────────────────────────────
+    // Returns a short-lived R2 GET URL for a private AfuMusic track. The
+    // database check is intentionally server-side so a client cannot turn a
+    // track key into an unrestricted download URL.
+    if (action === "read" && req.method === "POST") {
+      let body: { bucket?: string; path?: string; trackId?: string } = {};
+      try { body = await req.json(); } catch { /* invalid body handled below */ }
+
+      const logicalBucket = (body.bucket ?? "").trim();
+      const callerPath = (body.path ?? "").trim();
+      const trackId = (body.trackId ?? "").trim();
+      if (logicalBucket !== "music" || !callerPath || !trackId) {
+        return json({ error: "A music bucket, path, and trackId are required" }, 400);
+      }
+
+      const admin = createClient(cfg.supabaseUrl, cfg.serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: track, error: trackError } = await admin
+        .from("music_tracks")
+        .select("creator_id,price_acoin,storage_path,status")
+        .eq("id", trackId)
+        .maybeSingle();
+
+      if (trackError) throw trackError;
+      if (
+        !track ||
+        track.status !== "published" ||
+        track.storage_path !== callerPath
+      ) {
+        return json({ error: "Track not available" }, 404);
+      }
+
+      const isCreator = track.creator_id === userId;
+      if (!isCreator && (track.price_acoin ?? 0) > 0) {
+        const { data: purchase, error: purchaseError } = await admin
+          .from("music_purchases")
+          .select("id")
+          .eq("track_id", trackId)
+          .eq("buyer_id", userId)
+          .maybeSingle();
+        if (purchaseError) throw purchaseError;
+        if (!purchase) return json({ error: "Purchase required" }, 403);
+      }
+
+      const key = buildKey(logicalBucket, callerPath);
+      const readUrl = await getSignedUrl(
+        s3,
+        new GetObjectCommand({ Bucket: cfg.bucket, Key: key }),
+        { expiresIn: 3600 },
+      );
+      return json({ url: readUrl, key });
     }
 
     // ── POST /uploads/upload ────────────────────────────────────────────────
@@ -276,55 +333,6 @@ Deno.serve(async (req: Request) => {
       return json({
         items,
         next_token: resp.NextContinuationToken ?? null,
-      });
-    }
-
-    // ── POST /uploads/backfill ──────────────────────────────────────────────
-    // Copies a file from a legacy Supabase Storage URL into R2 if not present.
-    if (action === "backfill" && req.method === "POST") {
-      let body: { key?: string; legacyUrl?: string } = {};
-      try { body = await req.json(); } catch { /* ignore */ }
-
-      const { key, legacyUrl } = body;
-      if (!key || !legacyUrl) {
-        return json({ error: "key and legacyUrl are required" }, 400);
-      }
-
-      // HEAD check — return immediately if already exists.
-      try {
-        await s3.send(new HeadObjectCommand({ Bucket: cfg.bucket, Key: key }));
-        return json({
-          ok: true,
-          publicUrl: publicUrl(cfg, key),
-          migrated: false,
-          existed: true,
-        });
-      } catch {
-        // Object not found — fall through to copy.
-      }
-
-      const legacyResp = await fetch(legacyUrl);
-      if (!legacyResp.ok) {
-        return json({ error: `Could not fetch legacy URL (HTTP ${legacyResp.status})` }, 502);
-      }
-
-      const bytes = await legacyResp.arrayBuffer();
-      const contentType = legacyResp.headers.get("content-type") ?? "application/octet-stream";
-
-      await s3.send(new PutObjectCommand({
-        Bucket: cfg.bucket,
-        Key: key,
-        Body: new Uint8Array(bytes),
-        ContentType: contentType,
-        ContentLength: bytes.byteLength,
-      }));
-
-      console.log(`[uploads/backfill] userId=${userId} key=${key} migrated=true`);
-      return json({
-        ok: true,
-        publicUrl: publicUrl(cfg, key),
-        migrated: true,
-        existed: false,
       });
     }
 

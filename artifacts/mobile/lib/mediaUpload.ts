@@ -444,6 +444,44 @@ export async function uploadToStorage(
   }
 }
 
+/**
+ * Get a short-lived private R2 read URL. This is used for paid media such as
+ * AfuMusic, where the public CDN URL returned after upload must not grant
+ * access by itself.
+ */
+export async function getSignedR2ReadUrl(
+  bucket: string,
+  filePath: string,
+  trackId?: string,
+): Promise<{ url: string | null; error: string | null }> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return { url: null, error: "Not authenticated" };
+    const response = await fetch(uploadsUrl("read"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(await edgeFnHeaders(token)),
+      },
+      body: JSON.stringify({ bucket, path: filePath, trackId }),
+    });
+    const text = await response.text().catch(() => "");
+    if (!text || text.trimStart().startsWith("<")) {
+      return { url: null, error: "Storage service unreachable" };
+    }
+    let body: any;
+    try { body = JSON.parse(text); } catch {
+      return { url: null, error: `Read URL failed (HTTP ${response.status})` };
+    }
+    if (!response.ok || !body?.url) {
+      return { url: null, error: body?.error || `Read URL failed (HTTP ${response.status})` };
+    }
+    return { url: body.url, error: null };
+  } catch (error: any) {
+    return { url: null, error: error?.message || "Read URL failed" };
+  }
+}
+
 export async function uploadAvatar(userId: string, imageUri: string): Promise<string | null> {
   const result = await uploadAvatarWithError(userId, imageUri);
   if (result.error) console.warn("Avatar upload failed:", result.error);
@@ -565,59 +603,6 @@ export async function listUserFiles(
       nextToken: json.next_token || null,
     };
   } catch { return null; }
-}
-
-/**
- * Back-fill a missing R2 object from its old Supabase Storage URL.
- *
- * Call this when you detect that a CDN URL returns 404 but you still have the
- * legacy `*.supabase.co/storage/v1/object/public/...` URL in hand.  The edge
- * function will:
- *   1. HEAD the R2 key — if the file already exists, return immediately.
- *   2. Otherwise fetch from `legacyUrl` and PUT the bytes into R2.
- *
- * Returns the clean R2 CDN URL on success, or an error string on failure.
- */
-export async function backfillLegacyUrl(
-  key: string,
-  legacyUrl: string,
-): Promise<{ publicUrl: string | null; migrated: boolean; existed: boolean; error: string | null }> {
-  try {
-    const token = await getAccessToken();
-    if (!token) return { publicUrl: null, migrated: false, existed: false, error: "Not authenticated" };
-
-    const r = await fetch(uploadsUrl("backfill"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await edgeFnHeaders(token)),
-      },
-      body: JSON.stringify({ key, legacyUrl }),
-    });
-
-    const text = await r.text().catch(() => "");
-    if (!text || text.trimStart().startsWith("<")) {
-      return { publicUrl: null, migrated: false, existed: false, error: "Service unreachable" };
-    }
-
-    let parsed: any;
-    try { parsed = JSON.parse(text); } catch {
-      return { publicUrl: null, migrated: false, existed: false, error: `Parse error: ${text.slice(0, 100)}` };
-    }
-
-    if (!r.ok || !parsed?.ok) {
-      return { publicUrl: null, migrated: false, existed: false, error: parsed?.error || `Backfill failed (${r.status})` };
-    }
-
-    return {
-      publicUrl: parsed.publicUrl || null,
-      migrated: parsed.migrated === true,
-      existed: parsed.existed === true,
-      error: null,
-    };
-  } catch (e: any) {
-    return { publicUrl: null, migrated: false, existed: false, error: e?.message || "Backfill failed" };
-  }
 }
 
 export async function deleteUserFile(key: string): Promise<{ ok: boolean; error: string | null }> {

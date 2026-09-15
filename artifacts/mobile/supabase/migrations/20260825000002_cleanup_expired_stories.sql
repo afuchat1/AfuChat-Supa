@@ -1,5 +1,5 @@
 -- Schedule the cleanup-expired-stories Edge Function. It removes both the
--- database rows and Storage objects because storage.objects cannot be deleted
+-- database rows and Cloudflare R2 objects.
 -- directly from SQL on Supabase.
 
 CREATE OR REPLACE FUNCTION public.cleanup_expired_stories()

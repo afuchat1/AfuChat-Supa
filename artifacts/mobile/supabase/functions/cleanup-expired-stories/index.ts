@@ -1,8 +1,28 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  DeleteObjectCommand,
+  S3Client,
+} from "npm:@aws-sdk/client-s3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const R2_ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "";
+const R2_ACCESS_KEY_ID = Deno.env.get("CLOUDFLARE_R2_ACCESS_KEY_ID") ?? "";
+const R2_SECRET_ACCESS_KEY = Deno.env.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY") ?? "";
+const R2_BUCKET = Deno.env.get("R2_BUCKET") ?? "afuchat-media";
+const R2_PUBLIC_BASE_URL = (Deno.env.get("R2_PUBLIC_BASE_URL") ?? "").replace(/\/$/, "");
+
+const r2 = R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY
+  ? new S3Client({
+      region: "auto",
+      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    })
+  : null;
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -11,10 +31,10 @@ function json(body: Record<string, unknown>, status = 200) {
   });
 }
 
-function storagePath(mediaUrl: string): string | null {
-  const marker = "/stories/";
-  const index = mediaUrl.indexOf(marker);
-  return index === -1 ? null : decodeURIComponent(mediaUrl.slice(index + marker.length));
+function r2Key(mediaUrl: string): string | null {
+  if (!R2_PUBLIC_BASE_URL || !mediaUrl.startsWith(`${R2_PUBLIC_BASE_URL}/`)) return null;
+  const key = decodeURIComponent(mediaUrl.slice(R2_PUBLIC_BASE_URL.length + 1));
+  return key && !key.split("/").includes("..") ? key : null;
 }
 
 Deno.serve(async (request) => {
@@ -30,16 +50,17 @@ Deno.serve(async (request) => {
     if (readError) throw readError;
     if (!stories?.length) return json({ success: true, deleted: 0, storage_deleted: 0 });
 
-    const paths = stories
-      .map((story) => storagePath(story.media_url))
-      .filter((path): path is string => Boolean(path));
+    const keys = stories
+      .map((story) => r2Key(story.media_url))
+      .filter((key): key is string => Boolean(key));
 
     let storageDeleted = 0;
-    for (let index = 0; index < paths.length; index += 100) {
-      const batch = paths.slice(index, index + 100);
-      const { error } = await admin.storage.from("stories").remove(batch);
-      if (error) console.error("[cleanup-expired-stories] storage cleanup failed", error);
-      else storageDeleted += batch.length;
+    if (keys.length && !r2) {
+      return json({ success: false, error: "R2 storage is not configured" }, 503);
+    }
+    for (const key of keys) {
+      await r2!.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+      storageDeleted += 1;
     }
 
     const ids = stories.map((story) => story.id);

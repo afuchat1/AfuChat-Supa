@@ -106,47 +106,8 @@ create policy "music transactions are visible to participants"
   on public.music_transactions for select
   using (buyer_id = auth.uid() or creator_id = auth.uid());
 
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'music',
-  'music',
-  false,
-  104857600,
-  array['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/ogg', 'audio/aac']
-)
-on conflict (id) do update
-set public = false, file_size_limit = 104857600;
-
-drop policy if exists "music creators upload" on storage.objects;
-create policy "music creators upload"
-  on storage.objects for insert
-  with check (
-    bucket_id = 'music'
-    and (storage.foldername(name))[1] = auth.uid()::text
-  );
-
-drop policy if exists "music purchasers read" on storage.objects;
-create policy "music purchasers read"
-  on storage.objects for select
-  using (
-    bucket_id = 'music'
-    and exists (
-      select 1
-      from public.music_tracks t
-      left join public.music_purchases p
-        on p.track_id = t.id and p.buyer_id = auth.uid()
-      where t.storage_path = name
-        and (t.creator_id = auth.uid() or t.price_acoin = 0 or p.id is not null)
-    )
-  );
-
-drop policy if exists "music creators delete" on storage.objects;
-create policy "music creators delete"
-  on storage.objects for delete
-  using (
-    bucket_id = 'music'
-    and (storage.foldername(name))[1] = auth.uid()::text
-  );
+-- Audio bytes are stored in Cloudflare R2 through the authenticated uploads
+-- Edge Function. Supabase stores only the AfuMusic metadata and purchase rows.
 
 create or replace function public.purchase_music_track(p_track_id uuid)
 returns jsonb

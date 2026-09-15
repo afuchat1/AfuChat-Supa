@@ -1,9 +1,9 @@
-import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { cacheMusicFile, getOfflineMusicEntries, getOfflineMusicUri } from "./musicCache";
-import { supabase, supabaseAnonKey, supabaseUrl } from "./supabase";
+import { deleteUserFile, getSignedR2ReadUrl, uploadToStorage } from "./mediaUpload";
+import { supabase } from "./supabase";
 
 const MUSIC_BUCKET = "music";
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
@@ -128,21 +128,20 @@ export async function purchaseMusicTrack(trackId: string) {
   if (error) throw error;
 }
 
-async function accessToken() {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session?.access_token) throw new Error("Your session expired. Please sign in again.");
-  return data.session.access_token;
-}
-
 export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string | null> {
   const userId = await currentUserId();
   const cached = await getOfflineMusicUri(userId, track.id);
   if (cached) return cached;
   if (track.audioUrl?.startsWith("file://")) return track.audioUrl;
-  if (!track.storagePath) return track.audioUrl ?? null;
-  const { data, error } = await supabase.storage.from(MUSIC_BUCKET).createSignedUrl(track.storagePath, 60 * 60);
-  if (error || !data?.signedUrl) throw error ?? new Error("This track is not available for playback.");
-  return data.signedUrl;
+  if (!track.storagePath) {
+    if (track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")) {
+      return track.audioUrl;
+    }
+    return null;
+  }
+  const result = await getSignedR2ReadUrl(MUSIC_BUCKET, track.storagePath, track.id);
+  if (result.error || !result.url) throw new Error(result.error || "This track is not available for playback.");
+  return result.url;
 }
 
 export async function cacheMusicTrackOffline(track: AfuMusicTrack) {
@@ -177,32 +176,6 @@ function audioExtension(name: string, mimeType: string) {
   return "audio";
 }
 
-async function uploadPrivateAudio(fileUri: string, path: string, mimeType: string) {
-  const token = await accessToken();
-  const endpoint = `${supabaseUrl}/storage/v1/object/${MUSIC_BUCKET}/${path}`;
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    apikey: supabaseAnonKey,
-    "Content-Type": mimeType,
-    "x-upsert": "false",
-  };
-
-  if (Platform.OS === "web") {
-    const response = await fetch(fileUri);
-    const body = await response.blob();
-    const uploadResponse = await fetch(endpoint, { method: "POST", headers, body });
-    if (!uploadResponse.ok) throw new Error("Audio upload failed.");
-    return;
-  }
-
-  const result = await FileSystem.uploadAsync(endpoint, fileUri, {
-    httpMethod: "POST",
-    headers,
-    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-  });
-  if (result.status < 200 || result.status >= 300) throw new Error("Audio upload failed.");
-}
-
 export async function publishMusicTrack(input: {
   title: string;
   genre: string;
@@ -225,11 +198,14 @@ export async function publishMusicTrack(input: {
   const extension = audioExtension(input.fileName, mimeType);
   const uniquePart = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const path = `${creatorId}/${uniquePart}.${extension}`;
-  await uploadPrivateAudio(input.fileUri, path, mimeType);
+  const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType);
+  if (upload.error || !upload.publicUrl) {
+    throw new Error(upload.error || "Audio upload failed.");
+  }
   const { data, error } = await supabase.from("music_tracks").insert({
     creator_id: creatorId,
     title: input.title.trim(),
-    audio_url: path,
+    audio_url: upload.publicUrl,
     genre: input.genre,
     price_acoin: Math.floor(input.price),
     storage_path: path,
@@ -237,7 +213,7 @@ export async function publishMusicTrack(input: {
     file_size: fileSize,
   }).select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,created_at").single();
   if (error) {
-    await supabase.storage.from(MUSIC_BUCKET).remove([path]).catch(() => {});
+    await deleteUserFile(`${MUSIC_BUCKET}/${path}`).catch(() => {});
     throw error;
   }
   return {
@@ -255,6 +231,9 @@ export async function removeMusicTrack(track: AfuMusicTrack) {
     .eq("creator_id", await currentUserId());
   if (error) throw error;
   if (track.storagePath) {
-    await supabase.storage.from(MUSIC_BUCKET).remove([track.storagePath]).catch(() => {});
+    const deleted = await deleteUserFile(`${MUSIC_BUCKET}/${track.storagePath}`);
+    if (!deleted.ok) {
+      console.warn("[AfuMusic] R2 cleanup failed:", deleted.error);
+    }
   }
 }
