@@ -8,7 +8,6 @@ export * from "./localFeed";
 export * from "./localContacts";
 export * from "./localProfile";
 export * from "./localSettings";
-export * from "./mediaDownloader";
 export * from "./syncQueue";
 export * from "./mediaCache";
 export * from "./chatAttachmentCache";

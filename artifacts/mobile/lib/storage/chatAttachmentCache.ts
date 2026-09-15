@@ -20,6 +20,7 @@ import { getDB } from "./db";
 import { storage } from "./mmkv";
 
 const BASE = ((FileSystem as any).documentDirectory ?? "") + "afuchat_media/chat/";
+const LEGACY_BASE = ((FileSystem as any).documentDirectory ?? "") + "afuchat_attachments/";
 const GALLERY_WRITE_PERMISSION_KEY = "chat_gallery_write_permission";
 let _galleryPermissionRequest: Promise<boolean> | null = null;
 
@@ -171,16 +172,18 @@ export async function openChatFile(localPath: string): Promise<void> {
 export async function saveAttachmentToGallery(url: string): Promise<boolean> {
   try {
     // Resolve local path from memory or SQLite
-    let localPath: string | null = _mem.get(url) ?? null;
-    if (!localPath) {
-      const hash = _urlHash(url);
-      const db = await getDB();
-      const row = await db.getFirstAsync<{ local_path: string }>(
-        "SELECT local_path FROM media_cache WHERE url_hash = ?",
-        [hash],
-      );
-      if (row) localPath = row.local_path;
-    }
+    const hash = _urlHash(url);
+    const db = await getDB();
+    const row = await db.getFirstAsync<{
+      local_path: string;
+      media_type: string | null;
+      saved_to_device: number | null;
+    }>(
+      "SELECT local_path, media_type, saved_to_device FROM media_cache WHERE url_hash = ?",
+      [hash],
+    );
+    if (row?.media_type?.startsWith("chat_") && row.saved_to_device === 1) return true;
+    const localPath: string | null = _mem.get(url) ?? row?.local_path ?? null;
     if (!localPath) return false;
 
     // Ask at most once. Later saves reuse the OS grant and never reopen the
@@ -200,8 +203,6 @@ export async function saveAttachmentToGallery(url: string): Promise<boolean> {
     } catch {}
 
     // Mark saved in SQLite
-    const hash = _urlHash(url);
-    const db = await getDB();
     await db.runAsync(
       "UPDATE media_cache SET saved_to_device = 1 WHERE url_hash = ?",
       [hash],
@@ -292,6 +293,18 @@ async function _saveToDeviceLibrary(
   if (!["image", "gif", "story_reply"].includes(type)) return;
   try {
     const ML = await import("expo-media-library");
+    const db = await getDB();
+    const cacheRow = await db.getFirstAsync<{
+      media_type: string | null;
+      saved_to_device: number | null;
+    }>(
+      "SELECT media_type, saved_to_device FROM media_cache WHERE url_hash = ?",
+      [urlHash],
+    );
+    // The app cache and the gallery are separate stores. Once this URL has
+    // been mirrored to the gallery, never create another gallery asset when
+    // the chat list is rendered again.
+    if (cacheRow?.media_type?.startsWith("chat_") && cacheRow.saved_to_device === 1) return;
 
     // Check permission WITHOUT requesting — no dialog during background download
     let status: string;
@@ -319,7 +332,6 @@ async function _saveToDeviceLibrary(
     } catch {}
 
     // Mark saved in SQLite
-    const db = await getDB();
     await db.runAsync(
       "UPDATE media_cache SET saved_to_device = 1 WHERE url_hash = ?",
       [urlHash],
@@ -356,13 +368,38 @@ async function _download(url: string, type: string, saveToGallery = false): Prom
 
     // 1. Check SQLite registry (survived app restarts)
     const db = await getDB();
-    const row = await db.getFirstAsync<{ local_path: string }>(
-      "SELECT local_path FROM media_cache WHERE url_hash = ?",
+    const row = await db.getFirstAsync<{
+      local_path: string;
+      media_type: string | null;
+      saved_to_device: number | null;
+    }>(
+      "SELECT local_path, media_type, saved_to_device FROM media_cache WHERE url_hash = ?",
       [hash],
     );
     if (row) {
       const check = await FileSystem.getInfoAsync(row.local_path);
       if (check.exists && (check as any).size > 0) {
+        // Older builds stored chat media under afuchat_attachments/. Move
+        // that existing copy to the one canonical chat-media directory.
+        if (row.local_path.startsWith(LEGACY_BASE) && row.local_path !== localPath) {
+          try {
+            await FileSystem.copyAsync({ from: row.local_path, to: localPath });
+            const migrated = await FileSystem.getInfoAsync(localPath);
+            if (migrated.exists && (migrated as any).size > 0) {
+              await db.runAsync(
+                `UPDATE media_cache
+                 SET local_path = ?, media_type = ?, saved_to_device = 0, last_accessed = ?
+                 WHERE url_hash = ?`,
+                [localPath, `chat_${type}`, Date.now(), hash],
+              );
+              await FileSystem.deleteAsync(row.local_path, { idempotent: true });
+              _mem.set(url, localPath);
+              return localPath;
+            }
+          } catch {
+            // Keep using the old copy if the one-time migration cannot finish.
+          }
+        }
         _mem.set(url, row.local_path);
         return row.local_path;
       }
