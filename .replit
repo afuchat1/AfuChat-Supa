@@ -81,7 +81,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN:8000 EXPO_NO_REDIRECT_PAGE=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --lan --port 8000"
+args = "cd artifacts/mobile && EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN:8000 EXPO_NO_REDIRECT_PAGE=1 NODE_OPTIONS=--max-old-space-size=4096 node scripts/start-expo-go.mjs"
 waitForPort = 8000
 
 [[ports]]
