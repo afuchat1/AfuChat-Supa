@@ -15,6 +15,7 @@ import activityRoutes from "./routes/activity";
 import storageRoutes from "./routes/storage";
 import domainRoutes from "./routes/domains";
 import storageContainerRoutes from "./routes/storage-containers";
+import { proxySupabaseRequest } from "./routes/supabase-gateway";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -69,6 +70,17 @@ app.get("/", (c) =>
 app.get("/healthz", (c) =>
   c.json({ status: "ok", timestamp: new Date().toISOString(), version: "v1" }),
 );
+
+// ── Private Supabase infrastructure gateway ─────────────────────────────────
+// The mobile app talks to AfuCloud for Auth, PostgREST, and Realtime. The
+// Worker forwards the caller's session to the AfuChat Supabase project so RLS
+// remains authoritative while Supabase is removed from the public boundary.
+app.all("/auth/v1", proxySupabaseRequest);
+app.all("/auth/v1/*", proxySupabaseRequest);
+app.all("/rest/v1", proxySupabaseRequest);
+app.all("/rest/v1/*", proxySupabaseRequest);
+app.all("/realtime/v1", proxySupabaseRequest);
+app.all("/realtime/v1/*", proxySupabaseRequest);
 
 // ── API routes ────────────────────────────────────────────────────────────────
 app.route("/v1/auth", authRoutes);

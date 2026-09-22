@@ -1,10 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
+import { AFUCLOUD_API_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
 
 export const supabaseUrl = SUPABASE_URL;
 export const supabaseAnonKey = SUPABASE_ANON_KEY;
+export const supabaseGatewayUrl = AFUCLOUD_API_URL;
 
 // ─── Suppress expected Supabase refresh-token errors ────────────────────────
 // When the app starts with a stale/revoked refresh token in storage, Supabase
@@ -103,7 +104,9 @@ const webStorage = {
   },
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Keep the legacy Supabase URL export for the remaining Edge Function callers
+// during migration, but route Auth, PostgREST, and Realtime through AfuCloud.
+export const supabase = createClient(supabaseGatewayUrl, supabaseAnonKey, {
   auth: {
     storage: isWeb ? webStorage : AsyncStorage,
     autoRefreshToken: true,

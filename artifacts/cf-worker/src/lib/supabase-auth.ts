@@ -15,11 +15,13 @@ interface AuthResponse {
 }
 
 async function authRequest(env: Env, path: string, body: Record<string, unknown>): Promise<AuthResponse | null> {
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1${path}`, {
+  const authUrl = env.AFUCHAT_SUPABASE_URL || env.SUPABASE_URL;
+  const apiKey = env.AFUCHAT_SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_KEY;
+  const response = await fetch(`${authUrl}/auth/v1${path}`, {
     method: "POST",
     headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
-      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
