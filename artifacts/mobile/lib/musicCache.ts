@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
+import { toAfuCloudMediaUrl } from "./afuCloudMedia";
 
 import type { AfuMusicTrack } from "@/modules/afumusic";
 
@@ -107,7 +108,7 @@ export async function cacheMusicFile(
   const existing = await FileSystem.getInfoAsync(fileUri);
   let fileSize = (existing as any).size ?? 0;
   if (!existing.exists || fileSize <= 0) {
-    const result = await FileSystem.downloadAsync(remoteUri, fileUri);
+    const result = await FileSystem.downloadAsync(toAfuCloudMediaUrl(remoteUri) || remoteUri, fileUri);
     const info = await FileSystem.getInfoAsync(result.uri);
     if (!info.exists || !((info as any).size > 0)) {
       throw new Error("The track could not be saved to private storage.");

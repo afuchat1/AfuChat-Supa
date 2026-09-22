@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDB } from "./storage/db";
 import { storage } from "./storage/mmkv";
 import { isCellular } from "./networkQuality";
+import { toAfuCloudMediaUrl } from "./afuCloudMedia";
 
 // ─── Video Stores ───────────────────────────────────────────────────────────────
 // Watched videos are kept in documentDirectory so the user can use them
@@ -215,17 +216,18 @@ async function dbDeleteAll(): Promise<void> {
  */
 export async function getCachedVideoUri(url: string): Promise<string | null> {
   if (!url) return null;
+  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
 
   // 1. Memory map
-  if (memoryMap.has(url)) return memoryMap.get(url)!;
+  if (memoryMap.has(resolvedUrl)) return memoryMap.get(resolvedUrl)!;
 
   // 2. Check the permanent video directory
   try {
     await ensureDir(VIDEO_DIR);
-    const localPath = VIDEO_DIR + urlToFilename(url);
+    const localPath = VIDEO_DIR + urlToFilename(resolvedUrl);
     const info = await FileSystem.getInfoAsync(localPath);
     if (info.exists && (info as any).size > 0) {
-      memoryMap.set(url, localPath);
+      memoryMap.set(resolvedUrl, localPath);
       return localPath;
     }
   } catch {}
@@ -241,31 +243,32 @@ export async function getCachedVideoUri(url: string): Promise<string | null> {
  */
 export function cacheVideo(url: string): Promise<string | null> {
   if (!url) return Promise.resolve(null);
+  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
   // Never pre-download on cellular — stream only to protect mobile data
   if (isCellular()) return Promise.resolve(null);
-  if (memoryMap.has(url)) return Promise.resolve(memoryMap.get(url)!);
-  if (inProgress.has(url)) return inProgress.get(url)!;
+  if (memoryMap.has(resolvedUrl)) return Promise.resolve(memoryMap.get(resolvedUrl)!);
+  if (inProgress.has(resolvedUrl)) return inProgress.get(resolvedUrl)!;
 
   const task = (async (): Promise<string | null> => {
     try {
       await ensureDir(PREFETCH_DIR);
-      const localPath = PREFETCH_DIR + urlToFilename(url);
+      const localPath = PREFETCH_DIR + urlToFilename(resolvedUrl);
       const existing = await FileSystem.getInfoAsync(localPath);
       if (existing.exists && (existing as any).size > 0) {
-        memoryMap.set(url, localPath);
+        memoryMap.set(resolvedUrl, localPath);
         return localPath;
       }
-      const result = await FileSystem.downloadAsync(url, localPath);
+      const result = await FileSystem.downloadAsync(resolvedUrl, localPath);
       const check = await FileSystem.getInfoAsync(result.uri);
       if (check.exists && (check as any).size > 0) {
-        memoryMap.set(url, result.uri);
+        memoryMap.set(resolvedUrl, result.uri);
         return result.uri;
       }
     } catch {}
     return null;
-  })().finally(() => inProgress.delete(url));
+  })().finally(() => inProgress.delete(resolvedUrl));
 
-  inProgress.set(url, task);
+  inProgress.set(resolvedUrl, task);
   return task;
 }
 
@@ -292,21 +295,22 @@ export async function markVideoWatched(
   },
 ): Promise<void> {
   if (!url || !postId) return;
+  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
   if (saveInProgress.has(postId)) return;
   saveInProgress.add(postId);
 
   try {
     await ensureDir(VIDEO_DIR);
-    const filename = urlToFilename(url);
+    const filename = urlToFilename(resolvedUrl);
     const localPath = VIDEO_DIR + filename;
 
     // Check if already on device (in either the watched store or a prefetch).
     const existing = await FileSystem.getInfoAsync(localPath);
     if (existing.exists && (existing as any).size > 0) {
       // Already stored — just update metadata in registry, no download
-      memoryMap.set(url, localPath);
+      memoryMap.set(resolvedUrl, localPath);
       await dbSaveEntry({
-        postId, url, fileUri: localPath,
+        postId, url: resolvedUrl, fileUri: localPath,
         fileSize: (existing as any).size ?? 0,
         cachedAt: Date.now(),
         title: meta.title,
@@ -324,15 +328,15 @@ export async function markVideoWatched(
     let fileUri = localPath;
     let fileSize = 0;
 
-    const prefetchedPath = memoryMap.get(url);
+    const prefetchedPath = memoryMap.get(resolvedUrl);
     if (prefetchedPath && prefetchedPath !== localPath) {
       try {
         await FileSystem.copyAsync({ from: prefetchedPath, to: localPath });
         const info = await FileSystem.getInfoAsync(localPath);
         fileSize = (info as any).size ?? 0;
       } catch {}
-    } else if (inProgress.has(url)) {
-      const result = await inProgress.get(url)!;
+    } else if (inProgress.has(resolvedUrl)) {
+      const result = await inProgress.get(resolvedUrl)!;
       if (result) {
         // Copy from wherever it landed to our permanent path (if different)
         if (result !== localPath) {
@@ -354,16 +358,16 @@ export async function markVideoWatched(
 
     if (fileSize === 0) {
       // Download fresh directly to permanent location
-      const result = await FileSystem.downloadAsync(url, localPath);
+      const result = await FileSystem.downloadAsync(resolvedUrl, localPath);
       const info = await FileSystem.getInfoAsync(result.uri);
       if (!info.exists || (info as any).size === 0) return;
       fileUri = result.uri;
       fileSize = (info as any).size ?? 0;
     }
 
-    memoryMap.set(url, fileUri);
+    memoryMap.set(resolvedUrl, fileUri);
     await dbSaveEntry({
-      postId, url, fileUri, fileSize,
+      postId, url: resolvedUrl, fileUri, fileSize,
       cachedAt: Date.now(), title: meta.title, thumbnail: meta.thumbnail,
       authorId: meta.authorId,
       authorHandle: meta.authorHandle,

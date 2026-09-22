@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import CachedImage from "./CachedImage";
+import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
 
 const SEEK_TIME = 1.0;
 
@@ -80,6 +81,8 @@ function VideoThumbnailNative({
   durationSeconds, showDuration = true, watchedFraction,
 }: Props) {
   const [thumbUri, setThumbUri] = useState<string | null>(null);
+  const resolvedVideoUrl = toAfuCloudMediaUrl(videoUrl) || videoUrl;
+  const resolvedFallbackImageUrl = toAfuCloudMediaUrl(fallbackImageUrl) || fallbackImageUrl;
 
   useEffect(() => {
     // Android's video thumbnail decoder can allocate a full codec surface for
@@ -88,23 +91,23 @@ function VideoThumbnailNative({
     // already-supplied poster on Android; full playback remains available when
     // the user opens the video.
     if (lowData || Platform.OS === "android") return;
-    if (!videoUrl || videoUrl.startsWith("blob:")) return;
+    if (!resolvedVideoUrl || resolvedVideoUrl.startsWith("blob:")) return;
     let cancelled = false;
     (async () => {
       try {
         const thumbMod = await import("expo-video-thumbnails");
         const fn = thumbMod.getThumbnailAsync ?? (thumbMod as any).default?.getThumbnailAsync;
         if (!fn) return;
-        const result = await fn(videoUrl, { time: SEEK_TIME * 1000, quality: 0.7 });
+        const result = await fn(resolvedVideoUrl, { time: SEEK_TIME * 1000, quality: 0.7 });
         if (!cancelled && result?.uri) setThumbUri(result.uri);
       } catch {
         if (!cancelled) setThumbUri(null);
       }
     })();
     return () => { cancelled = true; };
-  }, [videoUrl, lowData]);
+  }, [resolvedVideoUrl, lowData]);
 
-  const source = thumbUri || fallbackImageUrl;
+  const source = thumbUri || resolvedFallbackImageUrl;
   const hasFraction = watchedFraction != null && watchedFraction >= 0.02 && watchedFraction <= 0.97;
   const durationLabel = showDuration && durationSeconds != null
     ? formatDuration(durationSeconds) : "";

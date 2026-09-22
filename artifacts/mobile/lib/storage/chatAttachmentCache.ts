@@ -18,6 +18,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { getDB } from "./db";
 import { storage } from "./mmkv";
+import { toAfuCloudMediaUrl } from "../afuCloudMedia";
 
 const BASE = ((FileSystem as any).documentDirectory ?? "") + "afuchat_media/chat/";
 const LEGACY_BASE = ((FileSystem as any).documentDirectory ?? "") + "afuchat_attachments/";
@@ -349,16 +350,18 @@ async function _downloadWithOpts(
   saveToGallery: boolean,
   _hint?: string,
 ): Promise<string | null> {
-  if (_mem.has(url)) return _mem.get(url)!;
-  if (_inFlight.has(url)) return _inFlight.get(url)!;
-  const p = _download(url, type, saveToGallery);
-  _inFlight.set(url, p);
-  p.finally(() => _inFlight.delete(url));
+  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  if (_mem.has(resolvedUrl)) return _mem.get(resolvedUrl)!;
+  if (_inFlight.has(resolvedUrl)) return _inFlight.get(resolvedUrl)!;
+  const p = _download(resolvedUrl, type, saveToGallery);
+  _inFlight.set(resolvedUrl, p);
+  p.finally(() => _inFlight.delete(resolvedUrl));
   return p;
 }
 
 async function _download(url: string, type: string, saveToGallery = false): Promise<string | null> {
   try {
+    url = toAfuCloudMediaUrl(url) || url;
     const dir = DIRS[type] ?? DIRS.file;
     await _ensureDir(dir);
 

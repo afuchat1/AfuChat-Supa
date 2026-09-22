@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { cacheMusicFile, getOfflineMusicEntries, getOfflineMusicUri } from "./musicCache";
 import { deleteUserFile, getSignedR2ReadUrl, uploadToStorage } from "./mediaUpload";
+import { toAfuCloudMediaUrl } from "./afuCloudMedia";
 import { supabase } from "./supabase";
 
 const MUSIC_BUCKET = "music";
@@ -135,7 +136,7 @@ export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string 
   if (track.audioUrl?.startsWith("file://")) return track.audioUrl;
   if (!track.storagePath) {
     if (track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")) {
-      return track.audioUrl;
+      return toAfuCloudMediaUrl(track.audioUrl) || null;
     }
     return null;
   }

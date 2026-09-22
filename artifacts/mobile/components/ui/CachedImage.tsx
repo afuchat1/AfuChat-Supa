@@ -1,5 +1,6 @@
 import React from "react";
 import { Image as ExpoImage, type ImageProps } from "expo-image";
+import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
 
 type Props = Omit<ImageProps, "source"> & {
   uri: string | null | undefined;
@@ -20,15 +21,16 @@ export function CachedImage({ uri, cacheType = "thumb", ...props }: Props) {
   // full-size bitmap allocations.
   void cacheType;
   if (!uri) return null;
+  const resolvedUri = toAfuCloudMediaUrl(uri);
 
   return (
     <ExpoImage
       {...props}
-      source={{ uri }}
+      source={{ uri: resolvedUri || uri }}
       cachePolicy="memory-disk"
       transition={0}
       allowDownscaling
-      recyclingKey={uri}
+      recyclingKey={resolvedUri || uri}
     />
   );
 }

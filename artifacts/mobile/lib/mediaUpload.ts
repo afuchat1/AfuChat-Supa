@@ -300,11 +300,6 @@ async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
   }
 }
 
-interface SignedUpload {
-  uploadUrl: string;
-  key: string;
-}
-
 function containerSlug(bucket: string): string {
   return bucket.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 }
@@ -359,26 +354,6 @@ async function getContainerId(
   } finally {
     containerPromises.delete(slug);
   }
-}
-
-async function getSignedUpload(
-  bucket: string,
-  filePath: string,
-  contentType: string,
-): Promise<{ data: SignedUpload | null; error: string | null }> {
-  const container = await getContainerId(bucket);
-  if (!container.id) return { data: null, error: container.error };
-  const result = await afuCloudJson(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload-url`, {
-    method: "POST",
-    body: JSON.stringify({ name: filePath, contentType }),
-  });
-  if (result.error || !result.body?.uploadUrl || !result.body?.key) {
-    return { data: null, error: result.error || "AfuCloud returned no upload URL" };
-  }
-  return {
-    data: { uploadUrl: result.body.uploadUrl, key: result.body.key },
-    error: null,
-  };
 }
 
 async function proxyUpload(
@@ -436,8 +411,10 @@ async function proxyUpload(
 }
 
 function publicObjectUrl(body: any, key: string): string {
-  const value = typeof body?.url === "string" ? body.url : "";
-  return value.startsWith("http") ? value : afuCloudUrl(value || `/v1/storage/${encodeURIComponent(key)}`);
+  // Always return the AfuCloud API route. The worker owns the R2 credentials
+  // and redirects to a short-lived object URL server-side.
+  void body;
+  return afuCloudUrl(`/v1/storage/${encodeURIComponent(key)}`);
 }
 
 function uploadResponseError(response: Response, body: any, fallback: string): string {
@@ -566,20 +543,8 @@ export async function uploadToStorage(
       } catch {
         return { publicUrl: null, error: "Could not read selected file. Please try again." };
       }
-      const sign = await getSignedUpload(realBucket, filePath, mime);
-      if (sign.data) {
-        try {
-          const putResp = await fetch(sign.data.uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": mime },
-            body: body as any,
-          });
-          if (putResp.ok) {
-            const size = body instanceof Blob ? body.size : (body as ArrayBuffer).byteLength;
-            return confirmUpload(realBucket, filePath, sign.data.key, mime, size);
-          }
-        } catch {}
-      }
+      // All bytes go through AfuCloud. Do not expose a presigned R2 URL to
+      // clients; the worker remains the only storage boundary.
       return proxyUpload(realBucket, filePath, body, mime);
     }
 
@@ -625,37 +590,7 @@ export async function uploadToStorage(
     const fileInfo = await FileSystem.getInfoAsync(uploadUri).catch(() => ({ exists: false } as any));
     const fileSize = Number((fileInfo as any).size ?? 0);
 
-    // 1. Try presigned PUT — bytes stream directly from disk to R2.
-    const sign = await getSignedUpload(realBucket, filePath, mime);
-    if (sign.data) {
-      try {
-        const putResult = await FileSystem.uploadAsync(sign.data.uploadUrl, uploadUri, {
-          httpMethod: "PUT",
-          headers: { "Content-Type": mime },
-          uploadType: FileSystemUploadType.BINARY_CONTENT,
-        });
-        if (putResult.status >= 200 && putResult.status < 300) {
-          cleanupTemp();
-          const confirmed = await confirmUpload(
-            realBucket,
-            filePath,
-            sign.data.key,
-            mime,
-            fileSize,
-          );
-          return confirmed;
-        }
-        console.warn(
-          `[Upload] Presigned PUT failed (${putResult.status}), falling back to proxy`,
-        );
-      } catch (e: any) {
-        console.warn(`[Upload] Presigned PUT threw, falling back to proxy: ${e?.message || e}`);
-      }
-    } else {
-      console.warn(`[Upload] Sign failed (${sign.error}), falling back to proxy`);
-    }
-
-    // 2. Proxy fallback — POST bytes through AfuCloud.
+    // Stream the bytes through AfuCloud. The worker writes to R2 server-side.
     //    Still streamed via FileSystem.uploadAsync, not loaded into memory.
     const streamed = await proxyStreamUpload(realBucket, filePath, uploadUri, mime, fileSize);
     if (!streamed.error || !fileUri.startsWith("content:")) {

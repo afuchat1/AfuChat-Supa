@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { toAfuCloudMediaUrl } from "./afuCloudMedia";
 
 const STORY_CACHE_DIR = `${FileSystem.documentDirectory ?? ""}afuchat_stories/`;
 
@@ -31,7 +32,8 @@ export async function getCachedStoryMedia(
   onProgress?: (progress: number) => void,
 ): Promise<string> {
   await ensureDirectory();
-  const localUri = `${STORY_CACHE_DIR}${stableHash(storyId)}.${extension(remoteUrl, mediaType)}`;
+  const resolvedUrl = toAfuCloudMediaUrl(remoteUrl) || remoteUrl;
+  const localUri = `${STORY_CACHE_DIR}${stableHash(storyId)}.${extension(resolvedUrl, mediaType)}`;
   const existing = await FileSystem.getInfoAsync(localUri);
   if (existing.exists && (existing as any).size !== 0) {
     onProgress?.(1);
@@ -39,7 +41,7 @@ export async function getCachedStoryMedia(
   }
 
   const download = FileSystem.createDownloadResumable(
-    remoteUrl,
+    resolvedUrl,
     localUri,
     {},
     ({ totalBytesWritten, totalBytesExpectedToWrite }) => {

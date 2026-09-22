@@ -22,6 +22,7 @@
 
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
+import { toAfuCloudMediaUrl } from "../afuCloudMedia";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -120,35 +121,36 @@ const _inFlight = new Map<string, Promise<string | null>>();
 
 export function downloadToTemp(url: string, extHint?: string): Promise<string | null> {
   if (!url) return Promise.resolve(null);
+  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
 
-  const cached = _mem.get(url);
+  const cached = _mem.get(resolvedUrl);
   if (cached) return Promise.resolve(cached);
-  if (_inFlight.has(url)) return _inFlight.get(url)!;
+  if (_inFlight.has(resolvedUrl)) return _inFlight.get(resolvedUrl)!;
 
   const task = (async (): Promise<string | null> => {
     try {
       await ensureDir();
-      const ext = extHint ?? guessExt(url);
-      const localPath = getTempFilePath(url, ext);
+       const ext = extHint ?? guessExt(resolvedUrl);
+       const localPath = getTempFilePath(resolvedUrl, ext);
 
       const existing = await FileSystem.getInfoAsync(localPath);
       if (existing.exists && (existing as any).size > 0) {
-        _mem.set(url, localPath);
+         _mem.set(resolvedUrl, localPath);
         return localPath;
       }
 
-      const result = await FileSystem.downloadAsync(url, localPath);
+       const result = await FileSystem.downloadAsync(resolvedUrl, localPath);
       const check = await FileSystem.getInfoAsync(result.uri);
       if (!check.exists || (check as any).size === 0) return null;
 
-      _mem.set(url, result.uri);
+       _mem.set(resolvedUrl, result.uri);
       return result.uri;
     } catch {
       return null;
     }
-  })().finally(() => _inFlight.delete(url));
+  })().finally(() => _inFlight.delete(resolvedUrl));
 
-  _inFlight.set(url, task);
+  _inFlight.set(resolvedUrl, task);
   return task;
 }
 

@@ -12,6 +12,7 @@
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import { getDB } from "./db";
+import { toAfuCloudMediaUrl } from "../afuCloudMedia";
 
 // ── documentDirectory = permanent; OS never clears this automatically ──────────
 // Computed lazily so we never capture a null documentDirectory at module-eval
@@ -116,39 +117,40 @@ export async function downloadAndCache(
   type: "avatar" | "thumb" = "thumb",
 ): Promise<string | null> {
   if (!url || !url.startsWith("http")) return null;
-  if (_memCache.has(url)) return _memCache.get(url)!;
+  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  if (_memCache.has(resolvedUrl)) return _memCache.get(resolvedUrl)!;
   if (Platform.OS === "web") return null;
-  const running = _inflight.get(url);
+  const running = _inflight.get(resolvedUrl);
   if (running) return running;
 
   const promise = (async () => {
     try {
     const dir = type === "avatar" ? getAvatarDir() : getThumbDir();
     await ensureDir(dir);
-    const localPath = urlToFilename(url, dir);
+     const localPath = urlToFilename(resolvedUrl, dir);
 
     // Already downloaded — no network call
     const existing = await FileSystem.getInfoAsync(localPath);
     if (existing.exists && (existing as any).size > 0) {
-      _memCache.set(url, localPath);
-      await registerInDB(url, localPath, type, (existing as any).size ?? 0);
+       _memCache.set(resolvedUrl, localPath);
+       await registerInDB(resolvedUrl, localPath, type, (existing as any).size ?? 0);
       return localPath;
     }
 
     // First time — download and store permanently
-    const result = await FileSystem.downloadAsync(url, localPath);
+     const result = await FileSystem.downloadAsync(resolvedUrl, localPath);
     const check = await FileSystem.getInfoAsync(result.uri);
     if (!check.exists || (check as any).size === 0) return null;
 
-    _memCache.set(url, result.uri);
-    await registerInDB(url, result.uri, type, (check as any).size ?? 0);
+     _memCache.set(resolvedUrl, result.uri);
+     await registerInDB(resolvedUrl, result.uri, type, (check as any).size ?? 0);
     return result.uri;
     } catch {
       return null;
     }
   })();
-  _inflight.set(url, promise);
-  promise.finally(() => _inflight.delete(url)).catch(() => {});
+   _inflight.set(resolvedUrl, promise);
+   promise.finally(() => _inflight.delete(resolvedUrl)).catch(() => {});
   return promise;
 }
 

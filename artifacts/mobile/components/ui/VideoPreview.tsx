@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { VideoView, useVideoPlayer } from "expo-video";
 import type { StyleProp, ViewStyle } from "react-native";
 import { safePause, safePlay } from "@/lib/safeMedia";
+import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
 
 type ContentFit = "contain" | "cover" | "fill";
 
@@ -27,7 +28,8 @@ export default function VideoPreview({
   nativeControls = false,
   playbackRate = 1,
 }: VideoPreviewProps) {
-  const player = useVideoPlayer(uri ? { uri } : null, (p) => {
+  const resolvedUri = toAfuCloudMediaUrl(uri) || uri;
+  const player = useVideoPlayer(resolvedUri ? { uri: resolvedUri } : null, (p) => {
     p.loop = isLooping;
     p.muted = isMuted;
     p.playbackRate = playbackRate;
@@ -35,7 +37,7 @@ export default function VideoPreview({
   });
 
   useEffect(() => {
-    if (!uri) return;
+    if (!resolvedUri) return;
     // useVideoPlayer recreates the player when uri changes. Calling
     // replaceAsync here as well causes expo-video's web adapter to start a
     // second load while the first play promise is pending, which surfaces as
@@ -45,7 +47,7 @@ export default function VideoPreview({
     player.playbackRate = playbackRate;
     if (shouldPlay) safePlay(player); else safePause(player);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri]);
+  }, [resolvedUri]);
 
   useEffect(() => {
     if (shouldPlay) safePlay(player); else safePause(player);

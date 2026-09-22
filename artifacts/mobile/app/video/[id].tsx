@@ -64,6 +64,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { getCachedVideoUri, cacheVideo, markVideoWatched, getOfflineVideos } from "@/lib/videoCache";
+import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
 import { storage } from "@/lib/storage/mmkv";
 import { recordWatchHistory } from "@/lib/watchHistory";
 import { onShortsRefresh } from "@/lib/shortsRefresh";
@@ -347,6 +348,7 @@ const VideoItem = React.memo(function VideoItem({
 }) {
   const { accent } = useAppAccent();
   const insets = useSafeAreaInsets();
+  const resolvedVideoUrl = toAfuCloudMediaUrl(item.video_url) || item.video_url;
   // On web, create the player with its final stable source. expo-video's web
   // replace() calls HTMLMediaElement.play() without handling the returned
   // promise, so replacing the fallback URL with a resolved/cache URL can
@@ -354,7 +356,7 @@ const VideoItem = React.memo(function VideoItem({
   // players still start empty and use replaceAsync below because that path
   // supports the native player lifecycle.
   const player = useVideoPlayer(
-    Platform.OS === "web" ? { uri: item.video_url } : null,
+    Platform.OS === "web" ? { uri: resolvedVideoUrl } : null,
     (p) => { p.loop = true; p.muted = false; },
   );
   const videoViewRef = useRef<VideoView>(null);
@@ -1739,7 +1741,8 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         showAlert("Permission needed", "Please allow media library access in Settings to save videos.");
         return;
       }
-      const url = await resolveDownloadUrl();
+      const rawUrl = await resolveDownloadUrl();
+      const url = toAfuCloudMediaUrl(rawUrl) || rawUrl;
       const dest = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
       const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
       if (!uri || (dlStatus !== undefined && (dlStatus < 200 || dlStatus >= 400))) throw new Error(`HTTP ${dlStatus}`);
