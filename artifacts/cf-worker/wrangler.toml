@@ -1,0 +1,39 @@
+# Canonical production API Worker. All AfuCloud projects use this Worker.
+# Do not create additional production Workers; add routes here instead.
+name = "afucloud-api"
+main = "src/index.ts"
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "42e79186125e8ff83e51f15816e074de"
+
+# ── Routes ───────────────────────────────────────────────────────────────────
+routes = [
+  { pattern = "api.afuchat.com", zone_name = "afuchat.com" },
+  { pattern = "api.afuchat.com/*", zone_name = "afuchat.com" }
+]
+
+# ── R2 Bucket binding ─────────────────────────────────────────────────────────
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "afucloud-images"
+# preview_bucket_name = "afucloud-images-dev"  # uncomment for local dev
+
+# ── Vars (non-secret) ─────────────────────────────────────────────────────────
+[vars]
+SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
+SUPABASE_PROJECT_ID = "poijhidfekwfthyksatp"
+SUPABASE_DB_SCHEMA = "afucloud"
+R2_BUCKET_NAME = "afucloud-images"
+CLOUDFLARE_ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de"
+AFU_CDN_TARGET = "cdn.afucloud.dev"
+CLOUDFLARE_R2_ACCESS_KEY_ID = "40916680c4892042d4ce49396ef62819"
+NODE_ENV = "production"
+
+# ── Secrets (set via: wrangler secret put SECRET_NAME) ────────────────────────
+# SUPABASE_SERVICE_KEY      — Supabase service role key
+# JWT_SECRET                — JWT signing secret
+# CLOUDFLARE_R2_SECRET_ACCESS_KEY  — R2 S3-compatible secret key
+
+# ── Dev environment overrides ─────────────────────────────────────────────────
+[env.dev]
+vars = { NODE_ENV = "development" }
