@@ -85,12 +85,12 @@ args = "cd artifacts/mobile && EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAI
 waitForPort = 8000
 
 [[ports]]
-localPort = 3000
-externalPort = 3000
-
-[[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000
 
 [[ports]]
 localPort = 8000
