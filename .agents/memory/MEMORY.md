@@ -104,3 +104,4 @@
 - [Vercel public profile prerendering](vercel-public-profile-prerender.md) — static Vercel hosting needs per-handle HTML files so profiles are readable before JavaScript runs.
 - [AfuMusic schema drift](afumusic-schema-drift.md) — Supabase may already contain a legacy public music_tracks table; apply the private AfuMusic schema additively.
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
+- [AfuChat Supabase schema migration](afuchat-supabase-schema-migration.md) — replacement project keeps app base tables in afuchat; auth/profile access stays preserved and RLS/triggers must move with tables.
