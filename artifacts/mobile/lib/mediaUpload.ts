@@ -130,6 +130,10 @@ async function afuCloudJson(
     clearAfuCloudSession();
     return afuCloudJson(path, init, false);
   }
+  if (response.status >= 500 && response.status <= 599 && retry) {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    return afuCloudJson(path, init, false);
+  }
   if (!response.ok) {
     const requestId = response.headers.get("X-AfuCloud-Request-Id");
     const requestSuffix = requestId ? ` [request ${requestId}]` : "";
@@ -392,29 +396,40 @@ async function proxyUpload(
   if (!auth.token) return { publicUrl: null, error: auth.error };
 
   const qs = new URLSearchParams({ name: filePath }).toString();
-  let response: Response;
-  try {
-    response = await fetch(
-      afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload?${qs}`),
-      {
-      method: "POST",
-      headers: {
-        "Content-Type": contentType,
-        Authorization: `Bearer ${auth.token}`,
-      },
-      body: body as any,
-      },
-    );
-  } catch (e: any) {
-    return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
+  let response: Response | null = null;
+  let json: any = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch(
+        afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload?${qs}`),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": contentType,
+            Authorization: `Bearer ${auth.token}`,
+          },
+          body: body as any,
+        },
+      );
+    } catch (e: any) {
+      if (attempt === 1) return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      continue;
+    }
+
+    json = await response.json().catch(() => null) as any;
+    if (response.ok && json?.key) break;
+    if (response.status < 500 || attempt === 1) break;
+    await new Promise((resolve) => setTimeout(resolve, 350));
   }
 
-  const json = await response.json().catch(() => null) as any;
-  if (!response.ok || !json?.key) {
-    if (response.status === 401) clearAfuCloudSession();
+  if (!response || !response.ok || !json?.key) {
+    if (response?.status === 401) clearAfuCloudSession();
     return {
       publicUrl: null,
-      error: json?.error || `Upload failed (HTTP ${response.status})`,
+      error: response
+        ? uploadResponseError(response, json, `Upload failed (HTTP ${response.status})`)
+        : "Upload failed",
     };
   }
   return confirmUpload(bucket, filePath, json.key, contentType, json.size || bodySize, json.etag);
@@ -423,6 +438,12 @@ async function proxyUpload(
 function publicObjectUrl(body: any, key: string): string {
   const value = typeof body?.url === "string" ? body.url : "";
   return value.startsWith("http") ? value : afuCloudUrl(value || `/v1/storage/${encodeURIComponent(key)}`);
+}
+
+function uploadResponseError(response: Response, body: any, fallback: string): string {
+  const requestId = response.headers.get("X-AfuCloud-Request-Id");
+  const requestSuffix = requestId ? ` [request ${requestId}]` : "";
+  return `${body?.error || fallback}${requestSuffix}`;
 }
 
 async function confirmUpload(
@@ -476,22 +497,35 @@ async function proxyStreamUpload(
   if (!auth.token) return { publicUrl: null, error: auth.error };
   const qs = new URLSearchParams({ name: filePath }).toString();
   try {
-    const response = await FileSystem.uploadAsync(
-      `${afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
-      uploadUri,
-      {
-        httpMethod: "POST",
-        headers: {
-          "Content-Type": contentType,
-          Authorization: `Bearer ${auth.token}`,
+    let response: Awaited<ReturnType<typeof FileSystem.uploadAsync>> | null = null;
+    let body: any = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      response = await FileSystem.uploadAsync(
+        `${afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
+        uploadUri,
+        {
+          httpMethod: "POST",
+          headers: {
+            "Content-Type": contentType,
+            Authorization: `Bearer ${auth.token}`,
+          },
+          uploadType: FileSystemUploadType.BINARY_CONTENT,
         },
-        uploadType: FileSystemUploadType.BINARY_CONTENT,
-      },
-    );
-    const body = response.body ? JSON.parse(response.body) : null;
-    if (response.status < 200 || response.status >= 300 || !body?.key) {
-      if (response.status === 401) clearAfuCloudSession();
-      return { publicUrl: null, error: body?.error || `Upload failed (HTTP ${response.status})` };
+      );
+      body = response.body ? JSON.parse(response.body) : null;
+      if (response.status >= 200 && response.status < 300 && body?.key) break;
+      if (response.status < 500 || attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    if (!response || response.status < 200 || response.status >= 300 || !body?.key) {
+      if (response?.status === 401) clearAfuCloudSession();
+      const headers = (response as any)?.headers || {};
+      const requestId = headers["X-AfuCloud-Request-Id"] || headers["x-afucloud-request-id"];
+      const requestSuffix = requestId ? ` [request ${requestId}]` : "";
+      return {
+        publicUrl: null,
+        error: `${body?.error || `Upload failed (HTTP ${response?.status ?? "unknown"})`}${requestSuffix}`,
+      };
     }
     return confirmUpload(bucket, filePath, body.key, contentType, body.size || size, body.etag);
   } catch (error: any) {
