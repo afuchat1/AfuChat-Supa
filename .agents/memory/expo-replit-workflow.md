@@ -21,3 +21,11 @@ The direct public manifest and bundle must both return HTTP 200; a successful ma
 
 **Do NOT use `CI=1`:** CI=1 breaks native bundle serving — every Expo Go connection produces a CommandError and the native bundle is never served.
 
+## Workflow startup check
+
+The managed workflow can remain in a running/building state while Metro is warming and may report no detected port temporarily. Check `getWorkflowStatus` for `openPorts: [8000]` and the wrapper's `Expo Android bundle warmed and ready for Expo Go.` message before changing the startup command. A direct shell `curl` may not see managed workflow ports from the same namespace.
+
+**Why:** A premature restart or command rewrite can discard a healthy Expo process; the workflow service and ordinary shell do not always share the same port visibility.
+
+**How to apply:** Allow the existing wrapper to finish its first bundle warm-up, then verify through workflow status and logs. Only diagnose forwarding after the workflow remains failed with no `openPorts` after the warm-up window.
+
