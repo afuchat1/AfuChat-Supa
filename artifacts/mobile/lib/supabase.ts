@@ -104,9 +104,13 @@ const webStorage = {
   },
 };
 
-// Keep the legacy Supabase URL export for the remaining Edge Function callers
-// during migration, but route Auth, PostgREST, and Realtime through AfuCloud.
-export const supabase = createClient(supabaseGatewayUrl, supabaseAnonKey, {
+// Browser preflight currently cannot reach the gateway until its deployed CORS
+// policy includes Supabase's `apikey` and `X-Client-Info` headers. Keep native
+// traffic behind AfuCloud, while using Supabase's public browser-compatible
+// endpoint on web so sign-in is not blocked by a gateway preflight failure.
+const supabaseClientUrl = isWeb ? SUPABASE_URL : supabaseGatewayUrl;
+
+export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
   auth: {
     storage: isWeb ? webStorage : AsyncStorage,
     autoRefreshToken: true,

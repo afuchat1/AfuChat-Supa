@@ -106,3 +106,4 @@
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
 - [AfuChat Supabase schema migration](afuchat-supabase-schema-migration.md) — replacement project keeps app base tables in afuchat; auth/profile access stays preserved and RLS/triggers must move with tables.
 - [AfuCloud worker workspace](afucloud-worker-workspace.md) — cf-worker is outside the root pnpm workspace; install its own lockfile before typechecking or deploying.
+- [AfuCloud browser auth CORS](afucloud-auth-cors.md) — gateway browser preflight must allow Supabase's apikey and X-Client-Info headers or web sign-in reports only Failed to fetch.

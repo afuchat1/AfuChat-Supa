@@ -44,7 +44,10 @@ app.use(
       return null;
     },
     allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    // Supabase JS sends these headers on Auth/PostgREST requests. Without
+    // them, browser preflight rejects the request and the client reports the
+    // unhelpful "Failed to fetch" message before the worker is reached.
+    allowHeaders: ["Content-Type", "Authorization", "apikey", "X-Client-Info"],
     exposeHeaders: ["Content-Range", "X-AfuCloud-Request-Id"],
     maxAge: 86400,
   }),
