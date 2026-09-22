@@ -16,13 +16,6 @@ const WEB_SHIMS = {
   "@shopify/flash-list":     path.resolve(__dirname, "lib/flash-list-web-shim.js"),
   "expo-share-intent":       path.resolve(__dirname, "lib/share-intent-web-shim.js"),
 };
-// Expo Media Library 57 publishes the legacy API through an export subpath,
-// but Metro's pnpm resolver can miss that subpath in the web route graph.
-const MEDIA_LIBRARY_LEGACY = path.resolve(
-  __dirname,
-  "node_modules/expo-media-library/build/legacy/index.js",
-);
-
 // Keep Metro focused on the mobile app and away from generated sandbox files.
 config.resolver = {
   ...(config.resolver || {}),
@@ -42,9 +35,6 @@ config.resolver = {
       undefined;
     if ((platform === "web" || platform == null) && shim) {
       return { filePath: shim, type: "sourceFile" };
-    }
-    if (moduleName === "expo-media-library/legacy") {
-      return { filePath: MEDIA_LIBRARY_LEGACY, type: "sourceFile" };
     }
     // Fall through to default Metro resolution for all other cases.
     return context.resolveRequest(context, moduleName, platform);

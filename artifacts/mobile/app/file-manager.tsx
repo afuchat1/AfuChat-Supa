@@ -25,20 +25,10 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
 import { isExpoGo } from "@/lib/expoEnvironment";
+import { getMediaLibrary } from "@/lib/mediaLibrary";
 
 type FileType = "image" | "video" | "audio" | "document";
 type Filter = "all" | "image" | "video" | "audio";
-type MediaLibraryModule = typeof import("expo-media-library/legacy");
-
-let mediaLibraryModule: MediaLibraryModule | null = null;
-
-function getMediaLibrary(): MediaLibraryModule | null {
-  if (Platform.OS === "web") return null;
-  if (!mediaLibraryModule) {
-    mediaLibraryModule = require("expo-media-library/legacy") as MediaLibraryModule;
-  }
-  return mediaLibraryModule;
-}
 
 type FileItem = {
   id: string;
