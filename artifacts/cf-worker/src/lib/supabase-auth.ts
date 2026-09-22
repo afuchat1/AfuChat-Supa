@@ -62,10 +62,15 @@ export async function getUserWithSupabaseAccessToken(
   env: Env,
   accessToken: string,
 ): Promise<SupabaseAuthUser | null> {
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+  // AfuChat keeps product data and its active sessions in its own Supabase
+  // project. AfuCloud owns the storage database, so validate the bearer token
+  // against AfuChat and then mint an AfuCloud API token for the same user ID.
+  const authUrl = env.AFUCHAT_SUPABASE_URL || env.SUPABASE_URL;
+  const apiKey = env.AFUCHAT_SUPABASE_ANON_KEY || env.SUPABASE_SERVICE_KEY;
+  const response = await fetch(`${authUrl}/auth/v1/user`, {
     method: "GET",
     headers: {
-      apikey: env.SUPABASE_SERVICE_KEY,
+      apikey: apiKey,
       Authorization: `Bearer ${accessToken}`,
     },
   });

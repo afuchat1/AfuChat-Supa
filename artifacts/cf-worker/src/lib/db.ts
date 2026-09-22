@@ -322,6 +322,11 @@ export function createDbClient(env: Env) {
       const rows = await r.json() as any[];
       return rows[0] ?? null;
     },
+    async getStorageObjectByKey(key: string, containerId: string, userId: string) {
+      const r = await request(`/storage_objects?object_key=eq.${encodeURIComponent(key)}&container_id=eq.${encodeURIComponent(containerId)}&user_id=eq.${encodeURIComponent(userId)}&limit=1`);
+      const rows = await r.json() as any[];
+      return rows[0] ?? null;
+    },
     async createStorageObject(data: Record<string, unknown>) {
       const r = await request("/storage_objects", "POST", data, { Prefer: "return=representation" });
       const rows = await r.json() as any[];

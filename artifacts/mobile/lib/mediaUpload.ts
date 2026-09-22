@@ -1,31 +1,143 @@
 /**
- * Media upload helpers — Cloudflare R2 backed via the Supabase Edge Function.
+ * Media upload helpers — Cloudflare R2 backed via the AfuCloud API.
  *
  * Uploads flow:
  *   Web:
- *     1. POST bytes to Supabase Edge Function /functions/v1/uploads/upload.
- *     2. Edge function streams them to R2 server-side (avoids R2 CORS issues).
- *     3. Write the returned CDN URL into Supabase DB.
+ *     1. Exchange the current AfuChat Supabase session for an AfuCloud API token.
+ *     2. POST bytes to AfuCloud's streamed container upload route.
+ *     3. Confirm the object so AfuCloud records its R2 metadata.
  *
  *   Native (iOS/Android):
- *     1. POST to Supabase Edge Function /functions/v1/uploads/sign → presigned PUT URL.
- *     2. PUT bytes directly to Cloudflare R2 using the presigned URL.
- *     3. Write the returned CDN URL into Supabase DB.
- *     4. Falls back to proxy upload via Edge Function if presigned PUT fails.
+ *     1. Exchange the current AfuChat Supabase session for an AfuCloud API token.
+ *     2. POST to AfuCloud for a presigned PUT URL.
+ *     3. PUT bytes directly to Cloudflare R2 using the presigned URL.
+ *     4. Confirm the object so AfuCloud records its R2 metadata.
+ *     5. Falls back to AfuCloud's streamed proxy upload if presigned PUT fails.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
+import { supabase } from "./supabase";
+import { AFUCLOUD_API_URL } from "./env";
 import * as FileSystem from "expo-file-system/legacy";
 import { FileSystemUploadType } from "expo-file-system/legacy";
 
-function getUploadsBase(): string {
-  return `${supabaseUrl}/functions/v1/uploads`;
+const AFUCLOUD_BASE = AFUCLOUD_API_URL.replace(/\/$/, "");
+const AFUCLOUD_SESSION_PATH = "/v1/auth/session";
+
+interface AfuCloudSession {
+  userId: string;
+  accessToken: string;
+  expiresAt: number;
 }
 
-function uploadsUrl(action: string): string {
-  return `${getUploadsBase()}/${action}`;
+let afuCloudSession: AfuCloudSession | null = null;
+let afuCloudSessionPromise: Promise<{ token: string | null; error: string | null }> | null = null;
+const containerIds = new Map<string, string>();
+const containerPromises = new Map<string, Promise<{ id: string | null; error: string | null }>>();
+
+function afuCloudUrl(path: string): string {
+  return `${AFUCLOUD_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function readJwtExpiry(token: string): number {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return Date.now() + 10 * 60_000;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const parsed = JSON.parse(atob(padded));
+    return typeof parsed.exp === "number" ? parsed.exp * 1000 : Date.now() + 10 * 60_000;
+  } catch {
+    return Date.now() + 10 * 60_000;
+  }
+}
+
+async function afuCloudToken(force = false): Promise<{ token: string | null; error: string | null }> {
+  const session = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+  const supabaseSession = session.data.session;
+  if (!supabaseSession) return { token: null, error: "Not authenticated" };
+
+  if (
+    !force &&
+    afuCloudSession &&
+    afuCloudSession.userId === supabaseSession.user.id &&
+    afuCloudSession.expiresAt > Date.now() + 30_000
+  ) {
+    return { token: afuCloudSession.accessToken, error: null };
+  }
+
+  if (afuCloudSessionPromise) return afuCloudSessionPromise;
+  afuCloudSessionPromise = (async () => {
+    try {
+      const response = await fetch(afuCloudUrl(AFUCLOUD_SESSION_PATH), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${supabaseSession.access_token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const body = await response.json().catch(() => null) as any;
+      if (!response.ok || !body?.accessToken) {
+        afuCloudSession = null;
+        return {
+          token: null,
+          error: body?.error || `AfuCloud session exchange failed (HTTP ${response.status})`,
+        };
+      }
+      afuCloudSession = {
+        userId: supabaseSession.user.id,
+        accessToken: body.accessToken,
+        expiresAt: readJwtExpiry(body.accessToken),
+      };
+      return { token: body.accessToken, error: null };
+    } catch (error: any) {
+      return { token: null, error: `AfuCloud network error: ${error?.message || error}` };
+    } finally {
+      afuCloudSessionPromise = null;
+    }
+  })();
+  return afuCloudSessionPromise;
+}
+
+function clearAfuCloudSession() {
+  afuCloudSession = null;
+  containerIds.clear();
+}
+
+async function afuCloudJson(
+  path: string,
+  init: RequestInit = {},
+  retry = true,
+): Promise<{ response: Response | null; body: any; error: string | null }> {
+  const auth = await afuCloudToken();
+  if (!auth.token) return { response: null, body: null, error: auth.error };
+  let response: Response;
+  try {
+    response = await fetch(afuCloudUrl(path), {
+      ...init,
+      headers: {
+        ...(init.headers || {}),
+        Authorization: `Bearer ${auth.token}`,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error: any) {
+    return { response: null, body: null, error: error?.message || "AfuCloud request failed" };
+  }
+  const body = await response.json().catch(() => null);
+  if (response.status === 401 && retry) {
+    clearAfuCloudSession();
+    return afuCloudJson(path, init, false);
+  }
+  if (!response.ok) {
+    return {
+      response,
+      body,
+      error: body?.error || `AfuCloud request failed (HTTP ${response.status})`,
+    };
+  }
+  return { response, body, error: null };
 }
 
 const MIME_MAP: Record<string, string> = {
@@ -150,22 +262,6 @@ function resolveBucket(bucket: string): string {
   return BUCKET_ALIAS[bucket] || bucket;
 }
 
-async function edgeFnHeaders(accessToken: string): Promise<Record<string, string>> {
-  return {
-    Authorization: `Bearer ${accessToken}`,
-    apikey: supabaseAnonKey,
-  };
-}
-
-async function getAccessToken(): Promise<string | null> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  } catch {
-    return null;
-  }
-}
-
 async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
   if (fileUri.startsWith("data:")) {
     const [header, b64] = fileUri.split(",");
@@ -198,8 +294,63 @@ async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
 
 interface SignedUpload {
   uploadUrl: string;
-  publicUrl: string;
   key: string;
+}
+
+function containerSlug(bucket: string): string {
+  return bucket.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+}
+
+async function getContainerId(
+  bucket: string,
+): Promise<{ id: string | null; error: string | null }> {
+  const slug = containerSlug(bucket);
+  const cached = containerIds.get(slug);
+  if (cached) return { id: cached, error: null };
+  const pending = containerPromises.get(slug);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const list = await afuCloudJson("/v1/storage-containers");
+    if (list.error) return { id: null, error: list.error };
+    const existing = Array.isArray(list.body)
+      ? list.body.find((item: any) => item?.slug === slug || item?.name === bucket)
+      : null;
+    if (existing?.id) {
+      containerIds.set(slug, existing.id);
+      return { id: existing.id, error: null };
+    }
+
+    const created = await afuCloudJson("/v1/storage-containers", {
+      method: "POST",
+      body: JSON.stringify({ name: bucket }),
+    });
+    if (created.error && created.response?.status !== 409) {
+      return { id: null, error: created.error };
+    }
+    if (created.body?.id) {
+      containerIds.set(slug, created.body.id);
+      return { id: created.body.id, error: null };
+    }
+
+    // A simultaneous upload on another device may have created the container
+    // after the list above. Re-read once after a conflict.
+    const reread = await afuCloudJson("/v1/storage-containers");
+    const found = Array.isArray(reread.body)
+      ? reread.body.find((item: any) => item?.slug === slug || item?.name === bucket)
+      : null;
+    if (found?.id) {
+      containerIds.set(slug, found.id);
+      return { id: found.id, error: null };
+    }
+    return { id: null, error: created.error || "AfuCloud storage container could not be created" };
+  })();
+  containerPromises.set(slug, request);
+  try {
+    return await request;
+  } finally {
+    containerPromises.delete(slug);
+  }
 }
 
 async function getSignedUpload(
@@ -207,35 +358,19 @@ async function getSignedUpload(
   filePath: string,
   contentType: string,
 ): Promise<{ data: SignedUpload | null; error: string | null }> {
-  const token = await getAccessToken();
-  if (!token) return { data: null, error: "Not authenticated" };
-
-  let resp: Response;
-  try {
-    resp = await fetch(uploadsUrl("sign"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await edgeFnHeaders(token)),
-      },
-      body: JSON.stringify({ bucket, path: filePath, contentType }),
-    });
-  } catch (e: any) {
-    return { data: null, error: `Network error: ${e?.message || e}` };
+  const container = await getContainerId(bucket);
+  if (!container.id) return { data: null, error: container.error };
+  const result = await afuCloudJson(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload-url`, {
+    method: "POST",
+    body: JSON.stringify({ name: filePath, contentType }),
+  });
+  if (result.error || !result.body?.uploadUrl || !result.body?.key) {
+    return { data: null, error: result.error || "AfuCloud returned no upload URL" };
   }
-
-  const text = await resp.text().catch(() => "");
-  if (!text) return { data: null, error: `Sign failed (HTTP ${resp.status})` };
-  if (text.trimStart().startsWith("<")) return { data: null, error: "Upload service unreachable" };
-
-  let json: any;
-  try { json = JSON.parse(text); } catch {
-    return { data: null, error: `Sign failed (HTTP ${resp.status}): ${text.slice(0, 120)}` };
-  }
-  if (!resp.ok) return { data: null, error: json?.error || `Sign failed (HTTP ${resp.status})` };
-  if (!json?.uploadUrl || !json?.publicUrl) return { data: null, error: "Sign endpoint returned no URL" };
-
-  return { data: { uploadUrl: json.uploadUrl, publicUrl: json.publicUrl, key: json.key }, error: null };
+  return {
+    data: { uploadUrl: result.body.uploadUrl, key: result.body.key },
+    error: null,
+  };
 }
 
 async function proxyUpload(
@@ -244,45 +379,115 @@ async function proxyUpload(
   body: Blob | ArrayBuffer,
   contentType: string,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
-  const token = await getAccessToken();
-  if (!token) return { publicUrl: null, error: "Not authenticated" };
-
   const bodySize = body instanceof Blob ? body.size : body instanceof ArrayBuffer ? body.byteLength : 0;
   if (!bodySize) return { publicUrl: null, error: "Selected file is empty or could not be read." };
 
-  const qs = new URLSearchParams({ bucket, path: filePath }).toString();
-  let resp: Response;
+  const container = await getContainerId(bucket);
+  if (!container.id) return { publicUrl: null, error: container.error };
+  const auth = await afuCloudToken();
+  if (!auth.token) return { publicUrl: null, error: auth.error };
+
+  const qs = new URLSearchParams({ name: filePath }).toString();
+  let response: Response;
   try {
-    resp = await fetch(`${uploadsUrl("upload")}?${qs}`, {
+    response = await fetch(
+      afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload?${qs}`),
+      {
       method: "POST",
       headers: {
         "Content-Type": contentType,
-        ...(await edgeFnHeaders(token)),
+        Authorization: `Bearer ${auth.token}`,
       },
       body: body as any,
-    });
+      },
+    );
   } catch (e: any) {
     return { publicUrl: null, error: `Upload failed: ${e?.message || e}` };
   }
 
-  const text = await resp.text().catch(() => "");
-  if (!text) return { publicUrl: null, error: `Upload failed (HTTP ${resp.status}). Please try again.` };
-  if (text.trimStart().startsWith("<")) return { publicUrl: null, error: "Upload service unreachable" };
-
-  let json: any;
-  try { json = JSON.parse(text); } catch {
-    return { publicUrl: null, error: `Upload failed (HTTP ${resp.status}): ${text.slice(0, 120)}` };
+  const json = await response.json().catch(() => null) as any;
+  if (!response.ok || !json?.key) {
+    if (response.status === 401) clearAfuCloudSession();
+    return {
+      publicUrl: null,
+      error: json?.error || `Upload failed (HTTP ${response.status})`,
+    };
   }
-  if (!resp.ok) return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${resp.status})` };
-  if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
+  return confirmUpload(bucket, filePath, json.key, contentType, json.size || bodySize, json.etag);
+}
 
-  return { publicUrl: json.publicUrl, error: null };
+function publicObjectUrl(body: any, key: string): string {
+  const value = typeof body?.url === "string" ? body.url : "";
+  return value.startsWith("http") ? value : afuCloudUrl(value || `/v1/storage/${encodeURIComponent(key)}`);
+}
+
+async function confirmUpload(
+  bucket: string,
+  filePath: string,
+  key: string,
+  contentType: string,
+  size: number,
+  etag?: string,
+): Promise<{ publicUrl: string | null; error: string | null }> {
+  const container = await getContainerId(bucket);
+  if (!container.id) return { publicUrl: null, error: container.error };
+  const result = await afuCloudJson(
+    `/v1/storage-containers/${encodeURIComponent(container.id)}/objects/confirm`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name: filePath,
+        key,
+        contentType,
+        size: Number.isFinite(size) ? size : 0,
+        etag: etag || null,
+      }),
+    },
+  );
+  if (result.error) return { publicUrl: null, error: result.error };
+  return { publicUrl: publicObjectUrl(result.body, key), error: null };
+}
+
+async function proxyStreamUpload(
+  bucket: string,
+  filePath: string,
+  uploadUri: string,
+  contentType: string,
+  size: number,
+): Promise<{ publicUrl: string | null; error: string | null }> {
+  const container = await getContainerId(bucket);
+  if (!container.id) return { publicUrl: null, error: container.error };
+  const auth = await afuCloudToken();
+  if (!auth.token) return { publicUrl: null, error: auth.error };
+  const qs = new URLSearchParams({ name: filePath }).toString();
+  try {
+    const response = await FileSystem.uploadAsync(
+      `${afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
+      uploadUri,
+      {
+        httpMethod: "POST",
+        headers: {
+          "Content-Type": contentType,
+          Authorization: `Bearer ${auth.token}`,
+        },
+        uploadType: FileSystemUploadType.BINARY_CONTENT,
+      },
+    );
+    const body = response.body ? JSON.parse(response.body) : null;
+    if (response.status < 200 || response.status >= 300 || !body?.key) {
+      if (response.status === 401) clearAfuCloudSession();
+      return { publicUrl: null, error: body?.error || `Upload failed (HTTP ${response.status})` };
+    }
+    return confirmUpload(bucket, filePath, body.key, contentType, body.size || size, body.etag);
+  } catch (error: any) {
+    return { publicUrl: null, error: error?.message || "Upload failed" };
+  }
 }
 
 /**
  * Upload a file to Cloudflare R2.
  *
- * Web:            proxied through Supabase Edge Function (avoids CORS).
+ * Web:            proxied through AfuCloud (avoids R2 CORS).
  * Native file://: FileSystem.uploadAsync streams bytes directly — no ArrayBuffer
  *                 loaded into memory, safe for 100 MB+ videos.
  * Native data:/blob:: fileUriToBlob + proxy (already in-memory, small).
@@ -320,7 +525,10 @@ export async function uploadToStorage(
             headers: { "Content-Type": mime },
             body: body as any,
           });
-          if (putResp.ok) return { publicUrl: sign.data.publicUrl, error: null };
+          if (putResp.ok) {
+            const size = body instanceof Blob ? body.size : (body as ArrayBuffer).byteLength;
+            return confirmUpload(realBucket, filePath, sign.data.key, mime, size);
+          }
         } catch {}
       }
       return proxyUpload(realBucket, filePath, body, mime);
@@ -365,6 +573,9 @@ export async function uploadToStorage(
       }
     };
 
+    const fileInfo = await FileSystem.getInfoAsync(uploadUri).catch(() => ({ exists: false } as any));
+    const fileSize = Number((fileInfo as any).size ?? 0);
+
     // 1. Try presigned PUT — bytes stream directly from disk to R2.
     const sign = await getSignedUpload(realBucket, filePath, mime);
     if (sign.data) {
@@ -376,7 +587,14 @@ export async function uploadToStorage(
         });
         if (putResult.status >= 200 && putResult.status < 300) {
           cleanupTemp();
-          return { publicUrl: sign.data.publicUrl, error: null };
+          const confirmed = await confirmUpload(
+            realBucket,
+            filePath,
+            sign.data.key,
+            mime,
+            fileSize,
+          );
+          return confirmed;
         }
         console.warn(
           `[Upload] Presigned PUT failed (${putResult.status}), falling back to proxy`,
@@ -388,41 +606,14 @@ export async function uploadToStorage(
       console.warn(`[Upload] Sign failed (${sign.error}), falling back to proxy`);
     }
 
-    // 2. Proxy fallback — POST bytes through the Supabase Edge Function.
+    // 2. Proxy fallback — POST bytes through AfuCloud.
     //    Still streamed via FileSystem.uploadAsync, not loaded into memory.
-    const token = await getAccessToken();
-    if (!token) { cleanupTemp(); return { publicUrl: null, error: "Not authenticated" }; }
-    const qs = new URLSearchParams({ bucket: realBucket, path: filePath }).toString();
-    try {
-      const proxyResult = await FileSystem.uploadAsync(
-        `${uploadsUrl("upload")}?${qs}`,
-        uploadUri,
-        {
-          httpMethod: "POST",
-          headers: {
-            "Content-Type": mime,
-            Authorization: `Bearer ${token}`,
-            apikey: supabaseAnonKey,
-          },
-          uploadType: FileSystemUploadType.BINARY_CONTENT,
-        },
-      );
+    const streamed = await proxyStreamUpload(realBucket, filePath, uploadUri, mime, fileSize);
+    if (!streamed.error || !fileUri.startsWith("content:")) {
       cleanupTemp();
-      const text = proxyResult.body ?? "";
-      if (!text) return { publicUrl: null, error: `Upload failed (HTTP ${proxyResult.status})` };
-      if (text.trimStart().startsWith("<")) return { publicUrl: null, error: "Upload service unreachable" };
-      let json: any;
-      try { json = JSON.parse(text); } catch {
-        return { publicUrl: null, error: `Upload failed (HTTP ${proxyResult.status})` };
-      }
-      if (proxyResult.status < 200 || proxyResult.status >= 300) {
-        return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${proxyResult.status})` };
-      }
-      if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
-      return { publicUrl: json.publicUrl, error: null };
-    } catch (e: any) {
-      console.warn(`[Upload] Native proxy stream failed, trying readable URI fallback: ${e?.message || e}`);
+      return streamed;
     }
+    console.warn(`[Upload] Native proxy stream failed, trying readable URI fallback: ${streamed.error}`);
 
     // Some Android content/file URIs are readable by fetch even when the
     // legacy FileSystem uploader rejects them. Use the same authenticated
@@ -445,9 +636,11 @@ export async function uploadToStorage(
 }
 
 /**
- * Get a short-lived private R2 read URL. This is used for paid media such as
- * AfuMusic, where the public CDN URL returned after upload must not grant
- * access by itself.
+ * Resolve a stored AfuCloud object to its canonical download route.
+ *
+ * AfuCloud's storage route mints the short-lived R2 URL server-side. The
+ * object key is opaque and the API remains the only service that knows the R2
+ * bucket credentials.
  */
 export async function getSignedR2ReadUrl(
   bucket: string,
@@ -455,28 +648,13 @@ export async function getSignedR2ReadUrl(
   trackId?: string,
 ): Promise<{ url: string | null; error: string | null }> {
   try {
-    const token = await getAccessToken();
-    if (!token) return { url: null, error: "Not authenticated" };
-    const response = await fetch(uploadsUrl("read"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await edgeFnHeaders(token)),
-      },
-      body: JSON.stringify({ bucket, path: filePath, trackId }),
-    });
-    const text = await response.text().catch(() => "");
-    if (!text || text.trimStart().startsWith("<")) {
-      return { url: null, error: "Storage service unreachable" };
-    }
-    let body: any;
-    try { body = JSON.parse(text); } catch {
-      return { url: null, error: `Read URL failed (HTTP ${response.status})` };
-    }
-    if (!response.ok || !body?.url) {
-      return { url: null, error: body?.error || `Read URL failed (HTTP ${response.status})` };
-    }
-    return { url: body.url, error: null };
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user.id;
+    if (!userId) return { url: null, error: "Not authenticated" };
+    const container = await getContainerId(resolveBucket(bucket));
+    if (!container.id) return { url: null, error: container.error };
+    const key = `containers/${userId}/${container.id}/${filePath.replace(/^\/+/, "")}`;
+    return { url: afuCloudUrl(`/v1/storage/${encodeURIComponent(key)}`), error: null };
   } catch (error: any) {
     return { url: null, error: error?.message || "Read URL failed" };
   }
@@ -568,15 +746,29 @@ export async function getCachedStorageUsage(): Promise<StorageUsage | null> {
 
 export async function getStorageUsage(): Promise<StorageUsage | null> {
   try {
-    const token = await getAccessToken();
-    if (!token) return null;
-    const r = await fetch(uploadsUrl("usage"), {
-      headers: await edgeFnHeaders(token),
-    });
-    if (!r.ok) return null;
-    const text = await r.text();
-    if (!text || text.trimStart().startsWith("<")) return null;
-    const parsed = JSON.parse(text) as StorageUsage;
+    const result = await afuCloudJson("/v1/storage-containers");
+    if (result.error || !Array.isArray(result.body)) return null;
+    const quotaBytes = 5 * 1024 * 1024 * 1024;
+    const perBucket: StorageUsage["per_bucket"] = {};
+    let usedBytes = 0;
+    let usedCount = 0;
+    for (const container of result.body) {
+      const bytes = Number(container?.storageUsed ?? 0);
+      const count = Number(container?.objectCount ?? 0);
+      const name = String(container?.slug || container?.name || "uploads");
+      perBucket[name] = { bytes, count };
+      usedBytes += Number.isFinite(bytes) ? bytes : 0;
+      usedCount += Number.isFinite(count) ? count : 0;
+    }
+    const parsed: StorageUsage = {
+      user_id: (await supabase.auth.getSession()).data.session?.user.id || "",
+      used_bytes: usedBytes,
+      used_count: usedCount,
+      quota_bytes: quotaBytes,
+      remaining_bytes: Math.max(0, quotaBytes - usedBytes),
+      percent_used: Math.min(100, (usedBytes / quotaBytes) * 100),
+      per_bucket: perBucket,
+    };
     AsyncStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(parsed)).catch(() => {});
     return parsed;
   } catch { return null; }
@@ -587,41 +779,43 @@ export async function listUserFiles(
   token?: string,
 ): Promise<{ items: StoredFile[]; nextToken: string | null } | null> {
   try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return null;
-    const qs = new URLSearchParams({ bucket });
-    if (token) qs.set("token", token);
-    const r = await fetch(`${uploadsUrl("list")}?${qs}`, {
-      headers: await edgeFnHeaders(accessToken),
-    });
-    if (!r.ok) return null;
-    const text = await r.text();
-    if (!text || text.trimStart().startsWith("<")) return null;
-    const json = JSON.parse(text);
+    const realBucket = resolveBucket(bucket);
+    const container = await getContainerId(realBucket);
+    if (!container.id) return null;
+    const result = await afuCloudJson(
+      `/v1/storage-containers/${encodeURIComponent(container.id)}/objects`,
+    );
+    if (result.error || !Array.isArray(result.body?.objects)) return null;
     return {
-      items: Array.isArray(json.items) ? json.items : [],
-      nextToken: json.next_token || null,
+      items: result.body.objects.map((object: any) => ({
+        key: `${realBucket}/${object.key}`,
+        size: Number(object.size ?? 0),
+        last_modified: object.updatedAt || object.createdAt || null,
+        url: object.url ? publicObjectUrl(object, object.key) : null,
+      })),
+      nextToken: null,
     };
   } catch { return null; }
 }
 
 export async function deleteUserFile(key: string): Promise<{ ok: boolean; error: string | null }> {
   try {
-    const token = await getAccessToken();
-    if (!token) return { ok: false, error: "Not signed in" };
-    const r = await fetch(uploadsUrl("object"), {
+    const separator = key.indexOf("/");
+    if (separator <= 0 || separator === key.length - 1) {
+      return { ok: false, error: "Invalid storage key" };
+    }
+    const bucket = resolveBucket(key.slice(0, separator));
+    const objectKey = key.slice(separator + 1);
+    const container = await getContainerId(bucket);
+    if (!container.id) return { ok: false, error: container.error };
+    const result = await afuCloudJson(
+      `/v1/storage-containers/${encodeURIComponent(container.id)}/objects/by-key`,
+      {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await edgeFnHeaders(token)),
+        body: JSON.stringify({ key: objectKey }),
       },
-      body: JSON.stringify({ key }),
-    });
-    const text = await r.text();
-    if (text.trimStart().startsWith("<")) return { ok: false, error: "Service unreachable" };
-    let json: any = {};
-    try { json = text ? JSON.parse(text) : {}; } catch { /* ignore */ }
-    if (!r.ok) return { ok: false, error: json?.error || `Failed (${r.status})` };
+    );
+    if (result.error) return { ok: false, error: result.error };
     AsyncStorage.removeItem(USAGE_CACHE_KEY).catch(() => {});
     return { ok: true, error: null };
   } catch (e: any) {

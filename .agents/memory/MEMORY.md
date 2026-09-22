@@ -105,3 +105,4 @@
 - [AfuMusic schema drift](afumusic-schema-drift.md) — Supabase may already contain a legacy public music_tracks table; apply the private AfuMusic schema additively.
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
 - [AfuChat Supabase schema migration](afuchat-supabase-schema-migration.md) — replacement project keeps app base tables in afuchat; auth/profile access stays preserved and RLS/triggers must move with tables.
+- [AfuCloud worker workspace](afucloud-worker-workspace.md) — cf-worker is outside the root pnpm workspace; install its own lockfile before typechecking or deploying.

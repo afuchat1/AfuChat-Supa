@@ -6,6 +6,8 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_PROJECT_ID: string;
   SUPABASE_DB_SCHEMA?: string;
+  AFUCHAT_SUPABASE_URL?: string;
+  AFUCHAT_SUPABASE_ANON_KEY?: string;
   R2_BUCKET_NAME: string;
   CLOUDFLARE_ACCOUNT_ID: string;
   CLOUDFLARE_R2_ACCESS_KEY_ID: string;

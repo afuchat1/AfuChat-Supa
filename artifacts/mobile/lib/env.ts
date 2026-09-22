@@ -24,6 +24,10 @@ export const APP_ORIGIN: string = `https://${APP_DOMAIN}`;
 
 export const SUPABASE_EDGE_URL: string = `${SUPABASE_URL}/functions/v1`;
 
+/** Canonical AfuCloud API. All app-owned media bytes and storage metadata use this API. */
+export const AFUCLOUD_API_URL: string =
+  (process.env.EXPO_PUBLIC_AFUCLOUD_API_URL ?? "").trim() || "https://api.afuchat.com";
+
 // Google OAuth web client ID. This is public configuration and is also used
 // by the native Google credential flow as its server/web audience.
 export const GOOGLE_WEB_CLIENT_ID: string =

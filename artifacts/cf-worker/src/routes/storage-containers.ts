@@ -149,6 +149,30 @@ storageContainers.post("/:id/upload-url", requireAuth, async (c) => {
   return c.json({ uploadUrl, objectId: crypto.randomUUID(), key, name });
 });
 
+// POST /v1/storage-containers/:id/upload
+// Proxy bytes through the canonical AfuCloud API. This is the web/native
+// fallback when a browser or device cannot PUT to the presigned R2 URL.
+storageContainers.post("/:id/upload", requireAuth, async (c) => {
+  const db = createDbClient(c.env);
+  const container = await db.getStorageContainer(c.req.param("id"), c.get("userId"));
+  if (!container) return c.json({ error: "Container not found" }, 404);
+  const name = (c.req.query("name") ?? "").trim().replace(/^\/+/, "");
+  const contentType = (c.req.header("content-type") ?? "application/octet-stream").split(";")[0].trim();
+  if (!name || name.includes("..")) return c.json({ error: "Object name is required" }, 400);
+  if (!c.req.raw.body) return c.json({ error: "Empty file body. Nothing to upload." }, 400);
+
+  const key = `containers/${c.get("userId")}/${container.id}/${name}`;
+  const object = await c.env.IMAGES_BUCKET.put(key, c.req.raw.body, {
+    httpMetadata: { contentType },
+  });
+  return c.json({
+    key,
+    etag: object.etag,
+    size: object.size,
+    name,
+  });
+});
+
 storageContainers.post("/:id/objects/confirm", requireAuth, async (c) => {
   const db = createDbClient(c.env);
   const container = await db.getStorageContainer(c.req.param("id"), c.get("userId"));
@@ -158,6 +182,10 @@ storageContainers.post("/:id/objects/confirm", requireAuth, async (c) => {
   const key = String(body.key ?? "");
   const prefix = `containers/${c.get("userId")}/${container.id}/`;
   if (!name || !key.startsWith(prefix)) return c.json({ error: "Invalid object confirmation" }, 400);
+  const existing = await db.getStorageObjectByKey(key, container.id, c.get("userId"));
+  if (existing) {
+    return c.json(objectApi(existing, container.id, c.env, await cdnUrl(db, container, c.get("userId"))));
+  }
   const object = await db.createStorageObject({
     container_id: container.id,
     user_id: c.get("userId"),
@@ -168,6 +196,20 @@ storageContainers.post("/:id/objects/confirm", requireAuth, async (c) => {
     etag: body.etag || null,
   });
   return c.json(objectApi(object, container.id, c.env, await cdnUrl(db, container, c.get("userId"))), 201);
+});
+
+storageContainers.delete("/:id/objects/by-key", requireAuth, async (c) => {
+  const db = createDbClient(c.env);
+  const container = await db.getStorageContainer(c.req.param("id"), c.get("userId"));
+  if (!container) return c.json({ error: "Container not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const key = String(body.key ?? "").trim();
+  if (!key) return c.json({ error: "Object key is required" }, 400);
+  const object = await db.getStorageObjectByKey(key, container.id, c.get("userId"));
+  if (!object) return c.json({ error: "Object not found" }, 404);
+  await deleteObject(object.object_key, c.env).catch(() => {});
+  await db.deleteStorageObject(object.id, container.id, c.get("userId"));
+  return c.json({ message: "Object deleted" });
 });
 
 storageContainers.get("/:containerId/objects/:objectId", requireAuth, async (c) => {
