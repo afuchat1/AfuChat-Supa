@@ -7,4 +7,6 @@ The AfuCloud Worker is intentionally outside the root pnpm workspace, so its dep
 
 **Why:** Root workspace installation only covers `artifacts/mobile`; a worker check otherwise reports missing Cloudflare type definitions even when the mobile dependencies are present.
 
-**How to apply:** Treat `artifacts/cf-worker/pnpm-lock.yaml` as the worker's independent dependency lock and run verification from that artifact directory.
+**How to apply:** Treat `artifacts/cf-worker/pnpm-lock.yaml` as the worker's independent dependency lock, install with `pnpm install --ignore-workspace` from that artifact directory, and use Node 22+ for the current Wrangler release.
+
+**Why:** Wrangler 4.136 requires Node 22 or newer; the workspace's default Node 20 runtime fails before authentication.
