@@ -131,10 +131,14 @@ async function afuCloudJson(
     return afuCloudJson(path, init, false);
   }
   if (!response.ok) {
+    const requestId = response.headers.get("X-AfuCloud-Request-Id");
+    const requestSuffix = requestId ? ` [request ${requestId}]` : "";
     return {
       response,
       body,
-      error: body?.error || `AfuCloud request failed (HTTP ${response.status})`,
+      error: body?.error
+        ? `${body.error}${requestSuffix}`
+        : `AfuCloud request failed (HTTP ${response.status})${requestSuffix}`,
     };
   }
   return { response, body, error: null };
@@ -444,7 +448,18 @@ async function confirmUpload(
       }),
     },
   );
-  if (result.error) return { publicUrl: null, error: result.error };
+  if (result.error) {
+    // The R2 write has already completed before confirmation is called. A
+    // transient database/schema failure must not turn a successfully uploaded
+    // attachment into a failed message. The storage route can still resolve
+    // this object by its opaque key; a later storage reconciliation can add
+    // the metadata row.
+    if (result.response && result.response.status >= 500) {
+      console.warn("[Upload] Metadata confirmation failed after R2 write; using object URL:", result.error);
+      return { publicUrl: publicObjectUrl(result.body, key), error: null };
+    }
+    return { publicUrl: null, error: result.error };
+  }
   return { publicUrl: publicObjectUrl(result.body, key), error: null };
 }
 

@@ -75,6 +75,7 @@
 - [Production FCM requires a new native build](production-fcm-native-build.md) — server-side sender fixes cannot repair tokens created by an older Play AAB; a completed new AAB must be installed before production delivery can recover.
 - [Phone contact display and matching](phone-contact-display-order.md) — preserve raw device rows for display/order; normalize only the separate value used for account matching.
 - [Concurrent media upload keys](concurrent-media-upload-keys.md) — parallel uploads must use unique object names; timestamp-only names collide and duplicate/overwrite grouped images.
+- [Media upload confirmation](media-upload-confirmation.md) — treat R2 byte writes as successful even if metadata confirmation has a transient 5xx; keep the canonical object URL usable.
 - [TypeScript typecheck heap](typescript-typecheck-heap.md) — full mobile typechecks need a larger Node heap than the default in this workspace.
 - [Foreground sync service risk](foreground-sync-service-risk.md) — keep offline sync durable in SQLite; do not start a custom Android foreground service for ordinary retry callbacks.
 - [Conservative dead-code audits](cleanup-audit.md) — trace indirect runtime imports and registries before deleting modules that look unreferenced.
