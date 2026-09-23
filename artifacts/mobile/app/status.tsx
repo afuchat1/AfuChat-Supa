@@ -15,7 +15,7 @@ import { router, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/env";
+import { AFUCLOUD_API_URL, SUPABASE_ANON_KEY } from "@/lib/env";
 
 type ServiceStatus = "operational" | "degraded" | "outage";
 
@@ -122,7 +122,7 @@ export default function StatusPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const edgeFnBase = `${SUPABASE_URL}/functions/v1`;
+  const edgeFnBase = `${AFUCLOUD_API_URL}/functions/v1`;
   const anonKey = SUPABASE_ANON_KEY;
 
   const fetchStatus = useCallback(async (isRefresh = false) => {
@@ -132,6 +132,7 @@ export default function StatusPage() {
         headers: {
           Accept: "application/json",
           ...(anonKey ? { Authorization: `Bearer ${anonKey}` } : {}),
+          ...(anonKey ? { apikey: anonKey } : {}),
         },
         signal: AbortSignal.timeout(10000),
       });

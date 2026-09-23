@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
-import { AFUCLOUD_API_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
+import { AFUCLOUD_API_URL, SUPABASE_ANON_KEY } from "./env";
 
-export const supabaseUrl = SUPABASE_URL;
+export const supabaseUrl = AFUCLOUD_API_URL;
 export const supabaseAnonKey = SUPABASE_ANON_KEY;
 export const supabaseGatewayUrl = AFUCLOUD_API_URL;
 
@@ -104,11 +104,11 @@ const webStorage = {
   },
 };
 
-// Browser preflight currently cannot reach the gateway until its deployed CORS
-// policy includes Supabase's `apikey` and `X-Client-Info` headers. Keep native
-// traffic behind AfuCloud, while using Supabase's public browser-compatible
-// endpoint on web so sign-in is not blocked by a gateway preflight failure.
-const supabaseClientUrl = isWeb ? SUPABASE_URL : supabaseGatewayUrl;
+// AfuCloud is the public API boundary for both native and web. Its Worker
+// exposes the Supabase-compatible auth, REST/RPC, storage, functions, and
+// realtime paths while forwarding the caller JWT to the shared Supabase
+// project so RLS remains authoritative.
+const supabaseClientUrl = supabaseGatewayUrl;
 
 export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
   auth: {

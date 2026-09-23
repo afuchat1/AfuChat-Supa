@@ -1,11 +1,11 @@
-import { SUPABASE_URL as supabaseUrl, SUPABASE_ANON_KEY as supabaseAnonKey } from "./env";
+import { AFUCLOUD_API_URL, SUPABASE_ANON_KEY as supabaseAnonKey } from "./env";
 
 /**
  * Returns the Supabase edge function base URL.
  * Used for non-AI edge functions (image generation, audio transcription, etc.).
  */
 function getEdgeFnBase(): string {
-  return `${supabaseUrl}/functions/v1`;
+  return `${AFUCLOUD_API_URL}/functions/v1`;
 }
 
 /** Common auth headers for Supabase edge function calls (anon key — works for verify_jwt:false functions). */

@@ -1,0 +1,240 @@
+# Future Roadmap
+
+The initial production release focuses on the Images platform. However, the architecture must be modular and extensible so future services can be added without redesigning the platform.
+
+The following roadmap represents planned future phases and should influence the overall architecture, database design, API versioning, permission system, and storage engine.
+
+---
+
+## Phase 2 — Video Platform
+
+Provide professional video infrastructure.
+
+Planned capabilities:
+
+* Video uploads
+* Video streaming
+* Adaptive bitrate streaming
+* Automatic transcoding
+* Thumbnail generation
+* Preview clips
+* Video compression
+* Video analytics
+* Video metadata
+* Subtitle support
+* Multiple resolutions
+* Private and public video sharing
+* Signed video URLs
+* Video API
+* Video processing pipeline
+
+---
+
+## Phase 3 — Document Platform
+
+Support professional document management.
+
+Planned capabilities:
+
+* PDF storage
+* Word documents
+* Excel files
+* PowerPoint files
+* Text files
+* Archive files
+* Version history
+* Document previews
+* OCR indexing
+* Metadata extraction
+* Secure document sharing
+* Signed document URLs
+* Full-text search
+
+---
+
+## Phase 4 — Audio Platform
+
+Support audio asset management.
+
+Planned capabilities:
+
+* Audio uploads
+* Streaming
+* Audio previews
+* Metadata management
+* Waveform generation
+* Playlist support
+* Podcast hosting
+* Download management
+* Audio analytics
+
+---
+
+## Phase 5 — Email Storage Platform
+
+Provide storage services for email systems.
+
+Planned capabilities:
+
+* Email attachment storage
+* Inline image hosting
+* Secure attachment links
+* Attachment expiration
+* Attachment analytics
+* Email asset management
+* Attachment APIs
+* Large attachment support
+
+---
+
+## Phase 6 — Developer Platform
+
+Expand developer capabilities.
+
+Planned capabilities:
+
+* Official SDKs
+* Command Line Interface (CLI)
+* Webhooks
+* Event subscriptions
+* API Playground
+* API Explorer
+* OpenAPI specification
+* GraphQL gateway (optional)
+* SDK generators
+* Example applications
+
+---
+
+## Phase 7 — Team Collaboration
+
+Support organizations and teams.
+
+Planned capabilities:
+
+* Teams
+* Organizations
+* Roles
+* Fine-grained permissions
+* Shared projects
+* Shared asset libraries
+* Activity logs
+* Audit history
+* Invitations
+* Enterprise administration
+
+---
+
+## Phase 8 — Custom Domains
+
+Allow customers to use their own domains.
+
+Examples:
+
+* images.company.com
+* media.company.com
+* cdn.company.com
+
+Planned capabilities:
+
+* Domain verification
+* SSL certificate automation
+* DNS validation
+* Branded asset URLs
+* Custom CDN configuration
+* Domain management dashboard
+
+---
+
+## Phase 9 — AI Services
+
+Introduce AI-powered media tools.
+
+Planned capabilities:
+
+* Automatic image tagging
+* OCR
+* Object detection
+* Duplicate detection
+* Smart search
+* Background removal
+* Image enhancement
+* AI-generated metadata
+* AI-powered asset organization
+
+---
+
+## Phase 10 — Global CDN & Performance
+
+Enhance global delivery.
+
+Planned capabilities:
+
+* Intelligent caching
+* Regional edge optimization
+* Smart cache invalidation
+* Edge processing
+* Automatic optimization
+* Traffic analytics
+* Global bandwidth monitoring
+
+---
+
+## Phase 11 — Storage Expansion
+
+Extend supported asset types.
+
+Future support includes:
+
+* Images
+* Videos
+* Audio
+* Documents
+* Archives
+* Backups
+* Application assets
+* Static websites
+* Configuration files
+* AI model assets
+
+---
+
+## Phase 12 — Enterprise Features
+
+Enterprise-focused capabilities.
+
+Planned features:
+
+* Single Sign-On (SSO)
+* SCIM provisioning
+* Compliance tools
+* Audit exports
+* Advanced security policies
+* Storage quotas
+* Regional storage policies
+* Data retention policies
+* Organization billing
+* Enterprise analytics
+
+---
+
+## Phase 13 — Marketplace
+
+Developer ecosystem.
+
+Planned capabilities:
+
+* Community extensions
+* Plugins
+* Integrations
+* Third-party applications
+* Templates
+* Automation workflows
+
+---
+
+## Long-Term Vision
+
+AfuCloud should evolve into a complete cloud platform for managing, processing, securing, and delivering digital assets through professional APIs and developer tools.
+
+Every future service should integrate seamlessly with the existing authentication system, permission model, storage abstraction layer, API gateway, analytics engine, and developer experience without requiring fundamental architectural changes.

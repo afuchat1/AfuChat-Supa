@@ -6,7 +6,7 @@
  * The key only authorises calls to this project's own /chat edge function, so
  * it is safe to ship in the client bundle (the edge function owns rate-limiting).
  */
-import { ENGAGERA_API_KEY, SUPABASE_URL } from "@/lib/env";
+import { AFUCLOUD_API_URL, ENGAGERA_API_KEY } from "@/lib/env";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 type ChatOptions = { messages: ChatMessage[]; model?: string; stream?: boolean };
@@ -25,7 +25,7 @@ export function getEngagera(): EngageraClient {
     _client = {
       chat: {
         create: async ({ messages, model = "engagera-pro", stream = false }) => {
-          const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+          const response = await fetch(`${AFUCLOUD_API_URL}/functions/v1/chat`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

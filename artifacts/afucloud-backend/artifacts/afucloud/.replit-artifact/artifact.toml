@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "AfuCloud"
+version = "1.0.0"
+id = "artifacts/afucloud"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21380
+
+[services.development]
+run = "pnpm --filter @workspace/afucloud run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/afucloud", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/afucloud/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21380"
+BASE_PATH = "/"

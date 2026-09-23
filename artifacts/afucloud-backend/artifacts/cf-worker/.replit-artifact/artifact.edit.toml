@@ -1,0 +1,16 @@
+kind = "api"
+previewPath = "/cf-worker"
+title = "Cloudflare Worker (Edge API)"
+version = "1.0.0"
+id = "artifacts/cf-worker"
+
+[[services]]
+name = "CF Worker Dev"
+paths = ["/cf-worker"]
+localPort = 8787
+
+[services.development]
+run = "pnpm --filter @workspace/cf-worker run dev"
+
+[services.env]
+PORT = "8787"
