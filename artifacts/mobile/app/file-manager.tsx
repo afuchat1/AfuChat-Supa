@@ -172,30 +172,30 @@ export default function FileManagerScreen() {
       }
 
       const mediaType = activeFilter === "image"
-        ? [MediaLibrary.MediaType.photo]
+         ? ["photo"]
         : activeFilter === "video"
-          ? [MediaLibrary.MediaType.video]
+           ? ["video"]
           : activeFilter === "audio"
-            ? [MediaLibrary.MediaType.audio]
-            : [MediaLibrary.MediaType.photo, MediaLibrary.MediaType.video];
+             ? ["audio"]
+             : ["photo", "video"];
       const result = await MediaLibrary.getAssetsAsync({
         mediaType,
         first: 300,
-        sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+        sortBy: [["creationTime", false]],
       });
       setGalleryFiles(result.assets.map((asset) => ({
         id: `gallery-${asset.id}`,
         assetId: asset.id,
         name: asset.filename || `${asset.mediaType}-${asset.id}`,
         size: Number((asset as any).fileSize) || 0,
-        type: asset.mediaType === MediaLibrary.MediaType.photo
+         type: asset.mediaType === "photo"
           ? "image"
-          : asset.mediaType === MediaLibrary.MediaType.video
+           : asset.mediaType === "video"
             ? "video"
             : "audio",
-        mimeType: asset.mediaType === MediaLibrary.MediaType.photo
+         mimeType: asset.mediaType === "photo"
           ? "image/*"
-          : asset.mediaType === MediaLibrary.MediaType.video
+           : asset.mediaType === "video"
             ? "video/*"
             : "audio/*",
         uri: asset.uri,

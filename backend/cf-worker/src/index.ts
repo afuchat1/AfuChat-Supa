@@ -17,6 +17,7 @@ import domainRoutes from "./routes/domains";
 import storageContainerRoutes from "./routes/storage-containers";
 import { proxySupabaseRequest } from "./routes/supabase-gateway";
 import appFunctionRoutes from "./routes/app-functions";
+import paymentRoutes from "./routes/payments";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -96,6 +97,7 @@ app.route("/v1/storage", storageRoutes);
 app.route("/v1/domains", domainRoutes);
 app.route("/v1/storage-containers", storageContainerRoutes);
 app.route("/v1", appFunctionRoutes);
+app.route("/v1/payments", paymentRoutes);
 
 // ── Project-scoped sub-routes ─────────────────────────────────────────────────
 // Images: /v1/projects/:projectId/images/*

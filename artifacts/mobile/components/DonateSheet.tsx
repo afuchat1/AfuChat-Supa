@@ -1,6 +1,6 @@
 // ─── DonateSheet ─────────────────────────────────────────────────────────────
 // Bottom-sheet donation flow powered by Pesapal.
-// Calls the existing `pesapal-initiate` edge function with
+// Calls the AfuCloud Worker `pesapal-initiate` route with
 // { purpose: "donation", usd_amount: X } — the same checkout WebView
 // pattern used by the ACoins top-up flow in modules/afupay.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,7 +20,7 @@ import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
-import { SUPABASE_EDGE_URL } from "@/lib/env";
+import { AFUCLOUD_API_URL } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
@@ -92,7 +92,7 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
     setLoading(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${SUPABASE_EDGE_URL}/pesapal-initiate`, {
+      const res = await fetch(`${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/payments/pesapal-initiate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -23,11 +23,12 @@ const THUMB = Math.floor((SCREEN_W - (COLS + 1) * 2) / COLS);
 const PAGE = 60;
 
 type MediaTab = "all" | "photos" | "videos" | "audio";
+type GalleryMediaType = "audio" | "photo" | "video" | "unknown" | "pairedVideo";
 
 export interface GalleryAsset {
   id: string;
   uri: string;
-  mediaType: MediaLibrary.MediaTypeValue;
+  mediaType: GalleryMediaType;
   duration: number;
   filename: string;
   width: number;
@@ -76,14 +77,14 @@ export default function MediaGalleryPicker({
   const [resolving, setResolving] = useState(false);
   const loadingMoreRef = useRef(false);
 
-  const mediaTypesForTab = useCallback((t: MediaTab): MediaLibrary.MediaTypeValue[] => {
+  const mediaTypesForTab = useCallback((t: MediaTab): GalleryMediaType[] => {
     switch (t) {
-      case "photos": return [MediaLibrary.MediaType.photo];
-      case "videos": return [MediaLibrary.MediaType.video];
+      case "photos": return ["photo"];
+      case "videos": return ["video"];
       // audio requires READ_MEDIA_AUDIO which is not declared in AndroidManifest
       // — exclude it from "all" and handle the audio tab separately.
-      case "audio":  return [MediaLibrary.MediaType.audio];
-      default:       return [MediaLibrary.MediaType.photo, MediaLibrary.MediaType.video];
+      case "audio":  return ["audio"];
+      default:       return ["photo", "video"];
     }
   }, []);
 
@@ -107,7 +108,7 @@ export default function MediaGalleryPicker({
         mediaType: mediaTypesForTab(tab),
         first: PAGE,
         after: reset ? undefined : cursor,
-        sortBy: [[MediaLibrary.SortBy.creationTime, false]],
+        sortBy: [["creationTime", false]],
       });
       const mapped: GalleryAsset[] = result.assets.map((a) => ({
         id: a.id, uri: a.uri, mediaType: a.mediaType,
@@ -295,8 +296,8 @@ export default function MediaGalleryPicker({
               const selIdx = isSelected
                 ? Array.from(selected.keys()).indexOf(item.id) + 1
                 : -1;
-              const isVideo = item.mediaType === MediaLibrary.MediaType.video;
-              const isAudio = item.mediaType === MediaLibrary.MediaType.audio;
+              const isVideo = item.mediaType === "video";
+              const isAudio = item.mediaType === "audio";
 
               return (
                 <Pressable

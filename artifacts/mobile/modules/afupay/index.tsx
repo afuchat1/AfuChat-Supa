@@ -22,7 +22,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { SUPABASE_EDGE_URL } from "@/lib/env";
+import { AFUCLOUD_API_URL } from "@/lib/env";
 import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
 import * as Clipboard from "expo-clipboard";
@@ -112,7 +112,7 @@ function localLine(usd: number, country?: string | null): string | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getEdgeFnBase() {
-  return SUPABASE_EDGE_URL;
+  return `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/payments`;
 }
 async function getToken(): Promise<string> {
   // Always refresh to avoid sending an expired token to Edge Functions
