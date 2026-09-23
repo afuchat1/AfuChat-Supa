@@ -14,7 +14,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+import { AFUCLOUD_API_URL } from "@/lib/env";
 import { useLanguage } from "@/context/LanguageContext";
 
 const DATA_TYPES: {
@@ -62,13 +63,12 @@ export default function PrivacyDownloadScreen() {
         return;
       }
       const accessToken = sessionData.session.access_token;
-      const functionUrl = `${supabaseUrl}/functions/v1/export-user-data`;
+      const functionUrl = `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/account/export`;
       const res = await fetch(functionUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
-          apikey: supabaseAnonKey,
         },
         body: JSON.stringify({ types: Array.from(selected) }),
       });

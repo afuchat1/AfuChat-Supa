@@ -23,7 +23,6 @@ export function toAfuCloudMediaUrl(value: string | null | undefined): string | n
     const parsed = new URL(value);
     const host = parsed.hostname.toLowerCase();
     const isAfuCloudStorage =
-      host === "cdn.afucloud.dev" ||
       host.endsWith(".r2.dev") ||
       host.endsWith(".r2.cloudflarestorage.com") ||
       host === "r2.cloudflarestorage.com";

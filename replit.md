@@ -101,6 +101,10 @@ pnpm run typecheck
   clients must not call Supabase Storage or Supabase Edge Functions directly.
   Cloudflare R2 is the object-storage layer, and Worker routes own application
   functions.
+- Current production media uses the AfuCloud R2 bucket `afucloud-images` and
+  its active CDN hostname `img.afuchat.com`. The older `afuchat-media` bucket
+  and `cdn.afuchat.com` hostname remain intact for older app versions; do not
+  delete or repoint them during current-app deploys.
 - The Worker source lives at `backend/cf-worker/` and is deployed independently
   with Wrangler as `afucloud-api`; it is intentionally not an `artifacts/`
   entry.

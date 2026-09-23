@@ -24,10 +24,21 @@ functions.on(["GET", "POST"], "/status", async (c) => {
     (async () => {
       const started = Date.now();
       try {
-        const response = await fetch(`${c.env.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/`, {
-          headers: { apikey: c.env.AFUCHAT_SUPABASE_ANON_KEY ?? "" },
-        });
-        return { name: "supabase", ok: response.ok, latency_ms: Date.now() - started, message: response.ok ? undefined : `HTTP ${response.status}` };
+        const response = await fetch(
+          `${(c.env.AFUCHAT_SUPABASE_URL ?? c.env.SUPABASE_URL).replace(/\/+$/, "")}/rest/v1/profiles?select=id&limit=1`,
+          {
+            headers: {
+              apikey: c.env.AFUCHAT_SUPABASE_ANON_KEY ?? "",
+              Accept: "application/json",
+            },
+          },
+        );
+        return {
+          name: "supabase",
+          ok: response.ok,
+          latency_ms: Date.now() - started,
+          message: response.ok ? undefined : `HTTP ${response.status}`,
+        };
       } catch (error) {
         return { name: "supabase", ok: false, latency_ms: Date.now() - started, message: error instanceof Error ? error.message : "unavailable" };
       }

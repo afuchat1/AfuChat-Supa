@@ -25,7 +25,7 @@ function apiHostname(hostname: any, env: Env) {
     dnsRecord: {
       type: "CNAME",
       name: hostname.hostname,
-      value: env.AFU_CDN_TARGET ?? "cdn.afucloud.dev",
+      value: env.AFU_CDN_TARGET ?? "img.afuchat.com",
     },
     createdAt: hostname.created_at,
   };
@@ -161,7 +161,7 @@ domains.post("/:domainId/hostnames/:hostnameId/verify", requireAuth, async (c) =
   } catch {
     return c.json({ error: "DNS verification service is temporarily unavailable" }, 502);
   }
-  const expected = (c.env.AFU_CDN_TARGET ?? "cdn.afucloud.dev").replace(/\.$/, "");
+  const expected = (c.env.AFU_CDN_TARGET ?? "img.afuchat.com").replace(/\.$/, "");
   if (!values.some(value => value === expected)) {
     return c.json({ error: "CNAME record not found", dnsRecord: { type: "CNAME", name: hostname.hostname, value: expected } }, 422);
   }

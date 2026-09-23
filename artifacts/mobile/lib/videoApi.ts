@@ -6,11 +6,13 @@
  *   getAssetVideoManifest — fetch playback manifest for an asset
  *   pickBestSource      — choose the best rendition for the current device
  */
-import { supabase, supabaseUrl } from "./supabase";
+import { supabase } from "./supabase";
+import { AFUCLOUD_API_URL } from "./env";
 
-// All video API calls go directly to the Supabase Edge Function.
-// No Express API server needed.
-const EDGE_BASE: string = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/videos`;
+// Video API calls must use the canonical public backend boundary.
+// The Worker currently does not expose a video-processing route; callers
+// retain the source-video fallback until that server-side pipeline is shipped.
+const EDGE_BASE: string = `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/videos`;
 
 export interface VideoSource {
   codec: "h264" | "av1";
@@ -193,4 +195,4 @@ export function pickBestSource(
 }
 
 // Re-export the Supabase project URL for callers that need it directly.
-export const SUPABASE_PUBLIC_URL: string = supabaseUrl;
+export const SUPABASE_PUBLIC_URL: string = AFUCLOUD_API_URL;
