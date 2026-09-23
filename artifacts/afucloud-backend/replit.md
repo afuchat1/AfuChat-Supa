@@ -63,9 +63,11 @@ workflow is stale or the development handler is missing.
 - Replit is source storage and editing only; no Replit server is part of the AfuCloud runtime.
 - The production frontend sends API requests directly to `https://api.afuchat.com`.
 - The Cloudflare Worker is the only API layer and is the only component allowed to access Supabase and R2.
-- The Worker also exposes Supabase-compatible `/auth/v1`, `/rest/v1`, `/storage/v1`,
-  `/functions/v1`, and `/realtime/v1` routes for AfuChat. These routes forward the
-  caller JWT and anon key so the shared Supabase RLS policies remain authoritative.
+- AfuChat and AfuCloud are one product and share this backend and database. The
+  Worker is the only public/application backend. Supabase PostgreSQL and Auth
+  are internal infrastructure accessed by the Worker; clients must not use
+  Supabase Storage or Supabase Edge Functions. Cloudflare R2 replaces Supabase
+  Storage, and all application functions must be implemented as Worker routes.
 - Do not put AfuCloud secrets, database URLs, or storage credentials in frontend variables.
 - Production secrets are stored only in the Cloudflare Worker secret store.
 
@@ -85,9 +87,9 @@ workflow is stale or the development handler is missing.
 - API codegen: Orval (from OpenAPI spec in `lib/api-spec/openapi.yaml`)
 - Frontend auth: JWT stored in `localStorage` as `afucloud_token`
 - Shared auth: Supabase's `auth.users` is the only identity and credential source for AfuChat, AfuMail, AfuAI, AfuCloud, and AfuAds. Shared profile data lives in `accounts.profiles` keyed by `user_id`; AfuCloud domain tables live under `afucloud.*` and reference `auth.users(id)` directly
-- AfuChat's existing public tables and RPCs are reached through the gateway; do not
-  duplicate them into `afucloud.*`. New AfuCloud-owned tables still belong in
-  `afucloud.*`, while `auth.users` and `accounts.profiles` remain shared.
+- The Worker accesses AfuChat's existing public tables and RPCs server-side; do
+  not duplicate them into `afucloud.*`. New AfuCloud-owned tables still belong
+  in `afucloud.*`, while `auth.users` and `accounts.profiles` remain shared.
 - Passwords and identity are managed by Supabase Auth; the Worker never creates a product-specific credential store
 - The Node API maps Supabase Auth explicitly with `pgSchema("auth")`; do not use an unqualified `users` table for login queries
 - Storage: Cloudflare R2 (S3-compatible) with pre-signed PUT URLs

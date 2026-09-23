@@ -1,6 +1,6 @@
 # AfuChat mobile app with an Expo web surface
 
-AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat and AfuCloud are one product and share the same backend and database. AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to the shared live Supabase project for auth, database, realtime, storage, and Edge Functions.
 
 ## Quick start on Replit
 
@@ -86,7 +86,11 @@ pnpm run typecheck
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
 - Keep the Expo web export identical to the native Expo flows. Do not create a separate web-only product surface or mock product content.
-- All DB writes go through Supabase RLS-protected routes or Edge Functions.
+- All application backend traffic goes through the Cloudflare Worker. The Worker
+  may use the shared Supabase PostgreSQL/Auth infrastructure internally, but
+  clients must not call Supabase Storage or Supabase Edge Functions directly.
+  Cloudflare R2 is the object-storage layer, and Worker routes own application
+  functions.
 - ACoin deductions must use the `deduct_acoin` RPC (not direct `.update()`).
 - Direct PostgreSQL connections from Replit fail (IPv4 blocked); use the Supabase JS admin client (HTTPS) for all DB ops.
 
