@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
+import type { ExportedHandler } from "@cloudflare/workers-types";
 import type { Env } from "./types";
 
 import authRoutes from "./routes/auth";
@@ -18,6 +19,7 @@ import storageContainerRoutes from "./routes/storage-containers";
 import { proxySupabaseRequest } from "./routes/supabase-gateway";
 import appFunctionRoutes from "./routes/app-functions";
 import paymentRoutes from "./routes/payments";
+import { cleanupExpiredStories } from "./lib/cleanup";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -144,4 +146,17 @@ app.onError((err, c) => {
   );
 });
 
-export default app;
+const worker: ExportedHandler<Env> = {
+  fetch: app.fetch,
+  async scheduled(_controller, env, _ctx) {
+    try {
+      const result = await cleanupExpiredStories(env);
+      console.log("[cleanup-expired-stories]", result);
+    } catch (error) {
+      console.error("[cleanup-expired-stories]", error);
+      throw error;
+    }
+  },
+};
+
+export default worker;

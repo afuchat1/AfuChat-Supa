@@ -51,6 +51,17 @@ functions.on(["GET", "POST"], "/status", async (c) => {
     ok: !hasOutage,
     timestamp: new Date().toISOString(),
     services: Object.fromEntries(checks.map((check) => [check.name, check])),
+    configuration: {
+      ai: Boolean(c.env.ENGAGERA_API_KEY),
+      push: Boolean(c.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? c.env.FIREBASE_SERVICE_ACCOUNT_KEY),
+      email_export: Boolean(c.env.RESEND_API_KEY),
+      payments: Boolean(
+        c.env.PESAPAL_CONSUMER_KEY &&
+        c.env.PESAPAL_CONSUMER_SECRET &&
+        c.env.PESAPAL_IPN_ID,
+      ),
+      expired_story_cleanup: true,
+    },
   });
 });
 

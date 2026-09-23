@@ -34,6 +34,11 @@ R2_PUBLIC_URL = "https://img.afuchat.com"
 CLOUDFLARE_R2_ACCESS_KEY_ID = "40916680c4892042d4ce49396ef62819"
 NODE_ENV = "production"
 
+# ── Scheduled jobs ─────────────────────────────────────────────────────────────
+# Expired stories and their active R2 objects are removed by the Worker itself.
+[triggers]
+crons = ["*/15 * * * *"]
+
 # ── Secrets (set via: wrangler secret put SECRET_NAME) ────────────────────────
 # SUPABASE_SERVICE_KEY      — Supabase service role key
 # JWT_SECRET                — JWT signing secret
