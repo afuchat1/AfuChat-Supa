@@ -109,3 +109,4 @@
 - [AfuCloud worker workspace](afucloud-worker-workspace.md) — cf-worker is outside the root pnpm workspace; install its own lockfile before typechecking or deploying.
 - [AfuCloud browser auth CORS](afucloud-auth-cors.md) — gateway browser preflight must allow Supabase's apikey and X-Client-Info headers or web sign-in reports only Failed to fetch.
 - [AfuCloud media boundary](afucloud-media-boundary.md) — app-owned media enters through the worker API; never expose direct R2/CDN upload or download paths to the client.
+- [Cloudflare Worker deployment audit](cloudflare-worker-deployment-audit.md) — inspect the active version’s multipart bundle and use protected-route probes to distinguish missing routes from auth failures.
