@@ -10,7 +10,7 @@ const CORS_HEADERS = {
 };
 
 const ENGAGERA_API_KEY = Deno.env.get("ENGAGERA_API_KEY") ?? "";
-const ENGAGERA_BASE = "https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1";
+const ENGAGERA_BASE = "https://poijhidfekwfthyksatp.supabase.co/functions/v1";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

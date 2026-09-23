@@ -18,7 +18,7 @@ function json(data: unknown, status = 200): Response {
 }
 
 async function chatWithEngagera(messages: unknown[], maxTokens: number, apiKey: string): Promise<string> {
-  const response = await fetch("https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1/chat", {
+  const response = await fetch("https://poijhidfekwfthyksatp.supabase.co/functions/v1/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

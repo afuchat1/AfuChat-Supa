@@ -13,9 +13,9 @@
 
 export const SUPABASE_URL: string =
   (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "").trim() ||
-  "https://rhnsjqqtdzlkvqazfcbg.supabase.co";
+  "https://poijhidfekwfthyksatp.supabase.co";
 
-export const SUPABASE_ANON_KEY: string = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobnNqcXF0ZHpsa3ZxYXpmY2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2NzA4NjksImV4cCI6MjA3NzI0Njg2OX0.j8zuszO1K6Apjn-jRiVUyZeqe3Re424xyOho9qDl_oY";
+export const SUPABASE_ANON_KEY: string = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE";
 
 export const APP_DOMAIN: string =
   (process.env.EXPO_PUBLIC_DOMAIN ?? "").trim() || "afuchat.com";

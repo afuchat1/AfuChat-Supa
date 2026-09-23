@@ -43,7 +43,7 @@ BEGIN
     '*/15 * * * *',
     $cron$
       SELECT net.http_post(
-        url := 'https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1/cleanup-expired-stories',
+         url := 'https://poijhidfekwfthyksatp.supabase.co/functions/v1/cleanup-expired-stories',
         headers := '{"Content-Type":"application/json"}'::jsonb,
         body := '{}'::jsonb
       );
