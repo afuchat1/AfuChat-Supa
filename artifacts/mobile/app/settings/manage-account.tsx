@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { afuChatApiJson } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
@@ -76,12 +77,12 @@ export default function ManageAccountScreen() {
     if (!user) return;
     setDownloading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("export-user-data", {
-        body: { types: ["profile", "posts", "messages", "activity", "transactions"] },
+      const { response, data } = await afuChatApiJson<{ error?: string; email?: string }>("/account/export", {
+        types: ["profile", "posts", "messages", "activity", "transactions"],
       });
 
-      if (error || data?.error) {
-        const msg = data?.error ?? error?.message ?? "Something went wrong. Please try again.";
+      if (!response.ok || data?.error) {
+        const msg = data?.error ?? "Something went wrong. Please try again.";
         showAlert("Export Failed", msg);
         return;
       }

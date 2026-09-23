@@ -1,31 +1,26 @@
-import { AFUCLOUD_API_URL, SUPABASE_ANON_KEY as supabaseAnonKey } from "./env";
+import { AFUCLOUD_API_URL } from "./env";
 
 /**
- * Returns the Supabase edge function base URL.
- * Used for non-AI edge functions (image generation, audio transcription, etc.).
+ * Returns the AfuCloud application API base URL.
  */
 function getEdgeFnBase(): string {
-  return `${AFUCLOUD_API_URL}/functions/v1`;
+  return `${AFUCLOUD_API_URL}/v1`;
 }
 
-/** Common auth headers for Supabase edge function calls (anon key — works for verify_jwt:false functions). */
+/** Common headers for public AfuCloud application routes. */
 function edgeHeaders(): Record<string, string> {
   return {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${supabaseAnonKey}`,
-    "apikey": supabaseAnonKey,
   };
 }
 
 /**
- * Auth headers that include the signed-in user's JWT.
- * Required for edge functions with verify_jwt:true (e.g. generate-ai-image, chat-with-afuai).
+ * Auth headers for AfuCloud routes that require the signed-in user's JWT.
  */
 export function edgeHeadersWithAuth(userAccessToken: string): Record<string, string> {
   return {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${userAccessToken}`,
-    "apikey": supabaseAnonKey,
   };
 }
 
@@ -41,7 +36,7 @@ export async function askAi(prompt: string, systemPrompt?: string, options?: Ask
   }
   messages.push({ role: "user", content: prompt });
 
-  const response = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
+  const response = await fetch(`${getEdgeFnBase()}/ai/reply`, {
     method: "POST",
     headers: edgeHeaders(),
     body: JSON.stringify({
@@ -132,9 +127,7 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
   try {
-    // Route to afu-ai-reply (verify_jwt:false, handles {audioUrl} natively via Groq).
-    // Falls back to the dedicated transcribe-audio function if the primary fails.
-    const primary = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
+    const primary = await fetch(`${getEdgeFnBase()}/ai/reply`, {
       method: "POST",
       headers: edgeHeaders(),
       body: JSON.stringify({ audioUrl }),
@@ -145,8 +138,7 @@ export async function transcribeAudio(audioUrl: string): Promise<string> {
       if (data.text !== undefined) return data.text || "";
     }
 
-    // Fallback: dedicated transcribe-audio function (requires user JWT via supabase client)
-    const fallback = await fetch(`${getEdgeFnBase()}/transcribe-audio`, {
+    const fallback = await fetch(`${getEdgeFnBase()}/ai/transcribe`, {
       method: "POST",
       headers: edgeHeaders(),
       body: JSON.stringify({ audioUrl }),
@@ -330,5 +322,5 @@ export async function aiResearchCompanyAndGenerateAbout(ctx: JobAiContext): Prom
   );
 }
 
-/** Builds the Supabase edge function base URL — exported for screens that call edge fns directly. */
+/** Builds the AfuCloud application API base URL for screens with special payloads. */
 export { getEdgeFnBase, edgeHeaders };

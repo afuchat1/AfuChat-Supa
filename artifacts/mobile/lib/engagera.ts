@@ -1,12 +1,10 @@
 /**
  * engagera.ts — Lazy singleton for the Engagera AI client.
  *
- * The API key is read from EXPO_PUBLIC_ENGAGERA_API_KEY (env) with a hardcoded
- * fallback, matching the same public-key pattern used for SUPABASE_ANON_KEY.
- * The key only authorises calls to this project's own /chat edge function, so
- * it is safe to ship in the client bundle (the edge function owns rate-limiting).
+ * Provider credentials stay in the Cloudflare Worker. The mobile client calls
+ * only the AfuCloud application API.
  */
-import { AFUCLOUD_API_URL, ENGAGERA_API_KEY } from "@/lib/env";
+import { AFUCLOUD_API_URL } from "@/lib/env";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 type ChatOptions = { messages: ChatMessage[]; model?: string; stream?: boolean };
@@ -21,15 +19,13 @@ let _client: EngageraClient | null = null;
  */
 export function getEngagera(): EngageraClient {
   if (!_client) {
-    if (!ENGAGERA_API_KEY) throw new Error("ENGAGERA_API_KEY is not configured");
     _client = {
       chat: {
         create: async ({ messages, model = "engagera-pro", stream = false }) => {
-          const response = await fetch(`${AFUCLOUD_API_URL}/functions/v1/chat`, {
+          const response = await fetch(`${AFUCLOUD_API_URL}/v1/ai/chat`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "x-engagera-api-key": ENGAGERA_API_KEY,
             },
             body: JSON.stringify({ messages, model, stream }),
           });

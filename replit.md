@@ -1,6 +1,6 @@
 # AfuChat mobile app with an Expo web surface
 
-AfuChat and AfuCloud are one product and share the same backend and database. AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to the shared live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat and AfuCloud are one product and share the same backend and database. AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app uses the Cloudflare Worker at `api.afuchat.com` as its only public backend boundary. The Worker uses Supabase Auth/PostgreSQL internally and Cloudflare R2 for object storage.
 
 ## Quick start on Replit
 
@@ -13,6 +13,14 @@ pnpm install
 ```
 
 This installs all packages and runs the `postinstall` script that patches native modules for the build environment.
+
+The Worker is an independent Cloudflare project outside the root pnpm workspace:
+
+```bash
+cd backend/cf-worker
+pnpm install --ignore-workspace --frozen-lockfile
+pnpm run typecheck
+```
 
 ### 2. Start the Expo web preview
 
@@ -34,11 +42,9 @@ The app ships with hardcoded production-safe fallbacks in `artifacts/mobile/lib/
 
 | Variable | Purpose | Required? |
 |---|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | Override the Supabase project URL | No — fallback in `env.ts` |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Public anon key used by the client | Required |
-| `EXPO_PUBLIC_ENGAGERA_API_KEY` | Engagera AI key (client use should be replaced by a server proxy) | Optional |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-side admin operations (Edge Functions) | Only for EAS builds |
-| `SUPABASE_ACCESS_TOKEN` | Deploy Edge Functions via CLI | Only for Edge Function deploys |
+| `EXPO_PUBLIC_AFUCLOUD_API_URL` | Override the public Cloudflare Worker URL | No — defaults to `https://api.afuchat.com` |
+| `EXPO_PUBLIC_SUPABASE_URL` | Legacy project URL used only for public client metadata | No |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Public anon key forwarded through the Worker gateway | No — fallback in `env.ts` |
 | `EXPO_TOKEN` | EAS cloud builds | Only for EAS builds |
 
 To set Replit secrets (for EAS builds): use the **Secrets** panel (environment-secrets skill).
@@ -54,11 +60,15 @@ artifacts/mobile/
   lib/          Supabase client, native services, storage, call engine
   modules/      Native mini-app modules
   web/          Legacy public web surface retained during the Expo web migration
-  supabase/     Existing Supabase migrations and Edge Function source
+  supabase/     Existing Supabase migrations kept as database reference
   scripts/      postinstall.sh — patches native modules for New Arch
+
+backend/cf-worker/
+  src/          Cloudflare Worker API and Supabase gateway
+  wrangler.toml Production route, R2 binding, and public vars
 ```
 
-The `supabase/` directory is part of the existing backend. Do not modify its migrations or Edge Functions during app-only work.
+The `supabase/` directory is retained for schema history and migration reference. It is not a deployed application backend: clients must not call Supabase Edge Functions or Supabase Storage directly.
 
 ## Key features implemented
 
@@ -91,6 +101,9 @@ pnpm run typecheck
   clients must not call Supabase Storage or Supabase Edge Functions directly.
   Cloudflare R2 is the object-storage layer, and Worker routes own application
   functions.
+- The Worker source lives at `backend/cf-worker/` and is deployed independently
+  with Wrangler as `afucloud-api`; it is intentionally not an `artifacts/`
+  entry.
 - ACoin deductions must use the `deduct_acoin` RPC (not direct `.update()`).
 - Direct PostgreSQL connections from Replit fail (IPv4 blocked); use the Supabase JS admin client (HTTPS) for all DB ops.
 

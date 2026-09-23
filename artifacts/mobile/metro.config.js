@@ -40,7 +40,6 @@ config.resolver = {
     return context.resolveRequest(context, moduleName, platform);
   },
   blockList: [
-    /artifacts[\\/]mockup-sandbox[\\/].*/,
     /node_modules[\\/]\.pnpm[\\/].*_tmp_\d+/,
     // typedoc's inner node_modules symlink doesn't exist in pnpm's virtual store
     /node_modules[\\/]\.pnpm[\\/]typedoc[^/]*[\\/]node_modules[\\/]typedoc[\\/]node_modules.*/,

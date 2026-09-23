@@ -122,17 +122,14 @@ export default function StatusPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const edgeFnBase = `${AFUCLOUD_API_URL}/functions/v1`;
-  const anonKey = SUPABASE_ANON_KEY;
+  const appApiBase = `${AFUCLOUD_API_URL}/v1`;
 
   const fetchStatus = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const res = await fetch(`${edgeFnBase}/status`, {
+      const res = await fetch(`${appApiBase}/status`, {
         headers: {
           Accept: "application/json",
-          ...(anonKey ? { Authorization: `Bearer ${anonKey}` } : {}),
-          ...(anonKey ? { apikey: anonKey } : {}),
         },
         signal: AbortSignal.timeout(10000),
       });
@@ -175,7 +172,7 @@ export default function StatusPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [edgeFnBase, anonKey]);
+  }, [appApiBase]);
 
   useEffect(() => {
     fetchStatus();

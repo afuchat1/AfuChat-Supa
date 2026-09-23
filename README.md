@@ -1,13 +1,15 @@
 # AfuChat
 
-AfuChat is an Android mobile app built with React Native and Expo. It provides messaging, social feeds, stories, AI features, payments, mini-apps, and offline-first native storage while using the existing Supabase project for backend services.
+AfuChat is an Android mobile app built with React Native and Expo. It provides messaging, social feeds, stories, AI features, payments, mini-apps, and offline-first native storage. Public application traffic goes through the Cloudflare Worker API, which uses the shared Supabase project internally and Cloudflare R2 for media.
 
 ## Stack
 
 - React Native 0.83
 - Expo SDK 55 and Expo Router
 - Hermes and the React Native New Architecture
-- Supabase Auth, PostgreSQL, Realtime, Storage, and Edge Functions
+- Cloudflare Worker API (Hono)
+- Supabase Auth, PostgreSQL, and Realtime behind the Worker
+- Cloudflare R2 object storage behind the Worker
 - AsyncStorage, SQLite, and MMKV for native persistence
 - pnpm workspace with the app in `artifacts/mobile`
 
@@ -37,10 +39,13 @@ artifacts/mobile/
   hooks/        React hooks
   lib/          Native services and Supabase client
   modules/      Native mini-apps
-  supabase/     Existing Supabase migrations and functions
+  supabase/     Existing Supabase migrations kept for schema reference
+backend/cf-worker/
+  src/          Cloudflare Worker API
+  wrangler.toml Worker routes and R2 binding
 ```
 
-The Supabase directory is intentionally preserved. App cleanup must not modify its migrations or Edge Functions.
+The Supabase directory is intentionally preserved for schema history. It is not a public backend surface; app-owned functions are implemented as Worker routes.
 
 ## Verification
 
@@ -53,6 +58,7 @@ pnpm run typecheck
 ## Native-only notes
 
 - The app does not include a web or Express server layer.
+- The only public backend is the Cloudflare Worker at `https://api.afuchat.com`.
 - `expo-web-browser` remains for Android OAuth and external links.
 - `react-native-webview` remains for the native AfuPay payment flow.
 - Replit startup uses `EXPO_OFFLINE=1`; do not replace it with `CI=1`.

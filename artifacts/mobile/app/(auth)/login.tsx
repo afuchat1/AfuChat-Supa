@@ -453,9 +453,9 @@ export default function SignInScreen() {
 
   async function resolveToEmail(raw: string): Promise<string | null> {
     try {
-      const res = await fetch(`${AFUCLOUD_API_URL}/functions/v1/auth-resolve-identifier`, {
+      const res = await fetch(`${AFUCLOUD_API_URL}/v1/auth-resolve-identifier`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: raw.trim() }),
       });
       const json = await res.json();

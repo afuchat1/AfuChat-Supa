@@ -22,6 +22,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { afuChatApiJson } from "@/lib/afuchatApi";
 import Colors from "@/constants/colors";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
@@ -204,9 +205,11 @@ export default function SupportCenter() {
       });
 
       // Fire AI reply in the background — don't block the success UI on it.
-      supabase.functions
-        .invoke("support-ai-reply", { body: { ticket_id: ticket.id } })
-        .catch((e) => console.warn("[Support] AI reply invoke failed:", e?.message));
+      afuChatApiJson("/support/ai-reply", { ticket_id: ticket.id })
+        .then(({ response, data }) => {
+          if (!response.ok) console.warn("[Support] AI reply request failed:", (data as any)?.error);
+        })
+        .catch((e) => console.warn("[Support] AI reply request failed:", e?.message));
 
       setSubmittedTicketId(ticket.id);
       setSubmitted(true);

@@ -1,8 +1,0 @@
-- [Supabase pooler SSL](supabase-pooler-ssl.md) — direct DB hostname may not resolve from Replit; use session pooler URL, strip sslmode from URL
-- [AfuCloud bootstrap](afucloud-bootstrap.md) — target Supabase project poijhidfekwfthyksatp, R2 bucket afucloud-images, pooler-backed API
-- [R2 CORS and image serving](r2-cors-image-serving.md) — R2 must have CORS set via PutBucketCors on startup; images served via /api/v1/storage/:key → 302 to pre-signed GET URL
-- [CF Worker Architecture](cf-worker-architecture.md) — Hono + Supabase REST + aws4fetch; 3 secrets needed before deploy; bcrypt→PBKDF2 migration wired in login
-- [Shared Afu authentication](shared-afu-auth.md) — auth.users is the only identity/credential source; accounts.profiles links by user_id and product tables reference auth.users directly
-- [Vercel frontend builds](vercel-vite-build.md) — static Vite builds need defaults for PORT and BASE_PATH because Vercel does not inject Replit preview variables
-- [API workflow database target](api-workflow-supabase-env.md) — keep the API package in the pnpm workspace and provide Supabase target variables so it cannot fall back to DATABASE_URL
-- [Local API token signing](local-api-token-signing.md) — development uses an in-memory JWT key when no persisted JWT_SECRET is available; production still requires explicit configuration

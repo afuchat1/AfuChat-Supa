@@ -26,21 +26,11 @@ export const APP_ORIGIN: string = `https://${APP_DOMAIN}`;
 export const AFUCLOUD_API_URL: string =
   (process.env.EXPO_PUBLIC_AFUCLOUD_API_URL ?? "").trim() || "https://api.afuchat.com";
 
-/** Supabase Edge Functions are reached through AfuCloud's gateway. */
-export const SUPABASE_EDGE_URL: string = `${AFUCLOUD_API_URL}/functions/v1`;
-
 // Google OAuth web client ID. This is public configuration and is also used
 // by the native Google credential flow as its server/web audience.
 export const GOOGLE_WEB_CLIENT_ID: string =
   (process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "").trim() ||
   "148950951890-hejlh2vvpeb7tg7d8haj6om52pf86ig6.apps.googleusercontent.com";
-
-/**
- * Engagera API key. Provider keys can carry quota or billing privileges even
- * when requests originate from a client app, so this must not be committed.
- */
-export const ENGAGERA_API_KEY: string =
-  (process.env.EXPO_PUBLIC_ENGAGERA_API_KEY ?? "").trim();
 
 /**
  * Giphy public API key — used client-side for GIF search and trending.

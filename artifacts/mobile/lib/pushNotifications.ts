@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { supabase } from "@/lib/supabase";
+import { afuChatApiJson } from "@/lib/afuchatApi";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
@@ -309,10 +310,13 @@ export async function registerPushToken(): Promise<string | null> {
   if (token.type !== Platform.OS || typeof token.data !== "string" || token.data.length < 20 || /^(Expo|Exponent)PushToken\[/.test(token.data)) {
     throw new Error("The native build did not return a direct FCM token.");
   }
-  const { error } = await supabase.functions.invoke("register-push-token", {
-    body: { token: token.data, platform: Platform.OS, provider: "fcm", appVersion: Constants.expoConfig?.version ?? "" },
+  const { response, data } = await afuChatApiJson<{ error?: string }>("/push/register", {
+    token: token.data,
+    platform: Platform.OS,
+    provider: "fcm",
+    appVersion: Constants.expoConfig?.version ?? "",
   });
-  if (error) throw error;
+  if (!response.ok) throw new Error(data?.error || `Push registration failed (${response.status})`);
   return token.data;
 }
 
@@ -349,22 +353,20 @@ export type NotifyChatRecipientsParams = {
 export async function notifyChatRecipients(params: NotifyChatRecipientsParams) {
   const recipientUserIds = [...new Set(params.recipientIds)].filter((id) => id && id !== params.senderId);
   if (!recipientUserIds.length) return;
-  const { error } = await supabase.functions.invoke("send-push-notification", {
-    body: {
-      recipientUserIds,
-      senderId: params.senderId,
-      senderName: params.senderName,
-      senderAvatarUrl: params.senderAvatarUrl ?? null,
-      body: params.body,
-      chatId: params.chatId,
-      messageId: params.messageId,
-      attachmentUrl: params.attachmentUrl ?? null,
-      attachmentType: params.attachmentType ?? null,
-      categoryId: PUSH_CATEGORY_MESSAGE,
-      data: { chatId: params.chatId, messageId: params.messageId, categoryId: PUSH_CATEGORY_MESSAGE },
-    },
+  const { response, data } = await afuChatApiJson<{ error?: string }>("/push/send", {
+    recipientUserIds,
+    senderId: params.senderId,
+    senderName: params.senderName,
+    senderAvatarUrl: params.senderAvatarUrl ?? null,
+    body: params.body,
+    chatId: params.chatId,
+    messageId: params.messageId,
+    attachmentUrl: params.attachmentUrl ?? null,
+    attachmentType: params.attachmentType ?? null,
+    categoryId: PUSH_CATEGORY_MESSAGE,
+    data: { chatId: params.chatId, messageId: params.messageId, categoryId: PUSH_CATEGORY_MESSAGE },
   });
-  if (error && __DEV__) console.warn("[push] delivery request failed", error.message);
+  if (!response.ok && __DEV__) console.warn("[push] delivery request failed", data?.error || response.status);
 }
 
 export type NotifyCallRecipientParams = {
@@ -378,8 +380,7 @@ export type NotifyCallRecipientParams = {
 
 export async function notifyCallRecipient(params: NotifyCallRecipientParams) {
   if (!params.recipientId || !params.senderId || params.recipientId === params.senderId) return;
-  const { error } = await supabase.functions.invoke("send-push-notification", {
-    body: {
+  const { response, data } = await afuChatApiJson<{ error?: string }>("/push/send", {
       recipientUserIds: [params.recipientId],
       senderId: params.senderId,
       senderName: params.callerName,
@@ -398,7 +399,6 @@ export async function notifyCallRecipient(params: NotifyCallRecipientParams) {
         chatId: params.chatId ?? "",
         categoryId: PUSH_CATEGORY_CALL,
       },
-    },
   });
-  if (error && __DEV__) console.warn("[push] call delivery request failed", error.message);
+  if (!response.ok && __DEV__) console.warn("[push] call delivery request failed", data?.error || response.status);
 }
