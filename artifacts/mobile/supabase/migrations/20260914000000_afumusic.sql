@@ -107,7 +107,8 @@ create policy "music transactions are visible to participants"
   using (buyer_id = auth.uid() or creator_id = auth.uid());
 
 -- Audio bytes are stored in Cloudflare R2 through the authenticated uploads
--- Edge Function. Supabase stores only the AfuMusic metadata and purchase rows.
+-- AfuCloud Worker routes own provider-backed operations. Supabase stores only
+-- the AfuMusic metadata and purchase rows.
 
 create or replace function public.purchase_music_track(p_track_id uuid)
 returns jsonb

@@ -50,8 +50,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from "expo-video";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
-import * as MediaLibrary from "expo-media-library";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -76,6 +74,7 @@ import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
 import { getPreferredVideoHeight, isOffline as checkIsOffline, subscribeToNetworkChanges } from "@/lib/networkQuality";
 import { safePause, safePlay } from "@/lib/safeMedia";
+import { getMediaLibrary } from "@/lib/mediaLibrary";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
 import {
@@ -155,58 +154,7 @@ function GradientOverlay({
   );
 }
 
-// ─── TapHandler ───────────────────────────────────────────────────────────────
-/**
- * Transparent layer that detects taps/double-taps/long-presses using
- * react-native-gesture-handler's native Gesture API.
- *
- * Running on the UI thread via JSI means this NEVER competes with the
- * FlatList's scroll gesture — the scroll starts the instant the finger
- * moves, with zero JS-thread negotiation delay.
- */
-function TapHandler({
-  onTap,
-  onDoubleTap,
-  onLongPress,
-}: {
-  onTap: () => void;
-  onDoubleTap?: (x: number, y: number) => void;
-  onLongPress?: () => void;
-}) {
-  const singleTap = Gesture.Tap()
-    .maxDuration(300)
-    .maxDistance(10)
-    .runOnJS(true)
-    .onEnd(() => { onTap(); });
-
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .maxDuration(250)
-    .maxDistance(10)
-    .runOnJS(true)
-    .onEnd((event) => { onDoubleTap?.(event.x, event.y); });
-
-  const longPress = Gesture.LongPress()
-    .minDuration(500)
-    .runOnJS(true)
-    .onStart(() => { onLongPress?.(); });
-
-  // Exclusive: double-tap wins over single-tap (waits to confirm no second tap)
-  // Race: long-press fires as soon as threshold met, cancels tap
-  const composed = Gesture.Race(
-    longPress,
-    Gesture.Exclusive(doubleTap, singleTap),
-  );
-
-  return (
-    <GestureDetector gesture={composed}>
-      {/* Exclude the right 80 px where the action-rail buttons live.
-          On Android the GestureDetector claims the entire touch area of its
-          child view, which would swallow taps on Like / Comment / etc. */}
-      <View style={[StyleSheet.absoluteFill, { right: 80 }]} />
-    </GestureDetector>
-  );
-}
+import TapHandler from "@/components/video/TapHandler";
 
 // ─── SocialShareSheet ─────────────────────────────────────────────────────────
 
@@ -1735,6 +1683,12 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     setDownloading(true); showToast("Saving to device…", 30000);
     try {
+      const MediaLibrary = getMediaLibrary();
+      if (!MediaLibrary) {
+        setDownloading(false); setDownloadToast(null);
+        showAlert("Unavailable", "Saving videos is only available in the mobile app.");
+        return;
+      }
       const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== "granted") {
         setDownloading(false); setDownloadToast(null);

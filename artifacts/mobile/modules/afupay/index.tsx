@@ -115,7 +115,7 @@ function getEdgeFnBase() {
   return `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/payments`;
 }
 async function getToken(): Promise<string> {
-  // Always refresh to avoid sending an expired token to Edge Functions
+  // Always refresh to avoid sending an expired token to AfuCloud routes
   const { data: refreshed } = await supabase.auth.refreshSession();
   if (refreshed.session?.access_token) return refreshed.session.access_token;
   const { data } = await supabase.auth.getSession();

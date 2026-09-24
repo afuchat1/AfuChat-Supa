@@ -152,7 +152,7 @@ export default function SecuritySettingsScreen() {
     }
   }
 
-  // ── Download data (via Supabase Edge Function → email) ──────────────────────
+  // ── Download data (via AfuCloud Worker → email) ─────────────────────────────
   const [showDownloadGate, setShowDownloadGate] = useState(false);
   const [downloading, setDownloading] = useState(false);
 

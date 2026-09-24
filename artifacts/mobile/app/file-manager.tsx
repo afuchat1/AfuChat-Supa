@@ -171,13 +171,13 @@ export default function FileManagerScreen() {
         return;
       }
 
-      const mediaType = activeFilter === "image"
-         ? ["photo"]
+      const mediaType: ("photo" | "video" | "audio")[] = activeFilter === "image"
+        ? ["photo"]
         : activeFilter === "video"
-           ? ["video"]
+          ? ["video"]
           : activeFilter === "audio"
-             ? ["audio"]
-             : ["photo", "video"];
+            ? ["audio"]
+            : ["photo", "video"];
       const result = await MediaLibrary.getAssetsAsync({
         mediaType,
         first: 300,

@@ -1,6 +1,5 @@
--- Schedule the cleanup-expired-stories Edge Function. It removes both the
--- database rows and Cloudflare R2 objects.
--- directly from SQL on Supabase.
+-- Keep the database helper for administrative/manual cleanup. The scheduled
+-- cleanup itself runs in the AfuCloud Worker, which also removes R2 objects.
 
 CREATE OR REPLACE FUNCTION public.cleanup_expired_stories()
 RETURNS integer
@@ -22,32 +21,3 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.cleanup_expired_stories() FROM PUBLIC;
-
--- Run frequently enough that an expired story does not remain available for
--- more than a short cleanup window after its 24-hour lifetime.
-DO $cleanup_job$
-DECLARE
-  existing_job_id bigint;
-BEGIN
-  SELECT jobid
-    INTO existing_job_id
-    FROM cron.job
-   WHERE jobname = 'cleanup-expired-stories';
-
-  IF existing_job_id IS NOT NULL THEN
-    PERFORM cron.unschedule(existing_job_id);
-  END IF;
-
-  PERFORM cron.schedule(
-    'cleanup-expired-stories',
-    '*/15 * * * *',
-    $cron$
-      SELECT net.http_post(
-         url := 'https://poijhidfekwfthyksatp.supabase.co/functions/v1/cleanup-expired-stories',
-        headers := '{"Content-Type":"application/json"}'::jsonb,
-        body := '{}'::jsonb
-      );
-    $cron$
-  );
-END;
-$cleanup_job$;
