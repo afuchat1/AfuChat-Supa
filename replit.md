@@ -98,18 +98,38 @@ pnpm run typecheck
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
 - Keep the Expo web export identical to the native Expo flows. Do not create a separate web-only product surface or mock product content.
-- The current local Worker configuration is a legacy mixed setup: `afucloud-api`
+- The current Worker configuration is a legacy mixed setup: `afucloud-api`
   owns the `api.afuchat.com` route, AfuCloud API handlers, AfuChat Supabase
-  gateway/app handlers, and an `afuchat-media` binding. Treat this as a
-  nonconforming state to migrate, not as the target architecture.
+  gateway/app handlers, and an `afuchat-media` binding, while its database
+  schema setting is `afucloud`. Treat this as a nonconforming state to migrate,
+  not as the target architecture.
 - AfuChat data and media belong to AfuChat's own schema and bucket; AfuCloud
   data and media belong to AfuCloud's own schema and bucket. The master rules
   give `afu-chat-assets` and `afu-cloud-storage` as product-owned bucket names.
   CDN paths must identify the product and map to its bucket.
+- Read-only Cloudflare inventory on 2026-10-03 confirmed `api.afuchat.com` routes
+  to `afucloud-api`, `cloud.afuchat.com/*` routes to `afucloud`, `cdn.afuchat.com`
+  is attached to `afuchat-media`, and `img.afuchat.com` is attached to
+  `afucloud-images`. All 136 objects in `afucloud-images` have identical key,
+  size, and ETag copies in `afuchat-media`; that bucket also contains 1,292
+  additional app-media objects. Keep the duplicate copies until old URLs and
+  consumers are migrated.
+- The deployed `afucloud-api` config has `SUPABASE_DB_SCHEMA=afucloud` but binds
+  `IMAGES_BUCKET` to `afuchat-media`. The separate `afucloud` Worker declares
+  `R2_BUCKET_NAME=afucloud-images` but has no R2 binding; its media operations
+  currently depend on the API Worker. Rebind only after AfuChat storage traffic
+  is separated and compatibility paths are verified.
+- The live Supabase PostgREST API exposes `public` and `chat` schemas but does
+  not expose `afuchat`. The available Supabase management token cannot query
+  the database, and anonymous PostgREST access cannot migrate protected data.
+  Resolve this with a privileged, reversible schema migration; do not assume
+  the older schema-migration notes reflect the live database.
 - Existing endpoints and media paths are compatibility contracts. Do not
   repoint, delete, or decommission the current Worker, route, bucket, or data
-  until live ownership, consumers, object inventory, migration, validation, and
-  rollback are established. No live Cloudflare inventory has been verified.
+  until consumers, migration validation, and rollback are established.
+- Direct requests to the live Worker hostnames from this workspace receive
+  Cloudflare error 1010, so do not interpret that response as a Worker failure.
+  Use a permitted external runtime probe for data-plane verification.
 - The Worker source currently lives at `backend/cf-worker/`; do not treat its
   current Wrangler deployment target as proof of exclusive resource ownership.
 - ACoin deductions must use the `deduct_acoin` RPC (not direct `.update()`).

@@ -1,10 +1,10 @@
 ---
 name: AfuChat Supabase schema migration
-description: The replacement Supabase project stores AfuChat application tables in afuchat while preserving auth and profile access.
+description: AfuChat's intended schema migration and the mismatch observed in the live Supabase project.
 ---
 
-The replacement project keeps all AfuChat base tables in the `afuchat` schema. Public compatibility views expose the same table names to the existing client, while `auth` remains project-owned and is not copied during application-data migrations. RLS policies and table triggers must be attached to `afuchat` base tables, not the compatibility views.
+The target architecture requires AfuChat product data in the `afuchat` schema, with shared identity/auth kept separate. However, a live PostgREST inspection on 2026-10-03 showed that `afuchat` is not in the exposed-schema list; `public`, `chat`, and `afucloud` are exposed. The available Supabase management token returned HTTP 403 for database queries, and the anonymous key cannot read protected product rows or alter schemas. Earlier migration notes are not proof of current live placement.
 
-**Why:** A table/data-only migration can look complete while silently losing RLS and trigger behavior; the target had matching tables and row counts but no policies or triggers.
+**Why:** The live API contradicts the previous assumption that the target schema was already deployed, while the only available database-management credential lacks query privileges.
 
-**How to apply:** Compare base tables, columns, indexes, row counts, policies, triggers, and functions separately. Do not recreate the legacy `create_marketplace_listing` RPC unless its missing `user_shop_purchases` dependency is restored first.
+**How to apply:** Before migrating, obtain a privileged HTTPS database path; inventory ownership, tables, views, columns, constraints, indexes, policies, triggers, functions, and row counts. Preserve compatibility views and auth behavior, validate copies, and retain rollback data until consumers pass. Never infer row counts from anonymous RLS-filtered results.

@@ -1,5 +1,7 @@
-# Canonical production API Worker. All AfuCloud projects use this Worker.
-# Do not create additional production Workers; add routes here instead.
+# Legacy mixed production Worker: it currently owns AfuCloud routes plus
+# AfuChat gateway/storage handlers. Do not rebind or overwrite it until the
+# separate AfuChat Worker and compatibility routing have been verified.
+# Target architecture: one product Worker per product behind the shared gateway.
 name = "afucloud-api"
 main = "src/index.ts"
 compatibility_date = "2025-07-01"

@@ -7,4 +7,4 @@ The Cloudflare Workers API can identify the active deployment and return the dep
 
 **Why:** A healthy Worker endpoint only proves that some version is live; local project vars and a successful deployment do not prove the Worker has the correct routes or project credentials.
 
-**How to apply:** Keep tokens and service keys in the secure secrets flow, never print them, compare the active bundle against local route literals, rotate the service key during project migrations, and separately probe API-server compatibility paths because path/method drift can look like missing deployment modules.
+**How to apply:** Keep tokens and service keys in the secure secrets flow, never print them, compare the active bundle against local route literals, rotate the service key during project migrations, and separately probe API-server compatibility paths because path/method drift can look like missing deployment modules. In this workspace, Cloudflare control-plane calls succeeded but direct requests to the zone and `workers.dev` hosts returned Cloudflare 1010; use an allowed external data-plane probe rather than treating 1010 as a Worker failure.
