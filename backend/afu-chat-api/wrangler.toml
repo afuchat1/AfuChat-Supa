@@ -10,8 +10,8 @@ workers_dev = false
 # Target API route from the Afu ecosystem rules. Do not enable until cutover:
 # routes = [{ pattern = "api.afuchat.com/afuchat/*", zone_name = "afuchat.com" }]
 
-# This target bucket was not present in the live inventory at staging time.
-# Deployment must wait until the bucket exists and object migration is planned.
+# The target bucket was created after inventory. Keep the source bucket and
+# current CDN custom-domain mapping in place until the object copy is verified.
 [[r2_buckets]]
 binding = "AFUCHAT_ASSETS"
 bucket_name = "afu-chat-assets"

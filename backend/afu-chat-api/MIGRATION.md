@@ -13,9 +13,39 @@ left unchanged.
 - API path: `api.afuchat.com/afuchat/*`
 - CDN path: `cdn.afuchat.com/chat/*` routed to `afu-chat-assets`
 
-The API route is intentionally disabled in `wrangler.toml`. The bucket binding
-names the target bucket, but that bucket was absent from the live inventory.
-Do not deploy or attach routes until the database and storage gates below pass.
+The API route is intentionally disabled in `wrangler.toml`. The
+`afu-chat-assets` bucket has been created, but no objects have been copied and
+no CDN/API route has been attached. Do not deploy or attach routes until the
+database, storage, and compatibility gates below pass.
+
+## Live inventory checked on 2026-10-03
+
+- The `afuchat` schema exists and has 201 base tables; all 201 currently have
+  row-level security enabled. The schema also contains relations named for
+  AfuMail (`afumail_*`) and Afu Ads (`ad_*`). Do not change those relations.
+- The database role setting for PostgREST excludes `afuchat`. The schema grants
+  `USAGE` to `anon` and `authenticated`, so adding it to the exposed-schema
+  setting could expand the REST API surface. Table grants and policies still
+  need a per-table review, and the other product owners must be coordinated
+  with before changing this shared API setting.
+- The mobile client currently uses Supabase's default schema; changing its
+  gateway profile to `afuchat` is not a safe drop-in until its table and RPC
+  usage is mapped and compatible.
+- The AfuChat media source, `afuchat-media`, contains 1,428 objects totaling
+  1,530,935,263 bytes. The complete paginated inventory reports object metadata
+  on all 1,428 objects. No object names or contents were copied or exposed.
+- The existing `cdn.afuchat.com` custom domain maps to `afuchat-media` at the
+  root. Keep this mapping intact; `/chat/*` requires a separate path-specific
+  route to `afu-chat-assets`, not a replacement of the root custom domain.
+- The exact `afu-chat-assets` bucket now exists and remains empty. The old
+  bucket and `img.afuchat.com` mapping to `afucloud-images` are unchanged.
+- The live `api.afuchat.com` root routes still target `afucloud-api`. AfuChat
+  mobile calls include paths that are absent from the deployed route literals,
+  so verify the production contracts before moving clients.
+- AfuChat media calls currently hit storage handlers in `afucloud-api`; those
+  handlers use the `afucloud` schema. Moving that data or changing the
+  AfuCloud Worker/schema requires coordination with its owner and is outside
+  this AfuChat-only change.
 
 ## Client contract inventory
 
@@ -56,17 +86,18 @@ through AfuCloud.
 2. Confirm `afuchat` schema setup and PostgREST exposure. The staged gateway
    sends `Accept-Profile: afuchat` for REST requests and will not fall back to
    `public` or `afucloud`.
-3. Create/inventory the exact `afu-chat-assets` bucket and plan a validated
-   copy from current AfuChat object locations. Preserve keys, metadata, access
-   behavior, and the `/chat/*` CDN contract; retain the old objects for
-   rollback.
+3. Copy the inventoried AfuChat objects into the existing `afu-chat-assets`
+   bucket. Preserve keys and metadata, verify object counts and byte totals,
+   and retain the source objects for rollback.
 4. Inspect the active production Worker/version and exercise every client
    endpoint against it. Source code alone is not proof of the live contract.
 5. Move AfuChat-owned handlers and data access into this Worker using only
    `afuchat` and `AFUCHAT_ASSETS`. Confirm ambiguous payment/video ownership
    with the relevant product owner; do not change AfuCloud resources.
-6. Add the explicit `/afuchat/*` API route and `/chat/*` CDN mapping only after
-   endpoint, auth, upload/download, and RLS tests pass. Move clients in a
+6. Coordinate any shared PostgREST exposure or AfuCloud-owned storage migration
+   with the affected product owners. Add the explicit `/afuchat/*` API route
+   and `/chat/*` CDN mapping only after endpoint, auth, upload/download, and RLS
+   tests pass. Move clients in a
    compatibility-preserving release, verify production behavior, then plan
    legacy decommissioning separately.
 
