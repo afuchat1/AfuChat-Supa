@@ -1,7 +1,10 @@
+import { handleCdnAssetRequest, type AfuChatAssetsBucket } from "./r2-assets";
+
 interface Env {
   AFUCHAT_SUPABASE_URL?: string;
   AFUCHAT_SUPABASE_ANON_KEY?: string;
   AFUCHAT_DATABASE_SCHEMA?: string;
+  AFUCHAT_ASSETS?: AfuChatAssetsBucket;
 }
 
 const PREFIX = "/afuchat";
@@ -76,7 +79,7 @@ function stripProductPrefix(path: string): string | null {
   return path.slice(PREFIX.length);
 }
 
-async function handleRequest(request: Request, env: Env): Promise<Response> {
+async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   const requestId = crypto.randomUUID();
   const incoming = new URL(request.url);
   const productPath = stripProductPrefix(incoming.pathname);
@@ -163,6 +166,17 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       502,
     );
   }
+}
+
+async function handleRequest(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  if (
+    url.hostname.toLowerCase() === "cdn.afuchat.com" &&
+    (url.pathname === "/chat" || url.pathname.startsWith("/chat/"))
+  ) {
+    return handleCdnAssetRequest(request, env.AFUCHAT_ASSETS);
+  }
+  return handleApiRequest(request, env);
 }
 
 export default {

@@ -105,7 +105,7 @@
 - [Vercel public profile prerendering](vercel-public-profile-prerender.md) — static Vercel hosting needs per-handle HTML files so profiles are readable before JavaScript runs.
 - [AfuMusic schema drift](afumusic-schema-drift.md) — Supabase may already contain a legacy public music_tracks table; apply the private AfuMusic schema additively.
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
-- [AfuChat Supabase schema migration](afuchat-supabase-schema-migration.md) — replacement project keeps app base tables in afuchat; auth/profile access stays preserved and RLS/triggers must move with tables.
+- [AfuChat Supabase schema migration](afuchat-supabase-schema-migration.md) — preserve public compatibility views; audit broad SECURITY DEFINER RPCs before routing or changing schema exposure.
 - [AfuCloud worker workspace](afucloud-worker-workspace.md) — cf-worker is outside the root pnpm workspace; install its own lockfile before typechecking or deploying.
 - [AfuCloud browser auth CORS](afucloud-auth-cors.md) — gateway browser preflight must allow Supabase's apikey and X-Client-Info headers or web sign-in reports only Failed to fetch.
 - [AfuCloud media boundary](afucloud-media-boundary.md) — app-owned media enters through the worker API; never expose direct R2/CDN upload or download paths to the client.

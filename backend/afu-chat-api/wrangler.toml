@@ -7,8 +7,11 @@ compatibility_date = "2025-07-01"
 account_id = "42e79186125e8ff83e51f15816e074de"
 workers_dev = false
 
-# Target API route from the Afu ecosystem rules. Do not enable until cutover:
-# routes = [{ pattern = "api.afuchat.com/afuchat/*", zone_name = "afuchat.com" }]
+# Product API and CDN routes remain detached until cutover validation:
+# routes = [
+#   { pattern = "api.afuchat.com/afuchat/*", zone_name = "afuchat.com" },
+#   { pattern = "cdn.afuchat.com/chat/*", zone_name = "afuchat.com" },
+# ]
 
 # The target bucket was created after inventory. Keep the source bucket and
 # current CDN custom-domain mapping in place until the object copy is verified.
