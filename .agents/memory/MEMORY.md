@@ -111,4 +111,4 @@
 - [AfuCloud media boundary](afucloud-media-boundary.md) — app-owned media enters through the worker API; never expose direct R2/CDN upload or download paths to the client.
 - [Cloudflare Worker deployment audit](cloudflare-worker-deployment-audit.md) — inspect the active version’s multipart bundle and use protected-route probes to distinguish missing routes from auth failures.
 - [Cloudflare-only application backend](cloudflare-only-backend.md) — AfuChat and AfuCloud share one Worker/API boundary; Supabase DB/Auth stay internal, while R2 replaces Supabase Storage.
-- [AfuCloud media bucket](afucloud-media-bucket.md) — AfuChat and AfuCloud share afuchat-media; retain both media hostnames and leave the source bucket intact.
+- [AfuCloud media bucket](afucloud-media-bucket.md) — Shared storage must preserve AfuCloud access through img.afuchat.com, as well as the shared-bucket domains.
