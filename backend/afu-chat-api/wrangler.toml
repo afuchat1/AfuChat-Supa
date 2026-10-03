@@ -1,0 +1,29 @@
+# AfuChat-owned Worker. This config is intentionally not attached to a
+# production API route until the schema, bucket, consumers, and rollback plan
+# have all been validated.
+name = "afu-chat-api"
+main = "src/index.ts"
+compatibility_date = "2025-07-01"
+account_id = "42e79186125e8ff83e51f15816e074de"
+workers_dev = false
+
+# Target API route from the Afu ecosystem rules. Do not enable until cutover:
+# routes = [{ pattern = "api.afuchat.com/afuchat/*", zone_name = "afuchat.com" }]
+
+# This target bucket was not present in the live inventory at staging time.
+# Deployment must wait until the bucket exists and object migration is planned.
+[[r2_buckets]]
+binding = "AFUCHAT_ASSETS"
+bucket_name = "afu-chat-assets"
+
+[vars]
+AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
+AFUCHAT_DATABASE_SCHEMA = "afuchat"
+AFUCHAT_CDN_BASE_URL = "https://cdn.afuchat.com/chat"
+
+[observability]
+enabled = true
+
+# Set through the Worker secret store before a validated deployment:
+# AFUCHAT_SUPABASE_ANON_KEY
+# AFUCHAT_SUPABASE_SERVICE_KEY (only if product handlers require service access)
