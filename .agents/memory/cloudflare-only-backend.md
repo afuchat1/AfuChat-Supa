@@ -1,10 +1,10 @@
 ---
-name: Cloudflare-only application backend
-description: AfuChat and AfuCloud share one product/backend boundary; Worker owns application APIs and R2 owns object storage.
+name: Product-isolated Cloudflare architecture
+description: AfuChat and AfuCloud are isolated products behind shared ecosystem entry points.
 ---
 
-AfuChat and AfuCloud are one product and share the same database/backend architecture. The Cloudflare Worker is the only public application backend; Supabase PostgreSQL/Auth are internal infrastructure, while Supabase Storage and Supabase Edge Functions are not production dependencies. Use Worker routes and Cloudflare R2 for application functions and media.
+AfuChat and AfuCloud are distinct products. They may share Afu Account, the `api.afuchat.com` API gateway, the `cdn.afuchat.com` CDN gateway, and one database, but each must own an independently deployable Worker, schema, R2 bucket, routes, configuration, secrets, and deployment. The API gateway routes requests; product-specific business logic belongs in its product Worker.
 
-**Why:** The user explicitly selected a Cloudflare-only application backend so every project uses one API boundary and one object-storage layer.
+**Why:** The user's Afu ecosystem master rules supersede earlier decisions that treated AfuChat and AfuCloud as one product with shared product resources.
 
-**How to apply:** Do not add client calls to Supabase Storage or Edge Functions. Port legacy Edge Function behavior into Worker handlers, access shared database tables server-side, and keep R2 object operations behind authenticated Worker routes.
+**How to apply:** Classify each endpoint, schema, object, binding, and deployment by product before changing it. Preserve legacy contracts during migration. Do not alter or decommission a resource until ownership, dependencies, data, consumers, validation, and rollback are confirmed; stop when ownership is unknown.
