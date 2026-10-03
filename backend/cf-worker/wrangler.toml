@@ -15,7 +15,7 @@ routes = [
 # ── R2 Bucket binding ─────────────────────────────────────────────────────────
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
-bucket_name = "afucloud-images"
+bucket_name = "afuchat-media"
 # preview_bucket_name = "afucloud-images-dev"  # uncomment for local dev
 
 # ── Vars (non-secret) ─────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ SUPABASE_DB_SCHEMA = "afucloud"
 # configuration and is only used to validate a bearer session at /auth/v1/user.
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
 AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
-R2_BUCKET_NAME = "afucloud-images"
+R2_BUCKET_NAME = "afuchat-media"
 CLOUDFLARE_ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de"
 AFU_CDN_TARGET = "img.afuchat.com"
 R2_PUBLIC_URL = "https://img.afuchat.com"

@@ -1,10 +1,10 @@
 ---
 name: AfuCloud media bucket migration
-description: Canonical current-app R2 bucket/CDN and legacy bucket preservation rule.
+description: Shared AfuChat/AfuCloud R2 bucket, retained media hostnames, and source-bucket handling.
 ---
 
-The current app must write and read media through the AfuCloud R2 bucket `afucloud-images`, with public media URLs served by its active custom domain `img.afuchat.com`. The legacy `afuchat-media` bucket and `cdn.afuchat.com` custom domain remain untouched for older app versions.
+`afuchat-media` is the shared R2 bucket for AfuChat and AfuCloud. Both `img.afuchat.com` and `cdn.afuchat.com` serve that bucket. Keep `api.afuchat.com` as the shared Worker boundary for Auth, REST/Realtime, and AfuCloud routes. The original `afucloud-images` bucket was left intact after cutover.
 
-**Why:** `cdn.afuchat.com` is still attached to the legacy bucket, while `img.afuchat.com` is attached to `afucloud-images`; moving the hostname would break older installed clients.
+**Why:** The user selected the existing AfuChat bucket as the shared store and asked that both buckets remain available through migration verification.
 
-**How to apply:** Keep new Worker bindings, public URL settings, and app-generated media URLs on `afucloud-images`/`img.afuchat.com`. Never generate the retired `.dev` hostname or switch the current app back to `afuchat-media`.
+**How to apply:** Keep Worker bindings, S3 bucket configuration, and new media URLs on `afuchat-media` while preserving both hostnames. Do not delete `afucloud-images` unless the user explicitly requests its removal.
