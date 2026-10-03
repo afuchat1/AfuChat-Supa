@@ -118,7 +118,6 @@ import { buildNavigationContext, ACTION_ROUTES_GUIDE, detectVoiceNavCommand, pic
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import { notifyChatRecipients } from "@/lib/pushNotifications";
 import { clearAIUnread } from "@/lib/aiChatStore";
-import { GIPHY_API_KEY } from "@/lib/env";
 import { BlurView } from "expo-blur";
 import WallpaperOverlay from "@/components/chat/WallpaperOverlay";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
