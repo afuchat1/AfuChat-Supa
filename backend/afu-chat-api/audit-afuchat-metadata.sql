@@ -54,9 +54,8 @@ SELECT
   CASE WHEN p.oid IS NULL THEN NULL ELSE has_function_privilege('authenticated', p.oid, 'EXECUTE') END AS authenticated_can_execute,
   pg_get_functiondef(p.oid) AS function_definition
 FROM client_rpc c
-LEFT JOIN pg_proc p ON p.proname = c.name
-LEFT JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
-WHERE p.oid IS NULL OR n.nspname = 'public'
+LEFT JOIN pg_namespace n ON n.nspname = 'public'
+LEFT JOIN pg_proc p ON p.pronamespace = n.oid AND p.proname = c.name
 ORDER BY c.name, signature;
 
 -- 2. Cross-schema foreign keys to or from afuchat, with exact column pairs.
