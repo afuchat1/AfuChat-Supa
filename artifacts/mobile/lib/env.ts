@@ -22,9 +22,18 @@ export const APP_DOMAIN: string =
 
 export const APP_ORIGIN: string = `https://${APP_DOMAIN}`;
 
-/** Canonical AfuCloud API. All app-owned data and media traffic use this API. */
+/** Legacy shared API entrypoint for non-media service calls. */
 export const AFUCLOUD_API_URL: string =
   (process.env.EXPO_PUBLIC_AFUCLOUD_API_URL ?? "").trim() || "https://api.afuchat.com";
+
+/** AfuChat-owned media Worker route and public CDN path. */
+export const AFUCHAT_MEDIA_API_URL: string =
+  (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_API_URL ?? "").trim() ||
+  "https://api.afuchat.com/afuchat";
+
+export const AFUCHAT_MEDIA_CDN_URL: string =
+  (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_CDN_URL ?? "").trim() ||
+  "https://cdn.afuchat.com/chat";
 
 // Google OAuth web client ID. This is public configuration and is also used
 // by the native Google credential flow as its server/web audience.

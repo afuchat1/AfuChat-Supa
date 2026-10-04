@@ -1,5 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { toAfuCloudMediaUrl } from "./afuCloudMedia";
+import { toAfuChatMediaUrl } from "./afuchatMedia";
 
 const STORY_CACHE_DIR = `${FileSystem.documentDirectory ?? ""}afuchat_stories/`;
 
@@ -32,7 +32,7 @@ export async function getCachedStoryMedia(
   onProgress?: (progress: number) => void,
 ): Promise<string> {
   await ensureDirectory();
-  const resolvedUrl = toAfuCloudMediaUrl(remoteUrl) || remoteUrl;
+  const resolvedUrl = toAfuChatMediaUrl(remoteUrl) || remoteUrl;
   const localUri = `${STORY_CACHE_DIR}${stableHash(storyId)}.${extension(resolvedUrl, mediaType)}`;
   const existing = await FileSystem.getInfoAsync(localUri);
   if (existing.exists && (existing as any).size !== 0) {

@@ -62,7 +62,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
 import { getCachedVideoUri, cacheVideo, markVideoWatched, getOfflineVideos } from "@/lib/videoCache";
-import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
+import { toAfuChatMediaUrl } from "@/lib/afuchatMedia";
 import { storage } from "@/lib/storage/mmkv";
 import { recordWatchHistory } from "@/lib/watchHistory";
 import { onShortsRefresh } from "@/lib/shortsRefresh";
@@ -296,7 +296,7 @@ const VideoItem = React.memo(function VideoItem({
 }) {
   const { accent } = useAppAccent();
   const insets = useSafeAreaInsets();
-  const resolvedVideoUrl = toAfuCloudMediaUrl(item.video_url) || item.video_url;
+  const resolvedVideoUrl = toAfuChatMediaUrl(item.video_url) || item.video_url;
   // On web, create the player with its final stable source. expo-video's web
   // replace() calls HTMLMediaElement.play() without handling the returned
   // promise, so replacing the fallback URL with a resolved/cache URL can
@@ -1696,7 +1696,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         return;
       }
       const rawUrl = await resolveDownloadUrl();
-      const url = toAfuCloudMediaUrl(rawUrl) || rawUrl;
+      const url = toAfuChatMediaUrl(rawUrl) || rawUrl;
       const dest = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
       const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
       if (!uri || (dlStatus !== undefined && (dlStatus < 200 || dlStatus >= 400))) throw new Error(`HTTP ${dlStatus}`);

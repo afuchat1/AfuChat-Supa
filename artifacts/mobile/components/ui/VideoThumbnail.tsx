@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import CachedImage from "./CachedImage";
-import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
+import { toAfuChatMediaUrl } from "@/lib/afuchatMedia";
 
 const SEEK_TIME = 1.0;
 
@@ -81,8 +81,8 @@ function VideoThumbnailNative({
   durationSeconds, showDuration = true, watchedFraction,
 }: Props) {
   const [thumbUri, setThumbUri] = useState<string | null>(null);
-  const resolvedVideoUrl = toAfuCloudMediaUrl(videoUrl) || videoUrl;
-  const resolvedFallbackImageUrl = toAfuCloudMediaUrl(fallbackImageUrl) || fallbackImageUrl;
+  const resolvedVideoUrl = toAfuChatMediaUrl(videoUrl) || videoUrl;
+  const resolvedFallbackImageUrl = toAfuChatMediaUrl(fallbackImageUrl) || fallbackImageUrl;
 
   useEffect(() => {
     // Android's video thumbnail decoder can allocate a full codec surface for

@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { VideoView, useVideoPlayer } from "expo-video";
 import type { StyleProp, ViewStyle } from "react-native";
 import { safePause, safePlay } from "@/lib/safeMedia";
-import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
+import { toAfuChatMediaUrl } from "@/lib/afuchatMedia";
 
 type ContentFit = "contain" | "cover" | "fill";
 
@@ -28,7 +28,7 @@ export default function VideoPreview({
   nativeControls = false,
   playbackRate = 1,
 }: VideoPreviewProps) {
-  const resolvedUri = toAfuCloudMediaUrl(uri) || uri;
+  const resolvedUri = toAfuChatMediaUrl(uri) || uri;
   const player = useVideoPlayer(resolvedUri ? { uri: resolvedUri } : null, (p) => {
     p.loop = isLooping;
     p.muted = isMuted;

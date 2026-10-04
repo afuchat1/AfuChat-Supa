@@ -1,43 +1,41 @@
 /**
- * Media upload helpers — Cloudflare R2 backed via the AfuCloud API.
+ * Media upload helpers — Cloudflare R2 backed by the AfuChat media Worker.
  *
  * Uploads flow:
  *   Web:
- *     1. Exchange the current AfuChat Supabase session for an AfuCloud API token.
- *     2. POST bytes to AfuCloud's streamed container upload route.
- *     3. Confirm the object so AfuCloud records its R2 metadata.
+ *     1. Exchange the current AfuChat Supabase session for an AfuChat media token.
+ *     2. POST bytes to AfuChat's streamed container upload route.
+ *     3. Confirm the object in the AfuChat-owned R2 bucket.
  *
  *   Native (iOS/Android):
- *     1. Exchange the current AfuChat Supabase session for an AfuCloud API token.
- *     2. POST to AfuCloud for a presigned PUT URL.
- *     3. PUT bytes directly to Cloudflare R2 using the presigned URL.
- *     4. Confirm the object so AfuCloud records its R2 metadata.
- *     5. Falls back to AfuCloud's streamed proxy upload if presigned PUT fails.
+ *     1. Exchange the current AfuChat Supabase session for an AfuChat media token.
+ *     2. Stream bytes to the AfuChat Worker, which writes directly to its R2 bucket.
+ *     3. Confirm the object in the AfuChat-owned bucket.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
-import { AFUCLOUD_API_URL } from "./env";
+import { AFUCHAT_MEDIA_API_URL, AFUCHAT_MEDIA_CDN_URL } from "./env";
 import * as FileSystem from "expo-file-system/legacy";
 import { FileSystemUploadType } from "expo-file-system/legacy";
 
-const AFUCLOUD_BASE = AFUCLOUD_API_URL.replace(/\/$/, "");
-const AFUCLOUD_SESSION_PATH = "/v1/auth/session";
+const AFUCHAT_MEDIA_BASE = AFUCHAT_MEDIA_API_URL.replace(/\/$/, "");
+const AFUCHAT_SESSION_PATH = "/v1/auth/session";
 
-interface AfuCloudSession {
+interface AfuChatMediaSession {
   userId: string;
   accessToken: string;
   expiresAt: number;
 }
 
-let afuCloudSession: AfuCloudSession | null = null;
-let afuCloudSessionPromise: Promise<{ token: string | null; error: string | null }> | null = null;
+let afuChatMediaSession: AfuChatMediaSession | null = null;
+let afuChatMediaSessionPromise: Promise<{ token: string | null; error: string | null }> | null = null;
 const containerIds = new Map<string, string>();
 const containerPromises = new Map<string, Promise<{ id: string | null; error: string | null }>>();
 
-function afuCloudUrl(path: string): string {
-  return `${AFUCLOUD_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+function afuChatMediaUrl(path: string): string {
+  return `${AFUCHAT_MEDIA_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function readJwtExpiry(token: string): number {
@@ -53,24 +51,24 @@ function readJwtExpiry(token: string): number {
   }
 }
 
-async function afuCloudToken(force = false): Promise<{ token: string | null; error: string | null }> {
+async function afuChatMediaToken(force = false): Promise<{ token: string | null; error: string | null }> {
   const session = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
   const supabaseSession = session.data.session;
   if (!supabaseSession) return { token: null, error: "Not authenticated" };
 
   if (
     !force &&
-    afuCloudSession &&
-    afuCloudSession.userId === supabaseSession.user.id &&
-    afuCloudSession.expiresAt > Date.now() + 30_000
+    afuChatMediaSession &&
+    afuChatMediaSession.userId === supabaseSession.user.id &&
+    afuChatMediaSession.expiresAt > Date.now() + 30_000
   ) {
-    return { token: afuCloudSession.accessToken, error: null };
+    return { token: afuChatMediaSession.accessToken, error: null };
   }
 
-  if (afuCloudSessionPromise) return afuCloudSessionPromise;
-  afuCloudSessionPromise = (async () => {
+  if (afuChatMediaSessionPromise) return afuChatMediaSessionPromise;
+  afuChatMediaSessionPromise = (async () => {
     try {
-      const response = await fetch(afuCloudUrl(AFUCLOUD_SESSION_PATH), {
+      const response = await fetch(afuChatMediaUrl(AFUCHAT_SESSION_PATH), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${supabaseSession.access_token}`,
@@ -79,42 +77,42 @@ async function afuCloudToken(force = false): Promise<{ token: string | null; err
       });
       const body = await response.json().catch(() => null) as any;
       if (!response.ok || !body?.accessToken) {
-        afuCloudSession = null;
+        afuChatMediaSession = null;
         return {
           token: null,
-          error: body?.error || `AfuCloud session exchange failed (HTTP ${response.status})`,
+          error: body?.error || `AfuChat media session exchange failed (HTTP ${response.status})`,
         };
       }
-      afuCloudSession = {
+      afuChatMediaSession = {
         userId: supabaseSession.user.id,
         accessToken: body.accessToken,
         expiresAt: readJwtExpiry(body.accessToken),
       };
       return { token: body.accessToken, error: null };
     } catch (error: any) {
-      return { token: null, error: `AfuCloud network error: ${error?.message || error}` };
+      return { token: null, error: `AfuChat media network error: ${error?.message || error}` };
     } finally {
-      afuCloudSessionPromise = null;
+      afuChatMediaSessionPromise = null;
     }
   })();
-  return afuCloudSessionPromise;
+  return afuChatMediaSessionPromise;
 }
 
-function clearAfuCloudSession() {
-  afuCloudSession = null;
+function clearAfuChatMediaSession() {
+  afuChatMediaSession = null;
   containerIds.clear();
 }
 
-async function afuCloudJson(
+async function afuChatMediaJson(
   path: string,
   init: RequestInit = {},
   retry = true,
 ): Promise<{ response: Response | null; body: any; error: string | null }> {
-  const auth = await afuCloudToken();
+  const auth = await afuChatMediaToken();
   if (!auth.token) return { response: null, body: null, error: auth.error };
   let response: Response;
   try {
-    response = await fetch(afuCloudUrl(path), {
+    response = await fetch(afuChatMediaUrl(path), {
       ...init,
       headers: {
         ...(init.headers || {}),
@@ -123,26 +121,26 @@ async function afuCloudJson(
       },
     });
   } catch (error: any) {
-    return { response: null, body: null, error: error?.message || "AfuCloud request failed" };
+    return { response: null, body: null, error: error?.message || "AfuChat media request failed" };
   }
   const body = await response.json().catch(() => null);
   if (response.status === 401 && retry) {
-    clearAfuCloudSession();
-    return afuCloudJson(path, init, false);
+    clearAfuChatMediaSession();
+    return afuChatMediaJson(path, init, false);
   }
   if (response.status >= 500 && response.status <= 599 && retry) {
     await new Promise((resolve) => setTimeout(resolve, 350));
-    return afuCloudJson(path, init, false);
+    return afuChatMediaJson(path, init, false);
   }
   if (!response.ok) {
-    const requestId = response.headers.get("X-AfuCloud-Request-Id");
+    const requestId = response.headers.get("X-AfuChat-Request-Id");
     const requestSuffix = requestId ? ` [request ${requestId}]` : "";
     return {
       response,
       body,
       error: body?.error
         ? `${body.error}${requestSuffix}`
-        : `AfuCloud request failed (HTTP ${response.status})${requestSuffix}`,
+        : `AfuChat media request failed (HTTP ${response.status})${requestSuffix}`,
     };
   }
   return { response, body, error: null };
@@ -314,7 +312,7 @@ async function getContainerId(
   if (pending) return pending;
 
   const request = (async () => {
-    const list = await afuCloudJson("/v1/storage-containers");
+    const list = await afuChatMediaJson("/v1/storage-containers");
     if (list.error) return { id: null, error: list.error };
     const existing = Array.isArray(list.body)
       ? list.body.find((item: any) => item?.slug === slug || item?.name === bucket)
@@ -324,7 +322,7 @@ async function getContainerId(
       return { id: existing.id, error: null };
     }
 
-    const created = await afuCloudJson("/v1/storage-containers", {
+    const created = await afuChatMediaJson("/v1/storage-containers", {
       method: "POST",
       body: JSON.stringify({ name: bucket }),
     });
@@ -338,7 +336,7 @@ async function getContainerId(
 
     // A simultaneous upload on another device may have created the container
     // after the list above. Re-read once after a conflict.
-    const reread = await afuCloudJson("/v1/storage-containers");
+    const reread = await afuChatMediaJson("/v1/storage-containers");
     const found = Array.isArray(reread.body)
       ? reread.body.find((item: any) => item?.slug === slug || item?.name === bucket)
       : null;
@@ -346,7 +344,7 @@ async function getContainerId(
       containerIds.set(slug, found.id);
       return { id: found.id, error: null };
     }
-    return { id: null, error: created.error || "AfuCloud storage container could not be created" };
+    return { id: null, error: created.error || "AfuChat media container could not be created" };
   })();
   containerPromises.set(slug, request);
   try {
@@ -367,7 +365,7 @@ async function proxyUpload(
 
   const container = await getContainerId(bucket);
   if (!container.id) return { publicUrl: null, error: container.error };
-  const auth = await afuCloudToken();
+  const auth = await afuChatMediaToken();
   if (!auth.token) return { publicUrl: null, error: auth.error };
 
   const qs = new URLSearchParams({ name: filePath }).toString();
@@ -376,7 +374,7 @@ async function proxyUpload(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       response = await fetch(
-        afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload?${qs}`),
+        afuChatMediaUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload?${qs}`),
         {
           method: "POST",
           headers: {
@@ -399,7 +397,7 @@ async function proxyUpload(
   }
 
   if (!response || !response.ok || !json?.key) {
-    if (response?.status === 401) clearAfuCloudSession();
+    if (response?.status === 401) clearAfuChatMediaSession();
     return {
       publicUrl: null,
       error: response
@@ -411,14 +409,16 @@ async function proxyUpload(
 }
 
 function publicObjectUrl(body: any, key: string): string {
-  // Always return the AfuCloud API route. The worker owns the R2 credentials
-  // and redirects to a short-lived object URL server-side.
+  // Public media is served only from the AfuChat CDN route and bucket.
   void body;
-  return afuCloudUrl(`/v1/storage/${encodeURIComponent(key)}`);
+  return `${AFUCHAT_MEDIA_CDN_URL.replace(/\/+$/, "")}/${key
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
 }
 
 function uploadResponseError(response: Response, body: any, fallback: string): string {
-  const requestId = response.headers.get("X-AfuCloud-Request-Id");
+  const requestId = response.headers.get("X-AfuChat-Request-Id");
   const requestSuffix = requestId ? ` [request ${requestId}]` : "";
   return `${body?.error || fallback}${requestSuffix}`;
 }
@@ -433,7 +433,7 @@ async function confirmUpload(
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const container = await getContainerId(bucket);
   if (!container.id) return { publicUrl: null, error: container.error };
-  const result = await afuCloudJson(
+  const result = await afuChatMediaJson(
     `/v1/storage-containers/${encodeURIComponent(container.id)}/objects/confirm`,
     {
       method: "POST",
@@ -470,7 +470,7 @@ async function proxyStreamUpload(
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const container = await getContainerId(bucket);
   if (!container.id) return { publicUrl: null, error: container.error };
-  const auth = await afuCloudToken();
+  const auth = await afuChatMediaToken();
   if (!auth.token) return { publicUrl: null, error: auth.error };
   const qs = new URLSearchParams({ name: filePath }).toString();
   try {
@@ -478,7 +478,7 @@ async function proxyStreamUpload(
     let body: any = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       response = await FileSystem.uploadAsync(
-        `${afuCloudUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
+        `${afuChatMediaUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
         uploadUri,
         {
           httpMethod: "POST",
@@ -495,9 +495,9 @@ async function proxyStreamUpload(
       await new Promise((resolve) => setTimeout(resolve, 350));
     }
     if (!response || response.status < 200 || response.status >= 300 || !body?.key) {
-      if (response?.status === 401) clearAfuCloudSession();
+      if (response?.status === 401) clearAfuChatMediaSession();
       const headers = (response as any)?.headers || {};
-      const requestId = headers["X-AfuCloud-Request-Id"] || headers["x-afucloud-request-id"];
+      const requestId = headers["X-AfuChat-Request-Id"] || headers["x-afuchat-request-id"];
       const requestSuffix = requestId ? ` [request ${requestId}]` : "";
       return {
         publicUrl: null,
@@ -513,7 +513,7 @@ async function proxyStreamUpload(
 /**
  * Upload a file to Cloudflare R2.
  *
- * Web:            proxied through AfuCloud (avoids R2 CORS).
+ * Web:            proxied through the AfuChat Worker (avoids R2 CORS).
  * Native file://: FileSystem.uploadAsync streams bytes directly — no ArrayBuffer
  *                 loaded into memory, safe for 100 MB+ videos.
  * Native data:/blob:: fileUriToBlob + proxy (already in-memory, small).
@@ -543,7 +543,7 @@ export async function uploadToStorage(
       } catch {
         return { publicUrl: null, error: "Could not read selected file. Please try again." };
       }
-      // All bytes go through AfuCloud. Do not expose a presigned R2 URL to
+      // All bytes go through AfuChat. Do not expose a presigned R2 URL to
       // clients; the worker remains the only storage boundary.
       return proxyUpload(realBucket, filePath, body, mime);
     }
@@ -590,7 +590,7 @@ export async function uploadToStorage(
     const fileInfo = await FileSystem.getInfoAsync(uploadUri).catch(() => ({ exists: false } as any));
     const fileSize = Number((fileInfo as any).size ?? 0);
 
-    // Stream the bytes through AfuCloud. The worker writes to R2 server-side.
+    // Stream the bytes through AfuChat. Its Worker writes only to its R2 bucket.
     //    Still streamed via FileSystem.uploadAsync, not loaded into memory.
     const streamed = await proxyStreamUpload(realBucket, filePath, uploadUri, mime, fileSize);
     if (!streamed.error || !fileUri.startsWith("content:")) {
@@ -620,11 +620,9 @@ export async function uploadToStorage(
 }
 
 /**
- * Resolve a stored AfuCloud object to its canonical download route.
+ * Resolve an AfuChat object to its canonical CDN route.
  *
- * AfuCloud's storage route mints the short-lived R2 URL server-side. The
- * object key is opaque and the API remains the only service that knows the R2
- * bucket credentials.
+ * The AfuChat CDN serves the object from the AfuChat-owned bucket.
  */
 export async function getSignedR2ReadUrl(
   bucket: string,
@@ -638,7 +636,7 @@ export async function getSignedR2ReadUrl(
     const container = await getContainerId(resolveBucket(bucket));
     if (!container.id) return { url: null, error: container.error };
     const key = `containers/${userId}/${container.id}/${filePath.replace(/^\/+/, "")}`;
-    return { url: afuCloudUrl(`/v1/storage/${encodeURIComponent(key)}`), error: null };
+    return { url: publicObjectUrl(null, key), error: null };
   } catch (error: any) {
     return { url: null, error: error?.message || "Read URL failed" };
   }
@@ -730,29 +728,9 @@ export async function getCachedStorageUsage(): Promise<StorageUsage | null> {
 
 export async function getStorageUsage(): Promise<StorageUsage | null> {
   try {
-    const result = await afuCloudJson("/v1/storage-containers");
-    if (result.error || !Array.isArray(result.body)) return null;
-    const quotaBytes = 5 * 1024 * 1024 * 1024;
-    const perBucket: StorageUsage["per_bucket"] = {};
-    let usedBytes = 0;
-    let usedCount = 0;
-    for (const container of result.body) {
-      const bytes = Number(container?.storageUsed ?? 0);
-      const count = Number(container?.objectCount ?? 0);
-      const name = String(container?.slug || container?.name || "uploads");
-      perBucket[name] = { bytes, count };
-      usedBytes += Number.isFinite(bytes) ? bytes : 0;
-      usedCount += Number.isFinite(count) ? count : 0;
-    }
-    const parsed: StorageUsage = {
-      user_id: (await supabase.auth.getSession()).data.session?.user.id || "",
-      used_bytes: usedBytes,
-      used_count: usedCount,
-      quota_bytes: quotaBytes,
-      remaining_bytes: Math.max(0, quotaBytes - usedBytes),
-      percent_used: Math.min(100, (usedBytes / quotaBytes) * 100),
-      per_bucket: perBucket,
-    };
+    const result = await afuChatMediaJson("/v1/storage/usage");
+    if (result.error || !result.body || typeof result.body.used_bytes !== "number") return null;
+    const parsed = result.body as StorageUsage;
     AsyncStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(parsed)).catch(() => {});
     return parsed;
   } catch { return null; }
@@ -766,7 +744,7 @@ export async function listUserFiles(
     const realBucket = resolveBucket(bucket);
     const container = await getContainerId(realBucket);
     if (!container.id) return null;
-    const result = await afuCloudJson(
+    const result = await afuChatMediaJson(
       `/v1/storage-containers/${encodeURIComponent(container.id)}/objects`,
     );
     if (result.error || !Array.isArray(result.body?.objects)) return null;
@@ -792,7 +770,7 @@ export async function deleteUserFile(key: string): Promise<{ ok: boolean; error:
     const objectKey = key.slice(separator + 1);
     const container = await getContainerId(bucket);
     if (!container.id) return { ok: false, error: container.error };
-    const result = await afuCloudJson(
+    const result = await afuChatMediaJson(
       `/v1/storage-containers/${encodeURIComponent(container.id)}/objects/by-key`,
       {
       method: "DELETE",

@@ -22,7 +22,7 @@
 
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
-import { toAfuCloudMediaUrl } from "../afuCloudMedia";
+import { toAfuChatMediaUrl } from "../afuchatMedia";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ const _inFlight = new Map<string, Promise<string | null>>();
 
 export function downloadToTemp(url: string, extHint?: string): Promise<string | null> {
   if (!url) return Promise.resolve(null);
-  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  const resolvedUrl = toAfuChatMediaUrl(url) || url;
 
   const cached = _mem.get(resolvedUrl);
   if (cached) return Promise.resolve(cached);

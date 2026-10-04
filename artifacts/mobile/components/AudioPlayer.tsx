@@ -11,7 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
-import { toAfuCloudMediaUrl } from "@/lib/afuCloudMedia";
+import { toAfuChatMediaUrl } from "@/lib/afuchatMedia";
 // expo-av: lazy-load on native only.
 // Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
 // production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
@@ -122,7 +122,7 @@ function AudioPlayerActive({
   backgroundColor,
   onError,
 }: AudioPlayerProps & { playerId: string }) {
-  const resolvedUri = toAfuCloudMediaUrl(uri) || uri;
+  const resolvedUri = toAfuChatMediaUrl(uri) || uri;
   const soundRef = useRef<AudioSound | null>(null);
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const mountedRef = useRef(true);

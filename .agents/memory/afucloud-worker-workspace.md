@@ -11,8 +11,8 @@ The AfuCloud Worker is intentionally outside the root pnpm workspace, so its dep
 
 **Why:** Wrangler 4.136 requires Node 22 or newer; the workspace's default Node 20 runtime fails before authentication.
 
-The public mobile data boundary is AfuCloud: its shared client points at the Worker, which proxies Supabase Auth, PostgREST, and Realtime while preserving the caller's bearer token and upstream RLS.
+Do not use the AfuCloud Worker as AfuChat's data or media boundary. AfuChat requires its own Worker, schema, bucket, routes, and deployment; only the API and CDN hostnames may be shared.
 
-**Why:** This moves the broad existing client query surface behind AfuCloud without rewriting hundreds of Supabase query chains or bypassing row-level authorization.
+**Why:** The user clarified that AfuChat and AfuCloud are separate products and that AfuChat must not use AfuCloud data or Worker resources.
 
-**How to apply:** Keep the gateway limited to the configured AfuChat Supabase prefixes (`/auth/v1`, `/rest/v1`, `/realtime/v1`); never forward service credentials to the client or turn it into an open proxy.
+**How to apply:** Follow [Product-isolated Cloudflare architecture](cloudflare-only-backend.md) before routing, migrating, or deploying either product.

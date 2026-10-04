@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDB } from "./storage/db";
 import { storage } from "./storage/mmkv";
 import { isCellular } from "./networkQuality";
-import { toAfuCloudMediaUrl } from "./afuCloudMedia";
+import { toAfuChatMediaUrl } from "./afuchatMedia";
 
 // ─── Video Stores ───────────────────────────────────────────────────────────────
 // Watched videos are kept in documentDirectory so the user can use them
@@ -216,7 +216,7 @@ async function dbDeleteAll(): Promise<void> {
  */
 export async function getCachedVideoUri(url: string): Promise<string | null> {
   if (!url) return null;
-  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  const resolvedUrl = toAfuChatMediaUrl(url) || url;
 
   // 1. Memory map
   if (memoryMap.has(resolvedUrl)) return memoryMap.get(resolvedUrl)!;
@@ -243,7 +243,7 @@ export async function getCachedVideoUri(url: string): Promise<string | null> {
  */
 export function cacheVideo(url: string): Promise<string | null> {
   if (!url) return Promise.resolve(null);
-  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  const resolvedUrl = toAfuChatMediaUrl(url) || url;
   // Never pre-download on cellular — stream only to protect mobile data
   if (isCellular()) return Promise.resolve(null);
   if (memoryMap.has(resolvedUrl)) return Promise.resolve(memoryMap.get(resolvedUrl)!);
@@ -295,7 +295,7 @@ export async function markVideoWatched(
   },
 ): Promise<void> {
   if (!url || !postId) return;
-  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  const resolvedUrl = toAfuChatMediaUrl(url) || url;
   if (saveInProgress.has(postId)) return;
   saveInProgress.add(postId);
 

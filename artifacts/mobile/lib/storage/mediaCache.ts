@@ -12,7 +12,7 @@
 import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import { getDB } from "./db";
-import { toAfuCloudMediaUrl } from "../afuCloudMedia";
+import { toAfuChatMediaUrl } from "../afuchatMedia";
 
 // ── documentDirectory = permanent; OS never clears this automatically ──────────
 // Computed lazily so we never capture a null documentDirectory at module-eval
@@ -117,7 +117,7 @@ export async function downloadAndCache(
   type: "avatar" | "thumb" = "thumb",
 ): Promise<string | null> {
   if (!url || !url.startsWith("http")) return null;
-  const resolvedUrl = toAfuCloudMediaUrl(url) || url;
+  const resolvedUrl = toAfuChatMediaUrl(url) || url;
   if (_memCache.has(resolvedUrl)) return _memCache.get(resolvedUrl)!;
   if (Platform.OS === "web") return null;
   const running = _inflight.get(resolvedUrl);
