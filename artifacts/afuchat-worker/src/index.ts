@@ -21,6 +21,7 @@ const CONTAINERS_PREFIX = "containers/";
 const CDN_PREFIX = "/chat/";
 const DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024 * 1024;
+const OBJECT_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
 
 class UploadTooLargeError extends Error {}
 
@@ -124,6 +125,10 @@ function containerPrefix(userId: string, containerId: string): string {
   return `${CONTAINERS_PREFIX}${userId}/${containerId}/`;
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 function encodeKeyPath(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
 }
@@ -142,7 +147,7 @@ function decodeKeyPath(encoded: string): string | null {
     const segments = key.split("/");
     if (
       segments.length < 4 ||
-      !segments[1] ||
+      !isUuid(segments[1]) ||
       !validContainerId(segments[2]) ||
       segments.slice(3).some((segment) => !segment || segment === "." || segment === "..")
     ) {
@@ -179,7 +184,7 @@ async function authenticate(
       return { user: null, response: error("Could not verify the session", 502) };
     }
     const data = (await response.json()) as { id?: unknown };
-    if (typeof data.id !== "string" || !/^[0-9a-f-]{36}$/i.test(data.id)) {
+    if (typeof data.id !== "string" || !isUuid(data.id)) {
       return { user: null, response: error("Session returned an invalid user", 401) };
     }
     return { user: { id: data.id, token: match[1] } };
@@ -200,18 +205,34 @@ async function readJson(request: Request, maxBytes = 64 * 1024): Promise<any | n
   }
 }
 
-async function listAll(
-  bucket: R2Bucket,
-  prefix: string,
-): Promise<{ objects: R2Object[]; truncated: boolean }> {
-  const objects: R2Object[] = [];
+async function storageUsage(userId: string, env: Env): Promise<Response> {
+  const rootPrefix = `${CONTAINERS_PREFIX}${userId}/`;
+  const perBucket: Record<string, { bytes: number; count: number }> = {};
+  let usedBytes = 0;
+  let usedCount = 0;
   let cursor: string | undefined;
   do {
-    const page = await bucket.list({ prefix, limit: 1000, cursor });
-    objects.push(...page.objects);
+    const page = await env.AFUCHAT_ASSETS.list({ prefix: rootPrefix, limit: 1000, cursor });
+    for (const object of page.objects) {
+      const bucket = object.key.slice(rootPrefix.length).split("/")[0];
+      if (!validContainerId(bucket)) continue;
+      const bucketUsage = (perBucket[bucket] ||= { bytes: 0, count: 0 });
+      bucketUsage.bytes += object.size;
+      bucketUsage.count += 1;
+      usedBytes += object.size;
+      usedCount += 1;
+    }
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
-  return { objects, truncated: false };
+  return json({
+    user_id: userId,
+    used_bytes: usedBytes,
+    used_count: usedCount,
+    quota_bytes: STORAGE_QUOTA_BYTES,
+    remaining_bytes: Math.max(0, STORAGE_QUOTA_BYTES - usedBytes),
+    percent_used: Math.min(100, (usedBytes / STORAGE_QUOTA_BYTES) * 100),
+    per_bucket: perBucket,
+  });
 }
 
 async function listContainers(userId: string, env: Env): Promise<Response> {
@@ -225,30 +246,6 @@ async function listContainers(userId: string, env: Env): Promise<Response> {
     .filter((id) => validContainerId(id))
     .map((id) => ({ id, name: id, slug: id }));
   return json(containers);
-}
-
-async function storageUsage(userId: string, env: Env): Promise<Response> {
-  const rootPrefix = `${CONTAINERS_PREFIX}${userId}/`;
-  const { objects } = await listAll(env.AFUCHAT_ASSETS, rootPrefix);
-  const perBucket: Record<string, { bytes: number; count: number }> = {};
-  let usedBytes = 0;
-  for (const object of objects) {
-    const bucket = object.key.slice(rootPrefix.length).split("/")[0];
-    if (!validContainerId(bucket)) continue;
-    const bucketUsage = (perBucket[bucket] ||= { bytes: 0, count: 0 });
-    bucketUsage.bytes += object.size;
-    bucketUsage.count += 1;
-    usedBytes += object.size;
-  }
-  return json({
-    user_id: userId,
-    used_bytes: usedBytes,
-    used_count: objects.length,
-    quota_bytes: STORAGE_QUOTA_BYTES,
-    remaining_bytes: Math.max(0, STORAGE_QUOTA_BYTES - usedBytes),
-    percent_used: Math.min(100, (usedBytes / STORAGE_QUOTA_BYTES) * 100),
-    per_bucket: perBucket,
-  });
 }
 
 function parseByteRange(value: string | null, size: number): ByteRange | null | "invalid" {
@@ -305,7 +302,7 @@ async function serveObject(request: Request, key: string, env: Env): Promise<Res
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Cache-Control", OBJECT_CACHE_CONTROL);
   headers.set("ETag", etag);
   headers.set("Accept-Ranges", "bytes");
   headers.set("Content-Length", String(range ? range.end - range.start + 1 : head.size));
@@ -394,7 +391,7 @@ async function handleApi(request: Request, env: Env, path: string): Promise<Resp
       const stored = await env.AFUCHAT_ASSETS.put(key, limitedBody, {
         httpMetadata: {
           contentType: request.headers.get("Content-Type") || "application/octet-stream",
-          cacheControl: "public, max-age=31536000, immutable",
+          cacheControl: OBJECT_CACHE_CONTROL,
         },
         customMetadata: { ownerId: userId, containerId },
       });
@@ -408,7 +405,9 @@ async function handleApi(request: Request, env: Env, path: string): Promise<Resp
   }
 
   if (action === "objects" && request.method === "GET") {
-    const page = await env.AFUCHAT_ASSETS.list({ prefix, limit: 1000 });
+    const cursor = new URL(request.url).searchParams.get("cursor") || undefined;
+    if (cursor && cursor.length > 4096) return error("Invalid pagination cursor", 400);
+    const page = await env.AFUCHAT_ASSETS.list({ prefix, limit: 1000, cursor });
     return json({
       objects: page.objects.map((object) => ({
         key: object.key,

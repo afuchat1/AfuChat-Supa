@@ -744,8 +744,9 @@ export async function listUserFiles(
     const realBucket = resolveBucket(bucket);
     const container = await getContainerId(realBucket);
     if (!container.id) return null;
+    const cursorQuery = token ? `?cursor=${encodeURIComponent(token)}` : "";
     const result = await afuChatMediaJson(
-      `/v1/storage-containers/${encodeURIComponent(container.id)}/objects`,
+      `/v1/storage-containers/${encodeURIComponent(container.id)}/objects${cursorQuery}`,
     );
     if (result.error || !Array.isArray(result.body?.objects)) return null;
     return {
@@ -755,7 +756,7 @@ export async function listUserFiles(
         last_modified: object.updatedAt || object.createdAt || null,
         url: object.url ? publicObjectUrl(object, object.key) : null,
       })),
-      nextToken: null,
+      nextToken: typeof result.body.nextToken === "string" ? result.body.nextToken : null,
     };
   } catch { return null; }
 }
