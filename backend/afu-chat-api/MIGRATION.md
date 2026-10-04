@@ -23,6 +23,15 @@ database, storage, and compatibility gates below pass.
 - The `afuchat` schema exists and has 201 base tables; all 201 currently have
   row-level security enabled. The schema also contains relations named for
   AfuMail (`afumail_*`) and Afu Ads (`ad_*`). Do not change those relations.
+- `chat`/`social` and `afuchat` contain separate physical copies with divergent
+  data. In the read-only message comparison, 18 rows present only in
+  `chat.messages` have plaintext content and no encrypted content; among 3,080
+  shared message IDs, 1,956 have different sender IDs. Other shared chat,
+  membership, channel, and follow rows also differ. Some `afuchat` foreign keys
+  still reference `chat` or `social`. Do not bulk-copy legacy rows, overwrite
+  existing `afuchat` values, or turn plaintext into encrypted content. Keep both
+  copies intact until conflicts and the row-retention policy are explicitly
+  resolved.
 - The database role setting for PostgREST excludes `afuchat`. The schema grants
   `USAGE` to `anon` and `authenticated`, so adding it to the exposed-schema
   setting could expand the REST API surface. Table grants and policies still
