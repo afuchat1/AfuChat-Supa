@@ -45,6 +45,7 @@ The app ships with hardcoded production-safe fallbacks in `artifacts/mobile/lib/
 | Variable | Purpose | Required? |
 |---|---|---|
 | `EXPO_PUBLIC_AFUCLOUD_API_URL` | Legacy mobile API base currently used by AfuChat call sites; split calls by product during migration | No — defaults to `https://api.afuchat.com` |
+| `EXPO_PUBLIC_AFUCHAT_API_URL` | AfuChat Supabase API base under the shared host's `/afuchat` namespace | No — defaults to the gateway origin plus `/afuchat` |
 | `EXPO_PUBLIC_SUPABASE_URL` | Legacy project URL used only for public client metadata | No |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Public anon key forwarded through the Worker gateway | No — fallback in `env.ts` |
 | `EXPO_TOKEN` | EAS cloud builds | Only for EAS builds |

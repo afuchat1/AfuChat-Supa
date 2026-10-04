@@ -8,3 +8,9 @@ AfuChat and AfuCloud are distinct products. They may share Afu Account, the `api
 **Why:** The user's Afu ecosystem master rules supersede earlier decisions that treated AfuChat and AfuCloud as one product with shared product resources. The user also specified that AfuChat's backend must be the Cloudflare Worker.
 
 **How to apply:** Classify each endpoint, schema, object, binding, and deployment by product before changing it. Preserve legacy contracts during migration. Do not alter or decommission a resource until ownership, dependencies, data, consumers, validation, and rollback are confirmed; stop when ownership is unknown.
+
+The shared API hostname is product-namespaced: AfuChat requests use `/afuchat`, and AfuCloud requests use `/afucloud`. Keep each product's Supabase and API paths under its own namespace.
+
+**Why:** the user clarified that `api.afuchat.com` is shared, with AfuChat under `/afuchat` and AfuCloud under `/afucloud`.
+
+**How to apply:** Set AfuChat client API bases to `/afuchat` and AfuCloud bases to `/afucloud`; route only product-specific paths to that product's Worker.

@@ -17,6 +17,7 @@ interface ByteRange {
 
 const API_PREFIX = "/afuchat";
 const API_STORAGE_PREFIX = "/v1/storage/";
+const SUPABASE_PATH_PREFIXES = ["/auth/v1", "/rest/v1", "/realtime/v1"] as const;
 const CONTAINERS_PREFIX = "containers/";
 const CDN_PREFIX = "/chat/";
 const DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -39,12 +40,16 @@ function error(message: string, status: number): Response {
 function isTrustedAppOrigin(origin: string): boolean {
   try {
     const { protocol, hostname } = new URL(origin);
-    if (protocol !== "https:" && protocol !== "http:") return false;
+    if (protocol === "http:" && (hostname === "localhost" || hostname === "127.0.0.1")) {
+      return true;
+    }
+    if (protocol !== "https:") return false;
     return (
       hostname === "afuchat.com" ||
       hostname.endsWith(".afuchat.com") ||
-      hostname === "localhost" ||
-      hostname === "127.0.0.1"
+      hostname.endsWith(".replit.dev") ||
+      hostname.endsWith(".replit.app") ||
+      hostname.endsWith(".vercel.app")
     );
   } catch {
     return false;
@@ -53,9 +58,9 @@ function isTrustedAppOrigin(origin: string): boolean {
 
 function corsHeaders(request: Request, publicAsset = false): Headers {
   const headers = new Headers({
-    "Access-Control-Allow-Methods": "GET, HEAD, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers":
-      "Authorization, Content-Type, Range, If-None-Match, If-Modified-Since",
+      "Accept, Accept-Profile, Authorization, Content-Profile, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Prefer, Range, X-Client-Info, X-Requested-With, X-Supabase-Api-Version, apikey",
     "Access-Control-Expose-Headers":
       "Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified, X-AfuChat-Request-Id",
     "Access-Control-Max-Age": "86400",
@@ -156,6 +161,47 @@ function decodeKeyPath(encoded: string): string | null {
     return key;
   } catch {
     return null;
+  }
+}
+
+function isSupabaseProxyPath(path: string): boolean {
+  return SUPABASE_PATH_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+async function proxySupabaseRequest(
+  request: Request,
+  env: Env,
+  path: string,
+): Promise<Response> {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+    return error("Supabase proxy is not configured", 503);
+  }
+
+  const incoming = new URL(request.url);
+  const target = new URL(
+    `${env.SUPABASE_URL.replace(/\/+$/, "")}${path}${incoming.search}`,
+  );
+  const headers = new Headers(request.headers);
+  headers.set("apikey", env.SUPABASE_ANON_KEY);
+  headers.delete("host");
+  headers.delete("content-length");
+
+  try {
+    const upstreamRequest = new Request(target, {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+      redirect: "manual",
+    });
+    return await fetch(upstreamRequest);
+  } catch (cause) {
+    console.error("AfuChat Supabase proxy request failed", {
+      path,
+      error: cause instanceof Error ? cause.message : "unknown",
+    });
+    return error("Supabase service is unavailable", 502);
   }
 }
 
@@ -468,7 +514,9 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (apiRequest) {
     const origin = request.headers.get("Origin");
     if (origin && !isTrustedAppOrigin(origin)) return error("Origin is not allowed", 403);
-    return handleApi(request, env, url.pathname.slice(API_PREFIX.length));
+    const path = url.pathname.slice(API_PREFIX.length);
+    if (isSupabaseProxyPath(path)) return proxySupabaseRequest(request, env, path);
+    return handleApi(request, env, path);
   }
 
   if (publicAsset && ["GET", "HEAD"].includes(request.method)) {

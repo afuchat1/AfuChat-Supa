@@ -1,11 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
-import { AFUCLOUD_API_URL, SUPABASE_ANON_KEY } from "./env";
+import { AFUCHAT_API_URL, SUPABASE_ANON_KEY } from "./env";
 
-export const supabaseUrl = AFUCLOUD_API_URL;
+export const supabaseUrl = AFUCHAT_API_URL;
 export const supabaseAnonKey = SUPABASE_ANON_KEY;
-export const supabaseGatewayUrl = AFUCLOUD_API_URL;
+export const supabaseGatewayUrl = AFUCHAT_API_URL;
 
 // ─── Suppress expected Supabase refresh-token errors ────────────────────────
 // When the app starts with a stale/revoked refresh token in storage, Supabase
@@ -104,10 +104,9 @@ const webStorage = {
   },
 };
 
-// AfuCloud is the public API boundary for both native and web. Its Worker
-// exposes the Supabase-compatible auth, REST/RPC, storage, functions, and
-// realtime paths while forwarding the caller JWT to the shared Supabase
-// project so RLS remains authoritative.
+// AfuChat Supabase requests use the /afuchat product namespace on the shared
+// API hostname. The dedicated AfuChat Worker forwards them to Supabase while
+// preserving the caller JWT so RLS remains authoritative.
 const supabaseClientUrl = supabaseGatewayUrl;
 
 export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {

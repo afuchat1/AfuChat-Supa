@@ -26,6 +26,13 @@ export const APP_ORIGIN: string = `https://${APP_DOMAIN}`;
 export const AFUCLOUD_API_URL: string =
   (process.env.EXPO_PUBLIC_AFUCLOUD_API_URL ?? "").trim() || "https://api.afuchat.com";
 
+const API_GATEWAY_ORIGIN = new URL(AFUCLOUD_API_URL).origin;
+
+/** AfuChat's product-specific API namespace on the shared API hostname. */
+export const AFUCHAT_API_URL: string =
+  (process.env.EXPO_PUBLIC_AFUCHAT_API_URL ?? "").trim().replace(/\/+$/, "") ||
+  `${API_GATEWAY_ORIGIN}/afuchat`;
+
 /** AfuChat-owned media Worker route and public CDN path. */
 export const AFUCHAT_MEDIA_API_URL: string =
   (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_API_URL ?? "").trim() ||
