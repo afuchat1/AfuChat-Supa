@@ -1,0 +1,581 @@
+Set up and organize the complete API infrastructure for the current AfuChat ecosystem, following the rules below.
+
+If any required infrastructure, configuration, route, binding, database connection, environment variable, secret, documentation, or test is missing, create or configure it immediately, provided that doing so is safe, non-destructive, and consistent with the requirements below. Do not claim that anything was created, configured, deployed, or tested unless it was actually completed and verified.
+
+The immediate development priority is AfuChat, but the API foundation must support all Afu products that currently exist:
+
+- AfuChat
+- AfuAuth
+- AfuMail
+- AfuCloud
+- AfuAI
+- AfuAds
+
+Do not create APIs or Workers for future products or services that do not currently exist.
+
+1. Required API Workers
+
+The final API Worker names must be:
+
+- "afuchat-api"
+- "afuauth-api"
+- "afumail-api"
+- "afucloud-api"
+- "afuai-api"
+- "afuads-api"
+
+Use these exact names.
+
+Do not create alternative names such as "afu-api-gateway", "afuchatbackend", "afu-ai-api", or other inconsistent names when the existing service belongs to one of the products above.
+
+If a required Worker is missing, create it immediately after auditing existing infrastructure and confirming that no equivalent implementation already exists. If an equivalent Worker exists under another name, reuse, rename, or restructure it instead of creating a duplicate.
+
+2. Audit Existing Infrastructure First
+
+Before creating or changing anything, thoroughly inspect the current infrastructure.
+
+Check:
+
+- Existing Cloudflare Workers
+- Worker names
+- Custom domains
+- Routes
+- API endpoints
+- "api.afuchat.com"
+- Existing "/v1/*" routes
+- Databases
+- Supabase projects
+- Authentication
+- Service bindings
+- Environment variables
+- Secrets
+- Existing CDN configuration
+- Existing storage configuration
+- Existing AfuCloud infrastructure
+- Existing AfuMail infrastructure
+- Existing AfuAI infrastructure
+- Existing AfuAds infrastructure
+- Existing AfuChat backend
+
+Determine exactly what already exists and what is missing.
+
+Create or configure any missing required item immediately after the audit, unless doing so would be destructive, require unapproved migration, or conflict with an existing production resource. Document any blocked or deferred item and the reason.
+
+3. Reuse Existing APIs Before Creating Anything
+
+If an existing API already performs the function of one of the required services but has an incorrect name, do not create a duplicate API or Worker.
+
+Instead, rename or reorganize the existing Worker into the correct name.
+
+For example, if an existing Worker is currently called "afu-api-gateway" but its actual responsibility is the AfuChat application API, evaluate it for renaming or restructuring as "afuchat-api".
+
+Likewise, if an existing AfuCloud API has another name, use the existing implementation and reorganize it as "afucloud-api".
+
+Apply the same principle to AfuAuth, AfuMail, AfuAI, and AfuAds.
+
+Rule
+
+Reuse existing implementation → rename or restructure when necessary → preserve existing data → avoid duplication.
+
+Do not create a second Worker simply because the existing Worker has the wrong name.
+
+If renaming is not technically supported without downtime, preserve the existing implementation and configure the required final name through the safest available Cloudflare deployment or routing strategy. Document the exact compatibility and rollback approach.
+
+4. Preserve Existing Data
+
+Renaming or reorganizing the API infrastructure must not unnecessarily require data migration.
+
+Preserve all existing:
+
+- Users
+- Accounts
+- Authentication records
+- Profiles
+- Messages
+- Posts
+- Stories
+- Gifts
+- ACoin data
+- Transactions
+- Email data
+- Cloud files
+- Storage metadata
+- AI-related data
+- Ads data
+- Databases
+- Tables
+- Existing production resources
+
+Do not create duplicate databases merely to match the new Worker names.
+
+If an existing database already contains the required data, continue using it.
+
+Only perform a data migration if it is technically unavoidable. If migration is unavoidable, stop before executing the migration, document exactly why it is required, identify the affected resources, provide a rollback plan, and obtain approval before proceeding.
+
+5. Central API Hostname
+
+Use:
+
+"https://api.afuchat.com"
+
+as the central public API hostname.
+
+Organize the current APIs using versioned namespaces.
+
+AfuAuth
+
+"https://api.afuchat.com/v1/auth/*"
+
+Owned by:
+
+"afuauth-api"
+
+AfuChat
+
+"https://api.afuchat.com/v1/chat/*"
+
+Owned by:
+
+"afuchat-api"
+
+AfuMail
+
+"https://api.afuchat.com/v1/mail/*"
+
+Owned by:
+
+"afumail-api"
+
+AfuCloud
+
+"https://api.afuchat.com/v1/cloud/*"
+
+Owned by:
+
+"afucloud-api"
+
+AfuAI
+
+"https://api.afuchat.com/v1/ai/*"
+
+Owned by:
+
+"afuai-api"
+
+AfuAds
+
+"https://api.afuchat.com/v1/ads/*"
+
+Owned by:
+
+"afuads-api"
+
+These namespaces are the initial structure. Determine the complete endpoint list from the actual requirements and existing application functionality.
+
+If any required namespace or route is missing, create and configure it immediately after confirming its responsible Worker and existing backend dependencies.
+
+6. AfuChat API
+
+"afuchat-api" is the first API that must be fully validated because AfuChat is the immediate development priority.
+
+It should provide the APIs currently required by the AfuChat application, including existing functionality such as:
+
+- User profiles
+- Social posts
+- Feeds
+- Comments
+- Reactions
+- Messaging
+- Conversations
+- Groups
+- Stories
+- Gifts
+- ACoin-related functionality
+- Notifications
+- Media
+- Search
+- Other functionality already present in AfuChat
+
+Do not invent endpoints for features that do not currently exist.
+
+Inspect the current application and backend to determine the actual API requirements. If an existing AfuChat endpoint is missing from the target namespace, configure it immediately while preserving its current behavior and data dependencies.
+
+7. AfuAuth API
+
+"afuauth-api" should provide the shared authentication foundation for the current Afu ecosystem.
+
+The architecture should support the same Afu account identity across:
+
+- AfuChat
+- AfuMail
+- AfuCloud
+- AfuAI
+- AfuAds
+
+Avoid creating separate login systems unnecessarily.
+
+Use the existing authentication infrastructure where possible. If the required shared authentication route, token validation, or service integration is missing, create and configure it using the existing identity system rather than creating duplicate accounts or authentication databases.
+
+8. AfuMail API
+
+"afumail-api" should handle the current AfuMail backend requirements.
+
+Audit the existing AfuMail application and backend before creating or changing anything.
+
+Reuse its existing database and authentication integration where appropriate.
+
+If any required AfuMail Worker, route, binding, environment variable, secret, or endpoint is missing, create or configure it immediately without disrupting existing mail functionality.
+
+9. AfuCloud API
+
+"afucloud-api" should handle the current AfuCloud backend requirements.
+
+Do not break the existing AfuCloud infrastructure.
+
+Before changing anything, audit:
+
+- "cloud.afuchat.com"
+- "img.afuchat.com"
+- "cdn.afuchat.com"
+- Existing storage buckets
+- Existing storage APIs
+- Existing object URLs
+- Existing image delivery
+- Existing Cloudflare configuration
+
+Existing storage and media URLs must continue working unless an approved migration is specifically required.
+
+If any required AfuCloud API, route, binding, storage configuration, or environment variable is missing, create or configure it immediately using the existing storage resources. Do not create duplicate buckets or storage systems.
+
+10. AfuAI API
+
+"afuai-api" should handle all current AfuAI functionality.
+
+Keep AfuAI as one unified API service.
+
+Do not split AfuAI into multiple Workers for individual AI features.
+
+Use:
+
+"https://api.afuchat.com/v1/ai/*"
+
+for AfuAI's public API namespace.
+
+If the unified AfuAI Worker or namespace is missing, create and configure it immediately after auditing existing AfuAI infrastructure. Reuse existing AI data, providers, credentials, bindings, and storage.
+
+11. AfuAds API
+
+"afuads-api" should handle the current AfuAds functionality.
+
+Use:
+
+"https://api.afuchat.com/v1/ads/*"
+
+for AfuAds.
+
+Audit any existing advertising-related backend or Worker first.
+
+If an existing Ads API already exists under another name, reuse and rename or restructure it instead of creating a duplicate.
+
+If any required Ads Worker, route, binding, database connection, environment variable, or secret is missing, create or configure it immediately without duplicating existing advertising data.
+
+12. API Gateway and Routing
+
+Do not automatically create a separate gateway Worker.
+
+The required product API Workers should be the actual service owners.
+
+If "api.afuchat.com" requires a gateway or routing layer because of the current Cloudflare architecture, determine whether "afuchat-api" can appropriately serve that role or whether a separate gateway is genuinely necessary.
+
+Do not create an unnecessary Worker simply to act as a gateway.
+
+The final architecture must clearly document how requests reach each API Worker.
+
+If a routing layer is genuinely required and cannot safely be handled by "afuchat-api", document the reason before creating it, ensure it does not duplicate product functionality, and include it in the final architecture and rollback plan.
+
+13. Service Bindings
+
+Where appropriate, use Cloudflare service bindings for Worker-to-Worker communication.
+
+For example:
+
+"afuchat-api" → "afuauth-api"
+
+"afuchat-api" → "afuai-api"
+
+"afuchat-api" → "afucloud-api"
+
+"afumail-api" → "afuauth-api"
+
+"afuads-api" → "afuauth-api"
+
+Only create bindings that are actually required.
+
+Do not expose internal services publicly when Worker-to-Worker communication can safely be used.
+
+If a required binding is missing, create and configure it immediately after verifying the target Worker and compatibility. Document every binding and its purpose.
+
+14. Authentication and Authorization
+
+Establish consistent authentication and authorization across the APIs.
+
+The APIs should support the shared Afu account architecture.
+
+Implement appropriate:
+
+- Authentication
+- Authorization
+- Token validation
+- Service authentication
+- Permission checks
+- Input validation
+- Rate limiting
+- CORS
+- Error handling
+- Abuse protection
+
+Never hardcode secrets or credentials into source code.
+
+If any of these protections are missing from a production API, configure them immediately using secure environment variables, secret storage, Cloudflare controls, or existing authentication infrastructure. Do not expose secret values in reports.
+
+15. Endpoint Documentation
+
+For every actual endpoint, document:
+
+- Full URL
+- HTTP method
+- Purpose
+- Authentication requirement
+- Authorization requirement
+- Request parameters
+- Request body
+- Response format
+- Error responses
+- Responsible Worker
+- Database or service dependencies
+
+For example:
+
+"POST https://api.afuchat.com/v1/auth/login"
+
+"GET https://api.afuchat.com/v1/users/me"
+
+"GET https://api.afuchat.com/v1/chat/conversations"
+
+"POST https://api.afuchat.com/v1/mail/send"
+
+"GET https://api.afuchat.com/v1/cloud/storage"
+
+"POST https://api.afuchat.com/v1/ai/chat"
+
+"GET https://api.afuchat.com/v1/ads"
+
+These are examples only. Determine the real endpoints from the current applications.
+
+If documentation is missing for any actual endpoint, create or update it immediately. Do not document hypothetical endpoints as operational.
+
+16. Backward Compatibility
+
+Existing production API endpoints must not be broken unnecessarily.
+
+If an existing endpoint uses a different path, maintain compatibility during the transition where technically possible.
+
+If a route must change, document:
+
+- Old endpoint
+- New endpoint
+- Reason for change
+- Compatibility strategy
+- Migration requirement
+- Rollback strategy
+
+Do not suddenly remove existing production endpoints.
+
+If a compatibility route is missing and can be safely added without conflict, create it immediately and verify that both old and new routes behave correctly.
+
+17. Cloudflare Routing
+
+Audit Cloudflare routing carefully.
+
+Determine:
+
+- Which Worker currently owns "api.afuchat.com"
+- Which routes exist
+- Whether multiple Workers overlap
+- Whether more-specific routes override broader routes
+- Which Worker handles each API namespace
+- Whether any existing custom domains conflict
+- Whether any existing routes must be renamed or reorganized
+
+The final configuration must have clear ownership for every API route.
+
+If any required route is missing, conflicting, or incorrectly assigned, correct it immediately using the safest non-destructive configuration. Verify route precedence and endpoint behavior after every routing change.
+
+18. No Unnecessary Data Migration
+
+Do not migrate data simply because Worker names are changing.
+
+Worker naming and routing should be separated from database ownership wherever possible.
+
+The objective is:
+
+Correct the API architecture without unnecessarily moving the underlying data.
+
+If any proposed change would require data migration, stop before execution unless the migration is technically unavoidable, fully documented, approved, backed up, and reversible.
+
+19. No Duplicate Services
+
+Before creating each Worker, search the existing infrastructure.
+
+If an equivalent Worker exists:
+
+- Reuse it.
+- Rename it if necessary.
+- Reconfigure its routes.
+- Preserve its database connections.
+- Preserve its data.
+- Preserve its functionality.
+
+Do not create duplicate Workers serving the same purpose.
+
+If infrastructure is missing, create only the specific required Worker or configuration item, using the exact final names and ownership defined above.
+
+20. Production Safety
+
+Do not:
+
+- Delete production databases
+- Delete existing users
+- Delete storage
+- Delete existing media
+- Delete existing API data
+- Break authentication
+- Break AfuCloud
+- Break AfuMail
+- Break AfuAI
+- Break AfuAds
+- Break existing AfuChat functionality
+- Replace working infrastructure unnecessarily
+
+Any destructive or migration-related change must be identified and approved before execution.
+
+If a required configuration cannot be safely applied without one of these risks, do not execute it. Report the blocker, affected resource, required approval, and safest implementation path.
+
+21. Testing
+
+After the infrastructure is organized, test every API.
+
+Verify:
+
+- Worker deployment
+- DNS
+- Routing
+- API accessibility
+- Authentication
+- Authorization
+- Database connectivity
+- Service bindings
+- CORS
+- Request validation
+- Error handling
+- Existing application compatibility
+- Existing data integrity
+- AfuCloud storage compatibility
+- Existing media URLs
+
+A URL must not be reported as operational merely because it has been configured. Confirm that the endpoint actually responds correctly.
+
+If any test fails, fix the issue immediately when the fix is safe and non-destructive, then rerun the test. Report unresolved failures accurately.
+
+22. Final API Structure
+
+The target current ecosystem structure is:
+
+"afuchat-api"
+
+"afuauth-api"
+
+"afumail-api"
+
+"afucloud-api"
+
+"afuai-api"
+
+"afuads-api"
+
+with:
+
+"https://api.afuchat.com"
+
+as the central API hostname.
+
+The initial API namespaces are:
+
+"/v1/auth/*"
+
+"/v1/chat/*"
+
+"/v1/mail/*"
+
+"/v1/cloud/*"
+
+"/v1/ai/*"
+
+"/v1/ads/*"
+
+If any of these required Workers, namespaces, routes, or configurations are missing, create or configure them immediately after auditing existing infrastructure and confirming that no equivalent implementation already exists.
+
+23. Final Deliverables
+
+After completing the work, provide a complete report containing:
+
+1. Existing Workers discovered.
+2. Existing APIs discovered.
+3. Workers that were renamed.
+4. Workers that were newly created.
+5. Final Worker names.
+6. Every API endpoint.
+7. HTTP method for every endpoint.
+8. API endpoint ownership.
+9. Cloudflare routes.
+10. Custom domains.
+11. Service bindings.
+12. Database connections.
+13. Environment variable names.
+14. Secret names, without exposing secret values.
+15. Authentication architecture.
+16. Existing endpoints preserved for compatibility.
+17. Endpoint testing results.
+18. Data integrity verification.
+19. Any conflicts discovered.
+20. Any migration that is genuinely unavoidable.
+21. Deployment status.
+22. Rollback plan.
+23. Final architecture diagram.
+
+Clearly distinguish between:
+
+- Verified existing resources
+- Newly created resources
+- Reconfigured resources
+- Missing resources
+- Blocked resources
+- Planned but unexecuted changes
+
+Do not claim completion for any item that was not actually created, configured, deployed, or tested.
+
+Final principle
+
+Reuse existing infrastructure before creating new infrastructure.
+
+Rename incorrect APIs instead of duplicating them.
+
+Preserve existing data instead of migrating it unnecessarily.
+
+Create only the APIs for products that currently exist.
+
+AfuChat is the first API to be fully validated, but the architecture must cleanly support AfuAuth, AfuMail, AfuCloud, AfuAI, and AfuAds.
+
+If any required infrastructure or configuration is missing, create and configure it immediately when safe, non-destructive, and technically appropriate.
+
+Do not proceed with destructive changes or unnecessary data migration.
