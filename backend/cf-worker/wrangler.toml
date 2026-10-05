@@ -8,11 +8,10 @@ compatibility_date = "2025-07-01"
 compatibility_flags = ["nodejs_compat"]
 account_id = "42e79186125e8ff83e51f15816e074de"
 
-# ── Routes ───────────────────────────────────────────────────────────────────
-routes = [
-  { pattern = "api.afuchat.com", zone_name = "afuchat.com" },
-  { pattern = "api.afuchat.com/*", zone_name = "afuchat.com" }
-]
+# Public API routes are owned by `afu-api-gateway`, which invokes this Worker
+# through the `AFUCLOUD_API` service binding. Keep this Worker un-routed so a
+# deploy cannot take over or bypass the gateway's production routes.
+workers_dev = false
 
 # ── R2 Bucket binding ─────────────────────────────────────────────────────────
 [[r2_buckets]]

@@ -1,11 +1,14 @@
 # AfuChat-owned Worker. This config is intentionally not attached to a
 # production API route until the schema, bucket, consumers, and rollback plan
 # have all been validated.
-name = "afu-chat-api"
+name = "afuchat-api"
 main = "src/index.ts"
 compatibility_date = "2025-07-01"
 account_id = "42e79186125e8ff83e51f15816e074de"
 workers_dev = false
+routes = [
+  { pattern = "api.afuchat.com/v1/chat/*", zone_name = "afuchat.com" }
+]
 
 # Product API and CDN routes remain detached until cutover validation:
 # routes = [
@@ -18,6 +21,11 @@ workers_dev = false
 [[r2_buckets]]
 binding = "AFUCHAT_ASSETS"
 bucket_name = "afu-chat-assets"
+
+[[services]]
+binding = "AFUCLOUD_API"
+service = "afucloud-api"
+environment = "production"
 
 [vars]
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
