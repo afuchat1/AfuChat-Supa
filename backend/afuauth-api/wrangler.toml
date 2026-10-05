@@ -1,18 +1,21 @@
-# AfuChat business API. Media and Supabase compatibility routes remain on
-# their existing dedicated Workers.
-name = "afuchat-api"
+name = "afuauth-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-05"
 account_id = "42e79186125e8ff83e51f15816e074de"
 workers_dev = false
 routes = [
-  { pattern = "api.afuchat.com/v1/chat/*", zone_name = "afuchat.com" }
+  { pattern = "api.afuchat.com/v1/auth/*", zone_name = "afuchat.com" },
+  { pattern = "api.afuchat.com/v1/auth-resolve-identifier", zone_name = "afuchat.com" }
 ]
 
 [vars]
+SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
+SUPABASE_DB_SCHEMA = "afucloud"
+SUPABASE_ACCOUNTS_SCHEMA = "accounts"
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
-AFUCHAT_DATABASE_SCHEMA = "public"
 AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
 
 [observability]
 enabled = true
+
+# Set SUPABASE_SERVICE_KEY and JWT_SECRET in the Worker secret store.

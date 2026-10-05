@@ -1,0 +1,11 @@
+name = "afumail-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-05"
+account_id = "42e79186125e8ff83e51f15816e074de"
+workers_dev = false
+routes = [
+  { pattern = "api.afuchat.com/v1/mail/*", zone_name = "afuchat.com" }
+]
+
+[observability]
+enabled = true

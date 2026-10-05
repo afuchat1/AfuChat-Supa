@@ -120,6 +120,31 @@ app.route("/v1/projects", webhookApp);
 // Project analytics: /v1/analytics/projects/:projectId
 app.route("/v1/analytics", analyticsRoutes);
 
+// AfuCloud product namespace. Keep the legacy /v1/* mounts above for older
+// clients while new clients use /v1/cloud/*.
+const cloudApi = new Hono<{ Bindings: Env }>();
+cloudApi.route("/projects", projectRoutes);
+cloudApi.route("/analytics", analyticsRoutes);
+cloudApi.route("/tokens", tokenRoutes);
+cloudApi.route("/activity", activityRoutes);
+cloudApi.route("/storage", storageRoutes);
+cloudApi.route("/domains", domainRoutes);
+cloudApi.route("/storage-containers", storageContainerRoutes);
+
+const cloudImageApp = new Hono<{ Bindings: Env }>();
+cloudImageApp.route("/:projectId/images", imageRoutes);
+cloudApi.route("/projects", cloudImageApp);
+
+const cloudApiKeyApp = new Hono<{ Bindings: Env }>();
+cloudApiKeyApp.route("/:projectId/api-keys", apiKeyRoutes);
+cloudApi.route("/projects", cloudApiKeyApp);
+
+const cloudWebhookApp = new Hono<{ Bindings: Env }>();
+cloudWebhookApp.route("/:projectId/webhooks", webhookRoutes);
+cloudApi.route("/projects", cloudWebhookApp);
+
+app.route("/v1/cloud", cloudApi);
+
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.notFound((c) =>
   c.json(

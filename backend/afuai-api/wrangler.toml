@@ -1,0 +1,16 @@
+name = "afuai-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-05"
+account_id = "42e79186125e8ff83e51f15816e074de"
+workers_dev = false
+routes = [
+  { pattern = "api.afuchat.com/v1/ai/*", zone_name = "afuchat.com" }
+]
+
+[vars]
+AFUAI_PRODUCT = "AfuAI"
+
+[observability]
+enabled = true
+
+# Set ENGAGERA_API_KEY with the Worker secret store.

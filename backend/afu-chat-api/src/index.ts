@@ -1,17 +1,10 @@
-import { handleCdnAssetRequest, type AfuChatAssetsBucket } from "./r2-assets";
-
 interface Env {
   AFUCHAT_SUPABASE_URL?: string;
   AFUCHAT_SUPABASE_ANON_KEY?: string;
   AFUCHAT_DATABASE_SCHEMA?: string;
-  AFUCHAT_ASSETS?: AfuChatAssetsBucket;
-  AFUCLOUD_API?: {
-    fetch(request: Request): Promise<Response>;
-  };
 }
 
-const PREFIX = "/afuchat";
-const SUPABASE_PREFIXES = ["/auth/v1", "/rest/v1", "/realtime/v1"] as const;
+const PREFIX = "/v1/chat";
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
 const ALLOWED_HEADERS = "Authorization, Content-Type, apikey, X-Client-Info";
 const EXPOSED_HEADERS = "Content-Range, X-AfuChat-Request-Id, X-AfuChat-Version";
@@ -117,15 +110,6 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       401,
     );
   }
-  if (!env.AFUCLOUD_API) {
-    return privateJsonResponse(
-      request,
-      requestId,
-      { error: "Chat data service is not configured", request_id: requestId },
-      503,
-    );
-  }
-
   const schema = env.AFUCHAT_DATABASE_SCHEMA?.trim() || "public";
   if (!/^[a-z][a-z0-9_]*$/i.test(schema)) {
     return privateJsonResponse(
@@ -152,10 +136,22 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     );
   }
 
-  const target = new URL(request.url);
+  const supabaseUrl = env.AFUCHAT_SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const anonKey = env.AFUCHAT_SUPABASE_ANON_KEY?.trim();
+  if (!supabaseUrl || !anonKey) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "Chat data service is not configured", request_id: requestId },
+      503,
+    );
+  }
+
+  const target = new URL(supabaseUrl);
   target.pathname = "/rest/v1/rpc/get_chat_list";
   target.search = "";
   const upstreamHeaders = new Headers({
+    apikey: anonKey,
     Authorization: authorization,
     Accept: "application/json",
     "Content-Type": "application/json",
@@ -164,14 +160,12 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
   });
 
   try {
-    const upstream = await env.AFUCLOUD_API.fetch(
-      new Request(target, {
-        method: "POST",
-        headers: upstreamHeaders,
-        body: JSON.stringify({ p_unread_excluded_ids: excludedIds }),
-        redirect: "manual",
-      }),
-    );
+    const upstream = await fetch(new Request(target, {
+      method: "POST",
+      headers: upstreamHeaders,
+      body: JSON.stringify({ p_unread_excluded_ids: excludedIds }),
+      redirect: "manual",
+    }));
     const outgoingHeaders = new Headers(upstream.headers);
     responseHeaders(request, requestId).forEach((value, key) => {
       outgoingHeaders.set(key, value);
@@ -193,30 +187,9 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
   }
 }
 
-function isSupabasePath(path: string): boolean {
-  return SUPABASE_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
-  );
-}
-
-function hasBody(method: string): boolean {
-  return method !== "GET" && method !== "HEAD";
-}
-
-function stripProductPrefix(path: string): string | null {
-  if (path === PREFIX) return "/";
-  if (!path.startsWith(`${PREFIX}/`)) return null;
-  return path.slice(PREFIX.length);
-}
-
 async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   const requestId = crypto.randomUUID();
   const incoming = new URL(request.url);
-  const productPath = stripProductPrefix(incoming.pathname);
-  if (productPath === null) {
-    return jsonResponse(request, requestId, { error: "Not found" }, 404);
-  }
-
   if (request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -224,90 +197,37 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  if (productPath === "/" || productPath === "/healthz") {
+  if (incoming.pathname === "/healthz" || incoming.pathname === `${PREFIX}/healthz`) {
     return jsonResponse(
       request,
       requestId,
-      { product: "afuchat", worker: "afu-chat-api", status: "ok", version: "v1" },
+      { product: "afuchat", worker: "afuchat-api", status: "ok", version: "v1" },
       200,
     );
   }
 
-  if (!isSupabasePath(productPath)) {
+  if (
+    incoming.pathname === `${PREFIX}/conversations` &&
+    request.method !== "OPTIONS"
+  ) {
+    return handleChatConversations(request, env);
+  }
+
+  if (incoming.pathname === PREFIX || incoming.pathname.startsWith(`${PREFIX}/`)) {
     return jsonResponse(
       request,
       requestId,
-      {
-        error: "Endpoint is not migrated to afu-chat-api",
-        product: "afuchat",
-        request_id: requestId,
-      },
+      { error: "This AfuChat endpoint is not implemented yet", worker: "afuchat-api", request_id: requestId },
       501,
     );
   }
-
-  const supabaseUrl = env.AFUCHAT_SUPABASE_URL?.trim().replace(/\/+$/, "");
-  const anonKey = env.AFUCHAT_SUPABASE_ANON_KEY?.trim();
-  const schema = env.AFUCHAT_DATABASE_SCHEMA?.trim();
-  if (!supabaseUrl || !anonKey || (productPath.startsWith("/rest/v1") && !schema)) {
-    return jsonResponse(
-      request,
-      requestId,
-      { error: "AfuChat Supabase gateway is not fully configured", request_id: requestId },
-      503,
-    );
-  }
-
-  const target = new URL(`${supabaseUrl}${productPath}${incoming.search}`);
-  const headers = new Headers(request.headers);
-  headers.set("apikey", anonKey);
-  headers.delete("host");
-  headers.delete("content-length");
-  if (productPath === "/rest/v1" || productPath.startsWith("/rest/v1/")) {
-    headers.set("Accept-Profile", schema!);
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      headers.set("Content-Profile", schema!);
-    }
-  }
-
-  try {
-    const upstream = await fetch(
-      new Request(target, {
-        method: request.method,
-        headers,
-        body: hasBody(request.method) ? request.body : undefined,
-        redirect: "manual",
-      }),
-    );
-    const outgoingHeaders = new Headers(upstream.headers);
-    responseHeaders(request, requestId).forEach((value, key) => {
-      outgoingHeaders.set(key, value);
-    });
-    return new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers: outgoingHeaders,
-    });
-  } catch {
-    return jsonResponse(
-      request,
-      requestId,
-      { error: "Upstream database service unavailable", request_id: requestId },
-      502,
-    );
-  }
+  return jsonResponse(request, requestId, { error: "Not found", path: incoming.pathname }, 404);
 }
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  if (url.pathname === "/v1/chat/conversations") {
+  if (url.pathname === `${PREFIX}/conversations`) {
     return handleChatConversations(request, env);
-  }
-  if (
-    url.hostname.toLowerCase() === "cdn.afuchat.com" &&
-    (url.pathname === "/chat" || url.pathname.startsWith("/chat/"))
-  ) {
-    return handleCdnAssetRequest(request, env.AFUCHAT_ASSETS);
   }
   return handleApiRequest(request, env);
 }
