@@ -2,6 +2,9 @@ interface Env {
   AFUCHAT_SUPABASE_URL?: string;
   AFUCHAT_SUPABASE_ANON_KEY?: string;
   AFUCHAT_DATABASE_SCHEMA?: string;
+  AFUAUTH_API?: {
+    fetch(request: Request): Promise<Response>;
+  };
 }
 
 const PREFIX = "/v1/chat";
@@ -133,6 +136,59 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       requestId,
       { error: "unread_excluded_ids must contain at most 100 UUIDs", request_id: requestId },
       400,
+    );
+  }
+
+  if (!env.AFUAUTH_API) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "Shared authentication service is not configured", request_id: requestId },
+      503,
+    );
+  }
+
+  try {
+    const verified = await env.AFUAUTH_API.fetch(new Request(
+      "https://afuauth.internal/v1/auth/session",
+      {
+        method: "POST",
+        headers: { Authorization: authorization, Accept: "application/json" },
+      },
+    ));
+    const payload = await verified.json().catch(() => null) as
+      | { user?: { id?: unknown } }
+      | null;
+    if (verified.status === 401 || verified.status === 403) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "Invalid or expired Supabase session", request_id: requestId },
+        401,
+      );
+    }
+    if (!verified.ok) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "Shared authentication service is unavailable", request_id: requestId },
+        503,
+      );
+    }
+    if (typeof payload?.user?.id !== "string" || !payload.user.id) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "Invalid or expired Supabase session", request_id: requestId },
+        401,
+      );
+    }
+  } catch {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "Shared authentication service is unavailable", request_id: requestId },
+      503,
     );
   }
 

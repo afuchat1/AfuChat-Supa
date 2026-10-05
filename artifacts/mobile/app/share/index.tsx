@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useDataMode } from "@/context/DataModeContext";
 import { supabase } from "@/lib/supabase";
+import { getAfuChatConversations } from "@/lib/afuchatApi";
 import { safeRouter } from "@/lib/navUtils";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
@@ -199,10 +200,7 @@ export default function ShareToAfuChatScreen() {
 
         // Refresh recent chats in the background so a newly-created
         // conversation is available even before the chats tab is opened.
-        const { data } = await supabase.rpc(
-          "get_chat_list",
-          { p_unread_excluded_ids: [] },
-        );
+        const { data } = await getAfuChatConversations();
         if (cancelled) return;
         const liveTargets = ((data ?? []) as any[])
            .filter((row) => !row.is_archived && row.last_message_at)

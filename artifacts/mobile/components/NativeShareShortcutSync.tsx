@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { InteractionManager } from "react-native";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
+import { getAfuChatConversations } from "@/lib/afuchatApi";
 import { getLocalConversations, type LocalConversation } from "@/lib/storage/localConversations";
 import { updateNativeShareShortcuts, type ShareShortcutChat } from "@/lib/nativeShareShortcuts";
 
@@ -68,9 +68,7 @@ export default function NativeShareShortcutSync() {
                 .filter(Boolean) as ShareShortcutChat[],
             );
 
-            const { data } = await supabase.rpc("get_chat_list", {
-              p_unread_excluded_ids: [],
-            });
+            const { data } = await getAfuChatConversations();
             if (cancelled) return;
             updateNativeShareShortcuts(
               ((data ?? []) as any[])

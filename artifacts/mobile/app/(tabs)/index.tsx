@@ -39,6 +39,7 @@ import { CHAT_FAST_SPRING } from "@/lib/chatMotion";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { getAfuChatConversations } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { safeRouter } from "@/lib/navUtils";
@@ -718,14 +719,11 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     ].filter((id, index, ids): id is string => !!id && ids.indexOf(id) === index);
 
     const rpcStartedAt = Date.now();
-    if (__DEV__) console.log("[ChatPerf] server RPC start");
+    if (__DEV__) console.log("[ChatPerf] server API start");
     let chatRows: any[] | null = null;
     let chatError: { message?: string } | null = null;
     try {
-      const result = await supabase.rpc(
-        "get_chat_list",
-        { p_unread_excluded_ids: unreadExcludedIds },
-      );
+      const result = await getAfuChatConversations(unreadExcludedIds);
       chatRows = result.data as any[] | null;
       chatError = result.error;
     } catch (error) {
@@ -733,7 +731,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     }
     if (__DEV__) {
       console.log(
-        "[ChatPerf] server RPC end",
+        "[ChatPerf] server API end",
         Date.now() - rpcStartedAt,
         "ms",
         "chats",

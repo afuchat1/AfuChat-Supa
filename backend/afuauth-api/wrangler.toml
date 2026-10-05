@@ -10,7 +10,6 @@ routes = [
 
 [vars]
 SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
-SUPABASE_DB_SCHEMA = "afucloud"
 SUPABASE_ACCOUNTS_SCHEMA = "accounts"
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
 AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
@@ -18,4 +17,5 @@ AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
 [observability]
 enabled = true
 
-# Set SUPABASE_SERVICE_KEY and JWT_SECRET in the Worker secret store.
+# Set SUPABASE_SERVICE_KEY in the Worker secret store. AfuAuth verifies and
+# returns Supabase-issued sessions; it does not mint product-specific tokens.
