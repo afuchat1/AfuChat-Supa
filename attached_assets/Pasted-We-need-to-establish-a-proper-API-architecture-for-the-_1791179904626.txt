@@ -1,0 +1,440 @@
+We need to establish a proper API architecture for the current Afu ecosystem, ensuring that no single Worker independently owns all of "api.afuchat.com". Each Afu product must have its own independently deployable API Worker, with its API endpoints correctly assigned to the appropriate product Worker.
+
+Current problem
+
+Currently, "api.afuchat.com" was originally owned and handled by the AfuCloud API infrastructure.
+
+This is causing an architectural problem because the AfuChat developer is deploying AfuChat API endpoints into the AfuCloud API Worker. When the AfuChat developer needs to modify or deploy an AfuChat endpoint, they can unintentionally modify or redeploy the same Worker that AfuCloud depends on.
+
+This must be separated.
+
+AfuChat must have its own API Worker, AfuCloud must have its own API Worker, and each current Afu product must have independent API ownership and deployment boundaries.
+
+All required API Workers must be created and made available now, even if some do not yet have active endpoints or connected application functionality. Their public routes and deployment boundaries must still be established so that future development can begin without requiring developers to repeat this infrastructure work.
+
+1. Create these API Workers
+
+Create exactly these six Workers:
+
+"afuchat-api"
+
+"afuauth-api"
+
+"afumail-api"
+
+"afucloud-api"
+
+"afuai-api"
+
+"afuads-api"
+
+Do not create additional product API Workers that are not currently required.
+
+Do not create duplicate Workers under alternative names.
+
+Each Worker must exist as an independently deployable Worker, even if it currently contains only the required baseline structure, health endpoint, configuration, or placeholder implementation.
+
+2. Independent ownership
+
+Each Worker must have independent responsibility and deployment.
+
+"afuchat-api"
+
+Owns AfuChat API functionality.
+
+The AfuChat developer must be able to modify, deploy and update AfuChat APIs without modifying or redeploying:
+
+- "afucloud-api"
+- "afumail-api"
+- "afuai-api"
+- "afuads-api"
+- "afuauth-api"
+
+"afucloud-api"
+
+Owns AfuCloud API functionality only.
+
+The AfuCloud API must no longer be the place where AfuChat API endpoints are developed or deployed.
+
+Existing AfuCloud functionality must remain intact.
+
+"afuauth-api"
+
+Owns shared authentication and identity APIs.
+
+It must be available as an independent Worker even if all authentication endpoints are not yet connected or migrated.
+
+"afumail-api"
+
+Owns AfuMail API functionality.
+
+It must be available as an independent Worker even if AfuMail endpoints are not yet connected.
+
+"afuai-api"
+
+Owns all current AfuAI API functionality as one unified service.
+
+It must be available as an independent Worker even if AfuAI endpoints are not yet connected.
+
+"afuads-api"
+
+Owns current AfuAds API functionality.
+
+It must be available as an independent Worker even if AfuAds endpoints are not yet connected.
+
+3. Central hostname
+
+Continue using:
+
+"https://api.afuchat.com"
+
+as the public API hostname.
+
+Establish the following routes now, regardless of whether each route currently has active endpoint functionality. Each route must point to the correct independent Worker so that future development can use the intended architecture immediately.
+
+Route requests according to their product namespace.
+
+AfuAuth
+
+"https://api.afuchat.com/v1/auth/*"
+
+→ "afuauth-api"
+
+AfuChat
+
+"https://api.afuchat.com/v1/chat/*"
+
+→ "afuchat-api"
+
+AfuMail
+
+"https://api.afuchat.com/v1/mail/*"
+
+→ "afumail-api"
+
+AfuCloud
+
+"https://api.afuchat.com/v1/cloud/*"
+
+→ "afucloud-api"
+
+AfuAI
+
+"https://api.afuchat.com/v1/ai/*"
+
+→ "afuai-api"
+
+AfuAds
+
+"https://api.afuchat.com/v1/ads/*"
+
+→ "afuads-api"
+
+For Workers without connected functionality, return a clear controlled response such as "501 Not Implemented" or an equivalent documented response rather than routing the namespace to another product Worker.
+
+The exact endpoint list should be determined from the current applications and existing functionality.
+
+4. Separate AfuChat from AfuCloud
+
+This is the most important requirement.
+
+Currently, AfuCloud is associated with the existing "api.afuchat.com" API infrastructure.
+
+Create the new "afuchat-api" Worker and move or implement the AfuChat API functionality there.
+
+Create and configure "afucloud-api" separately for AfuCloud.
+
+The end result must be:
+
+AfuChat developer
+
+→ "afuchat-api"
+
+AfuCloud developer
+
+→ "afucloud-api"
+
+They must be able to deploy independently.
+
+An AfuChat API deployment must not redeploy the AfuCloud API Worker.
+
+An AfuCloud API deployment must not redeploy the AfuChat API Worker.
+
+5. Preserve existing AfuCloud API
+
+Do not simply delete or replace the existing AfuCloud API.
+
+First identify all existing AfuCloud endpoints currently running through the old API infrastructure.
+
+Move or reassign them safely to:
+
+"afucloud-api"
+
+while preserving:
+
+- Existing functionality
+- Existing database connections
+- Existing storage
+- Existing files
+- Existing object metadata
+- Existing authentication
+- Existing API behavior
+- Existing URLs where compatibility is required
+
+Do not perform unnecessary data migration.
+
+The objective is to change API ownership and deployment boundaries, not to move the underlying AfuCloud data unnecessarily.
+
+6. Move AfuChat API functionality
+
+Identify every AfuChat endpoint currently living inside the old AfuCloud API Worker.
+
+Those endpoints must become part of:
+
+"afuchat-api"
+
+Do not leave AfuChat endpoints inside "afucloud-api".
+
+Do not create duplicate copies of the same API unless temporarily required for a controlled migration.
+
+Once the new AfuChat API is verified, the old AfuChat routes in the AfuCloud Worker should no longer be used for AfuChat.
+
+7. Existing data must remain where it is
+
+Do not migrate databases simply because the API Worker is changing.
+
+Worker separation does not mean database duplication.
+
+Continue using the existing databases and tables where appropriate.
+
+Preserve all existing:
+
+- Users
+- Accounts
+- Authentication records
+- Messages
+- Posts
+- Stories
+- Gifts
+- ACoin
+- Transactions
+- AfuCloud files
+- Storage metadata
+- AfuMail data
+- AfuAI data
+- AfuAds data
+
+Only migrate data if technically unavoidable.
+
+If a data migration is genuinely unavoidable, stop before performing it and report exactly why it is required.
+
+8. Authentication
+
+Create:
+
+"afuauth-api"
+
+as the shared authentication API.
+
+It should provide the foundation for the current Afu ecosystem.
+
+The Worker and its route must be available even if authentication functionality is still being connected or migrated.
+
+The architecture should allow the same Afu account identity to be used across:
+
+- AfuChat
+- AfuMail
+- AfuCloud
+- AfuAI
+- AfuAds
+
+Do not create separate duplicate user accounts or authentication databases.
+
+9. Worker-to-Worker communication
+
+Use Cloudflare service bindings where appropriate.
+
+For example:
+
+"afuchat-api" → "afuauth-api"
+
+"afuchat-api" → "afucloud-api"
+
+"afuchat-api" → "afuai-api"
+
+"afumail-api" → "afuauth-api"
+
+"afuads-api" → "afuauth-api"
+
+Only configure bindings that are actually required.
+
+Keep internal communication separate from public API routing where possible.
+
+Bindings may be prepared for the intended architecture, but do not add unnecessary bindings to Workers that do not yet require them.
+
+10. No shared deployment
+
+The six API Workers must have independent deployments.
+
+For example:
+
+If the AfuChat developer changes:
+
+"/v1/chat/messages"
+
+only:
+
+"afuchat-api"
+
+should need to be deployed.
+
+If AfuCloud changes:
+
+"/v1/cloud/storage"
+
+only:
+
+"afucloud-api"
+
+should need to be deployed.
+
+If AfuAI changes:
+
+"/v1/ai/*"
+
+only:
+
+"afuai-api"
+
+should need to be deployed.
+
+This separation is a primary requirement.
+
+11. Existing Cloudflare configuration
+
+Before changing "api.afuchat.com", inspect:
+
+- Current Worker routes
+- Custom domains
+- DNS
+- Route precedence
+- Existing "/v1/*" routes
+- Existing Worker bindings
+- Existing environment variables
+- Existing secrets
+- Existing API endpoints
+
+Do not blindly replace the current route.
+
+Build the new architecture safely and verify each route before removing or changing the old behavior.
+
+12. AfuCloud compatibility
+
+Do not break:
+
+"cloud.afuchat.com"
+
+"img.afuchat.com"
+
+"cdn.afuchat.com"
+
+or existing AfuCloud storage functionality.
+
+Audit the current AfuCloud API before moving its ownership.
+
+Existing storage and media URLs must continue working.
+
+13. API documentation
+
+Document every endpoint under its responsible Worker.
+
+For each endpoint provide:
+
+- URL
+- HTTP method
+- Purpose
+- Authentication
+- Request
+- Response
+- Errors
+- Worker owner
+- Database/service dependency
+
+For Workers that do not yet have connected endpoints, document the Worker, namespace route, current availability status, placeholder behavior, and planned ownership.
+
+The final ownership must be clear.
+
+14. Testing
+
+Test every new Worker independently.
+
+Verify:
+
+- Worker deployment
+- API routing
+- Authentication
+- Database access
+- Service bindings
+- CORS
+- Error handling
+- Existing application compatibility
+- Existing AfuCloud compatibility
+- Existing media URLs
+- Existing storage
+- Data integrity
+
+Also specifically test that deploying "afuchat-api" does not change or redeploy "afucloud-api".
+
+For Workers without connected functionality, verify that:
+
+- The Worker is deployed
+- Its namespace route reaches the correct Worker
+- It returns the documented controlled response
+- It does not fall through to another product Worker
+- It can be developed and deployed independently
+
+15. Final architecture
+
+The final structure must be:
+
+"api.afuchat.com"
+
+├── "/v1/auth/*" → "afuauth-api"
+
+├── "/v1/chat/*" → "afuchat-api"
+
+├── "/v1/mail/*" → "afumail-api"
+
+├── "/v1/cloud/*" → "afucloud-api"
+
+├── "/v1/ai/*" → "afuai-api"
+
+└── "/v1/ads/*" → "afuads-api"
+
+Each Worker must have its own codebase and deployment boundary.
+
+All six Workers and all six namespace routes must be established, even when a namespace does not yet have connected application functionality.
+
+16. Important rules
+
+Do not continue putting AfuChat endpoints into "afucloud-api".
+
+Do not make AfuCloud responsible for AfuChat APIs.
+
+Do not create duplicate databases just to separate Workers.
+
+Do not unnecessarily migrate existing data.
+
+Do not create unnecessary API Workers.
+
+Do not break existing AfuCloud functionality.
+
+Do not leave required Workers or namespace routes uncreated merely because their endpoints are not yet connected.
+
+Do not route an unimplemented namespace to another product Worker.
+
+Do not claim a Worker or endpoint is ready until it has actually been created, deployed and tested.
+
+The primary objective is to separate the current AfuCloud API infrastructure from AfuChat and establish six properly owned, independently deployable API Workers with their routes already in place.
+
+After this separation, the AfuChat developer should be able to work exclusively on "afuchat-api" without disturbing AfuCloud, while developers for AfuAuth, AfuMail, AfuAI and AfuAds can begin work on their own already-established Workers without repeating the infrastructure setup.
