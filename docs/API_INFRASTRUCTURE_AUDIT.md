@@ -76,6 +76,14 @@ These are the live media/Supabase routes, not a substitute for `/v1/chat/*` busi
 
 An unauthenticated zero-row `profiles` read through `/afuchat/rest/v1` returned `200`; a deliberately invalid login returned the expected Supabase `invalid_credentials` response. The PostgREST OpenAPI-root request was not accepted, so this audit does not claim a complete generated OpenAPI contract for the dynamic table/RPC surface. Direct CDN HEAD probes returned `403` from this audit environment and do not establish whether the CDN works for app clients.
 
+## Existing local Worker source (not a production contract)
+
+- `backend/cf-worker/wrangler.toml` names `afucloud-api`, but declares broad `api.afuchat.com` routes. The live broad route currently belongs to `afu-api-gateway`. Its `IMAGES_BUCKET` binding points to the mixed `afuchat-media` bucket, while the live `img.afuchat.com` custom domain points to `afucloud-images`. Do not deploy this config as a namespace migration.
+- The Hono entry point mounts local handlers at `/v1/auth`, `/v1/projects`, `/v1/analytics`, `/v1/tokens`, `/v1/activity`, `/v1/storage`, `/v1/domains`, `/v1/storage-containers`, `/v1/payments`, and `/v1`. It also declares root `/auth/v1/*`, `/rest/v1/*`, and `/realtime/v1/*` Supabase proxy paths. These local declarations do not match the current live `/afuchat/*` proxy route.
+- The local `/v1/auth/*` handler reads and creates profiles through the configured `afucloud` schema. It is not a verified, product-independent AfuAuth service.
+- The `/v1` app-functions router includes `/v1/ai/chat`, `/v1/ai/reply`, `/v1/ai/transcribe`, `/v1/ai/lens`, `/v1/status`, and `/v1/auth-resolve-identifier`. It combines Engagera calls with shared profile lookups and is not a verified isolated AfuAI Worker.
+- Production probes returned `404` for `/v1/auth/register` and `/v1/ai/chat` even though those paths appear in local source. Do not copy or route these local handlers to the requested product namespaces until their data ownership, auth contract, bindings, and live behavior are verified.
+
 ## Supabase and R2 data
 
 - One existing Supabase project is used; no new database was created. The schemas include `public`, `accounts`, `afuchat`, `afucloud`, `afuai`, `mail`, and `ads`.
