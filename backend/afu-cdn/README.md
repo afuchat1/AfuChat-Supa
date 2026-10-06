@@ -28,11 +28,14 @@ bucket for older URLs.
 1. Deploy this Worker with `pnpm exec wrangler deploy --config backend/afu-cdn/wrangler.toml`.
    The broad route is added while any older, more-specific product routes remain
    in place.
-2. Review the read-only route plan with `node backend/route-management/reconcile.mjs`.
+2. Review the read-only CDN-only route plan with
+   `node backend/route-management/reconcile.mjs --cdn-only`.
 3. After approving the production cutover, run
-   `node backend/route-management/reconcile.mjs --apply` to remove the old
-   product CDN routes and leave the single `cdn.afuchat.com/*` route.
+   `node backend/route-management/reconcile.mjs --cdn-only --apply` to remove
+   only the old product CDN routes and leave the single
+   `cdn.afuchat.com/*` route. API routes, DNS, buckets, and objects are untouched.
 
-The route reconciliation also validates API routes, all product R2 bindings,
-the legacy CDN domain, the AfuCloud image domain, and the existing website
-route. It does not change DNS, buckets, or objects.
+The CDN-only route reconciliation validates Worker ownership, all product R2
+bindings, the legacy CDN domain, the AfuCloud image domain, and the existing
+website route before and after cutover. The unscoped reconciliation command
+continues to manage the broader API and CDN route set separately.

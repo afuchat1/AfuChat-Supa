@@ -5,6 +5,7 @@ const ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de";
 const ZONE_ID = "d3eb877a0ae2af4dbb94d8e6b4310af9";
 const API = "https://api.cloudflare.com/client/v4";
 const APPLY = process.argv.includes("--apply");
+const CDN_ONLY = process.argv.includes("--cdn-only");
 const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
 
 if (!token) throw new Error("CLOUDFLARE_API_TOKEN is required.");
@@ -94,6 +95,10 @@ function isProductHostRoute(route) {
     const escaped = routeHost.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
     return new RegExp(`^${escaped}$`).test(host);
   });
+}
+
+function isCdnHostRoute(route) {
+  return route.pattern.split("/", 1)[0] === "cdn.afuchat.com";
 }
 
 function assertKnownOwners(currentRoutes) {
@@ -197,17 +202,21 @@ async function assertCompatibilityDomains() {
   }
 }
 
-function summarize(currentRoutes) {
-  const expected = [...routes, [rootGatewayRoute.pattern, rootGatewayRoute.script]].map(([pattern, script]) => {
+function summarize(currentRoutes, cdnOnly = false) {
+  const cdnRoutes = [...routes].filter(([pattern]) => pattern.startsWith("cdn.afuchat.com/"));
+  const expectedRoutes = cdnOnly
+    ? cdnRoutes
+    : [...routes, [rootGatewayRoute.pattern, rootGatewayRoute.script]];
+  const expected = expectedRoutes.map(([pattern, script]) => {
     const current = currentRoutes.find((route) => route.pattern === pattern);
     return { pattern, script, action: current ? "keep" : "create" };
   });
   const remove = currentRoutes
     .filter(isProductHostRoute)
-    .filter((route) =>
-      !routes.has(route.pattern) &&
-      route.pattern !== rootGatewayRoute.pattern
-    )
+    .filter((route) => {
+      if (cdnOnly) return isCdnHostRoute(route) && !routes.has(route.pattern);
+      return !routes.has(route.pattern) && route.pattern !== rootGatewayRoute.pattern;
+    })
     .map(({ id, pattern, script }) => ({ id, pattern, script }));
   return { expected, remove };
 }
@@ -238,7 +247,7 @@ async function restoreRoute(route) {
   );
 }
 
-async function reconcile(plan) {
+async function reconcile(plan, cdnOnly = false) {
   const created = [];
   const removed = [];
   try {
@@ -252,18 +261,31 @@ async function reconcile(plan) {
 
     const finalRoutes = await getRoutes();
     assertKnownOwners(finalRoutes);
-    const finalProductRoutes = finalRoutes.filter(isProductHostRoute);
-    if (
-      finalProductRoutes.length !== routes.size + 1 ||
-      !finalProductRoutes.some((route) =>
-        route.pattern === rootGatewayRoute.pattern &&
-        route.script === rootGatewayRoute.script
-      ) ||
-      [...routes].some(([pattern, script]) =>
-        !finalProductRoutes.some((route) => route.pattern === pattern && route.script === script)
-      )
-    ) {
-      throw new Error("Post-deploy API/CDN route inventory does not match the canonical set.");
+    if (cdnOnly) {
+      const finalCdnRoutes = finalRoutes.filter(isCdnHostRoute);
+      if (
+        finalCdnRoutes.length !== 1 ||
+        !finalCdnRoutes.some((route) =>
+          route.pattern === "cdn.afuchat.com/*" &&
+          route.script === "afu-cdn"
+        )
+      ) {
+        throw new Error("Post-deploy CDN route inventory does not match the canonical set.");
+      }
+    } else {
+      const finalProductRoutes = finalRoutes.filter(isProductHostRoute);
+      if (
+        finalProductRoutes.length !== routes.size + 1 ||
+        !finalProductRoutes.some((route) =>
+          route.pattern === rootGatewayRoute.pattern &&
+          route.script === rootGatewayRoute.script
+        ) ||
+        [...routes].some(([pattern, script]) =>
+          !finalProductRoutes.some((route) => route.pattern === pattern && route.script === script)
+        )
+      ) {
+        throw new Error("Post-deploy API/CDN route inventory does not match the canonical set.");
+      }
     }
     return finalRoutes;
   } catch (error) {
@@ -284,15 +306,22 @@ const [currentRoutes] = await Promise.all([
   assertCompatibilityDomains(),
 ]);
 assertKnownOwners(currentRoutes);
-const plan = summarize(currentRoutes);
+const plan = summarize(currentRoutes, CDN_ONLY);
 
 if (!APPLY) {
   console.log(JSON.stringify({
     mode: "dry-run",
-    apiAndCdnRouteCount: routes.size,
+    scope: CDN_ONLY ? "cdn-only" : "api-and-cdn",
+    canonicalRouteCount: plan.expected.length,
     canonicalRoutes: plan.expected,
     legacyRoutesToDelete: plan.remove,
-    rootGatewayPreserved: rootGatewayRoute,
+    ...(CDN_ONLY
+      ? {
+          apiRoutesUntouched: currentRoutes
+            .filter((route) => route.pattern.startsWith("api.afuchat.com/"))
+            .map(({ pattern, script }) => ({ pattern, script })),
+        }
+      : { rootGatewayPreserved: rootGatewayRoute }),
     websiteRoutePreserved: requiredSiteRoute,
     existingObjectDomainsPreserved: [
       "cdn.afuchat.com → afuchat-media (legacy reads through afu-cdn)",
@@ -302,12 +331,19 @@ if (!APPLY) {
     bucketOrObjectChanges: [],
   }));
 } else {
-  const finalRoutes = await reconcile(plan);
+  const finalRoutes = await reconcile(plan, CDN_ONLY);
   console.log(JSON.stringify({
     mode: "deployed",
-    apiAndCdnRouteCount: routes.size,
-    canonicalRoutes: [...routes].map(([pattern, script]) => ({ pattern, script })),
-    rootGatewayPreserved: rootGatewayRoute,
+    scope: CDN_ONLY ? "cdn-only" : "api-and-cdn",
+    canonicalRouteCount: plan.expected.length,
+    canonicalRoutes: plan.expected.map(({ pattern, script }) => ({ pattern, script })),
+    ...(CDN_ONLY
+      ? {
+          apiRoutesUntouched: finalRoutes
+            .filter((route) => route.pattern.startsWith("api.afuchat.com/"))
+            .map(({ pattern, script }) => ({ pattern, script })),
+        }
+      : { rootGatewayPreserved: rootGatewayRoute }),
     deletedLegacyRoutes: plan.remove.map(({ pattern, script }) => ({ pattern, script })),
     websiteRoutePreserved: requiredSiteRoute,
     existingObjectDomainsPreserved: [
@@ -316,6 +352,8 @@ if (!APPLY) {
     ],
     dnsChanges: [],
     bucketOrObjectChanges: [],
-    finalScopedRouteCount: finalRoutes.filter(isProductHostRoute).length,
+    finalScopedRouteCount: CDN_ONLY
+      ? finalRoutes.filter(isCdnHostRoute).length
+      : finalRoutes.filter(isProductHostRoute).length,
   }));
 }
