@@ -9,12 +9,8 @@ const WORKER_NAME = "afuchat-api";
 const AUTH_WORKER_NAME = "afuauth-api";
 const ZONE_NAME = "afuchat.com";
 const CHAT_ASSETS_BUCKET = "afu-chat-assets";
-const LEGACY_MEDIA_BUCKET = "afuchat-media";
 const REQUIRED_ROUTES = [
-  "api.afuchat.com/chat/*",
   "api.afuchat.com/v1/chat/*",
-  // Keep this route only for clients from app versions predating the chat storage namespace.
-  "api.afuchat.com/v1/storage*",
   "cdn.afuchat.com/chat/*",
 ];
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
@@ -296,9 +292,7 @@ async function assertProductionPostflight() {
   }
 
   for (const path of [
-    "/chat/v1/storage/usage",
     "/v1/chat/storage/usage",
-    "/v1/storage/usage",
   ]) {
     const storage = await fetch(`https://api.afuchat.com${path}`);
     if (storage.status !== 401) {
@@ -346,7 +340,7 @@ const byName = new Map(bindings.map((binding) => [binding.name, binding]));
 
 if (
   byName.get("AFUCHAT_ASSETS")?.type !== "r2_bucket" ||
-  ![LEGACY_MEDIA_BUCKET, CHAT_ASSETS_BUCKET].includes(byName.get("AFUCHAT_ASSETS")?.bucket_name) ||
+  byName.get("AFUCHAT_ASSETS")?.bucket_name !== CHAT_ASSETS_BUCKET ||
   byName.get("SUPABASE_URL")?.type !== "plain_text" ||
   byName.get("SUPABASE_ANON_KEY")?.type !== "plain_text"
 ) {
@@ -500,7 +494,7 @@ if (!APPLY) {
     existingWorker: true,
     createSimilarWorker: false,
     preservesLegacyMediaHandler: true,
-    addsChatCompatibilityRoute: true,
+    createsMissingCanonicalRoutes: routeState.routePlan.some(({ action }) => action === "create"),
     routes: routeState.routePlan,
     workersDevEnabled: false,
     targetAssetBucket: CHAT_ASSETS_BUCKET,
@@ -527,14 +521,12 @@ if (!APPLY) {
       "POST /v1/chat/storage/containers/{containerId}/objects/confirm",
       "DELETE /v1/chat/storage/containers/{containerId}/objects/by-key",
       "GET /v1/chat/storage/usage",
-      "GET /chat/v1/storage/usage",
       "GET|HEAD /v1/chat/storage/objects/{key}",
       "non-OPTIONS methods on /v1/chat/videos and /v1/chat/videos/* currently return 501",
       "POST /v1/auth/session (AfuAuth service binding; not an AfuChat route)",
-      "deprecated /v1/storage* and /v1/storage-containers* compatibility aliases",
       "GET|HEAD cdn.afuchat.com/chat/{key} media delivery",
     ],
-    nextStep: "Run with --apply to deploy this Worker and add only missing routes.",
+    nextStep: "Run with --apply to deploy the Worker and add any missing canonical routes.",
   }));
   process.exit(0);
 }
@@ -585,7 +577,7 @@ console.log(JSON.stringify({
     "storage handler route",
     "legacy CDN asset route",
     "dedicated AfuChat assets bucket binding",
-    "chat compatibility route",
+    "canonical chat API and storage routing",
   ],
   modules: Object.fromEntries(
     Object.entries(modules).map(([name, content]) => [name, Buffer.byteLength(content)]),

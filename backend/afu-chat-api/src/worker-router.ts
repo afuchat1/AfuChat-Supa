@@ -1,7 +1,5 @@
 import {
   isChatStoragePath,
-  isCompatibilityStoragePath,
-  toChatCompatibilityRequest,
   toChatStorageRequest,
 } from "./storage-routing.ts";
 
@@ -10,23 +8,42 @@ type WorkerHandler = {
 };
 
 const CHAT_PREFIX = "/v1/chat";
+const API_HOST = "api.afuchat.com";
+const CDN_HOST = "cdn.afuchat.com";
 
 export function createAfuChatWorkerRouter(chatApi: WorkerHandler, legacyApi: WorkerHandler) {
   return {
     fetch(request: Request, env: unknown, ctx: unknown) {
-      const pathname = new URL(request.url).pathname;
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+
+      if (url.hostname.toLowerCase() === CDN_HOST) {
+        if (pathname === "/chat" || pathname.startsWith("/chat/")) {
+          return legacyApi.fetch(request, env, ctx);
+        }
+        return notFound();
+      }
+
+      if (url.hostname.toLowerCase() !== API_HOST) return notFound();
 
       if (isChatStoragePath(pathname)) {
         const storageRequest = toChatStorageRequest(request);
-        if (storageRequest) return legacyApi.fetch(storageRequest, env, ctx);
+        return storageRequest
+          ? legacyApi.fetch(storageRequest, env, ctx)
+          : notFound();
       }
+
       if (pathname === CHAT_PREFIX || pathname.startsWith(`${CHAT_PREFIX}/`)) {
         return chatApi.fetch(request, env, ctx);
       }
-      if (isCompatibilityStoragePath(pathname)) {
-        return legacyApi.fetch(toChatCompatibilityRequest(request), env, ctx);
-      }
-      return legacyApi.fetch(request, env, ctx);
+      return notFound();
     },
   };
+}
+
+function notFound(): Response {
+  return Response.json(
+    { error: "Not found", worker: "afuchat-api" },
+    { status: 404, headers: { "Cache-Control": "no-store" } },
+  );
 }

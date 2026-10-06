@@ -14,20 +14,22 @@ endpoint-by-endpoint API contract.
 - `afuchat-api` owns `api.afuchat.com/v1/chat/*`, including the canonical
   `/v1/chat/storage/*` routes, and `cdn.afuchat.com/chat/*`. It preserves the
   existing media handler and R2 binding while serving the chat API.
-- The older `/v1/storage*` paths remain temporary compatibility aliases for
-  already-released app versions; new clients use only `/v1/chat/storage/*`.
-- `afuauth-api` owns `api.afuchat.com/v1/auth/*` and the legacy username
-  resolver alias. AfuChat verifies sessions through its Worker service binding
-  and forwards the same Supabase bearer token to RLS.
-- AfuCloud's existing API and CDN routes are unchanged by this AfuChat/AfuAuth
-  cutover.
+- The former `/v1/storage*` and `/chat/*` API aliases are removed. New clients
+  must use `/v1/chat/storage/*`; no compatibility redirect or proxy remains.
+- `afuauth-api` owns `api.afuchat.com/v1/auth/*`. Its canonical identifier
+  resolver is `/v1/auth/resolve-identifier`; the old resolver alias is removed.
+  AfuChat verifies sessions through its Worker service binding and forwards the
+  same Supabase bearer token to RLS.
+- AfuCloud, AfuMail, AfuAI, and AfuAds each retain their own versioned API and
+  CDN namespaces and product-specific R2 buckets. Their route ownership was
+  checked; their service health was not changed or brought into AfuChat scope.
 - `cdn.afuchat.com` at the root remains an R2 custom domain for
   `afuchat-media`. The more-specific `/chat/*` Worker route retains its
   existing `AFUCHAT_ASSETS` binding to that same bucket.
 
-Do not detach the live routes or rename/redeploy a Worker to an overlapping
-route until all current app callers have a compatibility plan and the new
-handlers pass production-equivalent tests.
+The root `api.afuchat.com/` route remains owned by the separate `afu-api`
+gateway. There is no generic API catch-all. Keep legacy URL parsing for stored
+data separate from outgoing API requests, which must use canonical routes.
 
 ## Database and compatibility inventory
 
@@ -94,12 +96,12 @@ Worker integration.
 - The repository source implements health, status, conversations, account
   export, Pesapal payments, and the existing media-storage operations under
   `/v1/chat/storage/*`. The updated `afuchat-api` Worker was deployed on
-  2026-10-06. Unauthenticated `/v1/chat/storage/usage` and the legacy
-  `/v1/storage/usage` both return `401`, confirming both paths reach the
-  authentication-guarded handler. This does not replace an authenticated
-  upload/read test. Video processing and unimplemented chat paths return `501`
-  until their handlers are configured. See `docs/AFUCHAT_API.md` for the full
-  contract.
+  2026-10-06. Health and status return `200`; status reports both Supabase and
+  Worker checks as healthy. CORS, invalid-session rejection, and unauthenticated
+  canonical storage checks pass. The legacy `/v1/storage*` API alias is removed.
+  This does not replace an authenticated upload/read test. Video processing
+  endpoints return `501` until their handlers are configured. See
+  `docs/AFUCHAT_API.md` for the full contract.
 
 ## Client contract inventory
 

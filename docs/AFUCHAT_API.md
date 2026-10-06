@@ -91,20 +91,24 @@ Supabase access token to AfuChat.
 
 ## Renamed routes and compatibility
 
-The mobile source now uses these canonical storage paths:
+The mobile source uses the canonical storage paths:
 
-| Legacy path | Canonical path |
+| Former path | Current path |
 |---|---|
 | `/v1/storage/usage` | `/v1/chat/storage/usage` |
 | `/v1/storage-containers` | `/v1/chat/storage/containers` |
 | `/v1/storage-containers/{containerId}/*` | `/v1/chat/storage/containers/{containerId}/*` |
 | `/v1/storage/{key}` | `/v1/chat/storage/objects/{key}` |
 
-The deployment wrapper still accepts the old `/v1/storage*` paths as
-compatibility aliases for previously released app versions. They are not the
-canonical contract and new clients must not call them. They can be removed
-only after old clients have been migrated and the production routes have been
-verified.
+The former `/v1/storage*` and `/chat/*` API aliases, along with the old
+`/afucloud/*` and auth resolver aliases, have been removed from Cloudflare
+routing. Older clients that still call those aliases must be upgraded; there is
+no redirect or compatibility proxy. The root `api.afuchat.com/` remains owned by
+the separate `afu-api` gateway and forwards only the root request to AfuAuth.
+
+The root `cdn.afuchat.com` R2 custom domain remains attached to
+`afuchat-media` for existing legacy object URLs. New AfuChat media uses only
+`cdn.afuchat.com/chat/*` and the dedicated `afu-chat-assets` bucket.
 
 No `/v1/posts`, `/v1/messages`, `/v1/profile`, `/v1/upload`, or `/v1/feed`
 endpoints are registered by this AfuChat Worker. Unimplemented AfuChat paths
@@ -113,17 +117,16 @@ return `501`; no speculative handlers are documented here.
 ## Deployment verification
 
 `backend/afu-chat-api/deploy.mjs` composes the chat API with the existing media
-handler and includes preflight/postflight checks for chat health, status,
-conversation authentication, the canonical and compatibility storage routes,
-the AfuAuth service, and the existing media binding. Production updates are
-deployed with that script; it preserves the existing Worker and checks live
-behavior before reporting success.
+handler and checks chat health, status, CORS, authentication rejection, the
+canonical storage route, AfuAuth service binding, CDN dispatch, and the
+dedicated media binding. Production updates are deployed with that script; it
+preserves the existing Worker and checks live behavior before reporting
+success.
 
 The updated Worker was deployed on 2026-10-06. Its postflight checks passed for
 health, status, CORS, session rejection, media routing, and the existing
-bindings. Unauthenticated `GET /v1/chat/storage/usage` and
-`GET /v1/storage/usage` both return `401`, confirming that the canonical and
-compatibility paths reach their authentication-guarded handlers rather than
-returning `501`. This verifies routing and unauthenticated behavior; it does
-not replace an authenticated upload/read test. Already-published mobile builds
-still need their own release to use the updated client paths.
+bindings. Unauthenticated `GET /v1/chat/storage/usage` returns `401`, confirming
+that the canonical route reaches its authentication-guarded handler. This
+verifies routing and unauthenticated behavior; it does not replace an
+authenticated upload/read test. Already-published mobile builds still need
+their own release to use updated client paths.

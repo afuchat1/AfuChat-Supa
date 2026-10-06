@@ -4,7 +4,6 @@ import worker from "../src/index.ts";
 import mediaHandler from "../../../artifacts/afuchat-worker/src/index.ts";
 import {
   isChatStoragePath,
-  isCompatibilityStoragePath,
   toChatStoragePath,
   toChatStorageRequest,
 } from "../src/storage-routing.ts";
@@ -44,14 +43,7 @@ test("chat health endpoint is public", async () => {
   assert.equal((await response.json()).worker, "afuchat-api");
 });
 
-test("API compatibility and CDN assets share the chat path without host collisions", async () => {
-  const apiResponse = await mediaHandler.fetch(
-    new Request("https://api.afuchat.com/chat/v1/storage/usage"),
-    makeEnv(),
-  );
-  assert.equal(apiResponse.status, 401);
-  assert.equal((await apiResponse.json()).error, "Authentication required");
-
+test("CDN media path reaches the media handler on the CDN hostname", async () => {
   const cdnResponse = await mediaHandler.fetch(
     new Request("https://cdn.afuchat.com/chat/__deployment_probe__"),
     makeEnv(),
@@ -108,14 +100,13 @@ test("canonical storage request preserves query, method, and authorization", asy
   assert.equal(await rewritten.text(), "image-bytes");
 });
 
-test("old storage paths are recognized only as compatibility routes", () => {
-  assert.equal(isCompatibilityStoragePath("/v1/storage/usage"), true);
-  assert.equal(isCompatibilityStoragePath("/v1/storage-containers"), true);
-  assert.equal(isCompatibilityStoragePath("/v1/chat/storage/usage"), false);
-  assert.equal(isCompatibilityStoragePath("/v1/cloud/storage/usage"), false);
+test("legacy product and unnamespaced storage API paths are not chat routes", () => {
+  assert.equal(isChatStoragePath("/v1/storage/usage"), false);
+  assert.equal(toChatStoragePath("/v1/storage/usage"), null);
+  assert.equal(isChatStoragePath("/v1/cloud/storage/usage"), false);
 });
 
-test("deployment router sends canonical storage to the media handler and chat API to chat", async () => {
+test("deployment router serves only canonical AfuChat API and CDN paths", async () => {
   const calls = [];
   const chatApi = {
     fetch: async (request) => {
@@ -132,16 +123,37 @@ test("deployment router sends canonical storage to the media handler and chat AP
   const router = createAfuChatWorkerRouter(chatApi, legacyApi);
 
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/storage/usage"), {}, {});
-  await router.fetch(new Request("https://api.afuchat.com/chat/v1/storage/usage"), {}, {});
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/conversations"), {}, {});
-  await router.fetch(new Request("https://api.afuchat.com/v1/storage/usage"), {}, {});
+  const oldApiPath = await router.fetch(
+    new Request("https://api.afuchat.com/chat/v1/storage/usage"),
+    {},
+    {},
+  );
+  const oldStoragePath = await router.fetch(
+    new Request("https://api.afuchat.com/v1/storage/usage"),
+    {},
+    {},
+  );
+  const cdnPath = await router.fetch(
+    new Request("https://cdn.afuchat.com/chat/object.jpg"),
+    {},
+    {},
+  );
+  const wrongCdnPrefix = await router.fetch(
+    new Request("https://cdn.afuchat.com/cloud/object.jpg"),
+    {},
+    {},
+  );
 
   assert.deepEqual(calls, [
     { handler: "media", path: "/chat/v1/storage/usage" },
-    { handler: "media", path: "/chat/v1/storage/usage" },
     { handler: "chat", path: "/v1/chat/conversations" },
-    { handler: "media", path: "/chat/v1/storage/usage" },
+    { handler: "media", path: "/chat/object.jpg" },
   ]);
+  assert.equal(oldApiPath.status, 404);
+  assert.equal(oldStoragePath.status, 404);
+  assert.equal(wrongCdnPrefix.status, 404);
+  assert.equal(cdnPath.status, 200);
 });
 
 test("AfuChat status reports the live Supabase check", async () => {

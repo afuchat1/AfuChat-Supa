@@ -25,10 +25,16 @@ All six products use the same Supabase project and one Supabase-issued account i
 
 **Why:** The user explicitly requires one Afu account across all current Afu products and identified AfuChat ↔ AfuAuth as the first integration.
 
-**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; use the supported AfuChat `/chat/*` compatibility paths.
+**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; use the canonical product API paths.
 
-Existing mixed media in `afuchat-media` and its root CDN mapping must remain intact. Canonical AfuChat storage API requests use `/v1/chat/storage/*`; media and Supabase compatibility requests use `/chat/*`. Keep `/v1/storage*` only as a temporary compatibility alias for old clients until the new Worker route is deployed and verified. Stored URLs may be normalized as data, but outgoing requests must use supported AfuChat paths. Do not copy, delete, or reassign mixed-bucket objects without prefix ownership review.
+The API root route `api.afuchat.com/` belongs to the `afu-api` gateway and forwards only `/` through its AfuAuth service binding. Product API namespaces remain direct routes to their owning Workers. Each product CDN prefix must use that product's isolated R2 bucket. Keep the existing `cloud.afuchat.com/*` website route.
 
-**Why:** The existing bucket contains mixed product/media categories and is still used by legacy URLs; changing the public namespace must not break already-released clients.
+**Why:** The user requires the main API root to remain owned by `afu-api`, while each product keeps its own API/CDN namespace and storage.
 
-**How to apply:** Preserve the existing R2 binding and root CDN. Deploy and verify the canonical Worker route before releasing clients that call it; keep compatibility parsing for old stored URLs separate from outgoing API requests.
+**How to apply:** Reconcile only the exact product routes plus the root gateway. Do not add a generic API catch-all. Preserve the existing root `cdn.afuchat.com` and `img.afuchat.com` R2 domains for old object URLs; do not copy, delete, or reassign objects during route cleanup.
+
+When route cleanup is requested across products, first verify every product's exact API/CDN owner and isolated bucket binding. Once non-AfuChat routing is confirmed, leave those products' health and implementation unchanged and focus follow-up health work on AfuChat only.
+
+**Why:** The user explicitly clarified that Afu products are separate products: other products need correct URL bindings, not additional health work during an AfuChat audit.
+
+**How to apply:** Confirm non-AfuChat route and bucket ownership, report any observed health issue without changing that product, then continue checks and fixes only for AfuChat.

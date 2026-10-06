@@ -31,18 +31,3 @@ export function toChatStorageRequest(request: Request): Request | null {
   url.pathname = pathname;
   return new Request(url, request);
 }
-
-export function isCompatibilityStoragePath(pathname: string): boolean {
-  return (
-    pathname === "/v1/storage" ||
-    pathname.startsWith("/v1/storage/") ||
-    pathname === "/v1/storage-containers" ||
-    pathname.startsWith("/v1/storage-containers/")
-  );
-}
-
-export function toChatCompatibilityRequest(request: Request): Request {
-  const url = new URL(request.url);
-  url.pathname = `${CHAT_PROXY_PREFIX}${url.pathname}`;
-  return new Request(url, request);
-}

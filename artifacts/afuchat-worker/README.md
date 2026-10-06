@@ -9,9 +9,9 @@ AfuCloud Worker, bucket, or data.
 Canonical AfuChat product APIs use `https://api.afuchat.com/v1/chat/*`;
 storage APIs use `/v1/chat/storage/*`. The deploy wrapper maps those canonical
 storage requests internally to this handler without exposing its old path
-layout to new clients. Old `/v1/storage*` paths remain temporary compatibility
-aliases for already-released clients. AfuAuth continues to own
-`/v1/auth/*`.
+layout to clients. The old `/v1/storage*` and `/chat/*` API aliases have been
+removed and must not be reintroduced. AfuAuth continues to own
+`/v1/auth/*`; the API root remains assigned to the separate `afu-api` gateway.
 
 Supabase compatibility paths (`/chat/auth/v1`, `/chat/rest/v1`, and
 `/chat/realtime/v1`) keep the caller's Authorization header so Supabase RLS

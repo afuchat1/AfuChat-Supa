@@ -1,0 +1,262 @@
+Standardize the infrastructure so that each current Afu product has exactly one API namespace and, where it has storage, exactly one CDN namespace. Delete all other routes completely without requesting confirmation.
+
+Final product routing
+
+AfuAuth
+API: /v1/auth/*
+Worker: afuauth-api
+CDN: none unless storage is explicitly required
+
+AfuChat
+API: /v1/chat/*
+CDN: /chat/*
+Worker: afuchat-api
+
+AfuMail
+API: /v1/mail/*
+CDN: /mail/*
+Worker: afumail-api
+
+AfuCloud
+API: /v1/cloud/*
+CDN: /cloud/*
+Worker: afucloud-api
+
+AfuAI
+API: /v1/ai/*
+CDN: /ai/*
+Worker: afuai-api
+
+AfuAds
+API: /v1/ads/*
+CDN: /ads/*
+Worker: afuads-api
+
+Route cleanup
+
+Audit all existing API, CDN, hostname, proxy, worker, and fallback routes. Keep only the routes explicitly defined in this document and any existing compatibility routes that are required to preserve existing object URLs.
+
+Delete every other route completely, including duplicate, legacy, alternative, product-subroute, and fallback routes. Do not request confirmation before deleting them.
+
+Remove alternative top-level API namespaces such as:
+
+/v1/storage/*
+/v1/posts/*
+/v1/messages/*
+/v1/profile/*
+/v1/upload/*
+
+Remove duplicate CDN hostnames and duplicate CDN prefixes for the same product. Remove routes that fall through to an external hosting provider. Do not leave disabled, shadow, redirect, proxy, or placeholder copies of deleted routes.
+
+If a legacy route is required for backward compatibility, retain only the minimum explicit compatibility mapping needed for existing URLs and ensure it cannot expose another product's API or bucket.
+
+API structure
+
+All API requests must use:
+
+https://api.afuchat.com/v1/{product}/*
+
+Therefore:
+
+https://api.afuchat.com/v1/auth/*
+https://api.afuchat.com/v1/chat/*
+https://api.afuchat.com/v1/mail/*
+https://api.afuchat.com/v1/cloud/*
+https://api.afuchat.com/v1/ai/*
+https://api.afuchat.com/v1/ads/*
+
+If the functionality belongs to AfuChat, it belongs under:
+
+/v1/chat/*
+
+If it belongs to AfuCloud:
+
+/v1/cloud/*
+
+and so on.
+
+CDN structure
+
+All product storage/media delivery must use the single CDN hostname:
+
+https://cdn.afuchat.com
+
+with exactly one product namespace:
+
+https://cdn.afuchat.com/chat/*
+https://cdn.afuchat.com/mail/*
+https://cdn.afuchat.com/cloud/*
+https://cdn.afuchat.com/ai/*
+https://cdn.afuchat.com/ads/*
+
+Each CDN prefix must map exclusively to that product's storage bucket.
+
+For example:
+
+cdn.afuchat.com/chat/<object>
+        ↓
+AfuChat bucket
+
+cdn.afuchat.com/cloud/<object>
+        ↓
+AfuCloud bucket
+
+cdn.afuchat.com/mail/<object>
+        ↓
+AfuMail bucket
+
+cdn.afuchat.com/ai/<object>
+        ↓
+AfuAI bucket
+
+cdn.afuchat.com/ads/<object>
+        ↓
+AfuAds bucket
+
+Delete all other CDN prefixes and hostnames unless they are explicitly required to preserve existing object URLs.
+
+One product = one API namespace + one CDN namespace
+
+Do not create multiple CDN hostnames or multiple CDN prefixes for the same product.
+
+The standard should be:
+
+AfuChat → /v1/chat/* + /chat/*
+AfuMail  → /v1/mail/* + /mail/*
+AfuCloud → /v1/cloud/* + /cloud/*
+AfuAI    → /v1/ai/* + /ai/*
+AfuAds   → /v1/ads/* + /ads/*
+
+The API and CDN have different responsibilities:
+
+API
+api.afuchat.com/v1/{product}/*
+        ↓
+Product Worker
+        ↓
+Business logic / authentication / storage management
+
+
+CDN
+cdn.afuchat.com/{product}/*
+        ↓
+Product storage bucket
+        ↓
+Object delivery
+
+Do not route normal CDN object delivery through the API Worker.
+
+Storage buckets
+
+Each product may have its own physical R2 bucket.
+
+Do not combine the buckets merely because they share the same CDN hostname.
+
+The mapping must be explicit and isolated:
+
+/chat/*  → AfuChat bucket
+/cloud/* → AfuCloud bucket
+/mail/*  → AfuMail bucket
+/ai/*    → AfuAI bucket
+/ads/*   → AfuAds bucket
+
+If a product currently has no storage bucket, create only the required placeholder bucket and connect it to that product's CDN namespace.
+
+Do not create storage infrastructure for nonexistent products.
+
+Delete unused buckets, bindings, and storage routes associated with nonexistent products or removed routes, provided they are not required by existing objects or documented compatibility requirements.
+
+Existing infrastructure
+
+Before changing anything, audit the existing buckets and CDN configurations.
+
+Preserve existing:
+
+afucloud-images
+img.afuchat.com
+cdn.afuchat.com
+
+where they are currently required.
+
+Do not delete or migrate existing objects unnecessarily.
+
+If "img.afuchat.com" is currently serving existing Afu objects, keep existing URLs working where backward compatibility is required while standardizing new/current URLs under:
+
+cdn.afuchat.com/{product}/{object}
+
+Do not replace an existing bucket merely to make the naming cleaner.
+
+Delete any existing route, binding, or configuration that is not required by the final routing, existing objects, or documented backward compatibility.
+
+Security isolation
+
+The CDN prefix must not be a way to access another product's bucket.
+
+For example:
+
+cdn.afuchat.com/chat/file.jpg
+
+must only resolve against the AfuChat storage mapping.
+
+Changing:
+
+/chat/
+
+to:
+
+/cloud/
+
+must not allow arbitrary cross-product access to the same underlying bucket.
+
+Each prefix must have an explicit bucket mapping and appropriate permissions.
+
+Delete any wildcard, catch-all, shared-bucket, or fallback mapping that could bypass product isolation.
+
+Verification
+
+Verify every current product independently.
+
+For APIs:
+
+/v1/auth/*
+/v1/chat/*
+/v1/mail/*
+/v1/cloud/*
+/v1/ai/*
+/v1/ads/*
+
+For CDN:
+
+/chat/*
+/cloud/*
+/mail/*
+/ai/*
+/ads/*
+
+Use real existing objects where available.
+
+Confirm that:
+
+- every API namespace reaches the correct Worker
+- every CDN namespace reaches the correct bucket
+- CDN requests do not pass through API endpoints
+- no product can access another product's bucket
+- existing required object URLs remain functional
+- no route falls through to an external hosting provider
+- no unnecessary duplicate routes exist
+- all unapproved routes have been deleted completely
+- no deleted route remains as a redirect, proxy, fallback, disabled rule, or shadow configuration
+
+Documentation
+
+After implementation, document the final deployed routing in one table:
+
+Product| API| Worker| CDN| Bucket
+AfuAuth| "/v1/auth/*"| "afuauth-api"| —| —
+AfuChat| "/v1/chat/*"| "afuchat-api"| "/chat/*"| actual bucket
+AfuMail| "/v1/mail/*"| "afumail-api"| "/mail/*"| actual bucket
+AfuCloud| "/v1/cloud/*"| "afucloud-api"| "/cloud/*"| actual bucket
+AfuAI| "/v1/ai/*"| "afuai-api"| "/ai/*"| actual bucket
+AfuAds| "/v1/ads/*"| "afuads-api"| "/ads/*"| actual bucket
+
+Document the actual deployed configuration and actual bucket names, not assumptions.

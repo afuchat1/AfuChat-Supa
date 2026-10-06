@@ -4,9 +4,7 @@ compatibility_date = "2026-10-05"
 account_id = "42e79186125e8ff83e51f15816e074de"
 workers_dev = false
 routes = [
-  { pattern = "api.afuchat.com/", zone_name = "afuchat.com" },
-  { pattern = "api.afuchat.com/v1/auth/*", zone_name = "afuchat.com" },
-  { pattern = "api.afuchat.com/v1/auth-resolve-identifier", zone_name = "afuchat.com" }
+  { pattern = "api.afuchat.com/v1/auth/*", zone_name = "afuchat.com" }
 ]
 
 [[r2_buckets]]

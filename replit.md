@@ -2,9 +2,9 @@
 
 AfuChat is a product separate from AfuCloud. AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site.
 
-The Afu ecosystem shares the Afu Account, `api.afuchat.com` gateway, `cdn.afuchat.com` CDN, and Supabase project. `afu-api` owns API-host namespace dispatch; product behavior stays in independently deployable Workers. The mobile-facing product Workers maintained in this workspace are `afuchat-api`, `afuauth-api`, and `afuai-api`. The workspace also keeps the `afu-api` gateway source and shared Worker utilities.
+The Afu ecosystem shares the Afu Account, `api.afuchat.com` hostname, `cdn.afuchat.com` hostname, and Supabase project, but each Afu product is separate. Product API and CDN paths go directly to their product Workers and isolated R2 buckets. `afu-api` owns only the exact `api.afuchat.com/` root gateway route. The mobile-facing product Workers maintained in this workspace are `afuchat-api`, `afuauth-api`, and `afuai-api`.
 
-This Repl owns the AfuChat mobile app and its gateway/AfuChat/AfuAuth/AfuAI Worker sources. AfuCloud, AfuAds, and AfuMail Worker source is intentionally not maintained here; those Workers and their routes may still exist in Cloudflare. Do not delete, detach, or reroute Cloudflare dashboard resources as part of workspace cleanup. AfuChat media and Supabase compatibility use `/chat/*`; versioned AfuChat business APIs use `/v1/chat/*`.
+This Repl owns the AfuChat mobile app and its gateway/AfuChat/AfuAuth/AfuAI Worker sources. AfuCloud, AfuAds, and AfuMail Worker source is intentionally not maintained here; those Workers and their data remain in Cloudflare. AfuChat business and storage APIs use `/v1/chat/*`; its product CDN path is `cdn.afuchat.com/chat/*`. Preserve existing root `cdn.afuchat.com` object URLs and `img.afuchat.com`.
 
 ## Quick start on Replit
 
@@ -110,56 +110,53 @@ pnpm run typecheck
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
 - Keep the Expo web export identical to the native Expo flows. Do not create a separate web-only product surface or mock product content.
-- `afu-api` owns the exact `api.afuchat.com/` root route and forwards `/` to
-  AfuAuth. Product API paths remain direct Cloudflare routes to their dedicated
-  Workers. Do not add a broad catch-all or attach a Worker custom domain.
-- The gateway deployment tooling must preserve every existing product route,
-  DNS record, domain, Worker, bucket, and data object. Its only route change is
-  changing the owner of the existing API-root route to `afu-api`.
+- `afu-api` owns only the exact `api.afuchat.com/` root route and forwards `/`
+  through its AfuAuth service binding. Product APIs and CDNs each have one
+  canonical product namespace and direct route to their product Worker. Do not
+  add a broad catch-all or attach a Worker custom domain.
+- `backend/route-management/reconcile.mjs` verifies the six API namespaces,
+  five CDN namespaces, product R2 bindings, root gateway, and existing website
+  route. It removes obsolete API/CDN aliases only; it does not modify DNS,
+  Workers, buckets, objects, or retained custom domains.
 - The dedicated AfuChat API source is `backend/afu-chat-api/` and its Worker is
   `afuchat-api`. Canonical AfuChat business and storage calls use `/v1/chat/*`
-  (`/v1/chat/storage/*` for storage); `/v1/storage*` is temporary compatibility
-  only. The updated Worker is deployed; unauthenticated requests to both the
-  canonical and compatibility storage usage paths return `401`. The mobile
-  client still needs a new release to use its updated canonical paths. Video
-  processing and other unimplemented AfuChat paths remain `501`; see
-  `docs/AFUCHAT_API.md`.
+  (`/v1/chat/storage/*` for storage). Legacy API aliases `/chat/*` and
+  `/v1/storage*` have been removed; do not reintroduce them. The updated Worker
+  is deployed and health/status, CORS, unauthenticated rejection, and canonical
+  storage routing pass live checks. Video processing endpoints remain explicit
+  `501` stubs; see `docs/AFUCHAT_API.md`.
 - AfuCloud, AfuAds, and AfuMail source folders were removed from this workspace
   because they are not mobile-app Worker dependencies. This does not delete or
   change their Cloudflare Workers, routes, buckets, or data.
 - A production probe on 2026-10-06 found `/v1/ai/healthz` returns `503` because
   `ENGAGERA_API_KEY` is not configured in the AfuAI Worker. Configure it through
   the approved secret flow before claiming AI production readiness.
-- AfuChat data and media belong to AfuChat's own schema and bucket; AfuCloud
-  data and media belong to AfuCloud's own schema and bucket. The master rules
-  give `afu-chat-assets` and `afu-cloud-storage` as product-owned bucket names.
-  CDN paths must identify the product and map to its bucket.
-- Read-only Cloudflare inventory on 2026-10-03 confirmed `api.afuchat.com` routes
-  to `afucloud-api`, `cloud.afuchat.com/*` routes to `afucloud`, `cdn.afuchat.com`
-  is attached to `afuchat-media`, and `img.afuchat.com` is attached to
-  `afucloud-images`. All 136 objects in `afucloud-images` have identical key,
-  size, and ETag copies in `afuchat-media`; that bucket also contains 1,292
-  additional app-media objects. Keep the duplicate copies until old URLs and
-  consumers are migrated.
-- The deployed `afucloud-api` config has `SUPABASE_DB_SCHEMA=afucloud` but binds
-  `IMAGES_BUCKET` to `afuchat-media`. The separate `afucloud` Worker declares
-  `R2_BUCKET_NAME=afucloud-images` but has no R2 binding; its media operations
-  currently depend on the API Worker. Rebind only after AfuChat storage traffic
-  is separated and compatibility paths are verified.
+- Each product uses its own explicit bucket: AfuChat `afu-chat-assets`, AfuMail
+  `afu-mail-assets`, AfuCloud `afucloud-images`, AfuAI `afu-ai-assets`, and
+  AfuAds `afu-ads-assets`. The root `cdn.afuchat.com` R2 custom domain remains
+  attached to `afuchat-media` for existing URLs; `img.afuchat.com` remains
+  attached to `afucloud-images`. Do not copy or delete existing objects as part
+  of route cleanup.
+- On 2026-10-06, the six product API routes, five product CDN routes, exact
+  root gateway, and `cloud.afuchat.com/*` → `afucloud-web` route were verified.
+  The four obsolete API aliases were removed. AfuCloud, AfuMail, AfuAI, and
+  AfuAds health/implementation were not changed after their route and bucket
+  ownership was confirmed.
 - The live Supabase PostgREST API exposes `public` and `chat` schemas but does
   not expose `afuchat`. The available Supabase management token cannot query
   the database, and anonymous PostgREST access cannot migrate protected data.
   Resolve this with a privileged, reversible schema migration; do not assume
   the older schema-migration notes reflect the live database.
-- Existing endpoints and media paths are compatibility contracts. Do not
-  repoint, delete, or decommission the current Worker, route, bucket, or data
-  until consumers, migration validation, and rollback are established.
+- Old API aliases were explicitly retired; do not restore redirects or proxy
+  fallbacks for them. Keep parsing of old stored media URLs separate from new
+  API calls, and preserve the existing R2 custom domains and objects.
 - Direct requests to the live Worker hostnames from this workspace receive
   Cloudflare error 1010, so do not interpret that response as a Worker failure.
   Use a permitted external runtime probe for data-plane verification.
 - The AfuCloud Worker remains a Cloudflare resource, but its source is
-  intentionally absent from this workspace. Do not infer ownership of its
-  routes, buckets, or data from the old local Wrangler configuration.
+  intentionally absent from this workspace. Its verified routes and bucket
+  binding are documented in `docs/API_DOMAIN_ROUTING.md`; do not change its
+  health or implementation unless separately requested.
 - ACoin deductions must use the `deduct_acoin` RPC (not direct `.update()`).
 - Direct PostgreSQL connections from Replit fail (IPv4 blocked); use the Supabase JS admin client (HTTPS) for all DB ops.
 

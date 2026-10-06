@@ -1,75 +1,111 @@
-# AfuChat API domain and routing
+# Production API and CDN routing
 
 **Verified:** 2026-10-06  
-**Scope:** The API namespace gateway route and product-specific API/CDN routes.
-No Cloudflare Worker, route, DNS record, domain, bucket, or data object is
-deleted by this routing configuration.
+**Scope:** Cloudflare Worker routes, product R2 bindings, and retained object
+domains. Product health is not implied by correct route ownership.
 
-## DNS and hostname ownership
+## Canonical product routes
 
-Cloudflare is authoritative for `afuchat.com`. The zone has proxied wildcard A
-records targeting the Vercel origin addresses `64.29.17.1` and `216.198.79.65`.
-Those records remain unchanged so other hostnames are unaffected.
-
-An exact DNS record now overrides the wildcard for the API hostname:
-
-| Type | Name | Origin | Proxy |
+| Product | API namespace → Worker | CDN namespace → Worker | R2 bucket |
 |---|---|---|---|
-| A | `api.afuchat.com` | `192.0.2.1` | Proxied |
+| AfuAuth | `/v1/auth/*` → `afuauth-api` | None | None |
+| AfuChat | `/v1/chat/*` → `afuchat-api` | `/chat/*` → `afuchat-api` | `afu-chat-assets` |
+| AfuMail | `/v1/mail/*` → `afumail-api` | `/mail/*` → `afumail-api` | `afu-mail-assets` |
+| AfuCloud | `/v1/cloud/*` → `afucloud-api` | `/cloud/*` → `afucloud-api` | `afucloud-images` |
+| AfuAI | `/v1/ai/*` → `afuai-api` | `/ai/*` → `afuai-api` | `afu-ai-assets` |
+| AfuAds | `/v1/ads/*` → `afuads-api` | `/ads/*` → `afuads-api` | `afu-ads-assets` |
 
-The origin is a reserved, non-routable placeholder. Cloudflare Worker routes
-serve API requests before origin fallback. Keep this exact record; do not
-replace it with a Vercel target or remove it without first providing an
-equivalent Cloudflare Worker-safe origin.
+Each CDN Worker serves only its own product prefix from its explicitly bound
+bucket. The CDN hostname dispatches to that product’s object handler; it does
+not call another product’s API or storage binding.
 
-The hostname is owned through Cloudflare Worker routes, not a Worker custom
-domain. No Vercel project-domain association could be queried from this
-workspace; the wildcard DNS target and the pre-fix Vercel response established
-the fallback behavior.
+## Root gateway and retained domains
 
-## AfuChat paths
+The API root remains a separate gateway route:
 
-| Host and path | Worker | Use |
+| Host and path | Owner | Behavior |
 |---|---|---|
-| `api.afuchat.com/` | `afu-api` | API root entry point; forwards to AfuAuth |
-| `api.afuchat.com/v1/auth/*` | `afuauth-api` | Authentication paths |
-| `api.afuchat.com/v1/auth-resolve-identifier` | `afuauth-api` | Identifier resolution |
-| `api.afuchat.com/chat/*` | `afuchat-api` | Supabase compatibility and media API |
-| `api.afuchat.com/v1/chat/*` | `afuchat-api` | Versioned AfuChat business API |
-| `api.afuchat.com/v1/storage*` | `afuchat-api` | Existing storage compatibility alias |
-| `api.afuchat.com/v1/ai/*` | `afuai-api` | AfuAI operations |
-| Other existing product paths | Existing product Worker | Preserved in Cloudflare |
-| `cdn.afuchat.com/chat/*` | `afuchat-api` | Public AfuChat media |
+| `api.afuchat.com/` | `afu-api` | Forwards only `/` through the `AFUAUTH_API` service binding. |
+| `cloud.afuchat.com/*` | `afucloud-web` | Existing AfuCloud website route; not an API route. |
 
-Product paths are assigned directly to their existing Workers. The API root
-route is assigned to `afu-api`, which forwards `/` through its AfuAuth service
-binding. No catch-all route is added; unmatched paths retain the existing
-fail-closed DNS behavior rather than being sent to a product Worker.
+The root route is not a product API namespace. No generic API catch-all is
+configured. The proxied exact DNS record for `api.afuchat.com` remains pointed
+at the reserved placeholder origin so unassigned paths do not fall through to
+the wildcard Vercel origin.
 
-The API and CDN use the same `/chat/*` path on different hostnames. The media
-handler now checks the hostname before dispatching that path, so API requests
-go through the compatibility handler while CDN requests serve public objects.
-The versioned business API remains under `/v1/chat/*`.
+These existing R2 custom domains remain attached to their current buckets to
+preserve old object URLs:
 
-The `afuchat-api` Worker retains its existing `AFUCHAT_ASSETS` binding to the
-`afu-chat-assets` bucket and `AFUAUTH_API` service binding to `afuauth-api`.
-The gateway forwards only its root/auth fallback through the existing
-`AFUAUTH_API` service binding.
+| Custom domain | Bucket | Purpose |
+|---|---|---|
+| `cdn.afuchat.com` (root object paths) | `afuchat-media` | Existing mixed-media object URLs. The `/chat/*` Worker route handles the canonical AfuChat CDN prefix. |
+| `img.afuchat.com` | `afucloud-images` | Existing AfuCloud object URLs. New product URLs use `cdn.afuchat.com/cloud/*`. |
 
-## Verification
+No bucket, object, DNS record, or custom domain was deleted, moved, or copied.
 
-- `GET https://api.afuchat.com/` → `200`, existing AfuAuth root handler.
+## Removed routes
+
+The following obsolete API aliases were removed from the Cloudflare zone:
+
+| Removed route | Previous Worker |
+|---|---|
+| `api.afuchat.com/chat/*` | `afuchat-api` |
+| `api.afuchat.com/v1/storage*` | `afuchat-api` |
+| `api.afuchat.com/afucloud/*` | `afucloud-api` |
+| `api.afuchat.com/v1/auth-resolve-identifier` | `afuauth-api` |
+
+The remaining scoped route inventory contains eleven product API/CDN routes
+plus the required `api.afuchat.com/` root gateway. Together with the preserved
+`cloud.afuchat.com/*` website route, these are the zone’s relevant routes for
+the audited hosts. No legacy alias or catch-all route remains on the API/CDN
+hosts.
+
+Older deployed clients were still using some removed aliases at audit time.
+Those callers must be updated to the canonical paths; the aliases are not
+redirected or proxied.
+
+## AfuChat production verification
+
+The `afuchat-api` Worker was deployed with hostname/path gating so it accepts
+only `api.afuchat.com/v1/chat/*` for API requests and
+`cdn.afuchat.com/chat/*` for media delivery. Legacy unnamespaced storage paths
+and other product CDN prefixes return `404` at the Worker.
+
+Verified live on 2026-10-06:
+
+- `GET https://api.afuchat.com/` → `200`, served through `afu-api` and its
+  AfuAuth service binding.
 - `GET /v1/chat/healthz` → `200`, `afuchat-api`.
-- `GET /chat/v1/storage/usage` → `401 Authentication required`, confirming the
-  protected AfuChat compatibility handler is reached.
-- `GET /v1/chat/storage/usage` and the existing `/v1/storage/usage` alias →
-  `401 Authentication required`.
-- Read-only `GET /chat/rest/v1/profiles?select=id&limit=0` → `200 []`.
+- `GET /v1/chat/status` → `200`; Supabase and Worker checks both report healthy.
+- CORS preflight for `/v1/chat/conversations` → `204` with the AfuChat origin.
+- Unauthenticated `/v1/chat/storage/usage` and invalid-session
+  `/v1/chat/conversations` → `401`.
 - `GET https://cdn.afuchat.com/chat/__deployment_probe__` → `400 Invalid storage
-  key`, confirming the CDN route reaches the AfuChat media handler.
-- An unassigned API path returns Cloudflare `522` from the reserved placeholder
-  origin; it does not reach Vercel or a product Worker.
-- The root route belongs to `afu-api`; all listed product routes remain on their
-  current Workers.
-- AfuChat Worker tests pass, including a test that distinguishes API and CDN
-  requests sharing `/chat/*`.
+  key` with an AfuChat request ID, confirming dispatch to the AfuChat media
+  handler.
+- Read-only `HEAD` checks for three existing public legacy objects on the root
+  `cdn.afuchat.com` custom domain returned `200` (two images and one video).
+- The post-deployment route inventory contains no removed aliases, and all six
+  product API routes, five CDN routes, five product R2 bindings, the root
+  gateway, and the AfuCloud website route have the expected owners.
+
+The `/chat/` CDN probe deliberately uses an invalid key; it verifies route
+dispatch, not delivery from the dedicated `afu-chat-assets` bucket, which had
+no objects at audit time. The separate legacy root-domain object probes verify
+that existing files still serve. Video registration and manifest endpoints
+remain explicit `501` stubs until a video-processing backend is configured;
+they are not reported as healthy processing endpoints.
+
+## Change safety
+
+`backend/route-management/reconcile.mjs` defaults to a read-only dry run. Use
+`--apply` only for an approved route reconciliation. It verifies Worker
+existence, exact route ownership, product bucket bindings, retained custom
+domains, API DNS fail-closed behavior, and the website/root routes before
+changing routes. It creates canonical routes before deleting obsolete API/CDN
+routes and rolls back route changes if post-deployment verification fails.
+
+Do not delete or migrate product data as part of route cleanup. Route ownership
+does not certify product health. Per the product-scope decision, once a
+non-AfuChat product’s URL and binding are confirmed, leave its health and
+implementation unchanged unless separately requested.

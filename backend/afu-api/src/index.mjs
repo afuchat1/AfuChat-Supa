@@ -1,27 +1,21 @@
 const API_HOST = "api.afuchat.com";
-
-const EXACT_ROUTES = new Map([
-  ["/", "AFUAUTH_API"],
-  ["/v1/auth-resolve-identifier", "AFUAUTH_API"],
-]);
+const ROOT_ROUTE = new Map([["/", "AFUAUTH_API"]]);
 
 export function resolveService(pathname) {
-  return EXACT_ROUTES.get(pathname) ?? null;
-}
-
-function json(status, body) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-    },
-  });
+  return ROOT_ROUTE.get(pathname) ?? null;
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const json = (status, body) => new Response(JSON.stringify(body), {
+      status,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    });
+
     if (url.hostname.toLowerCase() !== API_HOST) {
       return json(404, { error: "Unknown API hostname", worker: "afu-api" });
     }
