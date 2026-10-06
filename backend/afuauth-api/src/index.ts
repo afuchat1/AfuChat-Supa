@@ -282,6 +282,15 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: json(request, {}).headers });
   }
+  if (path === "/") {
+    return json(request, {
+      name: "AfuAuth API",
+      status: "ok",
+      worker: "afuauth-api",
+      version: "v1",
+      health: "/v1/auth/healthz",
+    });
+  }
   if (path === "/healthz" || path === `${prefix}/healthz`) {
     return json(request, { status: "ok", worker: "afuauth-api", version: "v1" });
   }

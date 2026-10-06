@@ -14,6 +14,16 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+test("API root identifies AfuAuth without requiring a session", async () => {
+  const response = await worker.fetch(new Request("https://api.afuchat.com/"), env);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.worker, "afuauth-api");
+  assert.equal(body.status, "ok");
+  assert.equal(body.health, "/v1/auth/healthz");
+  assert.equal(response.headers.get("X-AfuAuth-Worker"), "afuauth-api");
+});
+
 test("health endpoint responds without a Supabase session", async () => {
   const response = await worker.fetch(
     new Request("https://api.afuchat.com/v1/auth/healthz"),

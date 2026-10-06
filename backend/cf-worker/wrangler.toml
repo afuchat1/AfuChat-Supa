@@ -8,17 +8,20 @@ compatibility_date = "2025-07-01"
 compatibility_flags = ["nodejs_compat"]
 account_id = "42e79186125e8ff83e51f15816e074de"
 
-# Legacy `/v1/*` calls are owned by `afu-api-gateway` and forwarded through the
-# `AFUCLOUD_API` service binding. New `/v1/cloud/*` calls route directly here.
+# Product APIs use isolated versioned namespaces. This Worker owns only
+# `/v1/cloud/*`; never use a generic `/v1/*` fallback that could capture another
+# product's routes or future namespaces.
 workers_dev = false
 routes = [
-  { pattern = "api.afuchat.com/v1/cloud/*", zone_name = "afuchat.com" }
+  { pattern = "api.afuchat.com/v1/cloud/*", zone_name = "afuchat.com" },
+  { pattern = "api.afuchat.com/afucloud/*", zone_name = "afuchat.com" },
+  { pattern = "cdn.afuchat.com/cloud/*", zone_name = "afuchat.com" }
 ]
 
 # ── R2 Bucket binding ─────────────────────────────────────────────────────────
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
-bucket_name = "afuchat-media"
+bucket_name = "afucloud-images"
 # preview_bucket_name = "afucloud-images-dev"  # uncomment for local dev
 
 # ── Vars (non-secret) ─────────────────────────────────────────────────────────
@@ -30,7 +33,7 @@ SUPABASE_DB_SCHEMA = "afucloud"
 # configuration and is only used to validate a bearer session at /auth/v1/user.
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
 AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
-R2_BUCKET_NAME = "afuchat-media"
+R2_BUCKET_NAME = "afucloud-images"
 CLOUDFLARE_ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de"
 AFU_CDN_TARGET = "cdn.afuchat.com"
 R2_PUBLIC_URL = "https://cdn.afuchat.com"

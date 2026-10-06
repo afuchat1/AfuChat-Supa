@@ -123,6 +123,9 @@ app.route("/v1/analytics", analyticsRoutes);
 // AfuCloud product namespace. Keep the legacy /v1/* mounts above for older
 // clients while new clients use /v1/cloud/*.
 const cloudApi = new Hono<{ Bindings: Env }>();
+cloudApi.get("/healthz", (c) =>
+  c.json({ status: "ok", worker: "afucloud-api", version: "v1" }),
+);
 cloudApi.route("/projects", projectRoutes);
 cloudApi.route("/analytics", analyticsRoutes);
 cloudApi.route("/tokens", tokenRoutes);
