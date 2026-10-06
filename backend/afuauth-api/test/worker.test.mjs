@@ -83,3 +83,16 @@ test("legacy username resolver reads only the matching email", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { email: "member@example.test" });
 });
+
+test("canonical resolver endpoint preserves email identity under AfuAuth", async () => {
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/auth/resolve-identifier", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: "member@example.test" }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { email: "member@example.test" });
+});

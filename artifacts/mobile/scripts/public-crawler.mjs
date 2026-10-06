@@ -1,7 +1,6 @@
-const AFUCLOUD_API_URL = process.env.EXPO_PUBLIC_AFUCLOUD_API_URL || "https://api.afuchat.com";
-const AFUCHAT_API_URL = (
-  process.env.EXPO_PUBLIC_AFUCHAT_API_URL ||
-  `${new URL(AFUCLOUD_API_URL).origin}/afuchat`
+const SUPABASE_URL = (
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  "https://poijhidfekwfthyksatp.supabase.co"
 ).replace(/\/+$/, "");
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE";
 const CACHE_TTL_MS = 60_000;
@@ -41,7 +40,7 @@ function routePart(value) {
 }
 
 function isConfigured() {
-  return Boolean(AFUCHAT_API_URL && SUPABASE_ANON_KEY);
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
 function cacheGet(key) {
@@ -64,7 +63,7 @@ function cacheSet(key, value) {
 
 async function rest(path, options = {}) {
   if (!isConfigured()) return null;
-  const response = await fetch(`${AFUCHAT_API_URL}/rest/v1/${path}`, {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...options,
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -74,7 +73,7 @@ async function rest(path, options = {}) {
     },
   });
   if (!response.ok) {
-    console.warn(`[public-crawler] AfuCloud request failed (${response.status})`);
+    console.warn(`[public-crawler] Supabase request failed (${response.status})`);
     return null;
   }
   return response.json();
@@ -95,7 +94,7 @@ async function count(table, filters) {
   if (!isConfigured()) return null;
   const params = new URLSearchParams({ select: "id", limit: "1" });
   for (const [key, value] of filters) params.append(key, value);
-  const response = await fetch(`${AFUCHAT_API_URL}/rest/v1/${table}?${params.toString()}`, {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params.toString()}`, {
     method: "GET",
     headers: {
       apikey: SUPABASE_ANON_KEY,

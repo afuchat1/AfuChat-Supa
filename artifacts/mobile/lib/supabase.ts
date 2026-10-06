@@ -1,11 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
-import { AFUCHAT_API_URL, SUPABASE_ANON_KEY } from "./env";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
 
-export const supabaseUrl = AFUCHAT_API_URL;
+export const supabaseUrl = SUPABASE_URL;
 export const supabaseAnonKey = SUPABASE_ANON_KEY;
-export const supabaseGatewayUrl = AFUCHAT_API_URL;
+export const supabaseGatewayUrl = SUPABASE_URL;
 
 // ─── Suppress expected Supabase refresh-token errors ────────────────────────
 // When the app starts with a stale/revoked refresh token in storage, Supabase
@@ -104,10 +104,9 @@ const webStorage = {
   },
 };
 
-// AfuChat Supabase requests use the /afuchat product namespace on the shared
-// API hostname. The dedicated AfuChat Worker forwards them to Supabase while
-// preserving the caller JWT so RLS remains authoritative.
-const supabaseClientUrl = supabaseGatewayUrl;
+// Supabase SDK traffic uses the single shared project directly. Product APIs
+// are called separately through their explicit /v1/{product} Worker routes.
+const supabaseClientUrl = SUPABASE_URL;
 
 export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
   auth: {

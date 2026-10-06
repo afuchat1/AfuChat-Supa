@@ -14,7 +14,16 @@ function makeEnv(authStatus = 200) {
     SUPABASE_URL: "https://supabase.example.test",
     SUPABASE_ANON_KEY: "test-anon-key",
     AFUCHAT_DATABASE_SCHEMA: "public",
-    authStatus,
+    AFUAUTH_API: {
+      async fetch(input) {
+        const request = input instanceof Request ? input : new Request(input);
+        if (authStatus !== 200) {
+          return Response.json({ error: "Invalid token" }, { status: authStatus });
+        }
+        const token = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+        return Response.json({ user: { id: "user-123" }, accessToken: token });
+      },
+    },
   };
 }
 
@@ -30,7 +39,7 @@ test("chat health endpoint is public", async () => {
 test("conversation endpoint requires a bearer token", async () => {
   const env = makeEnv();
   let authCalls = 0;
-  globalThis.fetch = async () => {
+  env.AFUAUTH_API.fetch = async () => {
     authCalls += 1;
     return Response.json({ id: "user-123" });
   };
@@ -47,12 +56,12 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
   const env = makeEnv();
   let authRequest;
   let rpcRequest;
+  env.AFUAUTH_API.fetch = async (input) => {
+    authRequest = input instanceof Request ? input : new Request(input);
+    return Response.json({ user: { id: "user-123" }, accessToken: token });
+  };
   globalThis.fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
-    if (new URL(request.url).pathname === "/auth/v1/user") {
-      authRequest = request;
-      return Response.json({ id: "user-123" });
-    }
     rpcRequest = request;
     return Response.json([{ chat_id: "chat-1" }]);
   };
@@ -69,8 +78,8 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
     env,
   );
 
-  assert.equal(new URL(authRequest.url).pathname, "/auth/v1/user");
-  assert.equal(authRequest.headers.get("apikey"), "test-anon-key");
+  assert.equal(new URL(authRequest.url).pathname, "/v1/auth/session");
+  assert.equal(authRequest.method, "POST");
   assert.equal(authRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(new URL(rpcRequest.url).pathname, "/rest/v1/rpc/get_chat_list");
   assert.equal(rpcRequest.headers.get("Authorization"), `Bearer ${token}`);
@@ -86,11 +95,7 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
 test("conversation endpoint rejects invalid sessions before querying chat data", async () => {
   const env = makeEnv(401);
   let rpcCalls = 0;
-  globalThis.fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    if (new URL(request.url).pathname === "/auth/v1/user") {
-      return Response.json({ error: "Invalid token" }, { status: env.authStatus });
-    }
+  globalThis.fetch = async () => {
     rpcCalls += 1;
     return Response.json([]);
   };
@@ -107,7 +112,7 @@ test("conversation endpoint rejects invalid sessions before querying chat data",
 test("conversation endpoint rejects malformed excluded chat IDs", async () => {
   const env = makeEnv();
   let authCalls = 0;
-  globalThis.fetch = async () => {
+  env.AFUAUTH_API.fetch = async () => {
     authCalls += 1;
     return Response.json({ id: "user-123" });
   };
@@ -130,4 +135,38 @@ test("conversation endpoint fails closed when Supabase is not configured", async
     {},
   );
   assert.equal(response.status, 503);
+});
+
+test("conversation endpoint fails closed when AfuAuth service binding is missing", async () => {
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      headers: { Authorization: "Bearer valid-session" },
+    }),
+    {
+      SUPABASE_URL: "https://supabase.example.test",
+      SUPABASE_ANON_KEY: "test-anon-key",
+      AFUCHAT_DATABASE_SCHEMA: "public",
+    },
+  );
+  assert.equal(response.status, 503);
+});
+
+test("conversation endpoint rejects a session response that changes the shared token", async () => {
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: "different-token" });
+  let rpcCalls = 0;
+  globalThis.fetch = async () => {
+    rpcCalls += 1;
+    return Response.json([]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      headers: { Authorization: "Bearer original-token" },
+    }),
+    env,
+  );
+  assert.equal(response.status, 503);
+  assert.equal(rpcCalls, 0);
 });

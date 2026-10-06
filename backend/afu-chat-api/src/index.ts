@@ -4,6 +4,9 @@ interface Env {
   AFUCHAT_DATABASE_SCHEMA?: string;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
+  AFUAUTH_API?: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
 }
 
 const PREFIX = "/v1/chat";
@@ -156,22 +159,30 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     );
   }
 
+  const authApi = env.AFUAUTH_API;
+  if (!authApi) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "Shared authentication service is not configured", request_id: requestId },
+      503,
+    );
+  }
+
   try {
-    const verified = await fetch(`${supabase.url}/auth/v1/user`, {
-      method: "GET",
-      headers: {
-        apikey: supabase.anonKey,
-        Authorization: authorization,
-        Accept: "application/json",
-      },
-      redirect: "manual",
-    });
-    const payload = await verified.json().catch(() => null) as { id?: unknown } | null;
+    const verified = await authApi.fetch(new Request("https://afuauth-api/v1/auth/session", {
+      method: "POST",
+      headers: { Authorization: authorization, Accept: "application/json" },
+    }));
+    const payload = await verified.json().catch(() => null) as {
+      user?: { id?: unknown };
+      accessToken?: unknown;
+    } | null;
     if (verified.status === 401 || verified.status === 403) {
       return privateJsonResponse(
         request,
         requestId,
-        { error: "Invalid or expired Supabase session", request_id: requestId },
+        { error: "Invalid or expired shared session", request_id: requestId },
         401,
       );
     }
@@ -183,12 +194,17 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
         503,
       );
     }
-    if (typeof payload?.id !== "string" || !payload.id) {
+    const token = authorization.replace(/^Bearer\s+/i, "");
+    if (
+      typeof payload?.user?.id !== "string" ||
+      !payload.user.id ||
+      payload.accessToken !== token
+    ) {
       return privateJsonResponse(
         request,
         requestId,
-        { error: "Invalid or expired Supabase session", request_id: requestId },
-        401,
+        { error: "Shared authentication service returned an invalid session", request_id: requestId },
+        503,
       );
     }
   } catch {

@@ -7,7 +7,7 @@
  *   pickBestSource      — choose the best rendition for the current device
  */
 import { supabase } from "./supabase";
-import { AFUCHAT_API_URL, AFUCLOUD_API_URL } from "./env";
+import { AFUCLOUD_API_URL, SUPABASE_URL } from "./env";
 
 // Video API calls must use the canonical public backend boundary.
 // The Worker currently does not expose a video-processing route; callers
@@ -195,4 +195,4 @@ export function pickBestSource(
 }
 
 // Re-export the Supabase project URL for callers that need it directly.
-export const SUPABASE_PUBLIC_URL: string = AFUCHAT_API_URL;
+export const SUPABASE_PUBLIC_URL: string = SUPABASE_URL;

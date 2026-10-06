@@ -27,7 +27,7 @@ import * as SecureStore from "expo-secure-store";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
-import { AFUCLOUD_API_URL, SUPABASE_ANON_KEY } from "@/lib/env";
+import { AFUCHAT_API_URL, SUPABASE_ANON_KEY } from "@/lib/env";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -453,7 +453,7 @@ export default function SignInScreen() {
 
   async function resolveToEmail(raw: string): Promise<string | null> {
     try {
-      const res = await fetch(`${AFUCLOUD_API_URL}/v1/auth-resolve-identifier`, {
+      const res = await fetch(`${AFUCHAT_API_URL}/v1/auth/resolve-identifier`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: raw.trim() }),

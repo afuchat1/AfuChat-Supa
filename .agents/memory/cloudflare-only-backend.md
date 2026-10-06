@@ -1,22 +1,18 @@
 ---
-name: Product-isolated Cloudflare architecture
-description: AfuChat and AfuCloud are isolated products behind shared ecosystem entry points.
+name: Shared Afu identity and isolated Worker APIs
+description: Afu products share one Supabase identity while their product APIs use isolated, versioned Cloudflare Worker routes.
 ---
 
-AfuChat, AfuAuth, AfuMail, AfuCloud, AfuAI, and AfuAds are distinct products. Their required Worker names and namespaces are exact: `afuchat-api` → `/v1/chat/*`, `afuauth-api` → `/v1/auth/*`, `afumail-api` → `/v1/mail/*`, `afucloud-api` → `/v1/cloud/*`, `afuai-api` → `/v1/ai/*`, and `afuads-api` → `/v1/ads/*`. They may share an API hostname, account identity, or database, but product logic and access must remain isolated. Do not create placeholders or duplicate services; preserve legacy routes until their clients are migrated and verified. Do not route browser requests directly to Supabase as a workaround for a missing Worker route.
+AfuChat, AfuAuth, AfuMail, AfuCloud, AfuAI, and AfuAds are distinct products with exact Worker names and namespaces: `afuchat-api` → `/v1/chat/*`, `afuauth-api` → `/v1/auth/*`, `afumail-api` → `/v1/mail/*`, `afucloud-api` → `/v1/cloud/*`, `afuai-api` → `/v1/ai/*`, and `afuads-api` → `/v1/ads/*`.
 
-**Why:** The user's Afu ecosystem master rules supersede earlier decisions that treated AfuChat and AfuCloud as one product with shared product resources. The user also specified that AfuChat's backend must be the Cloudflare Worker.
+All six products use the same Supabase project and one Supabase-issued account identity. Never create product-specific user identities, duplicate login systems, or mint product-specific session tokens. Supabase SDK auth/data calls use the shared project directly; product business APIs use their owning versioned Worker route.
 
-**How to apply:** Classify each endpoint, schema, object, binding, and deployment by product before changing it. Preserve legacy contracts during migration. Do not alter or decommission a resource until ownership, dependencies, data, consumers, validation, and rollback are confirmed; stop when ownership is unknown.
+**Why:** The user explicitly requires one Afu account across all current Afu products and identified AfuChat ↔ AfuAuth as the first integration.
 
-The required final API namespaces above supersede the older `/afuchat` and `/afucloud` namespace proposal. Current legacy paths (`/afuchat/*` and root `/v1/*`) remain live compatibility routes until replacement handlers and clients are ready.
+**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; do not use public `/afuchat/*` API calls or create placeholder Workers for future products.
 
-**Why:** the user specified exact target Worker names and versioned product namespaces in the infrastructure brief.
+Existing mixed media in `afuchat-media` and its root CDN mapping must remain intact. Keep media API requests on `/v1/storage*`; legacy stored URLs may still be normalized as data, but clients must not send requests to `/afuchat/*`. Do not copy, delete, or reassign mixed-bucket objects without prefix ownership review.
 
-**How to apply:** Reconcile each live client path with its owner before changing routes. Keep `afu-api-gateway` only while required for current legacy calls; do not route a product namespace to an incomplete handler.
+**Why:** The existing bucket contains mixed product/media categories and is still used by legacy URLs.
 
-Legacy AfuChat media keys stay on the existing `cdn.afuchat.com` root mapping to `afuchat-media`; only new `containers/...` objects use `cdn.afuchat.com/chat/*` and `afu-chat-assets`. Do not bulk-copy the mixed source bucket without prefix ownership review.
-
-**Why:** the live `/chat/*` Worker accepts only container keys and its target bucket is empty, while older product media remains in the source bucket.
-
-**How to apply:** Preserve legacy media URLs through the root CDN or an explicitly approved, prefix-scoped migration. Keep source objects for rollback.
+**How to apply:** Preserve the existing R2 binding and root CDN while changing API routes. Keep compatibility parsing for old stored URLs separate from outgoing API requests.

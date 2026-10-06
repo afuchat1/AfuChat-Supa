@@ -1,19 +1,29 @@
-# Do not deploy this config directly over production: `afuchat-api` currently
-# also serves legacy media. Use deploy-preserving-media.mjs to retain that
-# handler as a module while adding the chat API.
+# Do not deploy this file directly: deploy.mjs preserves and composes the
+# deployed media handler. A direct Wrangler deploy would replace that handler.
 name = "afuchat-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-05"
 account_id = "42e79186125e8ff83e51f15816e074de"
 workers_dev = false
 routes = [
-  { pattern = "api.afuchat.com/v1/chat/*", zone_name = "afuchat.com" }
+  { pattern = "api.afuchat.com/v1/chat/*", zone_name = "afuchat.com" },
+  { pattern = "api.afuchat.com/v1/storage*", zone_name = "afuchat.com" },
+  { pattern = "cdn.afuchat.com/chat/*", zone_name = "afuchat.com" }
 ]
+
+[[r2_buckets]]
+binding = "AFUCHAT_ASSETS"
+bucket_name = "afuchat-media"
+
+[[services]]
+binding = "AFUAUTH_API"
+service = "afuauth-api"
 
 [vars]
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
 AFUCHAT_DATABASE_SCHEMA = "public"
 AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
+MAX_UPLOAD_BYTES = "104857600"
 
 [observability]
 enabled = true

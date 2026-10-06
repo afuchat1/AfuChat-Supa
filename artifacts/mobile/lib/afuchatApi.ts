@@ -1,4 +1,4 @@
-import { AFUCLOUD_API_URL } from "./env";
+import { AFUCHAT_API_URL } from "./env";
 import { supabase } from "./supabase";
 
 export interface AfuChatApiError {
@@ -27,7 +27,7 @@ export async function afuChatApiFetch(
     const token = await getAfuChatAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${AFUCLOUD_API_URL}/v1${path.startsWith("/") ? path : `/${path}`}`, {
+  return fetch(`${AFUCHAT_API_URL}/v1${path.startsWith("/") ? path : `/${path}`}`, {
     ...init,
     headers,
   });

@@ -28,15 +28,19 @@ export const AFUCLOUD_API_URL: string =
 
 const API_GATEWAY_ORIGIN = new URL(AFUCLOUD_API_URL).origin;
 
-/** AfuChat's product-specific API namespace on the shared API hostname. */
+/** AfuChat Worker API origin. Product routes are explicit, e.g. /v1/chat. */
 export const AFUCHAT_API_URL: string =
-  (process.env.EXPO_PUBLIC_AFUCHAT_API_URL ?? "").trim().replace(/\/+$/, "") ||
-  `${API_GATEWAY_ORIGIN}/afuchat`;
+  new URL(
+    (process.env.EXPO_PUBLIC_AFUCHAT_API_URL ?? "").trim() || API_GATEWAY_ORIGIN,
+    API_GATEWAY_ORIGIN,
+  ).origin;
 
-/** AfuChat-owned media Worker route and public CDN path. */
+/** Legacy media endpoints are now routed at the API origin without a product prefix. */
 export const AFUCHAT_MEDIA_API_URL: string =
-  (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_API_URL ?? "").trim() ||
-  "https://api.afuchat.com/afuchat";
+  new URL(
+    (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_API_URL ?? "").trim() || AFUCHAT_API_URL,
+    API_GATEWAY_ORIGIN,
+  ).origin;
 
 export const AFUCHAT_MEDIA_CDN_URL: string =
   (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_CDN_URL ?? "").trim() ||
