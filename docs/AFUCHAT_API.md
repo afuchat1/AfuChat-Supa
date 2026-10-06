@@ -54,7 +54,7 @@ the `afuchat-api` deployment wrapper. New app clients use only the canonical
 | `POST /v1/chat/storage/containers/{containerId}/objects/confirm` | Confirms an uploaded object. JSON body: `{ "name": "...", "key": "...", "size": number }`; `size` is optional. | Bearer session; the supplied key must match the authenticated user's container prefix. | `200 { key, size, etag, url }`; invalid input is `400`, outside-container key is `403`, missing object is `404`, size mismatch is `409`. |
 | `DELETE /v1/chat/storage/containers/{containerId}/objects/by-key` | Deletes one object. JSON body: `{ "key": "..." }`. | Bearer session; the key must be inside the authenticated user's container. | `200 { ok: true }`; invalid key is `400`, outside-container key is `403`. |
 | `GET`, `HEAD /v1/chat/storage/objects/{key}` | Reads a public container object by key. Supports conditional and byte-range requests. | Public read; only validated `containers/{userId}/{containerId}/...` keys are accepted. | Object bytes and HTTP metadata; invalid key is `400`, missing object is `404`, invalid byte range is `416`. |
-| `GET`, `HEAD https://cdn.afuchat.com/chat/{key}` | CDN delivery for validated container objects. This is a media-delivery route, not an API operation. | Public read. | Object bytes, cache headers, ETag, and range responses. |
+| `GET`, `HEAD https://cdn.afuchat.com/chat/{key}` | CDN delivery for validated container objects through the separate `afu-cdn` Worker. This is not an AfuChat API operation. | Public read. | Object bytes, cache headers, ETag, and range responses. |
 
 The current upload implementation does not enforce the reported cumulative
 5 GiB quota; it enforces the per-object upload limit.
@@ -106,9 +106,10 @@ routing. Older clients that still call those aliases must be upgraded; there is
 no redirect or compatibility proxy. The root `api.afuchat.com/` remains owned by
 the separate `afu-api` gateway and forwards only the root request to AfuAuth.
 
-The root `cdn.afuchat.com` R2 custom domain remains attached to
-`afuchat-media` for existing legacy object URLs. New AfuChat media uses only
-`cdn.afuchat.com/chat/*` and the dedicated `afu-chat-assets` bucket.
+The `afu-cdn` Worker owns `cdn.afuchat.com/*` and dispatches
+`/chat/{key}` to `afu-chat-assets`. Unprefixed legacy object URLs continue to
+read from `afuchat-media`; no objects are moved or copied. The original R2
+custom domain remains attached for compatibility.
 
 No `/v1/posts`, `/v1/messages`, `/v1/profile`, `/v1/upload`, or `/v1/feed`
 endpoints are registered by this AfuChat Worker. Unimplemented AfuChat paths
@@ -116,12 +117,11 @@ return `501`; no speculative handlers are documented here.
 
 ## Deployment verification
 
-`backend/afu-chat-api/deploy.mjs` composes the chat API with the existing media
-handler and checks chat health, status, CORS, authentication rejection, the
-canonical storage route, AfuAuth service binding, CDN dispatch, and the
-dedicated media binding. Production updates are deployed with that script; it
-preserves the existing Worker and checks live behavior before reporting
-success.
+`backend/afu-chat-api/deploy.mjs` composes the chat API with the existing
+storage API handler and checks chat health, status, CORS, authentication
+rejection, the canonical storage route, AfuAuth service binding, and the
+dedicated media binding. CDN routing and delivery are managed separately by
+`backend/afu-cdn/` and `backend/route-management/reconcile.mjs`.
 
 The updated Worker was deployed on 2026-10-06. Its postflight checks passed for
 health, status, CORS, session rejection, media routing, and the existing

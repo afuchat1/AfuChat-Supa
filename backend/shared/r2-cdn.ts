@@ -24,21 +24,23 @@ type ParsedRange = ByteRange | "invalid" | null;
 
 const CDN_HOST = "cdn.afuchat.com";
 const DEFAULT_CACHE_CONTROL = "public, max-age=3600, stale-while-revalidate=86400";
+const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
-function responseHeaders(product: string): Headers {
-  return new Headers({
+function responseHeaders(product?: string): Headers {
+  const headers = new Headers({
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
     "Access-Control-Allow-Headers": "Range, If-None-Match, If-Modified-Since, If-Range",
     "Access-Control-Expose-Headers": "Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified",
     "Access-Control-Max-Age": "86400",
-    "X-Afu-Storage-Product": product,
     "X-Content-Type-Options": "nosniff",
     "Cross-Origin-Resource-Policy": "cross-origin",
   });
+  if (product) headers.set("X-Afu-Storage-Product", product);
+  return headers;
 }
 
-function errorResponse(product: string, message: string, status: number): Response {
+function errorResponse(product: string | undefined, message: string, status: number): Response {
   const headers = responseHeaders(product);
   headers.set("Content-Type", "text/plain; charset=utf-8");
   headers.set("Cache-Control", "no-store");
@@ -118,33 +120,21 @@ function decodeObjectKey(pathname: string, prefix: string): string | null {
   }
 }
 
-export async function handleR2CdnRequest(
+function hasImmutableFilename(key: string): boolean {
+  const filename = key.slice(key.lastIndexOf("/") + 1);
+  const identifier = filename.split(".", 1)[0];
+  return (
+    /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(identifier) ||
+    /^[0-9a-f]{32}$/i.test(identifier)
+  );
+}
+
+async function serveObject(
   request: Request,
   bucket: R2CdnBucket,
-  product: string,
+  key: string,
+  product?: string,
 ): Promise<Response> {
-  const url = new URL(request.url);
-  if (url.hostname.toLowerCase() !== CDN_HOST) {
-    return errorResponse(product, "The requested media object was not found.", 404);
-  }
-
-  const prefix = `/${product}/`;
-  if (!url.pathname.startsWith(prefix)) {
-    return errorResponse(product, "The requested media object was not found.", 404);
-  }
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: responseHeaders(product) });
-  }
-  if (url.pathname === prefix) {
-    return errorResponse(product, "The requested media object was not found.", 404);
-  }
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return errorResponse(product, "Method not allowed", 405);
-  }
-
-  const key = decodeObjectKey(url.pathname, prefix);
-  if (!key) return errorResponse(product, "The requested media object was not found.", 404);
-
   try {
     const head = await bucket.head(key);
     if (!head) return errorResponse(product, "The requested media object was not found.", 404);
@@ -179,7 +169,12 @@ export async function handleR2CdnRequest(
 
     object.writeHttpMetadata(headers);
     headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
-    if (!headers.has("Cache-Control")) headers.set("Cache-Control", DEFAULT_CACHE_CONTROL);
+    if (!headers.has("Cache-Control")) {
+      headers.set(
+        "Cache-Control",
+        hasImmutableFilename(key) ? IMMUTABLE_CACHE_CONTROL : DEFAULT_CACHE_CONTROL,
+      );
+    }
     if (etag) headers.set("ETag", etag);
     if (object.uploaded) headers.set("Last-Modified", object.uploaded.toUTCString());
     headers.set("Accept-Ranges", "bytes");
@@ -197,10 +192,63 @@ export async function handleR2CdnRequest(
     });
   } catch (cause) {
     console.error("CDN object read failed", {
-      product,
+      product: product || "legacy",
       method: request.method,
       error: cause instanceof Error ? cause.message : "unknown error",
     });
     return errorResponse(product, "The media service is temporarily unavailable.", 503);
   }
+}
+
+export async function handleR2CdnRequest(
+  request: Request,
+  bucket: R2CdnBucket,
+  product: string,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.hostname.toLowerCase() !== CDN_HOST) {
+    return errorResponse(product, "The requested media object was not found.", 404);
+  }
+
+  const prefix = `/${product}/`;
+  const namespaceRoot = url.pathname === `/${product}` || url.pathname === prefix;
+  if (!url.pathname.startsWith(prefix) && !namespaceRoot) {
+    return errorResponse(product, "The requested media object was not found.", 404);
+  }
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: responseHeaders(product) });
+  }
+  if (namespaceRoot) {
+    return errorResponse(product, "The requested media object was not found.", 404);
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return errorResponse(product, "Method not allowed", 405);
+  }
+
+  const key = decodeObjectKey(url.pathname, prefix);
+  if (!key) return errorResponse(product, "The requested media object was not found.", 404);
+
+  return serveObject(request, bucket, key, product);
+}
+
+export async function handleR2CdnLegacyRequest(
+  request: Request,
+  bucket: R2CdnBucket,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.hostname.toLowerCase() !== CDN_HOST) {
+    return errorResponse(undefined, "The requested media object was not found.", 404);
+  }
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: responseHeaders() });
+  }
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return errorResponse(undefined, "Method not allowed", 405);
+  }
+
+  const key = decodeObjectKey(url.pathname, "/");
+  if (!key) {
+    return errorResponse(undefined, "The requested media object was not found.", 404);
+  }
+  return serveObject(request, bucket, key);
 }

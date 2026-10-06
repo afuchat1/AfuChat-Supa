@@ -11,7 +11,6 @@ const ZONE_NAME = "afuchat.com";
 const CHAT_ASSETS_BUCKET = "afu-chat-assets";
 const REQUIRED_ROUTES = [
   "api.afuchat.com/v1/chat/*",
-  "cdn.afuchat.com/chat/*",
 ];
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const WORKER_ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -194,7 +193,7 @@ async function removeCreatedRoutes(zoneId, routes) {
   }
 }
 
-async function assertProductionPreflight({ allowKnownChatPathCollision = false } = {}) {
+async function assertProductionPreflight() {
   const chat = await fetch("https://api.afuchat.com/v1/chat/healthz");
   const chatBody = await chat.json().catch(() => null);
   if (
@@ -203,24 +202,6 @@ async function assertProductionPreflight({ allowKnownChatPathCollision = false }
     chatBody?.status !== "ok"
   ) {
     throw new Error("The existing chat health endpoint is not ready; deployment stopped.");
-  }
-
-  const media = await fetch("https://cdn.afuchat.com/chat/");
-  const mediaBody = await media.text();
-  const hasWorkerRequestId = Boolean(media.headers.get("X-AfuChat-Request-Id"));
-  const expectedNamespaceResponse =
-    media.status === 404 &&
-    mediaBody.includes("The requested media object was not found.") &&
-    hasWorkerRequestId;
-  const legacyKeyValidation =
-    media.status === 400 && mediaBody.includes("Invalid storage key") && hasWorkerRequestId;
-  const knownChatPathCollision =
-    allowKnownChatPathCollision &&
-    media.status === 404 &&
-    mediaBody.includes("Route not found") &&
-    hasWorkerRequestId;
-  if (!expectedNamespaceResponse && !legacyKeyValidation && !knownChatPathCollision) {
-    throw new Error("The existing /chat media handler differs from the expected response; deployment stopped.");
   }
 }
 
@@ -258,16 +239,6 @@ async function assertProductionPostflight() {
     appStatusBody?.ok !== true
   ) {
     throw new Error(`AfuChat status check failed (HTTP ${appStatus.status}).`);
-  }
-
-  const mediaRoot = await fetch("https://cdn.afuchat.com/chat/");
-  const mediaRootBody = await mediaRoot.text();
-  if (
-    mediaRoot.status !== 404 ||
-    !mediaRootBody.includes("The requested media object was not found.") ||
-    !mediaRoot.headers.get("X-AfuChat-Request-Id")
-  ) {
-    throw new Error(`AfuChat CDN namespace root check failed (HTTP ${mediaRoot.status}).`);
   }
 
   const options = await fetch("https://api.afuchat.com/v1/chat/conversations", {
@@ -369,9 +340,6 @@ if (
 ) {
   throw new Error("The existing Worker source differs from the expected legacy media handler; deployment stopped.");
 }
-const allowKnownChatPathCollision =
-  /API_PREFIX\s*=\s*"\/chat"/.test(deployedLegacySource) &&
-  !deployedLegacySource.includes("isPublicAssetRequest");
 const mediaHandlerPath = path.resolve(WORKER_ROOT, "../../artifacts/afuchat-worker/src/index.ts");
 const mediaHandlerTypeScript = await readFile(mediaHandlerPath, "utf8");
 const mediaHandlerCompiled = ts.transpileModule(mediaHandlerTypeScript, {
@@ -396,7 +364,7 @@ if (
 }
 const legacySource = rewriteTypescriptImports(mediaHandlerCompiled.outputText);
 
-await assertProductionPreflight({ allowKnownChatPathCollision });
+await assertProductionPreflight();
 
 const sourcePath = path.join(WORKER_ROOT, "src", "index.ts");
 const sourceDirectory = path.dirname(sourcePath);
@@ -532,7 +500,6 @@ if (!APPLY) {
       "GET|HEAD /v1/chat/storage/objects/{key}",
       "non-OPTIONS methods on /v1/chat/videos and /v1/chat/videos/* currently return 501",
       "POST /v1/auth/session (AfuAuth service binding; not an AfuChat route)",
-      "GET|HEAD cdn.afuchat.com/chat/{key} media delivery",
     ],
     nextStep: "Run with --apply to deploy the Worker and add any missing canonical routes.",
   }));
@@ -564,7 +531,7 @@ try {
       await uploadBundle(originalMetadata, originalModules, "Restore the original Worker");
     }
     await removeCreatedRoutes(routeState.zoneId, createdRoutes);
-    await assertProductionPreflight();
+      await assertProductionPreflight();
   } catch {
     throw new Error("Production smoke tests failed and automatic rollback could not be confirmed.");
   }
@@ -583,7 +550,6 @@ console.log(JSON.stringify({
     "unauthenticated rejection",
     "AfuAuth shared-session rejection",
     "storage handler route",
-    "legacy CDN asset route",
     "dedicated AfuChat assets bucket binding",
     "canonical chat API and storage routing",
   ],

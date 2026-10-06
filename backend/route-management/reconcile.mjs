@@ -16,11 +16,7 @@ const routes = new Map([
   ["api.afuchat.com/v1/cloud/*", "afucloud-api"],
   ["api.afuchat.com/v1/ai/*", "afuai-api"],
   ["api.afuchat.com/v1/ads/*", "afuads-api"],
-  ["cdn.afuchat.com/chat/*", "afuchat-api"],
-  ["cdn.afuchat.com/mail/*", "afumail-api"],
-  ["cdn.afuchat.com/cloud/*", "afucloud-api"],
-  ["cdn.afuchat.com/ai/*", "afuai-api"],
-  ["cdn.afuchat.com/ads/*", "afuads-api"],
+  ["cdn.afuchat.com/*", "afu-cdn"],
 ]);
 
 const requiredSiteRoute = {
@@ -31,7 +27,7 @@ const rootGatewayRoute = {
   pattern: "api.afuchat.com/",
   script: "afu-api",
 };
-const apiWorkers = [
+const requiredWorkers = [
   "afu-api",
   "afuauth-api",
   "afuchat-api",
@@ -39,14 +35,24 @@ const apiWorkers = [
   "afucloud-api",
   "afuai-api",
   "afuads-api",
+  "afu-cdn",
 ];
 
-const cdnBindings = [
+const productStorageBindings = [
   { worker: "afuchat-api", name: "AFUCHAT_ASSETS", bucket: "afu-chat-assets" },
   { worker: "afumail-api", name: "MAIL_ASSETS", bucket: "afu-mail-assets" },
   { worker: "afucloud-api", name: "IMAGES_BUCKET", bucket: "afucloud-images" },
   { worker: "afuai-api", name: "AI_ASSETS", bucket: "afu-ai-assets" },
   { worker: "afuads-api", name: "ADS_ASSETS", bucket: "afu-ads-assets" },
+];
+
+const afuCdnBindings = [
+  { name: "CHAT_ASSETS", bucket: "afu-chat-assets" },
+  { name: "CLOUD_ASSETS", bucket: "afucloud-images" },
+  { name: "MAIL_ASSETS", bucket: "afu-mail-assets" },
+  { name: "AI_ASSETS", bucket: "afu-ai-assets" },
+  { name: "ADS_ASSETS", bucket: "afu-ads-assets" },
+  { name: "LEGACY_MEDIA", bucket: "afuchat-media" },
 ];
 
 const apiHeaders = {
@@ -117,7 +123,7 @@ function assertKnownOwners(currentRoutes) {
 
 async function assertProductWorkersAndBuckets() {
   const settingsByWorker = new Map();
-  for (const worker of apiWorkers) {
+  for (const worker of requiredWorkers) {
     const settings = await request(
       `/accounts/${ACCOUNT_ID}/workers/scripts/${worker}/settings`,
       {},
@@ -127,7 +133,7 @@ async function assertProductWorkersAndBuckets() {
     settingsByWorker.set(worker, settings);
   }
 
-  for (const { worker, name, bucket } of cdnBindings) {
+  for (const { worker, name, bucket } of productStorageBindings) {
     const settings = settingsByWorker.get(worker);
     const bindings = settings?.bindings || [];
     const r2Bindings = bindings.filter((item) => item.type === "r2_bucket");
@@ -138,6 +144,18 @@ async function assertProductWorkersAndBuckets() {
       binding.bucket_name !== bucket
     ) {
       throw new Error(`${worker} must bind ${name} to its isolated ${bucket} bucket.`);
+    }
+  }
+
+  const cdnSettings = settingsByWorker.get("afu-cdn");
+  const cdnR2Bindings = (cdnSettings?.bindings || []).filter((item) => item.type === "r2_bucket");
+  if (cdnR2Bindings.length !== afuCdnBindings.length) {
+    throw new Error("afu-cdn must bind exactly the five product buckets and the legacy media bucket.");
+  }
+  for (const { name, bucket } of afuCdnBindings) {
+    const binding = cdnR2Bindings.find((item) => item.name === name);
+    if (binding?.type !== "r2_bucket" || binding.bucket_name !== bucket) {
+      throw new Error(`afu-cdn must bind ${name} to ${bucket}.`);
     }
   }
 }
@@ -276,7 +294,10 @@ if (!APPLY) {
     legacyRoutesToDelete: plan.remove,
     rootGatewayPreserved: rootGatewayRoute,
     websiteRoutePreserved: requiredSiteRoute,
-    existingObjectDomainsPreserved: ["cdn.afuchat.com → afuchat-media", "img.afuchat.com → afucloud-images"],
+    existingObjectDomainsPreserved: [
+      "cdn.afuchat.com → afuchat-media (legacy reads through afu-cdn)",
+      "img.afuchat.com → afucloud-images",
+    ],
     dnsChanges: [],
     bucketOrObjectChanges: [],
   }));
@@ -289,7 +310,10 @@ if (!APPLY) {
     rootGatewayPreserved: rootGatewayRoute,
     deletedLegacyRoutes: plan.remove.map(({ pattern, script }) => ({ pattern, script })),
     websiteRoutePreserved: requiredSiteRoute,
-    existingObjectDomainsPreserved: ["cdn.afuchat.com → afuchat-media", "img.afuchat.com → afucloud-images"],
+    existingObjectDomainsPreserved: [
+      "cdn.afuchat.com → afuchat-media (legacy reads through afu-cdn)",
+      "img.afuchat.com → afucloud-images",
+    ],
     dnsChanges: [],
     bucketOrObjectChanges: [],
     finalScopedRouteCount: finalRoutes.filter(isProductHostRoute).length,

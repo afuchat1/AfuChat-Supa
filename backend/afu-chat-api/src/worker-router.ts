@@ -9,20 +9,12 @@ type WorkerHandler = {
 
 const CHAT_PREFIX = "/v1/chat";
 const API_HOST = "api.afuchat.com";
-const CDN_HOST = "cdn.afuchat.com";
 
 export function createAfuChatWorkerRouter(chatApi: WorkerHandler, legacyApi: WorkerHandler) {
   return {
     fetch(request: Request, env: unknown, ctx: unknown) {
       const url = new URL(request.url);
       const pathname = url.pathname;
-
-      if (url.hostname.toLowerCase() === CDN_HOST) {
-        if (pathname === "/chat" || pathname.startsWith("/chat/")) {
-          return legacyApi.fetch(request, env, ctx);
-        }
-        return notFound();
-      }
 
       if (url.hostname.toLowerCase() !== API_HOST) return notFound();
 

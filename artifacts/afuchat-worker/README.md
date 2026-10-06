@@ -15,10 +15,12 @@ removed and must not be reintroduced. AfuAuth continues to own
 
 Supabase compatibility paths (`/chat/auth/v1`, `/chat/rest/v1`, and
 `/chat/realtime/v1`) keep the caller's Authorization header so Supabase RLS
-remains authoritative. Public media is served from
-`cdn.afuchat.com/chat/*`.
+remains authoritative. This module continues to provide AfuChat storage API
+operations, but it does not own public CDN routes. Public media delivery is
+handled separately by `afu-cdn` at `cdn.afuchat.com/*`.
 
 The AfuChat deployment wrapper transpiles this module and composes it into the
 `afuchat-api` bundle. Keep production checks and deployment in
-`backend/afu-chat-api/`; do not add a separate Wrangler config or deploy command
-for this module.
+`backend/afu-chat-api/`. Its Worker owns only the canonical AfuChat API
+namespace; do not add CDN route ownership to this module or its deployment
+wrapper.

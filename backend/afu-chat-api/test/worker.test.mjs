@@ -44,88 +44,6 @@ test("chat health endpoint is public", async () => {
   assert.deepEqual(payload, { product: "afuchat", status: "ok", version: "v1" });
 });
 
-test("CDN media path reaches the media handler on the CDN hostname", async () => {
-  const cdnResponse = await mediaHandler.fetch(
-    new Request("https://cdn.afuchat.com/chat/__deployment_probe__"),
-    makeEnv(),
-  );
-  assert.equal(cdnResponse.status, 404);
-  assert.deepEqual(await cdnResponse.json(), {
-    error: "The requested media object was not found.",
-  });
-});
-
-test("AfuChat CDN product root is not treated as a storage object key", async () => {
-  let storageCalls = 0;
-  const env = {
-    AFUCHAT_ASSETS: {
-      async head() {
-        storageCalls += 1;
-        return null;
-      },
-      async get() {
-        storageCalls += 1;
-        return null;
-      },
-    },
-  };
-  const cdnResponse = await mediaHandler.fetch(
-    new Request("https://cdn.afuchat.com/chat/"),
-    env,
-  );
-  const preflight = await mediaHandler.fetch(
-    new Request("https://cdn.afuchat.com/chat/", { method: "OPTIONS" }),
-    env,
-  );
-
-  assert.equal(cdnResponse.status, 404);
-  assert.deepEqual(await cdnResponse.json(), {
-    error: "The requested media object was not found.",
-  });
-  assert.equal(preflight.status, 204);
-  assert.equal(storageCalls, 0);
-});
-
-test("valid product-first AfuChat object URLs resolve directly from the isolated bucket", async () => {
-  const objectKey = "containers/123e4567-e89b-42d3-a456-426614174000/media-bucket/photo.jpg";
-  let lookedUpKey = "";
-  const object = {
-    body: new ReadableStream({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode("image-bytes"));
-        controller.close();
-      },
-    }),
-    size: 11,
-    httpEtag: '"image-etag"',
-    httpMetadata: { contentType: "image/jpeg" },
-    writeHttpMetadata(headers) {
-      headers.set("Content-Type", "image/jpeg");
-    },
-  };
-  const env = {
-    AFUCHAT_ASSETS: {
-      async head(key) {
-        lookedUpKey = key;
-        return { ...object, body: undefined };
-      },
-      async get(key) {
-        lookedUpKey = key;
-        return object;
-      },
-    },
-  };
-  const response = await mediaHandler.fetch(
-    new Request(`https://cdn.afuchat.com/chat/${objectKey}`),
-    env,
-  );
-
-  assert.equal(response.status, 200);
-  assert.equal(lookedUpKey, objectKey);
-  assert.equal(response.headers.get("Content-Type"), "image/jpeg");
-  assert.equal(await response.text(), "image-bytes");
-});
-
 test("canonical chat storage routes map to the existing media handler", () => {
   const cases = [
     ["/v1/chat/storage/usage", "/chat/v1/storage/usage"],
@@ -180,7 +98,7 @@ test("legacy product and unnamespaced storage API paths are not chat routes", ()
   assert.equal(isChatStoragePath("/v1/cloud/storage/usage"), false);
 });
 
-test("deployment router serves only canonical AfuChat API and CDN paths", async () => {
+test("AfuChat API router serves only API namespaces, leaving CDN delivery to afu-cdn", async () => {
   const calls = [];
   const chatApi = {
     fetch: async (request) => {
@@ -222,12 +140,11 @@ test("deployment router serves only canonical AfuChat API and CDN paths", async 
   assert.deepEqual(calls, [
     { handler: "media", path: "/chat/v1/storage/usage" },
     { handler: "chat", path: "/v1/chat/conversations" },
-    { handler: "media", path: "/chat/object.jpg" },
   ]);
   assert.equal(oldApiPath.status, 404);
   assert.equal(oldStoragePath.status, 404);
   assert.equal(wrongCdnPrefix.status, 404);
-  assert.equal(cdnPath.status, 200);
+  assert.equal(cdnPath.status, 404);
 });
 
 test("API host /chat namespace is not treated as a storage object key", async () => {

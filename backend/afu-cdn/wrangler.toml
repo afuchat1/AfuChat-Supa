@@ -1,0 +1,36 @@
+name = "afu-cdn"
+main = "src/index.ts"
+compatibility_date = "2026-10-05"
+account_id = "42e79186125e8ff83e51f15816e074de"
+workers_dev = false
+
+routes = [
+  { pattern = "cdn.afuchat.com/*", zone_name = "afuchat.com" }
+]
+
+[[r2_buckets]]
+binding = "CHAT_ASSETS"
+bucket_name = "afu-chat-assets"
+
+[[r2_buckets]]
+binding = "CLOUD_ASSETS"
+bucket_name = "afucloud-images"
+
+[[r2_buckets]]
+binding = "MAIL_ASSETS"
+bucket_name = "afu-mail-assets"
+
+[[r2_buckets]]
+binding = "AI_ASSETS"
+bucket_name = "afu-ai-assets"
+
+[[r2_buckets]]
+binding = "ADS_ASSETS"
+bucket_name = "afu-ads-assets"
+
+[[r2_buckets]]
+binding = "LEGACY_MEDIA"
+bucket_name = "afuchat-media"
+
+[observability]
+enabled = true
