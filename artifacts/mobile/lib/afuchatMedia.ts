@@ -38,7 +38,11 @@ function keyFromCdnPath(pathname: string): string | null {
 }
 
 function keyFromStoragePath(pathname: string): string | null {
-  const prefixes = ["/afuchat/v1/storage/", "/v1/storage/"];
+  const prefixes = [
+    "/v1/chat/storage/objects/",
+    "/afuchat/v1/storage/",
+    "/v1/storage/",
+  ];
   const prefix = prefixes.find((candidate) => pathname.startsWith(candidate));
   if (!prefix) return null;
   try {
@@ -71,7 +75,11 @@ export function toAfuChatMediaUrl(
       ? canonicalMediaUrl(key, `${parsed.search}${parsed.hash}`) || value
       : value;
   }
-  if (value.startsWith("/afuchat/v1/storage/") || value.startsWith("/v1/storage/")) {
+  if (
+    value.startsWith("/v1/chat/storage/objects/") ||
+    value.startsWith("/afuchat/v1/storage/") ||
+    value.startsWith("/v1/storage/")
+  ) {
     const key = keyFromStoragePath(value);
     return key ? canonicalMediaUrl(key) : value;
   }

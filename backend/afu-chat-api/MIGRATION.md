@@ -6,11 +6,16 @@ identity. Their product API routes are `/v1/chat/*` and `/v1/auth/*`; the
 Supabase SDK uses the shared project URL directly rather than an `/afuchat`
 gateway path.
 
+See [`docs/AFUCHAT_API.md`](../../docs/AFUCHAT_API.md) for the current
+endpoint-by-endpoint API contract.
+
 ## Current live ownership
 
-- `afuchat-api` owns `api.afuchat.com/v1/chat/*`, the `/v1/storage*`
-  compatibility route, and `cdn.afuchat.com/chat/*`. It preserves the existing
-  media handler and R2 binding while serving the chat API.
+- `afuchat-api` owns `api.afuchat.com/v1/chat/*`, including the canonical
+  `/v1/chat/storage/*` routes, and `cdn.afuchat.com/chat/*`. It preserves the
+  existing media handler and R2 binding while serving the chat API.
+- The older `/v1/storage*` paths remain temporary compatibility aliases for
+  already-released app versions; new clients use only `/v1/chat/storage/*`.
 - `afuauth-api` owns `api.afuchat.com/v1/auth/*` and the legacy username
   resolver alias. AfuChat verifies sessions through its Worker service binding
   and forwards the same Supabase bearer token to RLS.
@@ -73,9 +78,9 @@ Worker integration.
   root. Keep this mapping intact. `/chat/*` is a separate path-specific route
   that must retain its `afuchat-media` bucket binding.
 - `img.afuchat.com` remains mapped to `afucloud-images`.
-- The mobile Supabase client uses the current shared Supabase URL. Chat calls
-  use `/v1/chat/*`; media-session verification uses AfuAuth `/v1/auth/session`;
-  media storage calls use `/v1/storage*`.
+- The mobile Supabase client uses the current shared Supabase URL. Chat and
+  media-storage API calls use `/v1/chat/*`; media-session verification uses
+  AfuAuth `/v1/auth/session`.
 - The app normalizes legacy `/v1/storage/{key}` and `/chat/{key}` URLs. The new
   `/chat/*` Worker accepts only `containers/...` keys, while legacy objects
   remain in `afuchat-media` and the root CDN custom domain. The mobile resolver
@@ -86,18 +91,22 @@ Worker integration.
 - The user confirmed AfuChat owns its app routes under `/v1/chat/*`, including
   status, payments, account export, and videos. AI is a separate product owned
   by `afuai-api` under `/v1/ai/*`. Do not add a generic `/v1/*` route.
-- The current `afuchat-api` implements health, status, and conversations;
-  other `/v1/chat/*` requests still return 501 until their handlers and
-  required provider configuration are migrated and verified.
+- The repository source implements health, status, conversations, account
+  export, Pesapal payments, and the existing media-storage operations under
+  `/v1/chat/storage/*`. A live probe confirms `afuchat-api` is deployed, but
+  `/v1/chat/storage/usage` still returns `501` while the legacy
+  `/v1/storage/usage` reaches the existing handler (`401` without auth).
+  Deploy the updated Worker before releasing the mobile caller changes.
+  Video processing and unimplemented chat paths return `501` until their
+  handlers are configured. See `docs/AFUCHAT_API.md` for the full contract.
 
 ## Client contract inventory
 
 - Supabase Auth/PostgREST/Realtime calls use the same shared Supabase project
   directly. App reads and writes continue to use `public` compatibility
   relations/RPCs; changing PostgREST profiles requires a call-by-call audit.
-- Media session/container requests use `/v1/auth/session`,
-  `/v1/storage/usage`, and `/v1/storage-containers/*`; chat-list requests use
-  `/v1/chat/conversations`.
+- Media session/container requests use AfuAuth `/v1/auth/session` and AfuChat
+  `/v1/chat/storage/*`; chat-list requests use `/v1/chat/conversations`.
 - AfuChat app functions use `/v1/chat/*` (including status, payments,
   account export, and videos); AI requests use `/v1/ai/*` on `afuai-api`.
   Existing mobile callers are being aligned to these product namespaces.

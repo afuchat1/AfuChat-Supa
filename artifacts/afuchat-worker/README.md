@@ -1,17 +1,21 @@
-# AfuChat Worker
+# AfuChat media and Supabase compatibility handler
 
-This is an AfuChat-owned Cloudflare Worker. It proxies Supabase Auth, REST, and
-Realtime under `api.afuchat.com/afuchat`, and owns the `afu-chat-assets` R2
-bucket for AfuChat media. It does not use or deploy the AfuCloud Worker, bucket,
-or data.
+This Worker source contains the existing AfuChat media handler and Supabase
+Auth, REST, and Realtime compatibility proxy. It is composed into the
+independently deployed `afuchat-api` Worker by `backend/afu-chat-api/deploy.mjs`.
+It does not use or deploy the AfuCloud Worker, bucket, or data.
 
-The API route is `api.afuchat.com/afuchat/*`; public media is served from
-`cdn.afuchat.com/chat/*`. Supabase paths (`/auth/v1`, `/rest/v1`, and
-`/realtime/v1`) are forwarded to the configured Supabase project while keeping
-the caller's Authorization header so Supabase RLS remains authoritative.
-Existing media routes remain available for session exchange, container
-discovery/creation, streaming uploads, upload confirmation, object
-listing/deletion, and storage usage.
+Canonical AfuChat product APIs use `https://api.afuchat.com/v1/chat/*`;
+storage APIs use `/v1/chat/storage/*`. The deploy wrapper maps those canonical
+storage requests internally to this handler without exposing its old path
+layout to new clients. Old `/v1/storage*` paths remain temporary compatibility
+aliases for already-released clients. AfuAuth continues to own
+`/v1/auth/*`.
+
+Supabase compatibility paths (`/auth/v1`, `/rest/v1`, and `/realtime/v1`) are
+still proxied under the legacy `/afuchat/*` route and keep the caller's
+Authorization header so Supabase RLS remains authoritative. Public media is
+served from `cdn.afuchat.com/chat/*`.
 
 ## Local checks
 

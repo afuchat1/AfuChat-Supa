@@ -1,0 +1,136 @@
+Update the AfuChat API so that every API endpoint belonging to AfuChat is under "/v1/chat/*".
+
+Mandatory routing rule
+
+If a feature, operation, or API call belongs to AfuChat, its route must use "/v1/chat" as the namespace, regardless of the type of operation.
+
+Examples:
+
+- "/v1/chat/me"
+- "/v1/chat/profile"
+- "/v1/chat/feed"
+- "/v1/chat/posts"
+- "/v1/chat/comments"
+- "/v1/chat/reactions"
+- "/v1/chat/messages"
+- "/v1/chat/conversations"
+- "/v1/chat/groups"
+- "/v1/chat/stories"
+- "/v1/chat/notifications"
+- "/v1/chat/storage/*"
+- "/v1/chat/upload/*"
+
+The exact endpoints must be determined from the existing AfuChat application and backend implementation. Do not invent unnecessary endpoints.
+
+Strict ownership rule
+
+Use this principle:
+
+/v1/auth/*   → afuauth-api
+/v1/chat/*   → afuchat-api
+/v1/mail/*   → afumail-api
+/v1/cloud/*  → afucloud-api
+/v1/ai/*     → afuai-api
+/v1/ads/*    → afuads-api
+
+Therefore:
+
+If it belongs to AfuChat, it must be "/v1/chat/...".
+
+Do not create AfuChat endpoints such as:
+
+/v1/posts
+/v1/messages
+/v1/storage
+/v1/profile
+/v1/notifications
+/v1/upload
+/v1/feed
+
+when those operations are owned by AfuChat.
+
+They must instead be namespaced under:
+
+/v1/chat/posts
+/v1/chat/messages
+/v1/chat/storage
+/v1/chat/profile
+/v1/chat/notifications
+/v1/chat/upload
+/v1/chat/feed
+
+Important
+
+Audit the existing AfuChat frontend and backend code and identify every API call currently made by AfuChat.
+
+Update the API calls and route definitions so they consistently use:
+
+https://api.afuchat.com/v1/chat/...
+
+Do not change routes belonging to AfuAuth or other Afu products.
+
+AfuChat must remain independently deployed through:
+
+afuchat-api
+
+and must not become dependent on the deployment lifecycle of "afucloud-api".
+
+For authentication, continue using the centralized:
+
+afuauth-api
+
+architecture. Do not create a separate AfuChat authentication system.
+
+Storage
+
+AfuChat storage operations, if they are owned directly by AfuChat, must also follow the same namespace:
+
+/v1/chat/storage/*
+
+AfuCloud storage remains:
+
+/v1/cloud/storage/*
+
+The route namespace identifies the product/API ownership. The underlying storage bucket does not have to match the URL namespace and can remain separate.
+
+Do not do unnecessary work
+
+Use the existing AfuChat code, routes, frontend API calls, Workers, Supabase infrastructure, and current authentication flow as the source of truth.
+
+Do not:
+
+- invent unused endpoints
+- create duplicate APIs
+- migrate existing data unnecessarily
+- modify AfuCloud functionality unnecessarily
+- create an API gateway unnecessarily
+- rebuild functionality that already exists
+- change the shared Supabase architecture
+- spend build/deployment credits on unrelated work
+
+If a route requires a migration or breaking change that cannot be safely handled, stop and report the exact issue before proceeding.
+
+Documentation requirement
+
+After completing the updates, document the final AfuChat API routes.
+
+The documentation must include:
+
+1. The base API URL.
+2. The "/v1/chat/*" namespace rule.
+3. Every currently implemented AfuChat endpoint.
+4. HTTP method for each endpoint.
+5. What each endpoint does.
+6. Authentication requirements.
+7. Request parameters/body where applicable.
+8. Response format where applicable.
+9. Storage/upload routes.
+10. Any AfuAuth dependency or authentication flow required by AfuChat.
+11. Any routes that were renamed or removed during this update.
+12. The Worker responsible for the routes:
+
+afuchat-api
+
+The documentation should reflect the actual implemented API after the changes, not hypothetical or planned endpoints.
+
+Before finishing, verify that AfuChat frontend calls resolve to the correct "/v1/chat/*" routes and that the documented routes match the deployed implementation.

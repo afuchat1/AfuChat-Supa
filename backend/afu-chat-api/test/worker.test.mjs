@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import worker from "../src/index.ts";
+import {
+  isChatStoragePath,
+  isLegacyStoragePath,
+  toLegacyStoragePath,
+  toLegacyStorageRequest,
+} from "../src/storage-routing.ts";
+import { createAfuChatWorkerRouter } from "../src/worker-router.ts";
 
 const originalFetch = globalThis.fetch;
 const excludedChatId = "123e4567-e89b-42d3-a456-426614174000";
@@ -34,6 +41,88 @@ test("chat health endpoint is public", async () => {
   );
   assert.equal(response.status, 200);
   assert.equal((await response.json()).worker, "afuchat-api");
+});
+
+test("canonical chat storage routes map to the existing media handler", () => {
+  const cases = [
+    ["/v1/chat/storage/usage", "/afuchat/v1/storage/usage"],
+    ["/v1/chat/storage/containers", "/afuchat/v1/storage-containers"],
+    [
+      "/v1/chat/storage/containers/media-bucket/upload",
+      "/afuchat/v1/storage-containers/media-bucket/upload",
+    ],
+    [
+      "/v1/chat/storage/containers/media-bucket/objects/confirm",
+      "/afuchat/v1/storage-containers/media-bucket/objects/confirm",
+    ],
+    [
+      "/v1/chat/storage/objects/containers/user-id/media-bucket/photo.jpg",
+      "/afuchat/v1/storage/containers/user-id/media-bucket/photo.jpg",
+    ],
+  ];
+
+  for (const [path, expected] of cases) {
+    assert.equal(isChatStoragePath(path), true);
+    assert.equal(toLegacyStoragePath(path), expected);
+  }
+  assert.equal(isChatStoragePath("/v1/chat/posts"), false);
+  assert.equal(toLegacyStoragePath("/v1/chat/storage/unknown"), null);
+});
+
+test("canonical storage request preserves query, method, and authorization", async () => {
+  const request = new Request(
+    "https://api.afuchat.com/v1/chat/storage/containers/media-bucket/upload?name=photo.jpg",
+    {
+      method: "POST",
+      headers: { Authorization: "Bearer upload-session", "Content-Type": "image/jpeg" },
+      body: "image-bytes",
+    },
+  );
+  const rewritten = toLegacyStorageRequest(request);
+
+  assert.ok(rewritten);
+  assert.equal(
+    new URL(rewritten.url).pathname,
+    "/afuchat/v1/storage-containers/media-bucket/upload",
+  );
+  assert.equal(new URL(rewritten.url).search, "?name=photo.jpg");
+  assert.equal(rewritten.method, "POST");
+  assert.equal(rewritten.headers.get("Authorization"), "Bearer upload-session");
+  assert.equal(await rewritten.text(), "image-bytes");
+});
+
+test("old storage paths are recognized only as compatibility routes", () => {
+  assert.equal(isLegacyStoragePath("/v1/storage/usage"), true);
+  assert.equal(isLegacyStoragePath("/v1/storage-containers"), true);
+  assert.equal(isLegacyStoragePath("/v1/chat/storage/usage"), false);
+  assert.equal(isLegacyStoragePath("/v1/cloud/storage/usage"), false);
+});
+
+test("deployment router sends canonical storage to the media handler and chat API to chat", async () => {
+  const calls = [];
+  const chatApi = {
+    fetch: async (request) => {
+      calls.push({ handler: "chat", path: new URL(request.url).pathname });
+      return new Response("chat");
+    },
+  };
+  const legacyApi = {
+    fetch: async (request) => {
+      calls.push({ handler: "media", path: new URL(request.url).pathname });
+      return new Response("media");
+    },
+  };
+  const router = createAfuChatWorkerRouter(chatApi, legacyApi);
+
+  await router.fetch(new Request("https://api.afuchat.com/v1/chat/storage/usage"), {}, {});
+  await router.fetch(new Request("https://api.afuchat.com/v1/chat/conversations"), {}, {});
+  await router.fetch(new Request("https://api.afuchat.com/v1/storage/usage"), {}, {});
+
+  assert.deepEqual(calls, [
+    { handler: "media", path: "/afuchat/v1/storage/usage" },
+    { handler: "chat", path: "/v1/chat/conversations" },
+    { handler: "media", path: "/afuchat/v1/storage/usage" },
+  ]);
 });
 
 test("AfuChat status reports the live Supabase check", async () => {

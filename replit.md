@@ -44,8 +44,8 @@ The app ships with hardcoded production-safe fallbacks in `artifacts/mobile/lib/
 
 | Variable | Purpose | Required? |
 |---|---|---|
-| `EXPO_PUBLIC_AFUCLOUD_API_URL` | Legacy mobile API base currently used by AfuChat call sites; split calls by product during migration | No — defaults to `https://api.afuchat.com` |
-| `EXPO_PUBLIC_AFUCHAT_API_URL` | AfuChat Supabase API base under the shared host's `/afuchat` namespace | No — defaults to the gateway origin plus `/afuchat` |
+| `EXPO_PUBLIC_AFUCLOUD_API_URL` | Legacy shared API origin used as a fallback origin for product API URLs | No — defaults to `https://api.afuchat.com` |
+| `EXPO_PUBLIC_AFUCHAT_API_URL` | AfuChat API origin; AfuChat product requests use `/v1/chat/*` | No — defaults to `https://api.afuchat.com` |
 | `EXPO_PUBLIC_SUPABASE_URL` | Legacy project URL used only for public client metadata | No |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Public anon key forwarded through the Worker gateway | No — fallback in `env.ts` |
 | `EXPO_TOKEN` | EAS cloud builds | Only for EAS builds |
@@ -99,11 +99,17 @@ pnpm run typecheck
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
 - Keep the Expo web export identical to the native Expo flows. Do not create a separate web-only product surface or mock product content.
-- The current Worker configuration is a legacy mixed setup: `afucloud-api`
-  owns the `api.afuchat.com` route, AfuCloud API handlers, AfuChat Supabase
-  gateway/app handlers, and an `afuchat-media` binding, while its database
-  schema setting is `afucloud`. Treat this as a nonconforming state to migrate,
-  not as the target architecture.
+- The generic root `/v1/*` gateway still has legacy mixed handlers. Keep those
+  fallback paths separate from product namespaces; do not assume they belong to
+  AfuChat or change them during an AfuChat route update. A live health check
+  reports the dedicated `afuchat-api` Worker on `/v1/chat/*`.
+- The dedicated AfuChat API source is `backend/afu-chat-api/` and its Worker is
+  `afuchat-api`. Canonical AfuChat business and storage calls use `/v1/chat/*`
+  (`/v1/chat/storage/*` for storage); `/v1/storage*` is temporary compatibility
+  only. AfuAuth stays under `/v1/auth/*`, and AfuAI stays under `/v1/ai/*`.
+  The canonical storage route currently returns `501` in production; deploy
+  the updated Worker before releasing mobile calls to it. See
+  `docs/AFUCHAT_API.md` for the endpoint contract and live status.
 - AfuChat data and media belong to AfuChat's own schema and bucket; AfuCloud
   data and media belong to AfuCloud's own schema and bucket. The master rules
   give `afu-chat-assets` and `afu-cloud-storage` as product-owned bucket names.

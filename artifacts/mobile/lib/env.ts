@@ -42,13 +42,6 @@ export const AFUAI_API_URL: string =
     API_GATEWAY_ORIGIN,
   ).origin;
 
-/** Legacy media endpoints are now routed at the API origin without a product prefix. */
-export const AFUCHAT_MEDIA_API_URL: string =
-  new URL(
-    (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_API_URL ?? "").trim() || AFUCHAT_API_URL,
-    API_GATEWAY_ORIGIN,
-  ).origin;
-
 export const AFUCHAT_MEDIA_CDN_URL: string =
   (process.env.EXPO_PUBLIC_AFUCHAT_MEDIA_CDN_URL ?? "").trim() ||
   "https://cdn.afuchat.com/chat";

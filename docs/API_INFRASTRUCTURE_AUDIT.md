@@ -3,6 +3,11 @@
 **Checked:** 2026-10-04  
 **Scope:** Cloudflare Workers, routes, bindings, Supabase schema metadata, R2 object metadata, mobile API callers, and production HTTP smoke checks.
 
+> Historical snapshot: this audit records the state observed on 2026-10-04.
+> It predates the current `afuchat-api` source and must not be treated as the
+> current route contract. See [`AFUCHAT_API.md`](AFUCHAT_API.md) for the
+> repository's current AfuChat API implementation and deployment checks.
+
 This audit preserves the production resources and data. It changed no Worker deployment, Cloudflare route, DNS record, database row/schema, or R2 object. One client-side compatibility correction is in source: legacy media keys now resolve through the existing CDN root while new `containers/...` objects continue through `/chat/`. That change is not live for already-published app builds until those builds are released.
 
 ## Required Workers and namespaces

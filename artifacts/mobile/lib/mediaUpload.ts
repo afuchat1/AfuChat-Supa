@@ -16,12 +16,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
-import { AFUCHAT_MEDIA_API_URL, AFUCHAT_MEDIA_CDN_URL } from "./env";
+import { AFUCHAT_API_URL, AFUCHAT_MEDIA_CDN_URL } from "./env";
 import * as FileSystem from "expo-file-system/legacy";
 import { FileSystemUploadType } from "expo-file-system/legacy";
 
-const AFUCHAT_MEDIA_BASE = AFUCHAT_MEDIA_API_URL.replace(/\/$/, "");
+const AFUCHAT_MEDIA_BASE = AFUCHAT_API_URL.replace(/\/$/, "");
 const AFUCHAT_SESSION_PATH = "/v1/auth/session";
+const AFUCHAT_STORAGE_PATH = "/v1/chat/storage";
 
 interface AfuChatMediaSession {
   userId: string;
@@ -312,7 +313,7 @@ async function getContainerId(
   if (pending) return pending;
 
   const request = (async () => {
-    const list = await afuChatMediaJson("/v1/storage-containers");
+    const list = await afuChatMediaJson(`${AFUCHAT_STORAGE_PATH}/containers`);
     if (list.error) return { id: null, error: list.error };
     const existing = Array.isArray(list.body)
       ? list.body.find((item: any) => item?.slug === slug || item?.name === bucket)
@@ -322,7 +323,7 @@ async function getContainerId(
       return { id: existing.id, error: null };
     }
 
-    const created = await afuChatMediaJson("/v1/storage-containers", {
+    const created = await afuChatMediaJson(`${AFUCHAT_STORAGE_PATH}/containers`, {
       method: "POST",
       body: JSON.stringify({ name: bucket }),
     });
@@ -336,7 +337,7 @@ async function getContainerId(
 
     // A simultaneous upload on another device may have created the container
     // after the list above. Re-read once after a conflict.
-    const reread = await afuChatMediaJson("/v1/storage-containers");
+    const reread = await afuChatMediaJson(`${AFUCHAT_STORAGE_PATH}/containers`);
     const found = Array.isArray(reread.body)
       ? reread.body.find((item: any) => item?.slug === slug || item?.name === bucket)
       : null;
@@ -374,7 +375,7 @@ async function proxyUpload(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       response = await fetch(
-        afuChatMediaUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload?${qs}`),
+        afuChatMediaUrl(`${AFUCHAT_STORAGE_PATH}/containers/${encodeURIComponent(container.id)}/upload?${qs}`),
         {
           method: "POST",
           headers: {
@@ -434,7 +435,7 @@ async function confirmUpload(
   const container = await getContainerId(bucket);
   if (!container.id) return { publicUrl: null, error: container.error };
   const result = await afuChatMediaJson(
-    `/v1/storage-containers/${encodeURIComponent(container.id)}/objects/confirm`,
+    `${AFUCHAT_STORAGE_PATH}/containers/${encodeURIComponent(container.id)}/objects/confirm`,
     {
       method: "POST",
       body: JSON.stringify({
@@ -478,7 +479,7 @@ async function proxyStreamUpload(
     let body: any = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       response = await FileSystem.uploadAsync(
-        `${afuChatMediaUrl(`/v1/storage-containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
+        `${afuChatMediaUrl(`${AFUCHAT_STORAGE_PATH}/containers/${encodeURIComponent(container.id)}/upload`)}?${qs}`,
         uploadUri,
         {
           httpMethod: "POST",
@@ -728,7 +729,7 @@ export async function getCachedStorageUsage(): Promise<StorageUsage | null> {
 
 export async function getStorageUsage(): Promise<StorageUsage | null> {
   try {
-    const result = await afuChatMediaJson("/v1/storage/usage");
+    const result = await afuChatMediaJson(`${AFUCHAT_STORAGE_PATH}/usage`);
     if (result.error || !result.body || typeof result.body.used_bytes !== "number") return null;
     const parsed = result.body as StorageUsage;
     AsyncStorage.setItem(USAGE_CACHE_KEY, JSON.stringify(parsed)).catch(() => {});
@@ -746,7 +747,7 @@ export async function listUserFiles(
     if (!container.id) return null;
     const cursorQuery = token ? `?cursor=${encodeURIComponent(token)}` : "";
     const result = await afuChatMediaJson(
-      `/v1/storage-containers/${encodeURIComponent(container.id)}/objects${cursorQuery}`,
+      `${AFUCHAT_STORAGE_PATH}/containers/${encodeURIComponent(container.id)}/objects${cursorQuery}`,
     );
     if (result.error || !Array.isArray(result.body?.objects)) return null;
     return {
@@ -772,7 +773,7 @@ export async function deleteUserFile(key: string): Promise<{ ok: boolean; error:
     const container = await getContainerId(bucket);
     if (!container.id) return { ok: false, error: container.error };
     const result = await afuChatMediaJson(
-      `/v1/storage-containers/${encodeURIComponent(container.id)}/objects/by-key`,
+      `${AFUCHAT_STORAGE_PATH}/containers/${encodeURIComponent(container.id)}/objects/by-key`,
       {
       method: "DELETE",
         body: JSON.stringify({ key: objectKey }),

@@ -10,6 +10,7 @@ const AUTH_WORKER_NAME = "afuauth-api";
 const ZONE_NAME = "afuchat.com";
 const REQUIRED_ROUTES = [
   "api.afuchat.com/v1/chat/*",
+  // Keep this route only for clients from app versions predating the chat storage namespace.
   "api.afuchat.com/v1/storage*",
   "cdn.afuchat.com/chat/*",
 ];
@@ -290,9 +291,14 @@ async function assertProductionPostflight() {
     throw new Error(`Invalid-session request returned HTTP ${invalidSession.status}.`);
   }
 
-  const storage = await fetch("https://api.afuchat.com/v1/storage/usage");
-  if (storage.status !== 401) {
-    throw new Error(`Unauthenticated media request returned HTTP ${storage.status}.`);
+  for (const path of [
+    "/v1/chat/storage/usage",
+    "/v1/storage/usage",
+  ]) {
+    const storage = await fetch(`https://api.afuchat.com${path}`);
+    if (storage.status !== 401) {
+      throw new Error(`Unauthenticated media request ${path} returned HTTP ${storage.status}.`);
+    }
   }
 
   const authHealth = await fetch("https://api.afuchat.com/v1/auth/healthz");
@@ -407,27 +413,9 @@ for (const entry of sourceEntries) {
 
 const wrapperSource = `import chatApi from "./chat-api.js";
 import legacyApi from "./legacy.js";
+import { createAfuChatWorkerRouter } from "./worker-router.js";
 
-const CHAT_PREFIX = "/v1/chat";
-const isChatPath = (pathname) =>
-  pathname === CHAT_PREFIX || pathname.startsWith(\`\${CHAT_PREFIX}/\`);
-const isStoragePath = (pathname) =>
-  pathname === "/v1/storage" ||
-  pathname.startsWith("/v1/storage/") ||
-  pathname === "/v1/storage-containers" ||
-  pathname.startsWith("/v1/storage-containers/");
-
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    if (isChatPath(url.pathname)) return chatApi.fetch(request, env, ctx);
-    if (isStoragePath(url.pathname)) {
-      url.pathname = \`/afuchat\${url.pathname}\`;
-      return legacyApi.fetch(new Request(url, request), env, ctx);
-    }
-    return legacyApi.fetch(request, env, ctx);
-  },
-};`;
+export default createAfuChatWorkerRouter(chatApi, legacyApi);`;
 
 const modules = {
   "index.js": wrapperSource,
@@ -488,16 +476,24 @@ if (!APPLY) {
     ),
     endpoints: [
       "GET /v1/chat/healthz",
-      "GET /v1/chat/status",
+      "GET|POST /v1/chat/status",
       "GET /v1/chat/conversations",
       "POST /v1/chat/account/export",
       "POST /v1/chat/payments/pesapal-initiate",
-      "GET /v1/chat/payments/pesapal-callback",
+      "GET|POST /v1/chat/payments/pesapal-callback",
       "GET|POST /v1/chat/payments/pesapal-ipn",
-      "POST /v1/chat/videos/* returns 501 until the video pipeline is configured",
-      "POST /v1/auth/session (AfuAuth service binding)",
-      "existing /v1/storage* media API",
-      "existing cdn.afuchat.com/chat/* assets",
+      "POST /v1/chat/storage/containers",
+      "GET /v1/chat/storage/containers",
+      "POST /v1/chat/storage/containers/{containerId}/upload?name={objectName}",
+      "GET /v1/chat/storage/containers/{containerId}/objects",
+      "POST /v1/chat/storage/containers/{containerId}/objects/confirm",
+      "DELETE /v1/chat/storage/containers/{containerId}/objects/by-key",
+      "GET /v1/chat/storage/usage",
+      "GET|HEAD /v1/chat/storage/objects/{key}",
+      "non-OPTIONS methods on /v1/chat/videos and /v1/chat/videos/* currently return 501",
+      "POST /v1/auth/session (AfuAuth service binding; not an AfuChat route)",
+      "deprecated /v1/storage* and /v1/storage-containers* compatibility aliases",
+      "GET|HEAD cdn.afuchat.com/chat/{key} media delivery",
     ],
     nextStep: "Run with --apply to deploy this Worker and add only missing routes.",
   }));
