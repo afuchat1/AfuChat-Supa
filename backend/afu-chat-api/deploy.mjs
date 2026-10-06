@@ -93,32 +93,54 @@ async function getCurrentWorkerSource() {
     throw new Error(`Could not read the current ${WORKER_NAME} Worker (HTTP ${response.status}).`);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  const contentType = response.headers.get("content-type") || "";
-  return extractModule(buffer, contentType, "index.js");
+  return extractModule(buffer, response.headers.get("content-type") || "", "index.js");
 }
 
-async function assertProductionMediaPreflight() {
+async function assertProductionPreflight() {
   const chat = await fetch("https://api.afuchat.com/v1/chat/healthz");
   const chatBody = await chat.text();
-  if (chat.status !== 404 || !chatBody.includes("Route not found")) {
-    throw new Error("The existing chat route does not match the expected legacy Worker response; deployment stopped.");
+  if (
+    chat.status !== 404 ||
+    !chatBody.includes("Route not found") ||
+    !chat.headers.get("X-AfuChat-Request-Id")
+  ) {
+    throw new Error("The existing chat endpoint differs from the expected legacy response; deployment stopped.");
   }
 
   const media = await fetch("https://cdn.afuchat.com/chat/__deployment_probe__");
   const mediaBody = await media.text();
-  if (media.status !== 400 || !mediaBody.includes("Invalid storage key")) {
-    throw new Error("The existing CDN media route does not match the expected Worker response; deployment stopped.");
+  if (
+    media.status !== 400 ||
+    !mediaBody.includes("Invalid storage key") ||
+    !media.headers.get("X-AfuChat-Request-Id")
+  ) {
+    throw new Error("The existing /chat media handler differs from the expected response; deployment stopped.");
   }
 }
 
-async function assertProductionMediaPostflight() {
-  const health = await fetch("https://api.afuchat.com/v1/chat/healthz");
-  const healthBody = await health.json().catch(() => null);
-  if (health.status !== 200 || healthBody?.worker !== WORKER_NAME || healthBody?.status !== "ok") {
-    throw new Error(
-      `Chat health check failed (HTTP ${health.status}, worker ${healthBody?.worker ?? "unknown"}).`,
-    );
+async function waitForChatHealth() {
+  let lastStatus = 0;
+  let lastWorker = "unknown";
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const health = await fetch("https://api.afuchat.com/v1/chat/healthz");
+    const body = await health.json().catch(() => null);
+    lastStatus = health.status;
+    lastWorker = body?.worker ?? "unknown";
+    if (
+      health.status === 200 &&
+      body?.product === "afuchat" &&
+      body?.worker === WORKER_NAME &&
+      body?.status === "ok"
+    ) {
+      return;
+    }
+    if (attempt < 15) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+  throw new Error(`Chat health check failed after 16 attempts (HTTP ${lastStatus}, worker ${lastWorker}).`);
+}
+
+async function assertProductionPostflight() {
+  await waitForChatHealth();
 
   const options = await fetch("https://api.afuchat.com/v1/chat/conversations", {
     method: "OPTIONS",
@@ -143,17 +165,16 @@ async function assertProductionMediaPostflight() {
   }
 
   const invalidSession = await fetch("https://api.afuchat.com/v1/chat/conversations", {
-    method: "GET",
     headers: { Authorization: "Bearer invalid-deployment-probe" },
   });
   if (invalidSession.status !== 401) {
     throw new Error(`Invalid-session request returned HTTP ${invalidSession.status}.`);
   }
 
-  const media = await fetch("https://cdn.afuchat.com/chat/__deployment_probe__");
-  const mediaBody = await media.text();
-  if (media.status !== 400 || !mediaBody.includes("Invalid storage key")) {
-    throw new Error(`Legacy CDN probe changed (HTTP ${media.status}).`);
+  const deployedSettings = await getJson(`/${WORKER_NAME}/settings`, "Verify API Worker settings");
+  const deployedBindings = deployedSettings.result?.bindings || [];
+  if (deployedBindings.some((binding) => binding.name === "AFUCHAT_ASSETS")) {
+    throw new Error("The production Worker still has the legacy media R2 binding.");
   }
 }
 
@@ -164,12 +185,10 @@ const byName = new Map(bindings.map((binding) => [binding.name, binding]));
 
 if (
   byName.get("AFUCHAT_ASSETS")?.type !== "r2_bucket" ||
-  byName.get("AFUCHAT_ASSETS")?.bucket_name !== "afuchat-media" ||
   byName.get("SUPABASE_URL")?.type !== "plain_text" ||
-  byName.get("SUPABASE_ANON_KEY")?.type !== "plain_text" ||
-  byName.get("MAX_UPLOAD_BYTES")?.type !== "plain_text"
+  byName.get("SUPABASE_ANON_KEY")?.type !== "plain_text"
 ) {
-  throw new Error("Live Worker bindings differ from the expected AfuChat media configuration; deployment stopped.");
+  throw new Error("The existing Worker does not match the expected AfuChat deployment target; deployment stopped.");
 }
 
 const subdomainResponse = await getJson(`/${WORKER_NAME}/subdomain`, "Read Worker subdomain settings");
@@ -183,10 +202,10 @@ if (
   !legacySource.includes('"/chat/"') ||
   !legacySource.includes("proxySupabaseRequest")
 ) {
-  throw new Error("The current Worker source does not match the expected media proxy; deployment stopped.");
+  throw new Error("The existing Worker source differs from the expected legacy media handler; deployment stopped.");
 }
 
-await assertProductionMediaPreflight();
+await assertProductionPreflight();
 
 const sourcePath = path.join(WORKER_ROOT, "src", "index.ts");
 const source = await readFile(sourcePath, "utf8");
@@ -196,52 +215,41 @@ const compiled = ts.transpileModule(source, {
     module: ts.ModuleKind.ESNext,
     strict: true,
   },
-  fileName: "chat.ts",
+  fileName: "index.ts",
   reportDiagnostics: true,
 });
 const errors = (compiled.diagnostics || []).filter(
   (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
 );
 if (errors.length) {
-  throw new Error("Chat Worker TypeScript transpilation failed.");
+  throw new Error("AfuChat API TypeScript transpilation failed.");
 }
 
-const chatModule = compiled.outputText;
-const legacyModule = legacySource.replace(/\/\/# sourceMappingURL=.*$/m, "");
-const entryModule = [
-  'import chat from "./chat.js";',
-  'import legacyMedia from "./legacy-media.js";',
-  "",
-  "export default {",
-  "  async fetch(request, env, ctx) {",
-  "    const pathname = new URL(request.url).pathname;",
-  '    if (pathname === "/v1/chat" || pathname.startsWith("/v1/chat/")) {',
-  "      return chat.fetch(request, env, ctx);",
-  "    }",
-  "    return legacyMedia.fetch(request, env, ctx);",
-  "  },",
-  "};",
-  "",
-].join("\n");
-
-const modules = {
-  "index.js": entryModule,
-  "chat.js": chatModule,
-  "legacy-media.js": legacyModule,
+const modules = { "index.js": compiled.outputText };
+const mediaBindingNames = new Set(["AFUCHAT_ASSETS", "MAX_UPLOAD_BYTES"]);
+const apiSettings = {
+  ...settings,
+  bindings: bindings.filter((binding) => !mediaBindingNames.has(binding.name)),
 };
 
 if (!APPLY) {
   console.log(JSON.stringify({
     mode: "dry-run",
     target: WORKER_NAME,
-    preservesLegacyMedia: true,
+    existingWorker: true,
+    createSimilarWorker: false,
+    removesLegacyMediaBinding: true,
     routeChanges: 0,
     workersDevEnabled: false,
-    existingBindings: bindings.map(({ name, type }) => ({ name, type })),
+    removedBindings: bindings
+      .filter((binding) => mediaBindingNames.has(binding.name))
+      .map(({ name }) => name),
+    preservedBindings: apiSettings.bindings.map(({ name, type }) => ({ name, type })),
     modules: Object.fromEntries(
       Object.entries(modules).map(([name, content]) => [name, Buffer.byteLength(content)]),
     ),
-    nextStep: "Run with --apply to deploy and execute production smoke tests.",
+    endpoints: ["GET /v1/chat/healthz", "GET /v1/chat/conversations"],
+    nextStep: "Run with --apply to replace the existing Worker and run production smoke tests.",
   }));
   process.exit(0);
 }
@@ -254,41 +262,39 @@ await writeFile(backupSettingsPath, JSON.stringify(settings), { mode: 0o600 });
 await chmod(backupModulePath, 0o600);
 await chmod(backupSettingsPath, 0o600);
 
-const metadata = {
-  ...settings,
-  main_module: "index.js",
-};
+const originalMetadata = { ...settings, main_module: "index.js" };
+const apiMetadata = { ...apiSettings, main_module: "index.js" };
 
-await uploadBundle(metadata, modules, "Deploy AfuChat Worker");
+await uploadBundle(apiMetadata, modules, "Deploy AfuChat API");
 try {
-  await assertProductionMediaPostflight();
+  await assertProductionPostflight();
 } catch (smokeTestError) {
   const reason = smokeTestError instanceof Error ? smokeTestError.message : "unknown smoke-test failure";
   try {
     await uploadBundle(
-      metadata,
+      originalMetadata,
       { "index.js": legacySource },
-      "Restore original media Worker",
+      "Restore the original Worker",
     );
-    await assertProductionMediaPreflight();
+    await assertProductionPreflight();
   } catch {
     throw new Error("Production smoke tests failed and automatic rollback could not be confirmed.");
   }
-  throw new Error(`Production smoke tests failed (${reason}); the previous media-only Worker was restored.`);
+  throw new Error(`Production smoke tests failed (${reason}); the original Worker was restored.`);
 }
 
 console.log(JSON.stringify({
   mode: "deployed",
   target: WORKER_NAME,
-  preservesLegacyMedia: true,
+  createdNewWorker: false,
+  removedLegacyMediaBinding: true,
   routeChanges: 0,
-  workersDevEnabled: false,
   smokeTests: [
     "chat health",
     "CORS preflight",
     "unauthenticated rejection",
     "invalid-session rejection",
-    "legacy CDN media route",
+    "legacy media binding removed",
   ],
   modules: Object.fromEntries(
     Object.entries(modules).map(([name, content]) => [name, Buffer.byteLength(content)]),
