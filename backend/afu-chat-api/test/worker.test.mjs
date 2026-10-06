@@ -165,12 +165,15 @@ test("AfuChat status reports the live Supabase check", async () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.worker, "afuchat-api");
   assert.equal(payload.services.supabase.ok, true);
+  assert.equal(payload.configuration.payments, false);
+  assert.equal(payload.configuration.email_export, false);
 });
 
 test("account export verifies AfuAuth and sends only the selected export to the signed-in email", async () => {
   const token = "account-export-session";
   const env = makeEnv();
   env.RESEND_API_KEY = "test-resend-key";
+  env.RESEND_FROM_EMAIL = "AfuChat <exports@example.test>";
   env.AFUAUTH_API.fetch = async () =>
     Response.json({
       user: { id: "user-123", email: "user@example.test" },
@@ -201,6 +204,7 @@ test("account export verifies AfuAuth and sends only the selected export to the 
 
   assert.equal(response.status, 200);
   assert.deepEqual(payload, { ok: true, email: "user@example.test" });
+  assert.equal(resendPayload.from, env.RESEND_FROM_EMAIL);
   assert.deepEqual(resendPayload.to, ["user@example.test"]);
   assert.deepEqual(resendPayload.attachments.map((attachment) => attachment.filename), [
     "afuchat-data-export-2026-10-06.json",
@@ -232,6 +236,32 @@ test("account export fails closed when email delivery is not configured", async 
   );
   assert.equal(response.status, 503);
   assert.equal(databaseCalls, 0);
+});
+
+test("account export requires a configured sender even when the Resend key exists", async () => {
+  const env = makeEnv();
+  env.RESEND_API_KEY = "test-resend-key";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({
+      user: { id: "user-123", email: "user@example.test" },
+      accessToken: "valid-session",
+    });
+  let externalCalls = 0;
+  globalThis.fetch = async () => {
+    externalCalls += 1;
+    return Response.json([]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/account/export", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-session" },
+      body: JSON.stringify({ types: ["profile"] }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 503);
+  assert.equal(externalCalls, 0);
 });
 
 test("Pesapal initiation verifies the shared session and reports missing notification configuration", async () => {

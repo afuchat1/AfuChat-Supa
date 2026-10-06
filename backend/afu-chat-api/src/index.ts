@@ -302,9 +302,13 @@ async function handleStatus(request: Request, env: Env): Promise<Response> {
         payments: Boolean(
           env.PESAPAL_CONSUMER_KEY?.trim() &&
           env.PESAPAL_CONSUMER_SECRET?.trim() &&
-          env.PESAPAL_IPN_ID?.trim()
+          env.PESAPAL_IPN_ID?.trim() &&
+          env.SUPABASE_SERVICE_KEY?.trim()
         ),
-        email_export: Boolean(env.RESEND_API_KEY?.trim()),
+        email_export: Boolean(
+          env.RESEND_API_KEY?.trim() &&
+          env.RESEND_FROM_EMAIL?.trim()
+        ),
         video_processing: false,
       },
       worker: "afuchat-api",

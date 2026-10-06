@@ -6,6 +6,7 @@ export interface Env {
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_KEY?: string;
   RESEND_API_KEY?: string;
+  RESEND_FROM_EMAIL?: string;
   PESAPAL_CONSUMER_KEY?: string;
   PESAPAL_CONSUMER_SECRET?: string;
   PESAPAL_IPN_ID?: string;

@@ -77,7 +77,8 @@ export async function handleAccountExport(request: Request, env: Env): Promise<R
       400,
     );
   }
-  if (!env.RESEND_API_KEY?.trim()) {
+  const from = env.RESEND_FROM_EMAIL?.trim();
+  if (!env.RESEND_API_KEY?.trim() || !from) {
     return privateJsonResponse(
       request,
       requestId,
@@ -210,7 +211,7 @@ export async function handleAccountExport(request: Request, env: Env): Promise<R
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "AfuChat <onboarding@resend.dev>",
+        from,
         to: [user.email],
         subject: "Your AfuChat data export is ready",
         attachments: [{ filename, content: encodeBase64(payload) }],
