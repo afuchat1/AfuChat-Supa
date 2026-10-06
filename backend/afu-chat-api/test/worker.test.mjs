@@ -230,6 +230,23 @@ test("deployment router serves only canonical AfuChat API and CDN paths", async 
   assert.equal(cdnPath.status, 200);
 });
 
+test("API host /chat namespace is not treated as a storage object key", async () => {
+  const router = createAfuChatWorkerRouter(worker, mediaHandler);
+
+  for (const path of ["/chat", "/chat/"]) {
+    const response = await router.fetch(
+      new Request(`https://api.afuchat.com${path}`),
+      makeEnv(),
+      {},
+    );
+    const payload = await response.json();
+
+    assert.equal(response.status, 404);
+    assert.equal(payload.error, "The requested API endpoint was not found.");
+    assert.doesNotMatch(JSON.stringify(payload), /Invalid storage key|Invalid object key/);
+  }
+});
+
 test("AfuChat status reports health without exposing provider or database details", async () => {
   let checkedUrl = "";
   globalThis.fetch = async (input) => {

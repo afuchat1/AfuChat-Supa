@@ -33,6 +33,12 @@ The API root route `api.afuchat.com/` belongs to the `afu-api` gateway and forwa
 
 **How to apply:** Reconcile only the exact product routes plus the root gateway. Do not add a generic API catch-all. Preserve the existing root `cdn.afuchat.com` and `img.afuchat.com` R2 domains for old object URLs; do not copy, delete, or reassign objects during route cleanup.
 
+Product CDN URLs follow `cdn.afuchat.com/{product}/{object}`. The product segment is a routing namespace, not part of the object key; an empty product root is not an object lookup. An API-host `/chat` path is not a CDN object path and should return a generic API 404, not a storage-key validation error.
+
+**Why:** The user clarified that `/chat` identifies the AfuChat CDN namespace and the object key starts after it.
+
+**How to apply:** Keep host and prefix checks explicit, strip the exact product prefix before object lookup, and test both CDN namespace roots and API-host `/chat` paths.
+
 When route cleanup is requested across products, first verify every product's exact API/CDN owner and isolated bucket binding. Once non-AfuChat routing is confirmed, leave those products' health and implementation unchanged and focus follow-up health work on AfuChat only.
 
 **Why:** The user explicitly clarified that Afu products are separate products: other products need correct URL bindings, not additional health work during an AfuChat audit.
