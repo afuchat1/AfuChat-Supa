@@ -93,12 +93,13 @@ Worker integration.
   by `afuai-api` under `/v1/ai/*`. Do not add a generic `/v1/*` route.
 - The repository source implements health, status, conversations, account
   export, Pesapal payments, and the existing media-storage operations under
-  `/v1/chat/storage/*`. A live probe confirms `afuchat-api` is deployed, but
-  `/v1/chat/storage/usage` still returns `501` while the legacy
-  `/v1/storage/usage` reaches the existing handler (`401` without auth).
-  Deploy the updated Worker before releasing the mobile caller changes.
-  Video processing and unimplemented chat paths return `501` until their
-  handlers are configured. See `docs/AFUCHAT_API.md` for the full contract.
+  `/v1/chat/storage/*`. The updated `afuchat-api` Worker was deployed on
+  2026-10-06. Unauthenticated `/v1/chat/storage/usage` and the legacy
+  `/v1/storage/usage` both return `401`, confirming both paths reach the
+  authentication-guarded handler. This does not replace an authenticated
+  upload/read test. Video processing and unimplemented chat paths return `501`
+  until their handlers are configured. See `docs/AFUCHAT_API.md` for the full
+  contract.
 
 ## Client contract inventory
 

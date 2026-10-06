@@ -15,13 +15,17 @@ Never attach a generic `api.afuchat.com/v1/*` fallback to AfuCloud. Each product
 
 **Why:** The user clarified that the shared database contains multiple product schemas and each product must remain isolated: `/v1/chat` is AfuChat, `/v1/cloud` is AfuCloud, and `/v1/mail` is AfuMail.
 
-**How to apply:** Before adding a route, identify its product owner and exact prefix. Keep future product namespaces unbound until that product Worker is ready; do not use a catch-all to make legacy requests appear routed.
+Before adding a route, identify its product owner and exact prefix. Create a placeholder Worker only when the user explicitly names that API and Cloudflare confirms the Worker script is missing. Keep placeholder routes limited to that product prefix and return clear `501` responses for unimplemented operations; never use a catch-all or create a duplicate.
+
+**Why:** The user requested future API placeholders only for named Workers that are confirmed missing, without connecting those placeholders to unrelated product routes.
+
+**How to apply:** Query the Cloudflare Worker-script and route inventories before deployment. Preserve every existing script and route owner, then verify the new Worker health and placeholder responses.
 
 All six products use the same Supabase project and one Supabase-issued account identity. Never create product-specific user identities, duplicate login systems, or mint product-specific session tokens. Supabase SDK auth/data calls use the shared project directly; product business APIs use their owning versioned Worker route.
 
 **Why:** The user explicitly requires one Afu account across all current Afu products and identified AfuChat ↔ AfuAuth as the first integration.
 
-**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; do not use public `/afuchat/*` API calls or create placeholder Workers for future products.
+**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; do not use public `/afuchat/*` API calls.
 
 Existing mixed media in `afuchat-media` and its root CDN mapping must remain intact. Canonical AfuChat storage API requests use `/v1/chat/storage/*`; keep `/v1/storage*` only as a temporary compatibility alias for old clients until the new Worker route is deployed and verified. Legacy stored URLs may still be normalized as data, but clients must not send requests to `/afuchat/*`. Do not copy, delete, or reassign mixed-bucket objects without prefix ownership review.
 

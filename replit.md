@@ -106,10 +106,18 @@ pnpm run typecheck
 - The dedicated AfuChat API source is `backend/afu-chat-api/` and its Worker is
   `afuchat-api`. Canonical AfuChat business and storage calls use `/v1/chat/*`
   (`/v1/chat/storage/*` for storage); `/v1/storage*` is temporary compatibility
-  only. AfuAuth stays under `/v1/auth/*`, and AfuAI stays under `/v1/ai/*`.
-  The canonical storage route currently returns `501` in production; deploy
-  the updated Worker before releasing mobile calls to it. See
-  `docs/AFUCHAT_API.md` for the endpoint contract and live status.
+  only. The updated Worker is deployed; unauthenticated requests to both the
+  canonical and compatibility storage usage paths return `401`. The mobile
+  client still needs a new release to use its updated canonical paths. Video
+  processing and other unimplemented AfuChat paths remain `501`; see
+  `docs/AFUCHAT_API.md`.
+- As of 2026-10-06, `afumail-api`, `afuai-api`, and `afuads-api` are deployed
+  only on their product routes `/v1/mail/*`, `/v1/ai/*`, and `/v1/ads/*`.
+  AfuMail and AfuAds health checks return `200`, while unimplemented operations
+  return `501` placeholders. AfuAI health is `503` degraded until its
+  `ENGAGERA_API_KEY` Worker secret is configured. Before creating any other
+  placeholder Worker, check Cloudflare and create it only if its exact name
+  was requested and is confirmed missing.
 - AfuChat data and media belong to AfuChat's own schema and bucket; AfuCloud
   data and media belong to AfuCloud's own schema and bucket. The master rules
   give `afu-chat-assets` and `afu-cloud-storage` as product-owned bucket names.

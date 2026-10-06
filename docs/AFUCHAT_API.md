@@ -115,15 +115,15 @@ return `501`; no speculative handlers are documented here.
 `backend/afu-chat-api/deploy.mjs` composes the chat API with the existing media
 handler and includes preflight/postflight checks for chat health, status,
 conversation authentication, the canonical and compatibility storage routes,
-the AfuAuth service, and the existing media binding. This source update does
-not itself deploy a Worker. Production route behavior must be rechecked after
-deploying with that script; do not report a local source change as a live
-deployment.
+the AfuAuth service, and the existing media binding. Production updates are
+deployed with that script; it preserves the existing Worker and checks live
+behavior before reporting success.
 
-The latest live smoke probe confirmed `GET /v1/chat/healthz` returns `200` from
-`afuchat-api`, but unauthenticated `GET /v1/chat/storage/usage` still returns
-`501`. The legacy `/v1/storage/usage` returns `401`, showing that the existing
-handler is reachable and enforcing authentication. The canonical storage
-mapping is therefore implemented in source but is not live yet. Deploy the
-Worker before releasing a mobile build that uses `/v1/chat/storage/*`; the
-postflight check must return `401` for both storage usage paths.
+The updated Worker was deployed on 2026-10-06. Its postflight checks passed for
+health, status, CORS, session rejection, media routing, and the existing
+bindings. Unauthenticated `GET /v1/chat/storage/usage` and
+`GET /v1/storage/usage` both return `401`, confirming that the canonical and
+compatibility paths reach their authentication-guarded handlers rather than
+returning `501`. This verifies routing and unauthenticated behavior; it does
+not replace an authenticated upload/read test. Already-published mobile builds
+still need their own release to use the updated client paths.
