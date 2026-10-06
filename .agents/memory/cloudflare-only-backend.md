@@ -38,3 +38,9 @@ When route cleanup is requested across products, first verify every product's ex
 **Why:** The user explicitly clarified that Afu products are separate products: other products need correct URL bindings, not additional health work during an AfuChat audit.
 
 **How to apply:** Confirm non-AfuChat route and bucket ownership, report any observed health issue without changing that product, then continue checks and fixes only for AfuChat.
+
+Public API responses must not expose internal Worker names, bindings, upstream services, database details, Cloudflare implementation details, stack traces, or internal hostnames. Keep operational diagnostics in internal logs and return generic public errors. Do not modify the AfuAuth API Worker; sanitize its responses at the gateway when needed. Preserve product namespaces and existing valid CDN object URLs.
+
+**Why:** The user explicitly requires infrastructure details to remain private while preserving API ownership and existing media URLs.
+
+**How to apply:** When changing maintained API Workers or the root gateway, sanitize upstream failures and uncaught errors before responding. Keep successful product data intact, use the owning product's isolated R2 binding for CDN objects, and leave AfuAuth source unchanged.

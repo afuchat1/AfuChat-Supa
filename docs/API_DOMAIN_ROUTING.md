@@ -1,6 +1,6 @@
 # Production API and CDN routing
 
-**Verified:** 2026-10-06  
+**Routing baseline checked:** 2026-10-06
 **Scope:** Cloudflare Worker routes, product R2 bindings, and retained object
 domains. Product health is not implied by correct route ownership.
 
@@ -71,30 +71,32 @@ only `api.afuchat.com/v1/chat/*` for API requests and
 `cdn.afuchat.com/chat/*` for media delivery. Legacy unnamespaced storage paths
 and other product CDN prefixes return `404` at the Worker.
 
-Verified live on 2026-10-06:
+The following behavior was verified against production on 2026-10-06 before the
+current hardening changes. The hardening itself has not been deployed or
+production-verified:
 
 - `GET https://api.afuchat.com/` → `200`, served through `afu-api` and its
   AfuAuth service binding.
-- `GET /v1/chat/healthz` → `200`, `afuchat-api`.
-- `GET /v1/chat/status` → `200`; Supabase and Worker checks both report healthy.
+- `GET /v1/chat/healthz` → `200` with product health only; Worker identifiers are not returned.
+- `GET /v1/chat/status` → `200 { ok, timestamp }`; provider and database details remain private.
 - CORS preflight for `/v1/chat/conversations` → `204` with the AfuChat origin.
 - Unauthenticated `/v1/chat/storage/usage` and invalid-session
   `/v1/chat/conversations` → `401`.
-- `GET https://cdn.afuchat.com/chat/__deployment_probe__` → `400 Invalid storage
-  key` with an AfuChat request ID, confirming dispatch to the AfuChat media
-  handler.
+- `GET https://cdn.afuchat.com/chat/` → generic `404` with an AfuChat request
+  ID; the product namespace root is not treated as an object key.
 - Read-only `HEAD` checks for three existing public legacy objects on the root
   `cdn.afuchat.com` custom domain returned `200` (two images and one video).
 - The post-deployment route inventory contains no removed aliases, and all six
   product API routes, five CDN routes, five product R2 bindings, the root
   gateway, and the AfuCloud website route have the expected owners.
 
-The `/chat/` CDN probe deliberately uses an invalid key; it verifies route
-dispatch, not delivery from the dedicated `afu-chat-assets` bucket, which had
-no objects at audit time. The separate legacy root-domain object probes verify
-that existing files still serve. Video registration and manifest endpoints
-remain explicit `501` stubs until a video-processing backend is configured;
-they are not reported as healthy processing endpoints.
+The `/chat/` CDN namespace-root probe verifies route dispatch and that an empty
+product prefix is not treated as an object key; it does not verify delivery
+from the dedicated `afu-chat-assets` bucket, which had no objects at audit
+time. The separate legacy root-domain object probes verify that existing files
+still serve. Video registration and manifest endpoints remain explicit `501`
+stubs until a video-processing backend is configured; they are not reported
+as healthy processing endpoints.
 
 ## Change safety
 

@@ -40,7 +40,8 @@ test("chat health endpoint is public", async () => {
     makeEnv(),
   );
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).worker, "afuchat-api");
+  const payload = await response.json();
+  assert.deepEqual(payload, { product: "afuchat", status: "ok", version: "v1" });
 });
 
 test("CDN media path reaches the media handler on the CDN hostname", async () => {
@@ -48,8 +49,81 @@ test("CDN media path reaches the media handler on the CDN hostname", async () =>
     new Request("https://cdn.afuchat.com/chat/__deployment_probe__"),
     makeEnv(),
   );
-  assert.equal(cdnResponse.status, 400);
-  assert.equal((await cdnResponse.json()).error, "Invalid storage key");
+  assert.equal(cdnResponse.status, 404);
+  assert.deepEqual(await cdnResponse.json(), {
+    error: "The requested media object was not found.",
+  });
+});
+
+test("AfuChat CDN product root is not treated as a storage object key", async () => {
+  let storageCalls = 0;
+  const env = {
+    AFUCHAT_ASSETS: {
+      async head() {
+        storageCalls += 1;
+        return null;
+      },
+      async get() {
+        storageCalls += 1;
+        return null;
+      },
+    },
+  };
+  const cdnResponse = await mediaHandler.fetch(
+    new Request("https://cdn.afuchat.com/chat/"),
+    env,
+  );
+  const preflight = await mediaHandler.fetch(
+    new Request("https://cdn.afuchat.com/chat/", { method: "OPTIONS" }),
+    env,
+  );
+
+  assert.equal(cdnResponse.status, 404);
+  assert.deepEqual(await cdnResponse.json(), {
+    error: "The requested media object was not found.",
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(storageCalls, 0);
+});
+
+test("valid product-first AfuChat object URLs resolve directly from the isolated bucket", async () => {
+  const objectKey = "containers/123e4567-e89b-42d3-a456-426614174000/media-bucket/photo.jpg";
+  let lookedUpKey = "";
+  const object = {
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("image-bytes"));
+        controller.close();
+      },
+    }),
+    size: 11,
+    httpEtag: '"image-etag"',
+    httpMetadata: { contentType: "image/jpeg" },
+    writeHttpMetadata(headers) {
+      headers.set("Content-Type", "image/jpeg");
+    },
+  };
+  const env = {
+    AFUCHAT_ASSETS: {
+      async head(key) {
+        lookedUpKey = key;
+        return { ...object, body: undefined };
+      },
+      async get(key) {
+        lookedUpKey = key;
+        return object;
+      },
+    },
+  };
+  const response = await mediaHandler.fetch(
+    new Request(`https://cdn.afuchat.com/chat/${objectKey}`),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(lookedUpKey, objectKey);
+  assert.equal(response.headers.get("Content-Type"), "image/jpeg");
+  assert.equal(await response.text(), "image-bytes");
 });
 
 test("canonical chat storage routes map to the existing media handler", () => {
@@ -156,7 +230,7 @@ test("deployment router serves only canonical AfuChat API and CDN paths", async 
   assert.equal(cdnPath.status, 200);
 });
 
-test("AfuChat status reports the live Supabase check", async () => {
+test("AfuChat status reports health without exposing provider or database details", async () => {
   let checkedUrl = "";
   globalThis.fetch = async (input) => {
     checkedUrl = String(input);
@@ -175,10 +249,7 @@ test("AfuChat status reports the live Supabase check", async () => {
     "https://supabase.example.test/rest/v1/profiles?select=id&limit=1",
   );
   assert.equal(payload.ok, true);
-  assert.equal(payload.worker, "afuchat-api");
-  assert.equal(payload.services.supabase.ok, true);
-  assert.equal(payload.configuration.payments, false);
-  assert.equal(payload.configuration.email_export, false);
+  assert.deepEqual(Object.keys(payload).sort(), ["ok", "timestamp"]);
 });
 
 test("account export verifies AfuAuth and sends only the selected export to the signed-in email", async () => {
@@ -313,13 +384,13 @@ test("Pesapal initiation verifies the shared session and reports missing notific
   assert.equal(providerCalls, 0);
 });
 
-test("video route reports its explicit unconfigured state", async () => {
+test("video route returns a generic unavailable response", async () => {
   const response = await worker.fetch(
     new Request("https://api.afuchat.com/v1/chat/videos"),
     makeEnv(),
   );
   assert.equal(response.status, 501);
-  assert.match((await response.json()).error, /original video remains available/);
+  assert.deepEqual((await response.json()).error, "Video processing is temporarily unavailable.");
 });
 
 test("conversation endpoint requires a bearer token", async () => {
@@ -376,6 +447,55 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://afuchat.com");
   assert.deepEqual(await response.json(), [{ chat_id: "chat-1" }]);
+});
+
+test("conversation endpoint sanitizes upstream database errors", async () => {
+  const env = makeEnv();
+  const token = "same-supabase-session";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  globalThis.fetch = async () =>
+    Response.json({
+      message: "relation private_schema.internal_table does not exist at db.internal.test",
+      worker: "database-proxy-worker",
+    }, { status: 500 });
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.deepEqual(Object.keys(payload).sort(), ["error", "request_id"]);
+  assert.equal(payload.error, "Chat data could not be loaded.");
+  assert.equal(JSON.stringify(payload).includes("private_schema"), false);
+  assert.equal(JSON.stringify(payload).includes("database-proxy-worker"), false);
+});
+
+test("conversation endpoint returns a generic error when the upstream request throws", async () => {
+  const env = makeEnv();
+  const token = "same-supabase-session";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  globalThis.fetch = async () => {
+    throw new Error("internal db host db.internal.test stack trace");
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.equal(payload.error, "Chat data could not be loaded.");
+  assert.equal(JSON.stringify(payload).includes("db.internal.test"), false);
+  assert.equal(JSON.stringify(payload).includes("stack trace"), false);
 });
 
 test("conversation endpoint rejects invalid sessions before querying chat data", async () => {

@@ -43,7 +43,7 @@ export function createAfuChatWorkerRouter(chatApi: WorkerHandler, legacyApi: Wor
 
 function notFound(): Response {
   return Response.json(
-    { error: "Not found", worker: "afuchat-api" },
+    { error: "The requested API endpoint was not found." },
     { status: 404, headers: { "Cache-Control": "no-store" } },
   );
 }

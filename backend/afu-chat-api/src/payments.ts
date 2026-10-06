@@ -173,7 +173,7 @@ async function handleInitiate(request: Request, env: Env, requestId: string): Pr
   if (verified.response) return verified.response;
   const { user } = verified.session;
   if (!env.PESAPAL_IPN_ID?.trim()) {
-    return errorResponse(request, requestId, "Pesapal notifications are not configured", 503);
+    return errorResponse(request, requestId, "Payments are temporarily unavailable.", 503);
   }
 
   const body = await readBody(request);
@@ -222,7 +222,7 @@ async function handleInitiate(request: Request, env: Env, requestId: string): Pr
     const data = await submit.json().catch(() => null) as PesapalResponse | null;
     if (!submit.ok || typeof data?.redirect_url !== "string") {
       console.error("[afuchat-pesapal-initiate]", submit.status);
-      return errorResponse(request, requestId, "Pesapal could not create the checkout session", 502);
+      return errorResponse(request, requestId, "Payment could not be initiated.", 502);
     }
     return privateJsonResponse(
       request,
@@ -236,7 +236,7 @@ async function handleInitiate(request: Request, env: Env, requestId: string): Pr
     );
   } catch (error) {
     console.error("[afuchat-pesapal-initiate]", error instanceof Error ? error.message : "unknown error");
-    return errorResponse(request, requestId, "Payment service is not configured", 503);
+    return errorResponse(request, requestId, "Payments are temporarily unavailable.", 503);
   }
 }
 

@@ -200,53 +200,52 @@ async function assertProductionPreflight({ allowKnownChatPathCollision = false }
   if (
     chat.status !== 200 ||
     chatBody?.product !== "afuchat" ||
-    chatBody?.worker !== WORKER_NAME ||
     chatBody?.status !== "ok"
   ) {
-    throw new Error("The existing chat health endpoint differs from the expected AfuChat Worker; deployment stopped.");
+    throw new Error("The existing chat health endpoint is not ready; deployment stopped.");
   }
 
-  const media = await fetch("https://cdn.afuchat.com/chat/__deployment_probe__");
+  const media = await fetch("https://cdn.afuchat.com/chat/");
   const mediaBody = await media.text();
   const hasWorkerRequestId = Boolean(media.headers.get("X-AfuChat-Request-Id"));
-  const expectedAssetResponse =
+  const expectedNamespaceResponse =
+    media.status === 404 &&
+    mediaBody.includes("The requested media object was not found.") &&
+    hasWorkerRequestId;
+  const legacyKeyValidation =
     media.status === 400 && mediaBody.includes("Invalid storage key") && hasWorkerRequestId;
   const knownChatPathCollision =
     allowKnownChatPathCollision &&
     media.status === 404 &&
     mediaBody.includes("Route not found") &&
     hasWorkerRequestId;
-  if (!expectedAssetResponse && !knownChatPathCollision) {
+  if (!expectedNamespaceResponse && !legacyKeyValidation && !knownChatPathCollision) {
     throw new Error("The existing /chat media handler differs from the expected response; deployment stopped.");
   }
 }
 
 async function waitForChatHealth() {
   let lastStatus = 0;
-  let lastWorker = "unknown";
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const health = await fetch("https://api.afuchat.com/v1/chat/healthz");
     const body = await health.json().catch(() => null);
     lastStatus = health.status;
-    lastWorker = body?.worker ?? "unknown";
     const healthIsReady =
       health.status === 200 &&
       body?.product === "afuchat" &&
-      body?.worker === WORKER_NAME &&
       body?.status === "ok";
 
     if (healthIsReady) {
       const appStatus = await fetch("https://api.afuchat.com/v1/chat/status");
       const appStatusBody = await appStatus.json().catch(() => null);
       lastStatus = appStatus.status;
-      lastWorker = appStatusBody?.worker ?? lastWorker;
-      if (appStatus.status === 200 && appStatusBody?.worker === WORKER_NAME) {
+      if (appStatus.status === 200 && appStatusBody?.ok === true) {
         return;
       }
     }
     if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error(`Chat health/status check failed after 30 attempts (HTTP ${lastStatus}, worker ${lastWorker}).`);
+  throw new Error(`Chat health/status check failed after 30 attempts (HTTP ${lastStatus}).`);
 }
 
 async function assertProductionPostflight() {
@@ -256,10 +255,19 @@ async function assertProductionPostflight() {
   const appStatusBody = await appStatus.json().catch(() => null);
   if (
     appStatus.status !== 200 ||
-    appStatusBody?.worker !== WORKER_NAME ||
-    appStatusBody?.services?.supabase?.ok !== true
+    appStatusBody?.ok !== true
   ) {
     throw new Error(`AfuChat status check failed (HTTP ${appStatus.status}).`);
+  }
+
+  const mediaRoot = await fetch("https://cdn.afuchat.com/chat/");
+  const mediaRootBody = await mediaRoot.text();
+  if (
+    mediaRoot.status !== 404 ||
+    !mediaRootBody.includes("The requested media object was not found.") ||
+    !mediaRoot.headers.get("X-AfuChat-Request-Id")
+  ) {
+    throw new Error(`AfuChat CDN namespace root check failed (HTTP ${mediaRoot.status}).`);
   }
 
   const options = await fetch("https://api.afuchat.com/v1/chat/conversations", {

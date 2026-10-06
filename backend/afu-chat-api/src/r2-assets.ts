@@ -215,7 +215,7 @@ export async function handleCdnAssetRequest(
   if (request.method !== "GET" && request.method !== "HEAD") {
     return errorResponse(requestId, 405, "Method not allowed", { Allow: "GET, HEAD, OPTIONS" });
   }
-  if (!bucket) return errorResponse(requestId, 503, "Asset storage is not configured");
+  if (!bucket) return errorResponse(requestId, 503, "The requested media is temporarily unavailable.");
 
   const rangeHeader = request.headers.get("Range");
   const hasConditions = [
@@ -270,7 +270,11 @@ export async function handleCdnAssetRequest(
     const responseRange = object.range ?? range ?? undefined;
     const headers = assetHeaders(object, requestId, responseRange);
     return response(object.body, responseRange ? 206 : 200, requestId, headers);
-  } catch {
-    return errorResponse(requestId, 502, "Asset storage is unavailable");
+  } catch (cause) {
+    console.error("[afuchat-api] CDN object read failed", {
+      requestId,
+      error: cause instanceof Error ? cause.message : "unknown error",
+    });
+    return errorResponse(requestId, 502, "The requested media is temporarily unavailable.");
   }
 }

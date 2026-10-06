@@ -125,70 +125,82 @@ export async function handleR2CdnRequest(
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.hostname.toLowerCase() !== CDN_HOST) {
-    return errorResponse(product, "Not found", 404);
+    return errorResponse(product, "The requested media object was not found.", 404);
   }
 
   const prefix = `/${product}/`;
   if (!url.pathname.startsWith(prefix)) {
-    return errorResponse(product, "Not found", 404);
+    return errorResponse(product, "The requested media object was not found.", 404);
   }
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: responseHeaders(product) });
+  }
+  if (url.pathname === prefix) {
+    return errorResponse(product, "The requested media object was not found.", 404);
   }
   if (request.method !== "GET" && request.method !== "HEAD") {
     return errorResponse(product, "Method not allowed", 405);
   }
 
   const key = decodeObjectKey(url.pathname, prefix);
-  if (!key) return errorResponse(product, "Invalid object key", 400);
+  if (!key) return errorResponse(product, "The requested media object was not found.", 404);
 
-  const head = await bucket.head(key);
-  if (!head) return errorResponse(product, "Object not found", 404);
+  try {
+    const head = await bucket.head(key);
+    if (!head) return errorResponse(product, "The requested media object was not found.", 404);
 
-  const etag = objectEtag(head);
-  const headers = responseHeaders(product);
-  if (etag && matchesEtagHeader(request.headers.get("If-None-Match"), etag)) {
-    headers.set("ETag", etag);
-    return new Response(null, { status: 304, headers });
-  }
+    const etag = objectEtag(head);
+    const headers = responseHeaders(product);
+    if (etag && matchesEtagHeader(request.headers.get("If-None-Match"), etag)) {
+      headers.set("ETag", etag);
+      return new Response(null, { status: 304, headers });
+    }
 
-  const rangeHeader = request.method === "GET" ? request.headers.get("Range") : null;
-  const parsedRange = parseByteRange(rangeHeader, head.size);
-  if (parsedRange === "invalid") {
-    headers.set("Content-Range", `bytes */${head.size}`);
+    const rangeHeader = request.method === "GET" ? request.headers.get("Range") : null;
+    const parsedRange = parseByteRange(rangeHeader, head.size);
+    if (parsedRange === "invalid") {
+      headers.set("Content-Range", `bytes */${head.size}`);
+      headers.set("Accept-Ranges", "bytes");
+      headers.set("Cache-Control", "no-store");
+      return new Response(null, { status: 416, headers });
+    }
+    const range = parsedRange && rangeAllowed(request, etag, head.uploaded)
+      ? parsedRange
+      : null;
+    const object = request.method === "HEAD"
+      ? head
+      : await bucket.get(
+          key,
+          range
+            ? { range: { offset: range.start, length: range.end - range.start + 1 } }
+            : undefined,
+        );
+    if (!object) return errorResponse(product, "The requested media object was not found.", 404);
+
+    object.writeHttpMetadata(headers);
+    headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
+    if (!headers.has("Cache-Control")) headers.set("Cache-Control", DEFAULT_CACHE_CONTROL);
+    if (etag) headers.set("ETag", etag);
+    if (object.uploaded) headers.set("Last-Modified", object.uploaded.toUTCString());
     headers.set("Accept-Ranges", "bytes");
-    headers.set("Cache-Control", "no-store");
-    return new Response(null, { status: 416, headers });
+
+    if (range) {
+      headers.set("Content-Length", String(range.end - range.start + 1));
+      headers.set("Content-Range", `bytes ${range.start}-${range.end}/${head.size}`);
+    } else {
+      headers.set("Content-Length", String(head.size));
+    }
+
+    return new Response(request.method === "HEAD" ? null : object.body ?? null, {
+      status: range ? 206 : 200,
+      headers,
+    });
+  } catch (cause) {
+    console.error("CDN object read failed", {
+      product,
+      method: request.method,
+      error: cause instanceof Error ? cause.message : "unknown error",
+    });
+    return errorResponse(product, "The media service is temporarily unavailable.", 503);
   }
-  const range = parsedRange && rangeAllowed(request, etag, head.uploaded)
-    ? parsedRange
-    : null;
-  const object = request.method === "HEAD"
-    ? head
-    : await bucket.get(
-        key,
-        range
-          ? { range: { offset: range.start, length: range.end - range.start + 1 } }
-          : undefined,
-      );
-  if (!object) return errorResponse(product, "Object not found", 404);
-
-  object.writeHttpMetadata(headers);
-  headers.set("Content-Type", object.httpMetadata?.contentType || "application/octet-stream");
-  if (!headers.has("Cache-Control")) headers.set("Cache-Control", DEFAULT_CACHE_CONTROL);
-  if (etag) headers.set("ETag", etag);
-  if (object.uploaded) headers.set("Last-Modified", object.uploaded.toUTCString());
-  headers.set("Accept-Ranges", "bytes");
-
-  if (range) {
-    headers.set("Content-Length", String(range.end - range.start + 1));
-    headers.set("Content-Range", `bytes ${range.start}-${range.end}/${head.size}`);
-  } else {
-    headers.set("Content-Length", String(head.size));
-  }
-
-  return new Response(request.method === "HEAD" ? null : object.body ?? null, {
-    status: range ? 206 : 200,
-    headers,
-  });
 }

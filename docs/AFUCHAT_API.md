@@ -20,15 +20,15 @@ unchanged.
 
 | Method and path | Purpose and inputs | Authentication | Response |
 |---|---|---|---|
-| `GET /v1/chat/healthz` | Worker health check. | Public. | `200 { product: "afuchat", worker: "afuchat-api", status: "ok", version: "v1" }`. |
-| `GET`, `POST /v1/chat/status` | Checks the public Supabase profile endpoint and reports Worker/provider configuration. The mobile status screen uses `GET`. | Public. | `200 { ok, timestamp, services, configuration, worker }`; `ok` is false if the Supabase check fails. |
+| `GET /v1/chat/healthz` | Public API health check. | Public. | `200 { product: "afuchat", status: "ok", version: "v1" }`; no Worker or infrastructure identifiers are returned. |
+| `GET`, `POST /v1/chat/status` | Checks service health without returning provider or database details. The mobile status screen uses `GET`. | Public. | `200 { ok, timestamp }`; `ok` is false if the health check fails. |
 
 ### Conversations and account data
 
 | Method and path | Purpose and inputs | Authentication | Response |
 |---|---|---|---|
-| `GET /v1/chat/conversations?unread_excluded_ids={uuid,...}` | Returns the signed-in user's chat list. The optional query can be repeated or comma-separated and accepts at most 100 UUIDs. | `Authorization: Bearer <Supabase access token>`; verified through `afuauth-api`, then the same token is forwarded to Supabase RLS. | Supabase `get_chat_list` JSON response passes through. Invalid IDs return `400`; missing/invalid session returns `401`; missing service configuration returns `503`; upstream failure returns `502`. |
-| `POST /v1/chat/account/export` | Requests an email export. JSON body: `{ "types": ["profile", "posts", "messages", "activity", "transactions"] }`. Omitted or unrecognized selections fall back to `profile`. | Bearer token verified through `afuauth-api`; account email required. | `200 { ok: true, email }` after the JSON attachment is emailed. Missing email is `400`; missing email-provider configuration is `503`; delivery failure is `502`. |
+| `GET /v1/chat/conversations?unread_excluded_ids={uuid,...}` | Returns the signed-in user's chat list. The optional query can be repeated or comma-separated and accepts at most 100 UUIDs. | `Authorization: Bearer <Supabase access token>`; verified through shared authentication, then the same token is forwarded for row-level authorization. | Successful chat-list JSON is returned. Invalid IDs return `400`; missing/invalid session returns `401`; upstream failures return a generic `502` without upstream error details. |
+| `POST /v1/chat/account/export` | Requests an email export. JSON body: `{ "types": ["profile", "posts", "messages", "activity", "transactions"] }`. Omitted or unrecognized selections fall back to `profile`. | Bearer token verified through shared authentication; account email required. | `200 { ok: true, email }` after the JSON attachment is emailed. Missing email is `400`; unavailable delivery returns a generic `503` or `502`. |
 
 ### Payments
 

@@ -17,7 +17,6 @@ function cors(request: Request): Headers {
     "Access-Control-Allow-Headers": ALLOWED_HEADERS,
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
-    "X-AfuAI-Worker": "afuai-api",
   });
   const origin = request.headers.get("Origin");
   if (origin) {
@@ -70,10 +69,10 @@ async function readJson(request: Request): Promise<Record<string, any>> {
 async function verifySharedSession(request: Request, env: Env): Promise<Response | null> {
   const authorization = request.headers.get("Authorization")?.trim() ?? "";
   if (!/^Bearer\s+\S+$/i.test(authorization)) {
-    return json(request, { error: "A valid bearer token is required", worker: "afuai-api" }, 401);
+    return json(request, { error: "A valid bearer token is required." }, 401);
   }
   if (!env.AFUAUTH_API) {
-    return json(request, { error: "Shared authentication service is not configured", worker: "afuai-api" }, 503);
+    return json(request, { error: "The request could not be verified." }, 503);
   }
 
   const token = authorization.replace(/^Bearer\s+/i, "");
@@ -88,17 +87,21 @@ async function verifySharedSession(request: Request, env: Env): Promise<Response
     } | null;
 
     if (verified.status === 401 || verified.status === 403) {
-      return json(request, { error: "Invalid or expired shared session", worker: "afuai-api" }, 401);
+      return json(request, { error: "Invalid or expired session." }, 401);
     }
     if (!verified.ok) {
-      return json(request, { error: "Shared authentication service is unavailable", worker: "afuai-api" }, 503);
+      console.error("[afuai-api] shared session verification returned an error", {
+        status: verified.status,
+      });
+      return json(request, { error: "The request could not be verified." }, 503);
     }
     if (typeof payload?.user?.id !== "string" || !payload.user.id || payload.accessToken !== token) {
-      return json(request, { error: "Shared authentication service returned an invalid session", worker: "afuai-api" }, 503);
+      return json(request, { error: "The request could not be verified." }, 503);
     }
     return null;
   } catch {
-    return json(request, { error: "Shared authentication service is unavailable", worker: "afuai-api" }, 503);
+    console.error("[afuai-api] shared session verification failed");
+    return json(request, { error: "The request could not be verified." }, 503);
   }
 }
 
@@ -112,20 +115,18 @@ async function handleAiRequest(request: Request, env: Env): Promise<Response> {
     const configured = Boolean(env.ENGAGERA_API_KEY?.trim());
     return json(request, {
       status: configured ? "ok" : "degraded",
-      worker: "afuai-api",
       version: "v1",
-      configuration: { engagera: configured },
     }, configured ? 200 : 503);
   }
   if (!url.pathname.startsWith("/v1/ai/")) {
-    return json(request, { error: "Not found", path: url.pathname }, 404);
+    return json(request, { error: "The requested API endpoint was not found." }, 404);
   }
   if (url.pathname !== "/v1/ai/healthz") {
     const authFailure = await verifySharedSession(request, env);
     if (authFailure) return authFailure;
   }
   if (request.method !== "POST") {
-    return json(request, { error: "Method not allowed", worker: "afuai-api" }, 405);
+    return json(request, { error: "Method not allowed." }, 405);
   }
 
   const body = await readJson(request);
@@ -136,7 +137,7 @@ async function handleAiRequest(request: Request, env: Env): Promise<Response> {
       }
       const isReply = url.pathname.endsWith("/reply");
       if (isReply && body.audioUrl && !Array.isArray(body.messages)) {
-        return json(request, { error: "Audio transcription is not configured on the Worker" }, 501);
+        return json(request, { error: "The requested feature is unavailable." }, 501);
       }
       const result = await callEngagera(env, {
         messages: body.messages,
@@ -150,7 +151,7 @@ async function handleAiRequest(request: Request, env: Env): Promise<Response> {
         if (isReply) {
           return json(request, { reply: "I'm having trouble connecting to AfuAI right now. Please try again in a moment." });
         }
-        return json(request, { error: "AI service unavailable" }, 502);
+        return json(request, { error: "AI responses are temporarily unavailable." }, 502);
       }
       return isReply
         ? json(request, { reply: result.content })
@@ -158,7 +159,7 @@ async function handleAiRequest(request: Request, env: Env): Promise<Response> {
     }
 
     if (url.pathname === "/v1/ai/transcribe") {
-      return json(request, { error: "Audio transcription is not configured on the Worker" }, 501);
+      return json(request, { error: "The requested feature is unavailable." }, 501);
     }
 
     if (url.pathname === "/v1/ai/lens") {
@@ -186,7 +187,9 @@ ${query ? `Answer the user's question: "${query}"` : "Use an empty answer becaus
         model: "engagera-pro",
         stream: false,
       });
-      if (!result.response.ok) return json(request, { error: "Vision service unavailable" }, 502);
+      if (!result.response.ok) {
+        return json(request, { error: "Image analysis is temporarily unavailable." }, 502);
+      }
       let parsed: Record<string, unknown>;
       try {
         parsed = JSON.parse(result.content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim());
@@ -212,14 +215,26 @@ ${query ? `Answer the user's question: "${query}"` : "Use an empty answer becaus
       });
     }
 
-    return json(request, { error: "AfuAI endpoint is not implemented yet", worker: "afuai-api" }, 501);
+    return json(request, { error: "The requested API endpoint is not available." }, 501);
   } catch (error) {
     console.error("[afuai-api]", error);
     if (url.pathname === "/v1/ai/reply") {
-      return json(request, { reply: "AI service is not configured. Please try again later." }, 503);
+      return json(request, { reply: "The service is temporarily unavailable. Please try again later." }, 503);
     }
-    return json(request, { error: "AfuAI service is not configured" }, 503);
+    return json(request, { error: "The service is temporarily unavailable." }, 503);
   }
 }
 
-export default { fetch: handleAiRequest };
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    try {
+      return await handleAiRequest(request, env);
+    } catch (cause) {
+      console.error("[afuai-api] request failed", {
+        path: new URL(request.url).pathname,
+        error: cause instanceof Error ? cause.message : "unknown error",
+      });
+      return json(request, { error: "The request could not be completed." }, 500);
+    }
+  },
+};

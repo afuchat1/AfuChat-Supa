@@ -129,6 +129,53 @@ test("returns an isolated empty-bucket 404 without cacheable error responses", a
   assert.equal(bucket.calls.head, 1);
 });
 
+test("all product namespace roots are not parsed as object keys or looked up in R2", async () => {
+  for (const product of ["chat", "mail", "cloud", "ai", "ads"]) {
+    for (const suffix of ["", "/"]) {
+      const bucket = makeBucket();
+      const response = await handleR2CdnRequest(
+        new Request(`https://cdn.afuchat.com/${product}${suffix}`),
+        bucket,
+        product,
+      );
+
+      assert.equal(response.status, 404, `${product}${suffix}`);
+      assert.equal(await response.text(), "The requested media object was not found.");
+      assert.equal(bucket.calls.head, 0);
+      assert.equal(bucket.calls.get, 0);
+      if (suffix === "/") {
+        const preflight = await handleR2CdnRequest(
+          new Request(`https://cdn.afuchat.com/${product}/`, { method: "OPTIONS" }),
+          bucket,
+          product,
+        );
+        assert.equal(preflight.status, 204);
+        assert.equal(bucket.calls.head, 0);
+        assert.equal(bucket.calls.get, 0);
+      }
+    }
+  }
+});
+
+test("R2 failures return generic public errors", async () => {
+  const bucket = {
+    async head() {
+      throw new Error("internal bucket binding and hostname details");
+    },
+    async get() {
+      throw new Error("internal bucket binding and hostname details");
+    },
+  };
+  const response = await handleR2CdnRequest(
+    new Request("https://cdn.afuchat.com/ai/sample/image.jpg"),
+    bucket,
+    "ai",
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(await response.text(), "The media service is temporarily unavailable.");
+});
+
 test("supports conditional requests and rejects invalid byte ranges", async () => {
   const bucket = makeBucket();
   const notModified = await handleR2CdnRequest(

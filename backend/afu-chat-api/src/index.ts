@@ -121,7 +121,7 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Chat data service is not configured", request_id: requestId },
+      { error: "This request is temporarily unavailable.", request_id: requestId },
       503,
     );
   }
@@ -147,7 +147,7 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Chat data service is not configured", request_id: requestId },
+      { error: "This request is temporarily unavailable.", request_id: requestId },
       503,
     );
   }
@@ -157,7 +157,7 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Shared authentication service is not configured", request_id: requestId },
+      { error: "The request could not be verified.", request_id: requestId },
       503,
     );
   }
@@ -175,15 +175,19 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       return privateJsonResponse(
         request,
         requestId,
-        { error: "Invalid or expired shared session", request_id: requestId },
+      { error: "Invalid or expired session.", request_id: requestId },
         401,
       );
     }
     if (!verified.ok) {
+      console.error("[afuchat-api] shared session verification returned an error", {
+        requestId,
+        status: verified.status,
+      });
       return privateJsonResponse(
         request,
         requestId,
-        { error: "Shared authentication service is unavailable", request_id: requestId },
+        { error: "The request could not be verified.", request_id: requestId },
         503,
       );
     }
@@ -196,15 +200,16 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       return privateJsonResponse(
         request,
         requestId,
-        { error: "Shared authentication service returned an invalid session", request_id: requestId },
+        { error: "The request could not be verified.", request_id: requestId },
         503,
       );
     }
   } catch {
+    console.error("[afuchat-api] shared session verification failed", { requestId });
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Shared authentication service is unavailable", request_id: requestId },
+      { error: "The request could not be verified.", request_id: requestId },
       503,
     );
   }
@@ -228,10 +233,24 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       body: JSON.stringify({ p_unread_excluded_ids: excludedIds }),
       redirect: "manual",
     }));
-    const outgoingHeaders = new Headers(upstream.headers);
-    responseHeaders(request, requestId).forEach((value, key) => {
-      outgoingHeaders.set(key, value);
-    });
+    if (!upstream.ok) {
+      console.error("[afuchat-api] chat data request failed", {
+        requestId,
+        status: upstream.status,
+      });
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "Chat data could not be loaded.", request_id: requestId },
+        upstream.status >= 500 ? 502 : upstream.status,
+      );
+    }
+
+    const outgoingHeaders = responseHeaders(request, requestId);
+    const contentType = upstream.headers.get("Content-Type");
+    const contentRange = upstream.headers.get("Content-Range");
+    if (contentType) outgoingHeaders.set("Content-Type", contentType);
+    if (contentRange) outgoingHeaders.set("Content-Range", contentRange);
     outgoingHeaders.set("Cache-Control", "private, no-store");
     outgoingHeaders.set("Vary", "Origin, Authorization");
     return new Response(upstream.body, {
@@ -240,10 +259,11 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       headers: outgoingHeaders,
     });
   } catch {
+    console.error("[afuchat-api] chat data request failed", { requestId });
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Chat data service is unavailable", request_id: requestId },
+      { error: "Chat data could not be loaded.", request_id: requestId },
       502,
     );
   }
@@ -286,32 +306,19 @@ async function handleStatus(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const services = {
-    supabase: supabaseCheck,
-    cloudflare_worker: { ok: true, latency_ms: 0 },
-  };
-  const ok = Object.values(services).every((service) => service.ok === true);
+  const ok = supabaseCheck.ok === true;
+  if (!ok) {
+    console.error("[afuchat-api] status check reports degraded service", {
+      requestId,
+      status: supabaseCheck.message,
+    });
+  }
   return jsonResponse(
     request,
     requestId,
     {
       ok,
       timestamp: new Date().toISOString(),
-      services,
-      configuration: {
-        payments: Boolean(
-          env.PESAPAL_CONSUMER_KEY?.trim() &&
-          env.PESAPAL_CONSUMER_SECRET?.trim() &&
-          env.PESAPAL_IPN_ID?.trim() &&
-          env.SUPABASE_SERVICE_KEY?.trim()
-        ),
-        email_export: Boolean(
-          env.RESEND_API_KEY?.trim() &&
-          env.RESEND_FROM_EMAIL?.trim()
-        ),
-        video_processing: false,
-      },
-      worker: "afuchat-api",
     },
     200,
   );
@@ -331,7 +338,7 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     return jsonResponse(
       request,
       requestId,
-      { product: "afuchat", worker: "afuchat-api", status: "ok", version: "v1" },
+      { product: "afuchat", status: "ok", version: "v1" },
       200,
     );
   }
@@ -374,7 +381,7 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
       request,
       requestId,
       {
-        error: "Video processing is not configured; the original video remains available",
+        error: "Video processing is temporarily unavailable.",
         request_id: requestId,
       },
       501,
@@ -392,11 +399,16 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     return jsonResponse(
       request,
       requestId,
-      { error: "This AfuChat endpoint is not implemented yet", worker: "afuchat-api", request_id: requestId },
+      { error: "The requested API endpoint is not available.", request_id: requestId },
       501,
     );
   }
-  return jsonResponse(request, requestId, { error: "Not found", path: incoming.pathname }, 404);
+  return jsonResponse(
+    request,
+    requestId,
+    { error: "The requested API endpoint was not found." },
+    404,
+  );
 }
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -408,5 +420,22 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  fetch: handleRequest,
+  async fetch(request: Request, env: Env): Promise<Response> {
+    try {
+      return await handleRequest(request, env);
+    } catch (cause) {
+      const requestId = crypto.randomUUID();
+      console.error("[afuchat-api] request failed", {
+        requestId,
+        path: new URL(request.url).pathname,
+        error: cause instanceof Error ? cause.message : "unknown error",
+      });
+      return jsonResponse(
+        request,
+        requestId,
+        { error: "The request could not be completed.", request_id: requestId },
+        500,
+      );
+    }
+  },
 };

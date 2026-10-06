@@ -174,7 +174,7 @@ function isPublicAssetRequest(request: Request): boolean {
   const url = new URL(request.url);
   return (
     url.hostname.toLowerCase() === "cdn.afuchat.com" &&
-    url.pathname.startsWith(CDN_PREFIX)
+    (url.pathname === "/chat" || url.pathname.startsWith(CDN_PREFIX))
   );
 }
 
@@ -184,7 +184,7 @@ async function proxySupabaseRequest(
   path: string,
 ): Promise<Response> {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-    return error("Supabase proxy is not configured", 503);
+    return error("The requested API operation is temporarily unavailable.", 503);
   }
 
   const incoming = new URL(request.url);
@@ -203,13 +203,21 @@ async function proxySupabaseRequest(
       body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
       redirect: "manual",
     });
-    return await fetch(upstreamRequest);
+    const response = await fetch(upstreamRequest);
+    if (!response.ok) {
+      console.error("AfuChat upstream API returned an error", {
+        path,
+        status: response.status,
+      });
+      return error("The requested API operation could not be completed.", response.status);
+    }
+    return response;
   } catch (cause) {
     console.error("AfuChat Supabase proxy request failed", {
       path,
       error: cause instanceof Error ? cause.message : "unknown",
     });
-    return error("Supabase service is unavailable", 502);
+    return error("The requested API operation could not be completed.", 502);
   }
 }
 
@@ -221,7 +229,7 @@ async function authenticate(
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) return { user: null, response: error("Authentication required", 401) };
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-    return { user: null, response: error("Authentication is not configured", 503) };
+    return { user: null, response: error("The request could not be verified.", 503) };
   }
 
   try {
@@ -235,15 +243,21 @@ async function authenticate(
       return { user: null, response: error("Session is invalid or expired", 401) };
     }
     if (!response.ok) {
-      return { user: null, response: error("Could not verify the session", 502) };
+      console.error("AfuChat session verification returned an error", {
+        status: response.status,
+      });
+      return { user: null, response: error("The request could not be verified.", 502) };
     }
     const data = (await response.json()) as { id?: unknown };
     if (typeof data.id !== "string" || !isUuid(data.id)) {
       return { user: null, response: error("Session returned an invalid user", 401) };
     }
     return { user: { id: data.id, token: match[1] } };
-  } catch {
-    return { user: null, response: error("Session verification is unavailable", 502) };
+  } catch (cause) {
+    console.error("AfuChat session verification failed", {
+      error: cause instanceof Error ? cause.message : "unknown",
+    });
+    return { user: null, response: error("The request could not be verified.", 502) };
   }
 }
 
@@ -332,7 +346,7 @@ function parseByteRange(value: string | null, size: number): ByteRange | null | 
 
 async function serveObject(request: Request, key: string, env: Env): Promise<Response> {
   const head = await env.AFUCHAT_ASSETS.head(key);
-  if (!head) return error("Object not found", 404);
+  if (!head) return error("The requested media object was not found.", 404);
 
   const etag = `"${head.httpEtag.replaceAll('"', "")}"`;
   if (request.headers.get("If-None-Match") === etag) {
@@ -351,7 +365,7 @@ async function serveObject(request: Request, key: string, env: Env): Promise<Res
     key,
     range ? { range: { offset: range.start, length: range.end - range.start + 1 } } : undefined,
   );
-  if (!object) return error("Object not found", 404);
+  if (!object) return error("The requested media object was not found.", 404);
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);
@@ -371,7 +385,7 @@ async function serveObject(request: Request, key: string, env: Env): Promise<Res
 
 async function handleApi(request: Request, env: Env, path: string): Promise<Response> {
   if (path === "/healthz" && request.method === "GET") {
-    return json({ status: "ok", service: "afuchat-api", component: "media" });
+    return json({ status: "ok", component: "media" });
   }
 
   if (path === "/v1/auth/session" && request.method === "POST") {
@@ -386,9 +400,11 @@ async function handleApi(request: Request, env: Env, path: string): Promise<Resp
   if (!usageMatch && !containersPath && !containerIdMatch) {
     if (path.startsWith(API_STORAGE_PREFIX) && ["GET", "HEAD"].includes(request.method)) {
       const key = decodeKeyPath(path.slice(API_STORAGE_PREFIX.length));
-      return key ? serveObject(request, key, env) : error("Invalid storage key", 400);
+      return key
+        ? serveObject(request, key, env)
+        : error("The requested media object was not found.", 404);
     }
-    return error("Route not found", 404);
+    return error("The requested API endpoint was not found.", 404);
   }
 
   const auth = await authenticate(request, env);
@@ -521,6 +537,13 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     return new Response(null, { status: 204 });
   }
 
+  if (
+    url.hostname.toLowerCase() === "cdn.afuchat.com" &&
+    (url.pathname === "/chat" || url.pathname === "/chat/")
+  ) {
+    return error("The requested media object was not found.", 404);
+  }
+
   if (apiRequest) {
     const origin = request.headers.get("Origin");
     if (origin && !isTrustedAppOrigin(origin)) return error("Origin is not allowed", 403);
@@ -531,13 +554,15 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 
   if (publicAsset && ["GET", "HEAD"].includes(request.method)) {
     const key = decodeKeyPath(url.pathname.slice(CDN_PREFIX.length));
-    return key ? serveObject(request, key, env) : error("Invalid storage key", 400);
+    return key
+      ? serveObject(request, key, env)
+      : error("The requested media object was not found.", 404);
   }
 
   if (url.pathname === "/healthz" && request.method === "GET") {
-    return json({ status: "ok", service: "afuchat-api", component: "media" });
+    return json({ status: "ok", component: "media" });
   }
-  return error("Route not found", 404);
+  return error("The requested API endpoint was not found.", 404);
 }
 
 export default {

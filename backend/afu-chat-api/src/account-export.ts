@@ -82,7 +82,7 @@ export async function handleAccountExport(request: Request, env: Env): Promise<R
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Email service is not configured", request_id: requestId },
+      { error: "Export delivery is temporarily unavailable.", request_id: requestId },
       503,
     );
   }
@@ -223,7 +223,7 @@ export async function handleAccountExport(request: Request, env: Env): Promise<R
       return privateJsonResponse(
         request,
         requestId,
-        { error: "Failed to send export email. Please try again later.", request_id: requestId },
+        { error: "Export delivery could not be completed. Please try again later.", request_id: requestId },
         502,
       );
     }
@@ -231,7 +231,7 @@ export async function handleAccountExport(request: Request, env: Env): Promise<R
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Email service is unavailable. Please try again later.", request_id: requestId },
+      { error: "Export delivery is temporarily unavailable. Please try again later.", request_id: requestId },
       502,
     );
   }

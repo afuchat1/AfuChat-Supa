@@ -131,7 +131,7 @@ export async function verifySharedSession(
       response: privateJsonResponse(
         request,
         requestId,
-        { error: "Shared authentication service is not configured", request_id: requestId },
+        { error: "The request could not be verified.", request_id: requestId },
         503,
       ),
     };
@@ -155,7 +155,7 @@ export async function verifySharedSession(
         response: privateJsonResponse(
           request,
           requestId,
-          { error: "Invalid or expired shared session", request_id: requestId },
+          { error: "Invalid or expired session.", request_id: requestId },
           401,
         ),
       };
@@ -165,7 +165,7 @@ export async function verifySharedSession(
         response: privateJsonResponse(
           request,
           requestId,
-          { error: "Shared authentication service is unavailable", request_id: requestId },
+          { error: "The request could not be verified.", request_id: requestId },
           503,
         ),
       };
@@ -179,7 +179,7 @@ export async function verifySharedSession(
         response: privateJsonResponse(
           request,
           requestId,
-          { error: "Shared authentication service returned an invalid session", request_id: requestId },
+          { error: "The request could not be verified.", request_id: requestId },
           503,
         ),
       };
@@ -198,11 +198,12 @@ export async function verifySharedSession(
       },
     };
   } catch {
+    console.error("[afuchat-api] shared session verification failed", { requestId });
     return {
       response: privateJsonResponse(
         request,
         requestId,
-        { error: "Shared authentication service is unavailable", request_id: requestId },
+        { error: "The request could not be verified.", request_id: requestId },
         503,
       ),
     };
