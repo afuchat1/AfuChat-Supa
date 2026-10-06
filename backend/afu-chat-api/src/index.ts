@@ -2,9 +2,8 @@ interface Env {
   AFUCHAT_SUPABASE_URL?: string;
   AFUCHAT_SUPABASE_ANON_KEY?: string;
   AFUCHAT_DATABASE_SCHEMA?: string;
-  AFUAUTH_API?: {
-    fetch(request: Request): Promise<Response>;
-  };
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
 }
 
 const PREFIX = "/v1/chat";
@@ -79,6 +78,14 @@ function privateJsonResponse(
   });
 }
 
+function supabaseConfig(env: Env): { url: string; anonKey: string } | null {
+  const url = (env.AFUCHAT_SUPABASE_URL || env.SUPABASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+  const anonKey = (env.AFUCHAT_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "").trim();
+  return url && anonKey ? { url, anonKey } : null;
+}
+
 async function handleChatConversations(request: Request, env: Env): Promise<Response> {
   const requestId = crypto.randomUUID();
   const headers = responseHeaders(request, requestId);
@@ -139,26 +146,27 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     );
   }
 
-  if (!env.AFUAUTH_API) {
+  const supabase = supabaseConfig(env);
+  if (!supabase) {
     return privateJsonResponse(
       request,
       requestId,
-      { error: "Shared authentication service is not configured", request_id: requestId },
+      { error: "Chat data service is not configured", request_id: requestId },
       503,
     );
   }
 
   try {
-    const verified = await env.AFUAUTH_API.fetch(new Request(
-      "https://afuauth.internal/v1/auth/session",
-      {
-        method: "POST",
-        headers: { Authorization: authorization, Accept: "application/json" },
+    const verified = await fetch(`${supabase.url}/auth/v1/user`, {
+      method: "GET",
+      headers: {
+        apikey: supabase.anonKey,
+        Authorization: authorization,
+        Accept: "application/json",
       },
-    ));
-    const payload = await verified.json().catch(() => null) as
-      | { user?: { id?: unknown } }
-      | null;
+      redirect: "manual",
+    });
+    const payload = await verified.json().catch(() => null) as { id?: unknown } | null;
     if (verified.status === 401 || verified.status === 403) {
       return privateJsonResponse(
         request,
@@ -175,7 +183,7 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
         503,
       );
     }
-    if (typeof payload?.user?.id !== "string" || !payload.user.id) {
+    if (typeof payload?.id !== "string" || !payload.id) {
       return privateJsonResponse(
         request,
         requestId,
@@ -192,22 +200,11 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     );
   }
 
-  const supabaseUrl = env.AFUCHAT_SUPABASE_URL?.trim().replace(/\/+$/, "");
-  const anonKey = env.AFUCHAT_SUPABASE_ANON_KEY?.trim();
-  if (!supabaseUrl || !anonKey) {
-    return privateJsonResponse(
-      request,
-      requestId,
-      { error: "Chat data service is not configured", request_id: requestId },
-      503,
-    );
-  }
-
-  const target = new URL(supabaseUrl);
+  const target = new URL(supabase.url);
   target.pathname = "/rest/v1/rpc/get_chat_list";
   target.search = "";
   const upstreamHeaders = new Headers({
-    apikey: anonKey,
+    apikey: supabase.anonKey,
     Authorization: authorization,
     Accept: "application/json",
     "Content-Type": "application/json",

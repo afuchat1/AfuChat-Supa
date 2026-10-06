@@ -1,5 +1,6 @@
-# AfuChat business API. Legacy Supabase/media traffic remains on the
-# afuchat-media-worker compatibility service.
+# Do not deploy this config directly over production: `afuchat-api` currently
+# also serves legacy media. Use deploy-preserving-media.mjs to retain that
+# handler as a module while adding the chat API.
 name = "afuchat-api"
 main = "src/index.ts"
 compatibility_date = "2026-10-05"
@@ -8,10 +9,6 @@ workers_dev = false
 routes = [
   { pattern = "api.afuchat.com/v1/chat/*", zone_name = "afuchat.com" }
 ]
-
-[[services]]
-binding = "AFUAUTH_API"
-service = "afuauth-api"
 
 [vars]
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
