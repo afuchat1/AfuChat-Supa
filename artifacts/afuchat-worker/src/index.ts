@@ -15,7 +15,7 @@ interface ByteRange {
   end: number;
 }
 
-const API_PREFIX = "/afuchat";
+const API_PREFIX = "/chat";
 const API_STORAGE_PREFIX = "/v1/storage/";
 const SUPABASE_PATH_PREFIXES = ["/auth/v1", "/rest/v1", "/realtime/v1"] as const;
 const CONTAINERS_PREFIX = "containers/";
@@ -167,6 +167,14 @@ function decodeKeyPath(encoded: string): string | null {
 function isSupabaseProxyPath(path: string): boolean {
   return SUPABASE_PATH_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+function isPublicAssetRequest(request: Request): boolean {
+  const url = new URL(request.url);
+  return (
+    url.hostname.toLowerCase() === "cdn.afuchat.com" &&
+    url.pathname.startsWith(CDN_PREFIX)
   );
 }
 
@@ -500,8 +508,10 @@ async function handleApi(request: Request, env: Env, path: string): Promise<Resp
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const apiRequest = url.pathname.startsWith(`${API_PREFIX}/`);
-  const publicAsset = url.pathname.startsWith(CDN_PREFIX);
+  const apiRequest =
+    url.hostname.toLowerCase() === "api.afuchat.com" &&
+    url.pathname.startsWith(`${API_PREFIX}/`);
+  const publicAsset = isPublicAssetRequest(request);
 
   if (request.method === "OPTIONS") {
     const origin = request.headers.get("Origin");
@@ -533,7 +543,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const requestId = crypto.randomUUID();
-    const publicAsset = new URL(request.url).pathname.startsWith(CDN_PREFIX);
+    const publicAsset = isPublicAssetRequest(request);
     try {
       const response = await handleRequest(request, env);
       return decorate(response, request, requestId, publicAsset);

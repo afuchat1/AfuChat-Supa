@@ -12,10 +12,10 @@ layout to new clients. Old `/v1/storage*` paths remain temporary compatibility
 aliases for already-released clients. AfuAuth continues to own
 `/v1/auth/*`.
 
-Supabase compatibility paths (`/auth/v1`, `/rest/v1`, and `/realtime/v1`) are
-still proxied under the legacy `/afuchat/*` route and keep the caller's
-Authorization header so Supabase RLS remains authoritative. Public media is
-served from `cdn.afuchat.com/chat/*`.
+Supabase compatibility paths (`/chat/auth/v1`, `/chat/rest/v1`, and
+`/chat/realtime/v1`) keep the caller's Authorization header so Supabase RLS
+remains authoritative. Public media is served from
+`cdn.afuchat.com/chat/*`.
 
 ## Local checks
 

@@ -1,8 +1,8 @@
 import {
   isChatStoragePath,
-  isLegacyStoragePath,
-  toLegacyCompatibilityRequest,
-  toLegacyStorageRequest,
+  isCompatibilityStoragePath,
+  toChatCompatibilityRequest,
+  toChatStorageRequest,
 } from "./storage-routing.ts";
 
 type WorkerHandler = {
@@ -17,14 +17,14 @@ export function createAfuChatWorkerRouter(chatApi: WorkerHandler, legacyApi: Wor
       const pathname = new URL(request.url).pathname;
 
       if (isChatStoragePath(pathname)) {
-        const storageRequest = toLegacyStorageRequest(request);
+        const storageRequest = toChatStorageRequest(request);
         if (storageRequest) return legacyApi.fetch(storageRequest, env, ctx);
       }
       if (pathname === CHAT_PREFIX || pathname.startsWith(`${CHAT_PREFIX}/`)) {
         return chatApi.fetch(request, env, ctx);
       }
-      if (isLegacyStoragePath(pathname)) {
-        return legacyApi.fetch(toLegacyCompatibilityRequest(request), env, ctx);
+      if (isCompatibilityStoragePath(pathname)) {
+        return legacyApi.fetch(toChatCompatibilityRequest(request), env, ctx);
       }
       return legacyApi.fetch(request, env, ctx);
     },

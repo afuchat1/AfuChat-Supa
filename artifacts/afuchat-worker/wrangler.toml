@@ -4,10 +4,9 @@ main = "src/index.ts"
 compatibility_date = "2026-09-28"
 workers_dev = false
 
-routes = [
-  { pattern = "api.afuchat.com/afuchat/*", zone_name = "afuchat.com" },
-  { pattern = "cdn.afuchat.com/chat/*", zone_name = "afuchat.com" }
-]
+# This handler is composed into afuchat-api. Keep it route-less to avoid a
+# duplicate Worker owner; public API and CDN routes are declared there.
+routes = []
 
 [vars]
 SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"

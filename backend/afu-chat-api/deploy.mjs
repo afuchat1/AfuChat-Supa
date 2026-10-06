@@ -9,6 +9,7 @@ const WORKER_NAME = "afuchat-api";
 const AUTH_WORKER_NAME = "afuauth-api";
 const ZONE_NAME = "afuchat.com";
 const REQUIRED_ROUTES = [
+  "api.afuchat.com/chat/*",
   "api.afuchat.com/v1/chat/*",
   // Keep this route only for clients from app versions predating the chat storage namespace.
   "api.afuchat.com/v1/storage*",
@@ -162,9 +163,6 @@ async function readRoutePlan() {
       id: existing?.id,
     };
   });
-  if (routes.some((route) => route.pattern === "api.afuchat.com/afuchat/*")) {
-    throw new Error("The deprecated /afuchat route still exists; remove that route before deploying.");
-  }
   return { zoneId: zone.id, routePlan };
 }
 
@@ -198,7 +196,7 @@ async function removeCreatedRoutes(zoneId, routes) {
   }
 }
 
-async function assertProductionPreflight() {
+async function assertProductionPreflight({ allowKnownChatPathCollision = false } = {}) {
   const chat = await fetch("https://api.afuchat.com/v1/chat/healthz");
   const chatBody = await chat.json().catch(() => null);
   if (
@@ -212,11 +210,15 @@ async function assertProductionPreflight() {
 
   const media = await fetch("https://cdn.afuchat.com/chat/__deployment_probe__");
   const mediaBody = await media.text();
-  if (
-    media.status !== 400 ||
-    !mediaBody.includes("Invalid storage key") ||
-    !media.headers.get("X-AfuChat-Request-Id")
-  ) {
+  const hasWorkerRequestId = Boolean(media.headers.get("X-AfuChat-Request-Id"));
+  const expectedAssetResponse =
+    media.status === 400 && mediaBody.includes("Invalid storage key") && hasWorkerRequestId;
+  const knownChatPathCollision =
+    allowKnownChatPathCollision &&
+    media.status === 404 &&
+    mediaBody.includes("Route not found") &&
+    hasWorkerRequestId;
+  if (!expectedAssetResponse && !knownChatPathCollision) {
     throw new Error("The existing /chat media handler differs from the expected response; deployment stopped.");
   }
 }
@@ -292,6 +294,7 @@ async function assertProductionPostflight() {
   }
 
   for (const path of [
+    "/chat/v1/storage/usage",
     "/v1/chat/storage/usage",
     "/v1/storage/usage",
   ]) {
@@ -331,9 +334,6 @@ async function assertProductionPostflight() {
       throw new Error(`Worker route ${route} is not active after deployment.`);
     }
   }
-  if (currentRoutes.some((item) => item.pattern === "api.afuchat.com/afuchat/*")) {
-    throw new Error("The deprecated /afuchat route remains active.");
-  }
 }
 
 const routeState = await readRoutePlan();
@@ -355,18 +355,43 @@ if (subdomainResponse.result?.enabled !== false) {
 }
 
 const originalModules = await getCurrentWorkerModules();
-const legacySource = originalModules["legacy.js"] || originalModules["index.js"];
+const deployedLegacySource = originalModules["legacy.js"] || originalModules["index.js"];
 if (
-  !legacySource.includes("AFUCHAT_ASSETS") ||
-  !legacySource.includes('"/chat/"') ||
-  !legacySource.includes("proxySupabaseRequest") ||
-  !legacySource.includes("storage-containers") ||
-  !legacySource.includes('"/afuchat"')
+  !deployedLegacySource.includes("AFUCHAT_ASSETS") ||
+  !deployedLegacySource.includes('"/chat/"') ||
+  !deployedLegacySource.includes("proxySupabaseRequest") ||
+  !deployedLegacySource.includes("storage-containers")
 ) {
   throw new Error("The existing Worker source differs from the expected legacy media handler; deployment stopped.");
 }
+const allowKnownChatPathCollision =
+  /API_PREFIX\s*=\s*"\/chat"/.test(deployedLegacySource) &&
+  !deployedLegacySource.includes("isPublicAssetRequest");
+const mediaHandlerPath = path.resolve(WORKER_ROOT, "../../artifacts/afuchat-worker/src/index.ts");
+const mediaHandlerTypeScript = await readFile(mediaHandlerPath, "utf8");
+const mediaHandlerCompiled = ts.transpileModule(mediaHandlerTypeScript, {
+  compilerOptions: {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    strict: true,
+  },
+  fileName: "legacy.ts",
+  reportDiagnostics: true,
+});
+const mediaHandlerErrors = (mediaHandlerCompiled.diagnostics || []).filter(
+  (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+);
+if (
+  mediaHandlerErrors.length ||
+  !mediaHandlerTypeScript.includes('const API_PREFIX = "/chat"') ||
+  !mediaHandlerTypeScript.includes('const CDN_PREFIX = "/chat/"') ||
+  !mediaHandlerTypeScript.includes("function isPublicAssetRequest")
+) {
+  throw new Error("The local AfuChat media handler is not ready for the shared chat path.");
+}
+const legacySource = rewriteTypescriptImports(mediaHandlerCompiled.outputText);
 
-await assertProductionPreflight();
+await assertProductionPreflight({ allowKnownChatPathCollision });
 
 const sourcePath = path.join(WORKER_ROOT, "src", "index.ts");
 const sourceDirectory = path.dirname(sourcePath);
@@ -467,7 +492,7 @@ if (!APPLY) {
     existingWorker: true,
     createSimilarWorker: false,
     preservesLegacyMediaHandler: true,
-    addsDeprecatedAfuChatNamespace: false,
+    addsChatCompatibilityRoute: true,
     routes: routeState.routePlan,
     workersDevEnabled: false,
     preservedBindings: apiSettings.bindings.map(({ name, type }) => ({ name, type })),
@@ -489,6 +514,7 @@ if (!APPLY) {
       "POST /v1/chat/storage/containers/{containerId}/objects/confirm",
       "DELETE /v1/chat/storage/containers/{containerId}/objects/by-key",
       "GET /v1/chat/storage/usage",
+      "GET /chat/v1/storage/usage",
       "GET|HEAD /v1/chat/storage/objects/{key}",
       "non-OPTIONS methods on /v1/chat/videos and /v1/chat/videos/* currently return 501",
       "POST /v1/auth/session (AfuAuth service binding; not an AfuChat route)",
@@ -546,7 +572,7 @@ console.log(JSON.stringify({
     "storage handler route",
     "legacy CDN asset route",
     "existing media bucket retained",
-    "no /afuchat route",
+    "chat compatibility route",
   ],
   modules: Object.fromEntries(
     Object.entries(modules).map(([name, content]) => [name, Buffer.byteLength(content)]),

@@ -17,7 +17,7 @@ The requested target names and namespaces are:
 | Product | Required Worker | Required namespace | Live status |
 |---|---|---|---|
 | AfuChat | `afuchat-api` | `/v1/chat/*` | Missing. `afuchat-media-worker` is live but only provides a Supabase proxy and storage API; it is not the complete chat API. |
-| AfuAuth | `afuauth-api` | `/v1/auth/*` | Missing as a dedicated Worker. Supabase Auth is available through the legacy `/afuchat/auth/v1/*` proxy. |
+| AfuAuth | `afuauth-api` | `/v1/auth/*` | Missing as a dedicated Worker in this historical snapshot. Supabase Auth was also available through the media compatibility proxy. |
 | AfuMail | `afumail-api` | `/v1/mail/*` | Missing; no matching backend source was found in this workspace. |
 | AfuCloud | `afucloud-api` | `/v1/cloud/*` | Exact Worker name exists, but the current implementation is a mixed root `/v1/*` API rather than the requested cloud namespace. |
 | AfuAI | `afuai-api` | `/v1/ai/*` | Missing. The mobile app's `/v1/ai/chat` smoke request currently returns 404. |
@@ -30,7 +30,7 @@ Do not deploy empty Workers or attach routes that return 404. `backend/afu-chat-
 | Host/path | Current owner or destination | Notes |
 |---|---|---|
 | `api.afuchat.com/*` | `afu-api-gateway` | The gateway forwards `/v1/*` to the service binding `AFUCLOUD_API`, targeting `afucloud-api`. |
-| `api.afuchat.com/afuchat/*` | `afuchat-media-worker` | More-specific route; serves the legacy Supabase-compatible and media API namespace used by the mobile app. |
+| Prior media/Supabase compatibility path | `afuchat-media-worker` | Served the Supabase-compatible and media API namespace used by the mobile app; it has since moved to the AfuChat chat namespace. |
 | `cdn.afuchat.com/chat/*` | `afuchat-media-worker` | Reads only `afu-chat-assets`; current target bucket is empty. |
 | `cdn.afuchat.com` root | R2 custom domain for `afuchat-media` | Keep this mapping for legacy object keys. A separate `/chat/*` Worker route takes precedence only on that path. |
 | `cdn.afuchat.com/cloud/*` | `afucloud-cdn` | Existing cloud CDN route. |
@@ -42,13 +42,13 @@ The live Worker inventory contains `afu-api-gateway`, `afuchat-media-worker`, `a
 
 The current mobile app uses two existing API bases; neither is the requested final `/v1/chat/*` namespace:
 
-- Supabase Auth, PostgREST, and Realtime use `https://api.afuchat.com/afuchat` as the Supabase client base. The live media Worker proxies `/auth/v1/*`, `/rest/v1/*`, and `/realtime/v1/*` to the existing Supabase project, preserving the caller's authorization and RLS behavior.
-- AfuChat media upload/session calls use the same `/afuchat` base.
+- Supabase Auth, PostgREST, and Realtime previously used the media compatibility proxy as their Supabase client base. The media Worker proxies `/auth/v1/*`, `/rest/v1/*`, and `/realtime/v1/*` to the existing Supabase project, preserving the caller's authorization and RLS behavior.
+- AfuChat media upload/session calls previously used the same compatibility proxy.
 - Other app functions still use `https://api.afuchat.com/v1`, which is routed through the gateway to the mixed `afucloud-api`. Current call sites include video, AI chat, payments, status, identifier resolution, and account export.
 
 ### Live AfuChat media/Supabase Worker endpoints
 
-Base URL: `https://api.afuchat.com/afuchat`
+Current compatibility base URL: `https://api.afuchat.com/chat`
 
 | Method and path | Purpose and inputs | Auth and authorization | Response/errors |
 |---|---|---|---|
@@ -79,12 +79,12 @@ These are the live media/Supabase routes, not a substitute for `/v1/chat/*` busi
 | `GET /v1/chat/conversations` | `404` | Required AfuChat namespace is not currently served. |
 | `GET /v1/status` | `404` | Mobile caller and production route are out of sync. |
 
-An unauthenticated zero-row `profiles` read through `/afuchat/rest/v1` returned `200`; a deliberately invalid login returned the expected Supabase `invalid_credentials` response. The PostgREST OpenAPI-root request was not accepted, so this audit does not claim a complete generated OpenAPI contract for the dynamic table/RPC surface. Direct CDN HEAD probes returned `403` from this audit environment and do not establish whether the CDN works for app clients.
+An unauthenticated zero-row `profiles` read through the previous compatibility proxy returned `200`; a deliberately invalid login returned the expected Supabase `invalid_credentials` response. The PostgREST OpenAPI-root request was not accepted, so this audit does not claim a complete generated OpenAPI contract for the dynamic table/RPC surface. Direct CDN HEAD probes returned `403` from this audit environment and do not establish whether the CDN works for app clients.
 
 ## Existing local Worker source (not a production contract)
 
 - `backend/cf-worker/wrangler.toml` names `afucloud-api`, but declares broad `api.afuchat.com` routes. The live broad route currently belongs to `afu-api-gateway`. Its `IMAGES_BUCKET` binding points to the mixed `afuchat-media` bucket, while the live `img.afuchat.com` custom domain points to `afucloud-images`. Do not deploy this config as a namespace migration.
-- The Hono entry point mounts local handlers at `/v1/auth`, `/v1/projects`, `/v1/analytics`, `/v1/tokens`, `/v1/activity`, `/v1/storage`, `/v1/domains`, `/v1/storage-containers`, `/v1/payments`, and `/v1`. It also declares root `/auth/v1/*`, `/rest/v1/*`, and `/realtime/v1/*` Supabase proxy paths. These local declarations do not match the current live `/afuchat/*` proxy route.
+- The Hono entry point mounts local handlers at `/v1/auth`, `/v1/projects`, `/v1/analytics`, `/v1/tokens`, `/v1/activity`, `/v1/storage`, `/v1/domains`, `/v1/storage-containers`, `/v1/payments`, and `/v1`. It also declares root `/auth/v1/*`, `/rest/v1/*`, and `/realtime/v1/*` Supabase proxy paths. These local declarations did not match the previous live media compatibility route.
 - The local `/v1/auth/*` handler reads and creates profiles through the configured `afucloud` schema. It is not a verified, product-independent AfuAuth service.
 - The `/v1` app-functions router includes `/v1/ai/chat`, `/v1/ai/reply`, `/v1/ai/transcribe`, `/v1/ai/lens`, `/v1/status`, and `/v1/auth-resolve-identifier`. It combines Engagera calls with shared profile lookups and is not a verified isolated AfuAI Worker.
 - Production probes returned `404` for `/v1/auth/register` and `/v1/ai/chat` even though those paths appear in local source. Do not copy or route these local handlers to the requested product namespaces until their data ownership, auth contract, bindings, and live behavior are verified.
@@ -109,7 +109,7 @@ An unauthenticated zero-row `profiles` read through `/afuchat/rest/v1` returned 
 ## Blockers before routing the target namespaces
 
 1. No complete, tested `afuchat-api` handler exists for `/v1/chat/*`; the staged Worker is incomplete and its configured name is wrong.
-2. The live `/afuchat/*` and `/chat/*` routes serve current app clients. Keep them until a compatibility release and route-by-route smoke test are ready.
+2. The live `/chat/*` and CDN `/chat/*` routes serve current app clients. Keep them until a compatibility release and route-by-route smoke test are ready.
 3. The root `/v1` gateway currently targets `afucloud-api`; changing it to `/v1/cloud/*` without preserving legacy `/v1/*` calls would break current clients.
 4. AfuMail and AfuAds backend source and API contracts are not present in this workspace. Their site homepages do not prove that API Workers or routes exist.
 5. A complete endpoint-by-endpoint contract for the dynamic PostgREST API and deployed root Worker cannot be produced from a successful OpenAPI response or a deployment-matched implementation. Do not document local route declarations as live behavior.

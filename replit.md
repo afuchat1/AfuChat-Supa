@@ -4,6 +4,8 @@ AfuChat is a product separate from AfuCloud. AfuChat is an Expo application buil
 
 The Afu ecosystem shares the Afu Account, `api.afuchat.com` API gateway, `cdn.afuchat.com` CDN gateway, and one database, while each product owns its Worker, schema, R2 bucket, routes, configuration, secrets, and deployment. The API gateway routes to independently deployable product Workers; it must not host product-specific business logic. Apply the Afu ecosystem master infrastructure rules before backend or infrastructure changes. Preserve compatibility during migrations and verify ownership, consumers, data, routes, bindings, and rollback before cutover or decommissioning.
 
+This Repl owns AfuChat only. Do not modify another Afu product's Worker, routes, schema, R2 bucket, configuration, secrets, or deployment. AfuChat media and Supabase compatibility use `/chat/*`; versioned AfuChat business APIs use `/v1/chat/*`. Keep outgoing AfuChat requests on those supported paths.
+
 ## Quick start on Replit
 
 ### 1. Install dependencies

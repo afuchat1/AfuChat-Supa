@@ -37,16 +37,22 @@ function keyFromCdnPath(pathname: string): string | null {
   }
 }
 
-function keyFromStoragePath(pathname: string): string | null {
+function keyFromStoragePath(pathname: string, acceptEmbeddedCompatibilityPath = false): string | null {
+  let candidatePath = pathname;
+  if (acceptEmbeddedCompatibilityPath) {
+    const marker = "/v1/storage/";
+    const markerIndex = candidatePath.lastIndexOf(marker);
+    if (markerIndex >= 0) candidatePath = candidatePath.slice(markerIndex);
+  }
   const prefixes = [
     "/v1/chat/storage/objects/",
-    "/afuchat/v1/storage/",
+    "/chat/v1/storage/",
     "/v1/storage/",
   ];
-  const prefix = prefixes.find((candidate) => pathname.startsWith(candidate));
+  const prefix = prefixes.find((candidate) => candidatePath.startsWith(candidate));
   if (!prefix) return null;
   try {
-    return decodeURIComponent(pathname.slice(prefix.length));
+    return decodeURIComponent(candidatePath.slice(prefix.length));
   } catch {
     return null;
   }
@@ -77,7 +83,7 @@ export function toAfuChatMediaUrl(
   }
   if (
     value.startsWith("/v1/chat/storage/objects/") ||
-    value.startsWith("/afuchat/v1/storage/") ||
+    value.startsWith("/chat/v1/storage/") ||
     value.startsWith("/v1/storage/")
   ) {
     const key = keyFromStoragePath(value);
@@ -95,7 +101,7 @@ export function toAfuChatMediaUrl(
     }
 
     if (host === API_HOST) {
-      const key = keyFromStoragePath(parsed.pathname);
+      const key = keyFromStoragePath(parsed.pathname, true);
       if (key) return canonicalMediaUrl(key) || value;
     }
 

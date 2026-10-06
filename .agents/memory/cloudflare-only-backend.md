@@ -25,9 +25,9 @@ All six products use the same Supabase project and one Supabase-issued account i
 
 **Why:** The user explicitly requires one Afu account across all current Afu products and identified AfuChat ↔ AfuAuth as the first integration.
 
-**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; do not use public `/afuchat/*` API calls.
+**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; use the supported AfuChat `/chat/*` compatibility paths.
 
-Existing mixed media in `afuchat-media` and its root CDN mapping must remain intact. Canonical AfuChat storage API requests use `/v1/chat/storage/*`; keep `/v1/storage*` only as a temporary compatibility alias for old clients until the new Worker route is deployed and verified. Legacy stored URLs may still be normalized as data, but clients must not send requests to `/afuchat/*`. Do not copy, delete, or reassign mixed-bucket objects without prefix ownership review.
+Existing mixed media in `afuchat-media` and its root CDN mapping must remain intact. Canonical AfuChat storage API requests use `/v1/chat/storage/*`; media and Supabase compatibility requests use `/chat/*`. Keep `/v1/storage*` only as a temporary compatibility alias for old clients until the new Worker route is deployed and verified. Stored URLs may be normalized as data, but outgoing requests must use supported AfuChat paths. Do not copy, delete, or reassign mixed-bucket objects without prefix ownership review.
 
 **Why:** The existing bucket contains mixed product/media categories and is still used by legacy URLs; changing the public namespace must not break already-released clients.
 
