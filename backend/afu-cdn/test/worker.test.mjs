@@ -56,7 +56,7 @@ function makeEnv(expectedBinding = "", expectedKey = "") {
   };
 }
 
-test("product namespaces dispatch to their isolated R2 buckets", async () => {
+test("product namespaces dispatch through their configured R2 bindings", async () => {
   const cases = [
     {
       path: "/chat/containers/user-1/container-1/photo.jpg",

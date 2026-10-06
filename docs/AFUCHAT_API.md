@@ -107,9 +107,9 @@ no redirect or compatibility proxy. The root `api.afuchat.com/` remains owned by
 the separate `afu-api` gateway and forwards only the root request to AfuAuth.
 
 The `afu-cdn` Worker owns `cdn.afuchat.com/*` and dispatches
-`/chat/{key}` to `afu-chat-assets`. Unprefixed legacy object URLs continue to
-read from `afuchat-media`; no objects are moved or copied. The original R2
-custom domain remains attached for compatibility.
+`/chat/{key}` through `CHAT_ASSETS` to `afuchat-media`. Unprefixed legacy
+object URLs use `LEGACY_MEDIA`, which points to that same bucket. The separate
+URL paths remain intact; no objects were moved or copied.
 
 No `/v1/posts`, `/v1/messages`, `/v1/profile`, `/v1/upload`, or `/v1/feed`
 endpoints are registered by this AfuChat Worker. Unimplemented AfuChat paths
@@ -120,7 +120,7 @@ return `501`; no speculative handlers are documented here.
 `backend/afu-chat-api/deploy.mjs` composes the chat API with the existing
 storage API handler and checks chat health, status, CORS, authentication
 rejection, the canonical storage route, AfuAuth service binding, and the
-dedicated media binding. CDN routing and delivery are managed separately by
+shared AfuChat/legacy media binding. CDN routing and delivery are managed separately by
 `backend/afu-cdn/` and `backend/route-management/reconcile.mjs`.
 
 The updated Worker was deployed on 2026-10-06. Its postflight checks passed for

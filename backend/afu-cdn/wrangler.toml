@@ -10,7 +10,7 @@ routes = [
 
 [[r2_buckets]]
 binding = "CHAT_ASSETS"
-bucket_name = "afu-chat-assets"
+bucket_name = "afuchat-media"
 
 [[r2_buckets]]
 binding = "CLOUD_ASSETS"

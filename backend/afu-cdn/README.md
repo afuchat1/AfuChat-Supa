@@ -1,18 +1,21 @@
 # afu-cdn
 
 `afu-cdn` is the single public media-delivery Worker for
-`cdn.afuchat.com/*`. It dispatches known product prefixes to isolated R2
-bindings and serves unprefixed legacy keys from `afuchat-media` without moving
-or copying objects.
+`cdn.afuchat.com/*`. It dispatches known product prefixes to their configured
+R2 bindings and serves unprefixed legacy keys from `afuchat-media`.
 
 | Path | R2 bucket |
 |---|---|
-| `/chat/{key}` | `afu-chat-assets` |
+| `/chat/{key}` | `afuchat-media` (`CHAT_ASSETS`) |
 | `/cloud/{key}` | `afucloud-images` |
 | `/mail/{key}` | `afu-mail-assets` |
 | `/ai/{key}` | `afu-ai-assets` |
 | `/ads/{key}` | `afu-ads-assets` |
-| `/{legacy-key}` | `afuchat-media` |
+| `/{legacy-key}` | `afuchat-media` (`LEGACY_MEDIA`) |
+
+`CHAT_ASSETS` and `LEGACY_MEDIA` are separate Worker bindings to the same R2
+bucket. AfuChat uploads and legacy root URLs therefore share storage; URL
+formats remain distinct, and no objects were copied to make this change.
 
 Product namespace roots such as `/chat` and `/chat/` are not object keys. An
 unknown first segment is treated as a legacy key to preserve older root URLs;

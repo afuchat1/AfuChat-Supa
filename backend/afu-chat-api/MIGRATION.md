@@ -12,8 +12,8 @@ endpoint-by-endpoint API contract.
 ## Current live ownership
 
 - `afuchat-api` owns `api.afuchat.com/v1/chat/*`, including the canonical
-  `/v1/chat/storage/*` routes, and `cdn.afuchat.com/chat/*`. It preserves the
-  existing media handler and R2 binding while serving the chat API.
+  `/v1/chat/storage/*` routes. Its `AFUCHAT_ASSETS` binding points to
+  `afuchat-media`, shared with AfuChat's CDN and legacy media paths.
 - The former `/v1/storage*` and `/chat/*` API aliases are removed. New clients
   must use `/v1/chat/storage/*`; no compatibility redirect or proxy remains.
 - `afuauth-api` owns `api.afuchat.com/v1/auth/*`. Its canonical identifier
@@ -23,13 +23,14 @@ endpoint-by-endpoint API contract.
 - AfuCloud, AfuMail, AfuAI, and AfuAds each retain their own versioned API and
   CDN namespaces and product-specific R2 buckets. Their route ownership was
   checked; their service health was not changed or brought into AfuChat scope.
-- `cdn.afuchat.com` at the root remains an R2 custom domain for
-  `afuchat-media`. The more-specific `/chat/*` Worker route retains its
-  existing `AFUCHAT_ASSETS` binding to that same bucket.
+- `afu-cdn` owns `cdn.afuchat.com/*`. Its `CHAT_ASSETS` and `LEGACY_MEDIA`
+  bindings both point to `afuchat-media`; `/chat/*` and unprefixed legacy URLs
+  retain separate URL paths while using the same physical bucket.
 
-The root `api.afuchat.com/` route remains owned by the separate `afu-api`
-gateway. There is no generic API catch-all. Keep legacy URL parsing for stored
-data separate from outgoing API requests, which must use canonical routes.
+The existing `api.afuchat.com/*` fallback remains owned by the separate
+`afu-api` gateway; product-specific API routes remain with their Workers. Keep
+legacy URL parsing for stored data separate from outgoing API requests, which
+must use canonical routes.
 
 ## Database and compatibility inventory
 
@@ -76,20 +77,21 @@ Worker integration.
   1,531,320,634 bytes in `afuchat-media`; no new object inventory was run for
   this integration. The bucket has several product/media categories, so do not
   bulk-copy it without confirming per-prefix ownership.
-- The existing `cdn.afuchat.com` custom domain maps to `afuchat-media` at the
-  root. Keep this mapping intact. `/chat/*` is a separate path-specific route
-  that must retain its `afuchat-media` bucket binding.
+- The existing `cdn.afuchat.com` R2 custom domain remains attached to
+  `afuchat-media`. The active `afu-cdn` Worker handles both root legacy paths
+  and `/chat/*` through separate bindings to that same bucket.
 - `img.afuchat.com` remains mapped to `afucloud-images`.
 - The mobile Supabase client uses the current shared Supabase URL. Chat and
   media-storage API calls use `/v1/chat/*`; media-session verification uses
   AfuAuth `/v1/auth/session`.
-- The app normalizes legacy `/v1/storage/{key}` and `/chat/{key}` URLs. The new
-  `/chat/*` Worker accepts only `containers/...` keys, while legacy objects
-  remain in `afuchat-media` and the root CDN custom domain. The mobile resolver
-  has been corrected in source to keep legacy keys on the root CDN and send
-  only `containers/...` keys to `/chat/`. This is not live in already-released
-  app builds until they are rebuilt/released.
-- No media copy or storage migration is part of the AfuChat/AfuAuth connection.
+- The app normalizes legacy `/v1/storage/{key}` and `/chat/{key}` URLs. The
+  mobile resolver keeps legacy keys on the CDN root and sends `containers/...`
+  keys under `/chat/`; the two URL forms now use the same physical
+  `afuchat-media` bucket. This is not live in already-released app builds until
+  they are rebuilt/released.
+- On 2026-10-06, `afu-chat-assets` was verified to contain zero objects, both
+  AfuChat bindings were switched to `afuchat-media`, and the empty bucket was
+  deleted. No existing objects were copied or moved.
 - The user confirmed AfuChat owns its app routes under `/v1/chat/*`, including
   status, payments, account export, and videos. AI is a separate product owned
   by `afuai-api` under `/v1/ai/*`. Do not add a generic `/v1/*` route.
@@ -117,17 +119,20 @@ Worker integration.
   shared Supabase identity; do not create product-specific user tables or
   tokens.
 
-## Gates before production routing
+## Storage and routing guardrails
 
 1. Keep the current shared Supabase project and its `public` compatibility
    views/RPCs; do not add a schema migration for this Worker connection.
-2. Keep the legacy root CDN mapping for old keys. No broad R2 copy is planned;
-   any future copy must be separately approved, prefix-scoped, count/byte
-   verified, and reversible by retaining the source.
+2. Keep the legacy root CDN mapping for old keys. AfuChat and legacy media
+   currently share `afuchat-media`; any future separation or object copy must be
+   separately approved, prefix-scoped, count/byte verified, and reversible by
+   retaining the source.
 3. Leave unrelated `/v1/*` handlers and the other product APIs unchanged.
 
 ## Rollback boundary
 
-Rollback restores the prior Worker modules and removes only routes created by
-this cutover. No Supabase schema, user, or R2 object is changed. Keep the
-existing R2 bucket binding and root CDN mapping for legacy keys.
+The prior `afu-chat-assets` bucket was empty when deleted. A rollback must not
+restore a binding to that deleted bucket; create a replacement bucket and
+explicitly migrate data only if separation is needed again. Existing
+`afuchat-media` objects, the root CDN mapping, Supabase schema, and users were
+not changed.

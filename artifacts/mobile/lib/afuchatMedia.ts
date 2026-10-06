@@ -17,8 +17,8 @@ function canonicalMediaUrl(key: string, suffix = ""): string | null {
   if (!normalized || normalized.split("/").some((part) => !part || part === "." || part === "..")) {
     return null;
   }
-  // New container objects live in the isolated /chat Worker bucket. Legacy
-  // object keys remain in the original bucket served by the CDN root domain.
+  // New container objects use the /chat Worker path; legacy keys use the CDN
+  // root path. Both bindings currently address afuchat-media.
   const base = normalized.startsWith(CONTAINERS_KEY_PREFIX) ? CDN_BASE : CDN_ROOT;
   return `${base}/${normalized.split("/").map(encodeURIComponent).join("/")}${suffix}`;
 }

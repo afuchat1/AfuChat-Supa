@@ -8,7 +8,8 @@ const ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de";
 const WORKER_NAME = "afuchat-api";
 const AUTH_WORKER_NAME = "afuauth-api";
 const ZONE_NAME = "afuchat.com";
-const CHAT_ASSETS_BUCKET = "afu-chat-assets";
+const PREVIOUS_CHAT_ASSETS_BUCKET = "afu-chat-assets";
+const CHAT_ASSETS_BUCKET = "afuchat-media";
 const REQUIRED_ROUTES = [
   "api.afuchat.com/v1/chat/*",
 ];
@@ -293,7 +294,7 @@ async function assertProductionPostflight() {
   const deployedBindings = deployedSettings.result?.bindings || [];
   const assetsBinding = deployedBindings.find((binding) => binding.name === "AFUCHAT_ASSETS");
   if (assetsBinding?.type !== "r2_bucket" || assetsBinding.bucket_name !== CHAT_ASSETS_BUCKET) {
-    throw new Error("The production Worker is not bound to the dedicated AfuChat assets bucket.");
+    throw new Error(`The production Worker is not bound to ${CHAT_ASSETS_BUCKET}.`);
   }
   const authBinding = deployedBindings.find((binding) => binding.name === "AFUAUTH_API");
   if (authBinding?.type !== "service" || authBinding.service !== AUTH_WORKER_NAME) {
@@ -316,14 +317,15 @@ const settingsResponse = await getJson(`/${WORKER_NAME}/settings`, "Read current
 const settings = settingsResponse.result;
 const bindings = Array.isArray(settings?.bindings) ? settings.bindings : [];
 const byName = new Map(bindings.map((binding) => [binding.name, binding]));
+const currentAssetsBinding = byName.get("AFUCHAT_ASSETS");
 
 if (
-  byName.get("AFUCHAT_ASSETS")?.type !== "r2_bucket" ||
-  byName.get("AFUCHAT_ASSETS")?.bucket_name !== CHAT_ASSETS_BUCKET ||
+  currentAssetsBinding?.type !== "r2_bucket" ||
+  ![PREVIOUS_CHAT_ASSETS_BUCKET, CHAT_ASSETS_BUCKET].includes(currentAssetsBinding.bucket_name) ||
   byName.get("SUPABASE_URL")?.type !== "plain_text" ||
   byName.get("SUPABASE_ANON_KEY")?.type !== "plain_text"
 ) {
-  throw new Error("The existing Worker does not match the expected AfuChat deployment target; deployment stopped.");
+  throw new Error("The existing Worker does not match the expected AfuChat storage migration; deployment stopped.");
 }
 const subdomainResponse = await getJson(`/${WORKER_NAME}/subdomain`, "Read Worker subdomain settings");
 if (subdomainResponse.result?.enabled !== false) {
@@ -473,6 +475,7 @@ if (!APPLY) {
     createsMissingCanonicalRoutes: routeState.routePlan.some(({ action }) => action === "create"),
     routes: routeState.routePlan,
     workersDevEnabled: false,
+    currentAssetBucket: currentAssetsBinding.bucket_name,
     targetAssetBucket: CHAT_ASSETS_BUCKET,
     preservedBindings: apiSettings.bindings.map(({ name, type, bucket_name }) => ({
       name,
@@ -550,7 +553,7 @@ console.log(JSON.stringify({
     "unauthenticated rejection",
     "AfuAuth shared-session rejection",
     "storage handler route",
-    "dedicated AfuChat assets bucket binding",
+    "shared AfuChat/legacy media bucket binding",
     "canonical chat API and storage routing",
   ],
   modules: Object.fromEntries(

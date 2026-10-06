@@ -2,7 +2,7 @@
 
 AfuChat is a product separate from AfuCloud. AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site.
 
-The Afu ecosystem shares the Afu Account, `api.afuchat.com` hostname, `cdn.afuchat.com` hostname, and Supabase project, but each Afu product is separate. Product API and CDN paths go directly to their product Workers and isolated R2 buckets. `afu-api` owns only the exact `api.afuchat.com/` root gateway route. The mobile-facing product Workers maintained in this workspace are `afuchat-api`, `afuauth-api`, and `afuai-api`.
+The Afu ecosystem shares the Afu Account, `api.afuchat.com` hostname, `cdn.afuchat.com` hostname, and Supabase project, but each Afu product is separate. Product API and CDN paths go to their product Workers. AfuChat currently shares `afuchat-media` between `/chat/*` objects and unprefixed legacy URLs; other product media uses product-specific R2 buckets. `afu-api` owns the existing API-host fallback; product API routes remain unchanged by the AfuChat bucket switch. The mobile-facing product Workers maintained in this workspace are `afuchat-api`, `afuauth-api`, and `afuai-api`.
 
 This Repl owns the AfuChat mobile app and its gateway/AfuChat/AfuAuth/AfuAI Worker sources. AfuCloud, AfuAds, and AfuMail Worker source is intentionally not maintained here; those Workers and their data remain in Cloudflare. AfuChat business and storage APIs use `/v1/chat/*`; its product CDN path is `cdn.afuchat.com/chat/*`. Preserve existing root `cdn.afuchat.com` object URLs and `img.afuchat.com`.
 
@@ -131,17 +131,19 @@ pnpm run typecheck
 - A production probe on 2026-10-06 found `/v1/ai/healthz` returns `503` because
   `ENGAGERA_API_KEY` is not configured in the AfuAI Worker. Configure it through
   the approved secret flow before claiming AI production readiness.
-- Each product uses its own explicit bucket: AfuChat `afu-chat-assets`, AfuMail
-  `afu-mail-assets`, AfuCloud `afucloud-images`, AfuAI `afu-ai-assets`, and
-  AfuAds `afu-ads-assets`. The root `cdn.afuchat.com` R2 custom domain remains
-  attached to `afuchat-media` for existing URLs; `img.afuchat.com` remains
-  attached to `afucloud-images`. Do not copy or delete existing objects as part
-  of route cleanup.
-- On 2026-10-06, the six product API routes, five product CDN routes, exact
-  root gateway, and `cloud.afuchat.com/*` → `afucloud-web` route were verified.
-  The four obsolete API aliases were removed. AfuCloud, AfuMail, AfuAI, and
-  AfuAds health/implementation were not changed after their route and bucket
-  ownership was confirmed.
+- AfuChat's `AFUCHAT_ASSETS` API binding and `CHAT_ASSETS` CDN binding use
+  `afuchat-media`, which also serves unprefixed legacy URLs through
+  `LEGACY_MEDIA`. AfuMail uses `afu-mail-assets`, AfuCloud uses
+  `afucloud-images`, AfuAI uses `afu-ai-assets`, and AfuAds uses
+  `afu-ads-assets`. The root `cdn.afuchat.com` R2 custom domain remains attached
+  to `afuchat-media`; `img.afuchat.com` remains attached to `afucloud-images`.
+  Do not copy or delete objects as part of route cleanup.
+- On 2026-10-06, CDN routing was consolidated to `cdn.afuchat.com/*` →
+  `afu-cdn`; its product prefixes use the verified R2 bindings. The existing
+  API route inventory (the `afu-api` fallback plus product API routes) and
+  `cloud.afuchat.com/*` → `afucloud-web` were left unchanged by the CDN and
+  storage changes. AfuCloud, AfuMail, AfuAI, and AfuAds health/implementation
+  were not changed after their route and bucket ownership was confirmed.
 - The live Supabase PostgREST API exposes `public` and `chat` schemas but does
   not expose `afuchat`. The available Supabase management token cannot query
   the database, and anonymous PostgREST access cannot migrate protected data.

@@ -40,7 +40,7 @@ const requiredWorkers = [
 ];
 
 const productStorageBindings = [
-  { worker: "afuchat-api", name: "AFUCHAT_ASSETS", bucket: "afu-chat-assets" },
+  { worker: "afuchat-api", name: "AFUCHAT_ASSETS", bucket: "afuchat-media" },
   { worker: "afumail-api", name: "MAIL_ASSETS", bucket: "afu-mail-assets" },
   { worker: "afucloud-api", name: "IMAGES_BUCKET", bucket: "afucloud-images" },
   { worker: "afuai-api", name: "AI_ASSETS", bucket: "afu-ai-assets" },
@@ -48,7 +48,7 @@ const productStorageBindings = [
 ];
 
 const afuCdnBindings = [
-  { name: "CHAT_ASSETS", bucket: "afu-chat-assets" },
+  { name: "CHAT_ASSETS", bucket: "afuchat-media" },
   { name: "CLOUD_ASSETS", bucket: "afucloud-images" },
   { name: "MAIL_ASSETS", bucket: "afu-mail-assets" },
   { name: "AI_ASSETS", bucket: "afu-ai-assets" },
@@ -148,14 +148,14 @@ async function assertProductWorkersAndBuckets() {
       binding?.type !== "r2_bucket" ||
       binding.bucket_name !== bucket
     ) {
-      throw new Error(`${worker} must bind ${name} to its isolated ${bucket} bucket.`);
+      throw new Error(`${worker} must bind ${name} to the configured ${bucket} bucket.`);
     }
   }
 
   const cdnSettings = settingsByWorker.get("afu-cdn");
   const cdnR2Bindings = (cdnSettings?.bindings || []).filter((item) => item.type === "r2_bucket");
   if (cdnR2Bindings.length !== afuCdnBindings.length) {
-    throw new Error("afu-cdn must bind exactly the five product buckets and the legacy media bucket.");
+    throw new Error("afu-cdn must have exactly six configured R2 bindings.");
   }
   for (const { name, bucket } of afuCdnBindings) {
     const binding = cdnR2Bindings.find((item) => item.name === name);

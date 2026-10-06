@@ -11,7 +11,7 @@ routes = [
 
 [[r2_buckets]]
 binding = "AFUCHAT_ASSETS"
-bucket_name = "afu-chat-assets"
+bucket_name = "afuchat-media"
 
 [[services]]
 binding = "AFUAUTH_API"

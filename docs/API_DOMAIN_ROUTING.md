@@ -1,7 +1,7 @@
 # Production API and CDN routing
 
-**Live routing baseline checked:** 2026-10-06, before the `afu-cdn` cutover
-**Target CDN owner:** `afu-cdn` (source and route plan are staged locally; not deployed)
+**Live routing and binding baseline checked:** 2026-10-06, after the CDN cutover
+**CDN owner:** `afu-cdn` (deployed and active)
 **Scope:** Cloudflare Worker routes, product R2 bindings, and retained object
 domains. Product health is not implied by correct route ownership.
 
@@ -10,7 +10,7 @@ domains. Product health is not implied by correct route ownership.
 | Product | API namespace → Worker | CDN path → `afu-cdn` binding | R2 bucket |
 |---|---|---|---|
 | AfuAuth | `/v1/auth/*` → `afuauth-api` | None | None |
-| AfuChat | `/v1/chat/*` → `afuchat-api` | `/chat/{key}` → `CHAT_ASSETS` | `afu-chat-assets` |
+| AfuChat | `/v1/chat/*` → `afuchat-api` | `/chat/{key}` → `CHAT_ASSETS` | `afuchat-media` (shared with legacy URLs) |
 | AfuMail | `/v1/mail/*` → `afumail-api` | `/mail/{key}` → `MAIL_ASSETS` | `afu-mail-assets` |
 | AfuCloud | `/v1/cloud/*` → `afucloud-api` | `/cloud/{key}` → `CLOUD_ASSETS` | `afucloud-images` |
 | AfuAI | `/v1/ai/*` → `afuai-api` | `/ai/{key}` → `AI_ASSETS` | `afu-ai-assets` |
@@ -23,9 +23,10 @@ Worker serves only public GET, HEAD, and OPTIONS requests and does not handle
 API operations.
 
 Unprefixed legacy paths continue to read from `LEGACY_MEDIA`
-(`afuchat-media`). Unknown prefixes fall back to that legacy key space so
-existing root URLs remain available. Future product prefixes must be added to
-the dispatch map and assigned their own R2 binding.
+(`afuchat-media`). AfuChat's `CHAT_ASSETS` binding points to that same physical
+bucket. Unknown prefixes fall back to the legacy key space so existing root
+URLs remain available. Future product prefixes must be added to the dispatch
+map and assigned an R2 binding.
 
 The deployed AfuCloud Worker was inspected read-only. Its `R2_PUBLIC_URL` is
 `cdn.afuchat.com/cloud`, and the active `/cloud/*` handler reads from
@@ -34,17 +35,18 @@ moves to `afu-cdn`.
 
 ## Root gateway and retained domains
 
-The API root remains a separate gateway route:
+The existing API route inventory was left unchanged by the CDN and storage
+changes:
 
 | Host and path | Owner | Behavior |
 |---|---|---|
-| `api.afuchat.com/` | `afu-api` | Forwards only `/` through the `AFUAUTH_API` service binding. |
+| `api.afuchat.com/*` | `afu-api` | Existing API-host fallback; product-specific routes remain owned by their Workers. |
 | `cloud.afuchat.com/*` | `afucloud-web` | Existing AfuCloud website route; not an API route. |
 
-The root route is not a product API namespace. No generic API catch-all is
-configured. The proxied exact DNS record for `api.afuchat.com` remains pointed
-at the reserved placeholder origin so unassigned paths do not fall through to
-the wildcard Vercel origin.
+No API route, including AfuAuth, was changed for this storage update. The
+proxied exact DNS record for `api.afuchat.com` remains pointed at the reserved
+placeholder origin so requests do not fall through to the wildcard Vercel
+origin.
 
 These existing R2 custom domains remain attached to their current buckets to
 preserve old object URLs:
@@ -54,7 +56,9 @@ preserve old object URLs:
 | `cdn.afuchat.com` | `afuchat-media` | The original R2 custom domain remains attached. After cutover, `afu-cdn` handles requests and reads unprefixed legacy object keys through `LEGACY_MEDIA`. |
 | `img.afuchat.com` | `afucloud-images` | Existing AfuCloud compatibility URLs remain on the same bucket. |
 
-No bucket, object, DNS record, or custom domain was deleted, moved, or copied.
+The empty `afu-chat-assets` bucket was deleted after its zero-object inventory
+was verified and both AfuChat bindings were switched. No existing objects were
+copied or moved; the retained custom domains and other buckets were unchanged.
 
 ## Removed routes
 
@@ -79,45 +83,32 @@ redirected or proxied.
 
 ## Production verification and cutover status
 
-The production behavior below was verified read-only on 2026-10-06 before this
-CDN consolidation was staged:
+Verified on 2026-10-06 after the CDN and AfuChat storage changes:
 
-The following behavior was verified against production on 2026-10-06 before the
-current hardening changes. The hardening itself has not been deployed or
-production-verified:
+- `cdn.afuchat.com/*` is owned by `afu-cdn`; no product-specific CDN routes
+  remain. The exact API route inventory was unchanged.
+- `afuchat-api` binds `AFUCHAT_ASSETS` to `afuchat-media`.
+- `afu-cdn` binds both `CHAT_ASSETS` and `LEGACY_MEDIA` to `afuchat-media`;
+  other product bindings remain on their own buckets.
+- Cloudflare's object listing returned zero objects for `afu-chat-assets`
+  before it was deleted.
+- A live request for a nonexistent CDN key returned the Worker’s generic 404
+  with `X-AfuCdn-Request-Id`, confirming the CDN host reaches `afu-cdn`. This
+  probe does not verify bytes for a real media object.
+- `img.afuchat.com` remains attached to `afucloud-images`; the Cloud site route
+  and API routes were not changed.
 
-- `GET https://api.afuchat.com/` → `200`, served through `afu-api` and its
-  AfuAuth service binding.
-- `GET /v1/chat/healthz` → `200` with product health only; Worker identifiers are not returned.
-- `GET /v1/chat/status` → `200 { ok, timestamp }`; provider and database details remain private.
-- CORS preflight for `/v1/chat/conversations` → `204` with the AfuChat origin.
-- Unauthenticated `/v1/chat/storage/usage` and invalid-session
-  `/v1/chat/conversations` → `401`.
-- `GET https://cdn.afuchat.com/chat/` → generic `404` with an AfuChat request
-  ID under the former per-product route.
-- Read-only `HEAD` checks for three existing public legacy objects on the root
-  `cdn.afuchat.com` custom domain returned `200` (two images and one video).
-- Before this change, all six API routes, five per-product CDN routes, five
-  product R2 bindings, the root gateway, and the AfuCloud website route had the
-  expected owners.
-
-The new `afu-cdn` Worker and route consolidation have not been deployed or
-production-verified. No Cloudflare routes, DNS records, buckets, or objects
-were changed while preparing this implementation. The previous `/chat/` probe
-did not verify object delivery from `afu-chat-assets`, which had no objects at
-audit time. Video registration and manifest endpoints remain explicit `501`
-stubs until a video-processing backend is configured; they are not reported
-as healthy processing endpoints.
+Video registration and manifest endpoints remain explicit `501` stubs until a
+video-processing backend is configured; they are not reported as healthy
+processing endpoints.
 
 ## Change safety
 
-`backend/route-management/reconcile.mjs` defaults to a read-only dry run. It
-now requires the deployed `afu-cdn` Worker and all six exact R2 bindings before
-reporting a safe plan. Use `--apply` only for an approved route reconciliation.
-It verifies exact route ownership, product storage bindings, retained custom
-domains, API DNS fail-closed behavior, and website/root routes before changing
-routes. It creates canonical routes before deleting obsolete API/CDN routes
-and rolls back route changes if post-deployment verification fails.
+`backend/route-management/reconcile.mjs` defaults to a read-only dry run. Its
+`--cdn-only` mode changes only CDN routes and validates all six `afu-cdn`
+bindings, retained custom domains, the API DNS fail-closed behavior, and the
+website route before and after a CDN change. The unscoped mode manages the
+broader API and CDN route set separately.
 
 Do not delete or migrate product data as part of route cleanup. Route ownership
 does not certify product health. Per the product-scope decision, once a
