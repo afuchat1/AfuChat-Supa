@@ -1,5 +1,8 @@
+import { handleR2CdnRequest, type R2CdnBucket } from "../../shared/r2-cdn.ts";
+
 interface Env {
   ENGAGERA_API_KEY?: string;
+  AI_ASSETS: R2CdnBucket;
   AFUAUTH_API?: {
     fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   };
@@ -101,6 +104,9 @@ async function verifySharedSession(request: Request, env: Env): Promise<Response
 
 async function handleAiRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+  if (url.hostname.toLowerCase() === "cdn.afuchat.com" && url.pathname.startsWith("/ai/")) {
+    return handleR2CdnRequest(request, env.AI_ASSETS, "ai");
+  }
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(request) });
   if (url.pathname === "/healthz" || url.pathname === "/v1/ai/healthz") {
     const configured = Boolean(env.ENGAGERA_API_KEY?.trim());

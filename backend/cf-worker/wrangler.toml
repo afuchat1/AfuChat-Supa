@@ -1,7 +1,6 @@
-# Legacy mixed production Worker: it currently owns AfuCloud routes plus
-# AfuChat gateway/storage handlers. Do not rebind or overwrite it until the
-# separate AfuChat Worker and compatibility routing have been verified.
-# Target architecture: one product Worker per product behind the shared gateway.
+# AfuCloud API and CDN Worker. Legacy gateway/storage aliases remain active for
+# existing AfuChat clients; keep them until their consumers are migrated.
+# The /cloud CDN route reads only from afucloud-images.
 name = "afucloud-api"
 main = "src/index.ts"
 compatibility_date = "2025-07-01"
@@ -36,7 +35,7 @@ AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdX
 R2_BUCKET_NAME = "afucloud-images"
 CLOUDFLARE_ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de"
 AFU_CDN_TARGET = "cdn.afuchat.com"
-R2_PUBLIC_URL = "https://cdn.afuchat.com"
+R2_PUBLIC_URL = "https://cdn.afuchat.com/cloud"
 CLOUDFLARE_R2_ACCESS_KEY_ID = "40916680c4892042d4ce49396ef62819"
 NODE_ENV = "production"
 

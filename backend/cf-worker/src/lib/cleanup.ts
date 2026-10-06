@@ -7,14 +7,55 @@ type ExpiredStory = {
 };
 
 function storageKey(env: Env, mediaUrl: string | null | undefined): string | null {
-  const publicBase = (env.R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
-  if (!publicBase || typeof mediaUrl !== "string" || !mediaUrl.startsWith(`${publicBase}/`)) {
+  if (typeof mediaUrl !== "string" || !mediaUrl) return null;
+
+  let url: URL;
+  try {
+    url = new URL(mediaUrl);
+  } catch {
     return null;
   }
 
-  const key = decodeURIComponent(mediaUrl.slice(publicBase.length + 1));
-  if (!key || key.split("/").includes("..")) return null;
-  return key;
+  const configuredBase = env.R2_PUBLIC_URL ? new URL(env.R2_PUBLIC_URL) : null;
+  const configuredPath = configuredBase?.pathname.replace(/\/+$/, "") || "";
+  const configuredPrefix = `${configuredPath}/`;
+  let encodedKey: string | null = null;
+
+  if (
+    configuredBase &&
+    url.origin === configuredBase.origin &&
+    (configuredPath === "" || url.pathname.startsWith(configuredPrefix))
+  ) {
+    encodedKey = configuredPath
+      ? url.pathname.slice(configuredPrefix.length)
+      : url.pathname.replace(/^\/+/, "");
+  } else if (url.hostname.toLowerCase() === "cdn.afuchat.com") {
+    const legacyPath = url.pathname.replace(/^\/+/, "");
+    const [firstSegment, ...remaining] = legacyPath.split("/");
+    if (firstSegment === "cloud") {
+      encodedKey = remaining.join("/");
+    } else if (!["chat", "mail", "ai", "ads"].includes(firstSegment || "")) {
+      encodedKey = legacyPath;
+    }
+  }
+
+  if (!encodedKey) return null;
+  try {
+    const segments = encodedKey.split("/").map((segment) => decodeURIComponent(segment));
+    if (
+      segments.some((segment) =>
+        !segment ||
+        segment === "." ||
+        segment === ".." ||
+        /[\/\\\u0000-\u001f\u007f]/.test(segment),
+      )
+    ) {
+      return null;
+    }
+    return segments.join("/");
+  } catch {
+    return null;
+  }
 }
 
 export async function cleanupExpiredStories(env: Env): Promise<{

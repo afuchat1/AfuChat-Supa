@@ -39,7 +39,8 @@ export async function generateUploadUrl(key: string, contentType: string, env: E
  */
 export function getPublicUrl(key: string, env: Env): string {
   if (env.R2_PUBLIC_URL) {
-    return `${env.R2_PUBLIC_URL.replace(/\/$/, "")}/${key}`;
+    const objectPath = key.split("/").map(encodeURIComponent).join("/");
+    return `${env.R2_PUBLIC_URL.replace(/\/+$/, "")}/${objectPath}`;
   }
   return `/v1/storage/${encodeURIComponent(key)}`;
 }

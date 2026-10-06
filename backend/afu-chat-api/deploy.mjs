@@ -8,6 +8,8 @@ const ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de";
 const WORKER_NAME = "afuchat-api";
 const AUTH_WORKER_NAME = "afuauth-api";
 const ZONE_NAME = "afuchat.com";
+const CHAT_ASSETS_BUCKET = "afu-chat-assets";
+const LEGACY_MEDIA_BUCKET = "afuchat-media";
 const REQUIRED_ROUTES = [
   "api.afuchat.com/chat/*",
   "api.afuchat.com/v1/chat/*",
@@ -317,8 +319,8 @@ async function assertProductionPostflight() {
   const deployedSettings = await getJson(`/${WORKER_NAME}/settings`, "Verify API Worker settings");
   const deployedBindings = deployedSettings.result?.bindings || [];
   const assetsBinding = deployedBindings.find((binding) => binding.name === "AFUCHAT_ASSETS");
-  if (assetsBinding?.type !== "r2_bucket" || assetsBinding.bucket_name !== "afuchat-media") {
-    throw new Error("The production Worker no longer has its existing media bucket binding.");
+  if (assetsBinding?.type !== "r2_bucket" || assetsBinding.bucket_name !== CHAT_ASSETS_BUCKET) {
+    throw new Error("The production Worker is not bound to the dedicated AfuChat assets bucket.");
   }
   const authBinding = deployedBindings.find((binding) => binding.name === "AFUAUTH_API");
   if (authBinding?.type !== "service" || authBinding.service !== AUTH_WORKER_NAME) {
@@ -344,6 +346,7 @@ const byName = new Map(bindings.map((binding) => [binding.name, binding]));
 
 if (
   byName.get("AFUCHAT_ASSETS")?.type !== "r2_bucket" ||
+  ![LEGACY_MEDIA_BUCKET, CHAT_ASSETS_BUCKET].includes(byName.get("AFUCHAT_ASSETS")?.bucket_name) ||
   byName.get("SUPABASE_URL")?.type !== "plain_text" ||
   byName.get("SUPABASE_ANON_KEY")?.type !== "plain_text"
 ) {
@@ -456,6 +459,11 @@ if (
   throw new Error("The existing AFUAUTH_API binding points to an unexpected Worker.");
 }
 const chatBindings = bindings.map((binding) => ({ ...binding }));
+const assetsBinding = chatBindings.find((binding) => binding.name === "AFUCHAT_ASSETS");
+if (!assetsBinding || assetsBinding.type !== "r2_bucket") {
+  throw new Error("The AfuChat assets bucket binding is missing or invalid.");
+}
+assetsBinding.bucket_name = CHAT_ASSETS_BUCKET;
 if (!authServiceBinding) {
   chatBindings.push({
     type: "service",
@@ -495,7 +503,12 @@ if (!APPLY) {
     addsChatCompatibilityRoute: true,
     routes: routeState.routePlan,
     workersDevEnabled: false,
-    preservedBindings: apiSettings.bindings.map(({ name, type }) => ({ name, type })),
+    targetAssetBucket: CHAT_ASSETS_BUCKET,
+    preservedBindings: apiSettings.bindings.map(({ name, type, bucket_name }) => ({
+      name,
+      type,
+      ...(type === "r2_bucket" ? { bucket_name } : {}),
+    })),
     modules: Object.fromEntries(
       Object.entries(modules).map(([name, content]) => [name, Buffer.byteLength(content)]),
     ),
@@ -571,7 +584,7 @@ console.log(JSON.stringify({
     "AfuAuth shared-session rejection",
     "storage handler route",
     "legacy CDN asset route",
-    "existing media bucket retained",
+    "dedicated AfuChat assets bucket binding",
     "chat compatibility route",
   ],
   modules: Object.fromEntries(

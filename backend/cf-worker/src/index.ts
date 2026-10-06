@@ -20,6 +20,7 @@ import { proxySupabaseRequest } from "./routes/supabase-gateway";
 import appFunctionRoutes from "./routes/app-functions";
 import paymentRoutes from "./routes/payments";
 import { cleanupExpiredStories } from "./lib/cleanup";
+import { handleR2CdnRequest } from "../../shared/r2-cdn.ts";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -63,6 +64,9 @@ app.use("*", async (c, next) => {
   c.res.headers.set("X-AfuCloud-Version", "v1");
   await next();
 });
+
+// Public AfuCloud assets use their own bucket behind the shared CDN hostname.
+app.all("/cloud/*", (c) => handleR2CdnRequest(c.req.raw, c.env.IMAGES_BUCKET, "cloud"));
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get("/", (c) =>

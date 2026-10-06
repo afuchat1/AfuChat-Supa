@@ -1,3 +1,9 @@
+import { handleR2CdnRequest, type R2CdnBucket } from "../../shared/r2-cdn.ts";
+
+interface Env {
+  MAIL_ASSETS: R2CdnBucket;
+}
+
 function json(request: Request, body: unknown, status = 200): Response {
   const headers = new Headers({
     "Content-Type": "application/json; charset=utf-8",
@@ -21,8 +27,12 @@ function json(request: Request, body: unknown, status = 200): Response {
 }
 
 export default {
-  fetch(request: Request) {
-    const path = new URL(request.url).pathname;
+  fetch(request: Request, env: Env) {
+    const url = new URL(request.url);
+    if (url.hostname.toLowerCase() === "cdn.afuchat.com" && url.pathname.startsWith("/mail/")) {
+      return handleR2CdnRequest(request, env.MAIL_ASSETS, "mail");
+    }
+    const path = url.pathname;
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: json(request, {}).headers });
     if (path === "/healthz" || path === "/v1/mail/healthz") {
       return json(request, { status: "ok", worker: "afumail-api", version: "v1" });
