@@ -1,0 +1,215 @@
+Update the Afu storage/CDN configuration so that all current product storage buckets use "cdn.afuchat.com" for object delivery, with the product type as the first path segment.
+
+If any current product bucket is missing, create it as a placeholder without deleting, renaming, or migrating existing buckets or objects. Link each placeholder or existing bucket to the exact product routing described below so it is ready for future use. Do not create buckets or prefixes for products that do not currently exist.
+
+Required CDN URL structure
+
+All CDN object URLs must follow:
+
+https://cdn.afuchat.com/{product}/{object}
+
+The exact product prefixes must correspond to the current Afu products:
+
+chat
+cloud
+mail
+ai
+ads
+
+Examples:
+
+https://cdn.afuchat.com/chat/<object>
+https://cdn.afuchat.com/cloud/<object>
+https://cdn.afuchat.com/mail/<object>
+https://cdn.afuchat.com/ai/<object>
+https://cdn.afuchat.com/ads/<object>
+
+Each prefix must map only to its corresponding product bucket:
+
+AfuChat bucket
+    ↓
+cdn.afuchat.com/chat/<object>
+
+AfuCloud bucket
+    ↓
+cdn.afuchat.com/cloud/<object>
+
+AfuMail bucket
+    ↓
+cdn.afuchat.com/mail/<object>
+
+AfuAI bucket
+    ↓
+cdn.afuchat.com/ai/<object>
+
+AfuAds bucket
+    ↓
+cdn.afuchat.com/ads/<object>
+
+The CDN hostname is shared, but the underlying buckets must remain logically and operationally separated. A missing bucket must be created as a placeholder for its product and linked to the exact corresponding CDN prefix.
+
+Important distinction
+
+Do not interpret this as requiring one physical bucket for everything.
+
+The desired structure is:
+
+                   cdn.afuchat.com
+                          |
+          +---------------+---------------+
+          |               |               |
+        /chat           /cloud           /mail
+          |               |               |
+    AfuChat bucket   AfuCloud bucket   AfuMail bucket
+
+and similarly for:
+
+/ai
+/ads
+
+The URL prefix determines the product namespace; the storage layer determines which product bucket serves the object.
+
+API vs CDN
+
+Keep API operations separate from CDN delivery.
+
+API:
+
+api.afuchat.com/v1/chat/*
+api.afuchat.com/v1/cloud/*
+api.afuchat.com/v1/mail/*
+api.afuchat.com/v1/ai/*
+api.afuchat.com/v1/ads/*
+
+CDN:
+
+cdn.afuchat.com/chat/*
+cdn.afuchat.com/cloud/*
+cdn.afuchat.com/mail/*
+cdn.afuchat.com/ai/*
+cdn.afuchat.com/ads/*
+
+A CDN object request must not be routed through "/v1/*" merely to retrieve the object.
+
+Audit before changing anything
+
+First identify every existing storage bucket currently used by the Afu products. Also identify any product bucket that is missing and must be created as a placeholder.
+
+For each product and bucket, document:
+
+- Bucket name, or the placeholder bucket name if a bucket is missing
+- Owning product
+- Exact CDN prefix
+- Current CDN/custom domain
+- Current object URL format
+- Existing object path structure
+- Whether the bucket is public or private
+- Whether a Worker is currently involved in delivery
+- Whether existing URLs are actively used by applications
+- Whether the bucket is existing or a newly created placeholder
+
+Then configure the exact "cdn.afuchat.com/{product}/*" mapping for every current product.
+
+Existing data must be preserved
+
+Do not unnecessarily migrate, rename, or recreate existing buckets.
+
+Do not delete existing objects.
+
+Do not change object keys simply to satisfy the new URL structure.
+
+If existing objects can be served through the new CDN path using routing or custom-domain configuration, prefer that.
+
+If changing existing object URLs requires physically moving or renaming objects, stop and report the required migration before doing it.
+
+Placeholder buckets may be created only when a current product bucket is missing. They must be linked to the exact product CDN route and must not be used to replace an existing bucket without explicit approval.
+
+AfuCloud specifically
+
+Preserve the existing AfuCloud storage infrastructure and bucket(s), including:
+
+afucloud-images
+
+where applicable.
+
+The desired public CDN structure should become:
+
+cdn.afuchat.com/cloud/<object>
+
+without unnecessarily moving the underlying AfuCloud objects.
+
+Do not break "cloud.afuchat.com" or the AfuCloud API.
+
+If the AfuCloud bucket is missing in any environment, create the required placeholder only for that environment and link it specifically to "/cloud/".
+
+Existing img.afuchat.com
+
+Audit the existing:
+
+img.afuchat.com
+
+configuration and determine which existing applications or objects depend on it.
+
+Do not immediately delete or disable it.
+
+If existing URLs are still required for backward compatibility, keep them working while the new standardized CDN URLs are introduced.
+
+The target architecture for new and current object URLs should be:
+
+cdn.afuchat.com/{product}/{object}
+
+Verification
+
+After implementation, verify actual objects from every current product bucket. For a missing product bucket, verify that the placeholder bucket exists and that its exact product route resolves to that bucket without exposing another product's data.
+
+Test examples such as:
+
+https://cdn.afuchat.com/chat/<real-object>
+https://cdn.afuchat.com/cloud/<real-object>
+https://cdn.afuchat.com/mail/<real-object>
+https://cdn.afuchat.com/ai/<real-object>
+https://cdn.afuchat.com/ads/<real-object>
+
+using real existing objects where available.
+
+Confirm that each URL returns the correct object from the correct underlying bucket.
+
+Also verify:
+
+- correct "Content-Type"
+- correct caching behavior
+- no accidental API routing
+- no Vercel response
+- no cross-product bucket access
+- no broken existing object URLs
+- placeholder routes do not silently resolve to another product bucket
+- changing the product prefix cannot access another product's bucket
+
+Security
+
+A product must not be able to access another product's bucket merely by changing the URL prefix.
+
+For example:
+
+cdn.afuchat.com/chat/...
+
+must not provide arbitrary access to the Cloud bucket.
+
+Keep bucket permissions and Worker/storage authorization separate from the public URL structure. Each CDN prefix must have an explicit, isolated mapping to its own product bucket, including placeholder buckets.
+
+Documentation
+
+After completing the update, document the final CDN architecture in detail.
+
+Include a table containing:
+
+Product| CDN prefix| Physical bucket| Delivery method
+AfuChat| "/chat/"| actual bucket or documented placeholder bucket| actual implementation
+AfuCloud| "/cloud/"| actual bucket or documented placeholder bucket| actual implementation
+AfuMail| "/mail/"| actual bucket or documented placeholder bucket| actual implementation
+AfuAI| "/ai/"| actual bucket or documented placeholder bucket| actual implementation
+AfuAds| "/ads/"| actual bucket or documented placeholder bucket| actual implementation
+
+Use the actual bucket names, including any explicitly identified placeholder buckets, and the actual deployed configuration in the documentation.
+
+Do not invent bucket names or claim a mapping was completed unless it was actually configured and verified.
