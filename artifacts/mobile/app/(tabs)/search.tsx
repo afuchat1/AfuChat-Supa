@@ -786,9 +786,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
       setLensImageUri(asset.uri);
       setLensLoading(true);
-      const response = await fetch(`${getEdgeFnBase()}/ai/lens`, {
+      const response = await fetch(`${getEdgeFnBase()}/lens`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...edgeHeaders() },
+        headers: { "Content-Type": "application/json", ...await edgeHeaders() },
         body: JSON.stringify({ imageBase64: asset.base64, mimeType: asset.mimeType || "image/jpeg" }),
       });
       const payload = await response.json().catch(() => null);

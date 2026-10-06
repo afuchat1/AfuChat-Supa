@@ -1,21 +1,25 @@
-import { AFUCLOUD_API_URL } from "./env";
+import { AFUAI_API_URL } from "./env";
+import { getAfuChatAccessToken } from "./afuchatApi";
 
 /**
- * Returns the AfuCloud application API base URL.
+ * Returns the AfuAI API base URL.
  */
 function getEdgeFnBase(): string {
-  return `${AFUCLOUD_API_URL}/v1`;
+  return `${AFUAI_API_URL}/v1/ai`;
 }
 
-/** Common headers for public AfuCloud application routes. */
-function edgeHeaders(): Record<string, string> {
-  return {
+/** Attach the shared AfuAuth session to AfuAI requests. */
+async function edgeHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  const token = await getAfuChatAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 /**
- * Auth headers for AfuCloud routes that require the signed-in user's JWT.
+ * Auth headers for AfuAI routes that require the signed-in user's JWT.
  */
 export function edgeHeadersWithAuth(userAccessToken: string): Record<string, string> {
   return {
@@ -36,9 +40,9 @@ export async function askAi(prompt: string, systemPrompt?: string, options?: Ask
   }
   messages.push({ role: "user", content: prompt });
 
-  const response = await fetch(`${getEdgeFnBase()}/ai/reply`, {
+  const response = await fetch(`${getEdgeFnBase()}/reply`, {
     method: "POST",
-    headers: edgeHeaders(),
+    headers: await edgeHeaders(),
     body: JSON.stringify({
       messages,
       fast: options?.fast ?? false,
@@ -127,9 +131,9 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
   try {
-    const primary = await fetch(`${getEdgeFnBase()}/ai/reply`, {
+    const primary = await fetch(`${getEdgeFnBase()}/reply`, {
       method: "POST",
-      headers: edgeHeaders(),
+      headers: await edgeHeaders(),
       body: JSON.stringify({ audioUrl }),
     });
 
@@ -138,9 +142,9 @@ export async function transcribeAudio(audioUrl: string): Promise<string> {
       if (data.text !== undefined) return data.text || "";
     }
 
-    const fallback = await fetch(`${getEdgeFnBase()}/ai/transcribe`, {
+    const fallback = await fetch(`${getEdgeFnBase()}/transcribe`, {
       method: "POST",
-      headers: edgeHeaders(),
+      headers: await edgeHeaders(),
       body: JSON.stringify({ audioUrl }),
     });
     if (!fallback.ok) throw new Error(`Transcription failed: ${fallback.status}`);
@@ -322,5 +326,5 @@ export async function aiResearchCompanyAndGenerateAbout(ctx: JobAiContext): Prom
   );
 }
 
-/** Builds the AfuCloud application API base URL for screens with special payloads. */
+/** Builds the AfuAI API base URL for screens with special payloads. */
 export { getEdgeFnBase, edgeHeaders };

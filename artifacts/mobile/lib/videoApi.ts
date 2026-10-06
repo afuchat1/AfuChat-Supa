@@ -7,12 +7,12 @@
  *   pickBestSource      — choose the best rendition for the current device
  */
 import { supabase } from "./supabase";
-import { AFUCLOUD_API_URL, SUPABASE_URL } from "./env";
+import { AFUCHAT_API_URL, SUPABASE_URL } from "./env";
 
 // Video API calls must use the canonical public backend boundary.
 // The Worker currently does not expose a video-processing route; callers
 // retain the source-video fallback until that server-side pipeline is shipped.
-const EDGE_BASE: string = `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/videos`;
+const EDGE_BASE: string = `${AFUCHAT_API_URL.replace(/\/+$/, "")}/v1/chat/videos`;
 
 export interface VideoSource {
   codec: "h264" | "av1";

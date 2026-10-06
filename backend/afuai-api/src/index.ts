@@ -1,5 +1,8 @@
 interface Env {
   ENGAGERA_API_KEY?: string;
+  AFUAUTH_API?: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
 }
 
 const ALLOWED_METHODS = "GET, POST, OPTIONS";
@@ -61,14 +64,59 @@ async function readJson(request: Request): Promise<Record<string, any>> {
   }
 }
 
+async function verifySharedSession(request: Request, env: Env): Promise<Response | null> {
+  const authorization = request.headers.get("Authorization")?.trim() ?? "";
+  if (!/^Bearer\s+\S+$/i.test(authorization)) {
+    return json(request, { error: "A valid bearer token is required", worker: "afuai-api" }, 401);
+  }
+  if (!env.AFUAUTH_API) {
+    return json(request, { error: "Shared authentication service is not configured", worker: "afuai-api" }, 503);
+  }
+
+  const token = authorization.replace(/^Bearer\s+/i, "");
+  try {
+    const verified = await env.AFUAUTH_API.fetch(new Request("https://afuauth-api/v1/auth/session", {
+      method: "POST",
+      headers: { Authorization: authorization, Accept: "application/json" },
+    }));
+    const payload = await verified.json().catch(() => null) as {
+      user?: { id?: unknown };
+      accessToken?: unknown;
+    } | null;
+
+    if (verified.status === 401 || verified.status === 403) {
+      return json(request, { error: "Invalid or expired shared session", worker: "afuai-api" }, 401);
+    }
+    if (!verified.ok) {
+      return json(request, { error: "Shared authentication service is unavailable", worker: "afuai-api" }, 503);
+    }
+    if (typeof payload?.user?.id !== "string" || !payload.user.id || payload.accessToken !== token) {
+      return json(request, { error: "Shared authentication service returned an invalid session", worker: "afuai-api" }, 503);
+    }
+    return null;
+  } catch {
+    return json(request, { error: "Shared authentication service is unavailable", worker: "afuai-api" }, 503);
+  }
+}
+
 async function handleAiRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(request) });
   if (url.pathname === "/healthz" || url.pathname === "/v1/ai/healthz") {
-    return json(request, { status: "ok", worker: "afuai-api", version: "v1" });
+    const configured = Boolean(env.ENGAGERA_API_KEY?.trim());
+    return json(request, {
+      status: configured ? "ok" : "degraded",
+      worker: "afuai-api",
+      version: "v1",
+      configuration: { engagera: configured },
+    }, configured ? 200 : 503);
   }
   if (!url.pathname.startsWith("/v1/ai/")) {
     return json(request, { error: "Not found", path: url.pathname }, 404);
+  }
+  if (url.pathname !== "/v1/ai/healthz") {
+    const authFailure = await verifySharedSession(request, env);
+    if (authFailure) return authFailure;
   }
   if (request.method !== "POST") {
     return json(request, { error: "Method not allowed", worker: "afuai-api" }, 405);

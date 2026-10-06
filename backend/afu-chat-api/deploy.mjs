@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmod, readFile, writeFile } from "node:fs/promises";
+import { chmod, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -21,6 +21,9 @@ function readQuotedVar(name) {
   const value = wranglerConfig.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"\\s*$`, "m"))?.[1];
   if (!value) throw new Error(`The AfuChat Worker config is missing ${name}.`);
   return value;
+}
+function rewriteTypescriptImports(source) {
+  return source.replace(/(["'])(\.\.?\/[^"']+)\.ts\1/g, "$1$2.js$1");
 }
 const SUPABASE_URL = readQuotedVar("AFUCHAT_SUPABASE_URL").replace(/\/+$/, "");
 const SUPABASE_ANON_KEY = readQuotedVar("AFUCHAT_SUPABASE_ANON_KEY");
@@ -196,13 +199,14 @@ async function removeCreatedRoutes(zoneId, routes) {
 
 async function assertProductionPreflight() {
   const chat = await fetch("https://api.afuchat.com/v1/chat/healthz");
-  const chatBody = await chat.text();
+  const chatBody = await chat.json().catch(() => null);
   if (
-    chat.status !== 404 ||
-    !chatBody.includes("Route not found") ||
-    !chat.headers.get("X-AfuChat-Request-Id")
+    chat.status !== 200 ||
+    chatBody?.product !== "afuchat" ||
+    chatBody?.worker !== WORKER_NAME ||
+    chatBody?.status !== "ok"
   ) {
-    throw new Error("The existing chat endpoint differs from the expected legacy response; deployment stopped.");
+    throw new Error("The existing chat health endpoint differs from the expected AfuChat Worker; deployment stopped.");
   }
 
   const media = await fetch("https://cdn.afuchat.com/chat/__deployment_probe__");
@@ -219,26 +223,43 @@ async function assertProductionPreflight() {
 async function waitForChatHealth() {
   let lastStatus = 0;
   let lastWorker = "unknown";
-  for (let attempt = 0; attempt < 16; attempt += 1) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
     const health = await fetch("https://api.afuchat.com/v1/chat/healthz");
     const body = await health.json().catch(() => null);
     lastStatus = health.status;
     lastWorker = body?.worker ?? "unknown";
-    if (
+    const healthIsReady =
       health.status === 200 &&
       body?.product === "afuchat" &&
       body?.worker === WORKER_NAME &&
-      body?.status === "ok"
-    ) {
-      return;
+      body?.status === "ok";
+
+    if (healthIsReady) {
+      const appStatus = await fetch("https://api.afuchat.com/v1/chat/status");
+      const appStatusBody = await appStatus.json().catch(() => null);
+      lastStatus = appStatus.status;
+      lastWorker = appStatusBody?.worker ?? lastWorker;
+      if (appStatus.status === 200 && appStatusBody?.worker === WORKER_NAME) {
+        return;
+      }
     }
-    if (attempt < 15) await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error(`Chat health check failed after 16 attempts (HTTP ${lastStatus}, worker ${lastWorker}).`);
+  throw new Error(`Chat health/status check failed after 30 attempts (HTTP ${lastStatus}, worker ${lastWorker}).`);
 }
 
 async function assertProductionPostflight() {
   await waitForChatHealth();
+
+  const appStatus = await fetch("https://api.afuchat.com/v1/chat/status");
+  const appStatusBody = await appStatus.json().catch(() => null);
+  if (
+    appStatus.status !== 200 ||
+    appStatusBody?.worker !== WORKER_NAME ||
+    appStatusBody?.services?.supabase?.ok !== true
+  ) {
+    throw new Error(`AfuChat status check failed (HTTP ${appStatus.status}).`);
+  }
 
   const options = await fetch("https://api.afuchat.com/v1/chat/conversations", {
     method: "OPTIONS",
@@ -342,6 +363,7 @@ if (
 await assertProductionPreflight();
 
 const sourcePath = path.join(WORKER_ROOT, "src", "index.ts");
+const sourceDirectory = path.dirname(sourcePath);
 const source = await readFile(sourcePath, "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
@@ -357,6 +379,30 @@ const errors = (compiled.diagnostics || []).filter(
 );
 if (errors.length) {
   throw new Error("AfuChat API TypeScript transpilation failed.");
+}
+
+const sourceEntries = await readdir(sourceDirectory, { withFileTypes: true });
+const extraModules = {};
+for (const entry of sourceEntries) {
+  if (!entry.isFile() || !entry.name.endsWith(".ts") || entry.name === "index.ts") continue;
+  const modulePath = path.join(sourceDirectory, entry.name);
+  const moduleSource = await readFile(modulePath, "utf8");
+  const moduleCompiled = ts.transpileModule(moduleSource, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+      strict: true,
+    },
+    fileName: entry.name,
+    reportDiagnostics: true,
+  });
+  const moduleErrors = (moduleCompiled.diagnostics || []).filter(
+    (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
+  );
+  if (moduleErrors.length) {
+    throw new Error(`AfuChat API TypeScript transpilation failed for ${entry.name}.`);
+  }
+  extraModules[entry.name.replace(/\.ts$/, ".js")] = rewriteTypescriptImports(moduleCompiled.outputText);
 }
 
 const wrapperSource = `import chatApi from "./chat-api.js";
@@ -385,8 +431,9 @@ export default {
 
 const modules = {
   "index.js": wrapperSource,
-  "chat-api.js": compiled.outputText,
+  "chat-api.js": rewriteTypescriptImports(compiled.outputText),
   "legacy.js": legacySource,
+  ...extraModules,
 };
 const authServiceBinding = byName.get("AFUAUTH_API");
 if (
@@ -441,7 +488,13 @@ if (!APPLY) {
     ),
     endpoints: [
       "GET /v1/chat/healthz",
+      "GET /v1/chat/status",
       "GET /v1/chat/conversations",
+      "POST /v1/chat/account/export",
+      "POST /v1/chat/payments/pesapal-initiate",
+      "GET /v1/chat/payments/pesapal-callback",
+      "GET|POST /v1/chat/payments/pesapal-ipn",
+      "POST /v1/chat/videos/* returns 501 until the video pipeline is configured",
       "POST /v1/auth/session (AfuAuth service binding)",
       "existing /v1/storage* media API",
       "existing cdn.afuchat.com/chat/* assets",

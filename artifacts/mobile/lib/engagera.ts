@@ -2,9 +2,10 @@
  * engagera.ts — Lazy singleton for the Engagera AI client.
  *
  * Provider credentials stay in the Cloudflare Worker. The mobile client calls
- * only the AfuCloud application API.
+ * only the AfuAI application API.
  */
-import { AFUCLOUD_API_URL } from "@/lib/env";
+import { AFUAI_API_URL } from "@/lib/env";
+import { getAfuChatAccessToken } from "@/lib/afuchatApi";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 type ChatOptions = { messages: ChatMessage[]; model?: string; stream?: boolean };
@@ -22,10 +23,12 @@ export function getEngagera(): EngageraClient {
     _client = {
       chat: {
         create: async ({ messages, model = "engagera-pro", stream = false }) => {
-          const response = await fetch(`${AFUCLOUD_API_URL}/v1/ai/chat`, {
+          const token = await getAfuChatAccessToken();
+          const response = await fetch(`${AFUAI_API_URL}/v1/ai/chat`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({ messages, model, stream }),
           });

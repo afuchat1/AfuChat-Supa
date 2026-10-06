@@ -22,7 +22,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { AFUCLOUD_API_URL } from "@/lib/env";
+import { AFUCHAT_API_URL } from "@/lib/env";
 import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
 import * as Clipboard from "expo-clipboard";
@@ -112,10 +112,10 @@ function localLine(usd: number, country?: string | null): string | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getEdgeFnBase() {
-  return `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/payments`;
+  return `${AFUCHAT_API_URL.replace(/\/+$/, "")}/v1/chat/payments`;
 }
 async function getToken(): Promise<string> {
-  // Always refresh to avoid sending an expired token to AfuCloud routes
+  // Always refresh to avoid sending an expired token to AfuChat routes
   const { data: refreshed } = await supabase.auth.refreshSession();
   if (refreshed.session?.access_token) return refreshed.session.access_token;
   const { data } = await supabase.auth.getSession();

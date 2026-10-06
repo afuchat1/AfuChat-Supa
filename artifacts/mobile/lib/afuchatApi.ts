@@ -27,7 +27,7 @@ export async function afuChatApiFetch(
     const token = await getAfuChatAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${AFUCHAT_API_URL}/v1${path.startsWith("/") ? path : `/${path}`}`, {
+  return fetch(`${AFUCHAT_API_URL}/v1/chat${path.startsWith("/") ? path : `/${path}`}`, {
     ...init,
     headers,
   });
@@ -45,7 +45,7 @@ export async function getAfuChatConversations(
 
   try {
     const response = await afuChatApiFetch(
-      `/chat/conversations${suffix}`,
+      `/conversations${suffix}`,
       { method: "GET" },
     );
     const payload: unknown = await response.json().catch(() => null);

@@ -1,13 +1,6 @@
-interface Env {
-  AFUCHAT_SUPABASE_URL?: string;
-  AFUCHAT_SUPABASE_ANON_KEY?: string;
-  AFUCHAT_DATABASE_SCHEMA?: string;
-  SUPABASE_URL?: string;
-  SUPABASE_ANON_KEY?: string;
-  AFUAUTH_API?: {
-    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  };
-}
+import { handleAccountExport } from "./account-export.ts";
+import { handlePayments } from "./payments.ts";
+import type { Env } from "./shared.ts";
 
 const PREFIX = "/v1/chat";
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -256,6 +249,70 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
   }
 }
 
+async function handleStatus(request: Request, env: Env): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  const supabase = supabaseConfig(env);
+  const startedAt = Date.now();
+  let supabaseCheck: Record<string, unknown>;
+
+  if (!supabase) {
+    supabaseCheck = {
+      ok: false,
+      latency_ms: 0,
+      message: "Supabase is not configured",
+    };
+  } else {
+    try {
+      const response = await fetch(
+        `${supabase.url}/rest/v1/profiles?select=id&limit=1`,
+        {
+          headers: {
+            apikey: supabase.anonKey,
+            Accept: "application/json",
+          },
+        },
+      );
+      supabaseCheck = {
+        ok: response.ok,
+        latency_ms: Date.now() - startedAt,
+        ...(response.ok ? {} : { message: `HTTP ${response.status}` }),
+      };
+    } catch {
+      supabaseCheck = {
+        ok: false,
+        latency_ms: Date.now() - startedAt,
+        message: "Supabase is unavailable",
+      };
+    }
+  }
+
+  const services = {
+    supabase: supabaseCheck,
+    cloudflare_worker: { ok: true, latency_ms: 0 },
+  };
+  const ok = Object.values(services).every((service) => service.ok === true);
+  return jsonResponse(
+    request,
+    requestId,
+    {
+      ok,
+      timestamp: new Date().toISOString(),
+      services,
+      configuration: {
+        payments: Boolean(
+          env.PESAPAL_CONSUMER_KEY?.trim() &&
+          env.PESAPAL_CONSUMER_SECRET?.trim() &&
+          env.PESAPAL_IPN_ID?.trim()
+        ),
+        email_export: Boolean(env.RESEND_API_KEY?.trim()),
+        video_processing: false,
+      },
+      worker: "afuchat-api",
+    },
+    200,
+  );
+}
+
 async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   const requestId = crypto.randomUUID();
   const incoming = new URL(request.url);
@@ -272,6 +329,51 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
       requestId,
       { product: "afuchat", worker: "afuchat-api", status: "ok", version: "v1" },
       200,
+    );
+  }
+
+  if (incoming.pathname === `${PREFIX}/status`) {
+    if (request.method === "GET" || request.method === "POST") {
+      return handleStatus(request, env);
+    }
+    const response = privateJsonResponse(
+      request,
+      requestId,
+      { error: "Method not allowed", request_id: requestId },
+      405,
+    );
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, POST, OPTIONS");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
+  if (incoming.pathname === `${PREFIX}/account/export`) {
+    return handleAccountExport(request, env);
+  }
+
+  if (
+    incoming.pathname === `${PREFIX}/payments` ||
+    incoming.pathname.startsWith(`${PREFIX}/payments/`)
+  ) {
+    return handlePayments(request, env);
+  }
+
+  if (
+    incoming.pathname === `${PREFIX}/videos` ||
+    incoming.pathname.startsWith(`${PREFIX}/videos/`)
+  ) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      {
+        error: "Video processing is not configured; the original video remains available",
+        request_id: requestId,
+      },
+      501,
     );
   }
 

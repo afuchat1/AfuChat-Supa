@@ -7,6 +7,11 @@ routes = [
   { pattern = "api.afuchat.com/v1/ai/*", zone_name = "afuchat.com" }
 ]
 
+[[services]]
+binding = "AFUAUTH_API"
+service = "afuauth-api"
+environment = "production"
+
 [vars]
 AFUAI_PRODUCT = "AfuAI"
 

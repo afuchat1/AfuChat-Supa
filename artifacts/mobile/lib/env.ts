@@ -22,7 +22,7 @@ export const APP_DOMAIN: string =
 
 export const APP_ORIGIN: string = `https://${APP_DOMAIN}`;
 
-/** Legacy shared API entrypoint for non-media service calls. */
+/** Legacy shared API origin retained only as a default for product API origins. */
 export const AFUCLOUD_API_URL: string =
   (process.env.EXPO_PUBLIC_AFUCLOUD_API_URL ?? "").trim() || "https://api.afuchat.com";
 
@@ -32,6 +32,13 @@ const API_GATEWAY_ORIGIN = new URL(AFUCLOUD_API_URL).origin;
 export const AFUCHAT_API_URL: string =
   new URL(
     (process.env.EXPO_PUBLIC_AFUCHAT_API_URL ?? "").trim() || API_GATEWAY_ORIGIN,
+    API_GATEWAY_ORIGIN,
+  ).origin;
+
+/** AfuAI owns AI requests under /v1/ai; provider credentials remain server-side. */
+export const AFUAI_API_URL: string =
+  new URL(
+    (process.env.EXPO_PUBLIC_AFUAI_API_URL ?? "").trim() || API_GATEWAY_ORIGIN,
     API_GATEWAY_ORIGIN,
   ).origin;
 

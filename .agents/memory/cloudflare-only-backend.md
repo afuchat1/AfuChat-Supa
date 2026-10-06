@@ -5,6 +5,12 @@ description: Afu products share one Supabase identity while their product APIs u
 
 AfuChat, AfuAuth, AfuMail, AfuCloud, AfuAI, and AfuAds are distinct products with exact Worker names and namespaces: `afuchat-api` → `/v1/chat/*`, `afuauth-api` → `/v1/auth/*`, `afumail-api` → `/v1/mail/*`, `afucloud-api` → `/v1/cloud/*`, `afuai-api` → `/v1/ai/*`, and `afuads-api` → `/v1/ads/*`.
 
+The user confirmed AfuChat owns its app endpoints under `/v1/chat/*`, including status, payments, account export, and videos; AI is separate and belongs to `afuai-api` under `/v1/ai/*`. The current AfuChat Worker still needs handlers/configuration for the routes that return 501.
+
+**Why:** Product path ownership is based on the app/product, not on where legacy route code happens to live.
+
+**How to apply:** Move app calls to the owning product prefix, verify the owner Worker has a real handler before calling the route complete, and keep AfuAI on its own Worker.
+
 Never attach a generic `api.afuchat.com/v1/*` fallback to AfuCloud. Each product keeps its own namespace, and an unassigned legacy path must not be captured by another product's Worker.
 
 **Why:** The user clarified that the shared database contains multiple product schemas and each product must remain isolated: `/v1/chat` is AfuChat, `/v1/cloud` is AfuCloud, and `/v1/mail` is AfuMail.

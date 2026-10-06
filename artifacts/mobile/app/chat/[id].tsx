@@ -517,9 +517,9 @@ async function requestAfuAiReply(
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   maxTokens: number,
 ): Promise<string> {
-  const response = await fetch(`${getEdgeFnBase()}/ai/reply`, {
+  const response = await fetch(`${getEdgeFnBase()}/reply`, {
     method: "POST",
-    headers: edgeHeaders(),
+    headers: await edgeHeaders(),
     body: JSON.stringify({ messages, fast: true, max_tokens: maxTokens }),
   });
   if (!response.ok) {

@@ -36,6 +36,142 @@ test("chat health endpoint is public", async () => {
   assert.equal((await response.json()).worker, "afuchat-api");
 });
 
+test("AfuChat status reports the live Supabase check", async () => {
+  let checkedUrl = "";
+  globalThis.fetch = async (input) => {
+    checkedUrl = String(input);
+    return Response.json([{ id: "profile-1" }]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/status"),
+    makeEnv(),
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    checkedUrl,
+    "https://supabase.example.test/rest/v1/profiles?select=id&limit=1",
+  );
+  assert.equal(payload.ok, true);
+  assert.equal(payload.worker, "afuchat-api");
+  assert.equal(payload.services.supabase.ok, true);
+});
+
+test("account export verifies AfuAuth and sends only the selected export to the signed-in email", async () => {
+  const token = "account-export-session";
+  const env = makeEnv();
+  env.RESEND_API_KEY = "test-resend-key";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({
+      user: { id: "user-123", email: "user@example.test" },
+      accessToken: token,
+    });
+  let resendPayload;
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    if (new URL(request.url).hostname === "supabase.example.test") {
+      assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+      assert.equal(new URL(request.url).pathname, "/rest/v1/profiles");
+      return Response.json([{ id: "user-123", display_name: "Test User" }]);
+    }
+    assert.equal(new URL(request.url).hostname, "api.resend.com");
+    resendPayload = await request.json();
+    return Response.json({ id: "email-1" });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/account/export", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ types: ["profile", "unknown"] }),
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload, { ok: true, email: "user@example.test" });
+  assert.deepEqual(resendPayload.to, ["user@example.test"]);
+  assert.deepEqual(resendPayload.attachments.map((attachment) => attachment.filename), [
+    "afuchat-data-export-2026-10-06.json",
+  ]);
+  const exported = JSON.parse(atob(resendPayload.attachments[0].content));
+  assert.deepEqual(exported.included_types, ["profile"]);
+  assert.equal(exported.data.profile.display_name, "Test User");
+});
+
+test("account export fails closed when email delivery is not configured", async () => {
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({
+      user: { id: "user-123", email: "user@example.test" },
+      accessToken: "valid-session",
+    });
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/account/export", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-session" },
+      body: JSON.stringify({ types: ["profile"] }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 503);
+  assert.equal(databaseCalls, 0);
+});
+
+test("Pesapal initiation verifies the shared session and reports missing notification configuration", async () => {
+  const env = makeEnv();
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return Response.json({});
+  };
+  const unauthenticated = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/payments/pesapal-initiate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acoin_amount: 500 }),
+    }),
+    env,
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({
+      user: { id: "user-123", email: "user@example.test" },
+      accessToken: "valid-session",
+    });
+  const missingIpn = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/payments/pesapal-initiate", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer valid-session",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ acoin_amount: 500 }),
+    }),
+    env,
+  );
+  assert.equal(missingIpn.status, 503);
+  assert.equal(providerCalls, 0);
+});
+
+test("video route reports its explicit unconfigured state", async () => {
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/videos"),
+    makeEnv(),
+  );
+  assert.equal(response.status, 501);
+  assert.match((await response.json()).error, /original video remains available/);
+});
+
 test("conversation endpoint requires a bearer token", async () => {
   const env = makeEnv();
   let authCalls = 0;

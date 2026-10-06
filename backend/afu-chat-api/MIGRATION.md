@@ -83,8 +83,12 @@ Worker integration.
   only `containers/...` keys to `/chat/`. This is not live in already-released
   app builds until they are rebuilt/released.
 - No media copy or storage migration is part of the AfuChat/AfuAuth connection.
-- Keep push, support-reply, and account-export handlers out of `afuchat-api`;
-  they are outside this integration and must not gain general `public` access.
+- The user confirmed AfuChat owns its app routes under `/v1/chat/*`, including
+  status, payments, account export, and videos. AI is a separate product owned
+  by `afuai-api` under `/v1/ai/*`. Do not add a generic `/v1/*` route.
+- The current `afuchat-api` implements health, status, and conversations;
+  other `/v1/chat/*` requests still return 501 until their handlers and
+  required provider configuration are migrated and verified.
 
 ## Client contract inventory
 
@@ -94,13 +98,12 @@ Worker integration.
 - Media session/container requests use `/v1/auth/session`,
   `/v1/storage/usage`, and `/v1/storage-containers/*`; chat-list requests use
   `/v1/chat/conversations`.
-- Other mobile functions still call the legacy root `/v1/*` API, including
-  `/v1/status`, `/v1/ai/chat`,
-  `/v1/account/export`, `/v1/videos/*`, and `/v1/payments/*`. Production probes
-  behavior for those unrelated routes is outside this AfuChat/AfuAuth cutover.
-- AfuMail, AfuCloud, AfuAI, and AfuAds API contracts are unchanged by this
-  work. Reuse the shared Supabase identity when those API integrations are
-  implemented; do not create product-specific user tables or tokens.
+- AfuChat app functions use `/v1/chat/*` (including status, payments,
+  account export, and videos); AI requests use `/v1/ai/*` on `afuai-api`.
+  Existing mobile callers are being aligned to these product namespaces.
+- AfuMail, AfuCloud, and AfuAds retain their own API namespaces. Reuse the
+  shared Supabase identity; do not create product-specific user tables or
+  tokens.
 
 ## Gates before production routing
 

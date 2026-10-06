@@ -15,7 +15,7 @@ import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { supabase } from "@/lib/supabase";
-import { AFUCLOUD_API_URL } from "@/lib/env";
+import { AFUCHAT_API_URL } from "@/lib/env";
 import { useLanguage } from "@/context/LanguageContext";
 
 const DATA_TYPES: {
@@ -63,7 +63,7 @@ export default function PrivacyDownloadScreen() {
         return;
       }
       const accessToken = sessionData.session.access_token;
-      const functionUrl = `${AFUCLOUD_API_URL.replace(/\/+$/, "")}/v1/account/export`;
+      const functionUrl = `${AFUCHAT_API_URL.replace(/\/+$/, "")}/v1/chat/account/export`;
       const res = await fetch(functionUrl, {
         method: "POST",
         headers: {
