@@ -1,8 +1,9 @@
 # AfuChat API domain and routing
 
 **Verified:** 2026-10-06  
-**Scope:** AfuChat routes and the exact DNS record for `api.afuchat.com`. Other
-Afu products' Workers, routes, data, and settings were not changed.
+**Scope:** The API namespace gateway route and product-specific API/CDN routes.
+No Cloudflare Worker, route, DNS record, domain, bucket, or data object is
+deleted by this routing configuration.
 
 ## DNS and hostname ownership
 
@@ -17,11 +18,9 @@ An exact DNS record now overrides the wildcard for the API hostname:
 | A | `api.afuchat.com` | `192.0.2.1` | Proxied |
 
 The origin is a reserved, non-routable placeholder. Cloudflare Worker routes
-serve the supported API paths before origin fallback; an unassigned path cannot
-fall through to the website's Vercel origin. The unmatched-path probe returned
-Cloudflare `522`, not a Vercel response. Do not replace this exact record with a
-Vercel target or remove it without first providing an equivalent Cloudflare
-Worker-safe origin.
+serve API requests before origin fallback. Keep this exact record; do not
+replace it with a Vercel target or remove it without first providing an
+equivalent Cloudflare Worker-safe origin.
 
 The hostname is owned through Cloudflare Worker routes, not a Worker custom
 domain. No Vercel project-domain association could be queried from this
@@ -32,14 +31,20 @@ the fallback behavior.
 
 | Host and path | Worker | Use |
 |---|---|---|
+| `api.afuchat.com/` | `afu-api` | API root entry point; forwards to AfuAuth |
+| `api.afuchat.com/v1/auth/*` | `afuauth-api` | Authentication paths |
+| `api.afuchat.com/v1/auth-resolve-identifier` | `afuauth-api` | Identifier resolution |
 | `api.afuchat.com/chat/*` | `afuchat-api` | Supabase compatibility and media API |
 | `api.afuchat.com/v1/chat/*` | `afuchat-api` | Versioned AfuChat business API |
 | `api.afuchat.com/v1/storage*` | `afuchat-api` | Existing storage compatibility alias |
+| `api.afuchat.com/v1/ai/*` | `afuai-api` | AfuAI operations |
+| Other existing product paths | Existing product Worker | Preserved in Cloudflare |
 | `cdn.afuchat.com/chat/*` | `afuchat-api` | Public AfuChat media |
 
-Cloudflare selects the most-specific matching Worker route. Existing routes
-owned by other products were left unchanged. There is no broad API-host catchall
-to another product's Worker.
+Product paths are assigned directly to their existing Workers. The API root
+route is assigned to `afu-api`, which forwards `/` through its AfuAuth service
+binding. No catch-all route is added; unmatched paths retain the existing
+fail-closed DNS behavior rather than being sent to a product Worker.
 
 The API and CDN use the same `/chat/*` path on different hostnames. The media
 handler now checks the hostname before dispatching that path, so API requests
@@ -47,8 +52,9 @@ go through the compatibility handler while CDN requests serve public objects.
 The versioned business API remains under `/v1/chat/*`.
 
 The `afuchat-api` Worker retains its existing `AFUCHAT_ASSETS` binding to the
-`afuchat-media` bucket and `AFUAUTH_API` service binding to `afuauth-api`.
-Neither binding nor the shared authentication Worker was changed.
+`afu-chat-assets` bucket and `AFUAUTH_API` service binding to `afuauth-api`.
+The gateway forwards only its root/auth fallback through the existing
+`AFUAUTH_API` service binding.
 
 ## Verification
 
@@ -61,8 +67,9 @@ Neither binding nor the shared authentication Worker was changed.
 - Read-only `GET /chat/rest/v1/profiles?select=id&limit=0` → `200 []`.
 - `GET https://cdn.afuchat.com/chat/__deployment_probe__` → `400 Invalid storage
   key`, confirming the CDN route reaches the AfuChat media handler.
-- An unassigned API path returned Cloudflare `522`; it no longer reached
-  Vercel.
-- Cloudflare confirms the exact proxied DNS record and AfuChat route ownership.
+- An unassigned API path returns Cloudflare `522` from the reserved placeholder
+  origin; it does not reach Vercel or a product Worker.
+- The root route belongs to `afu-api`; all listed product routes remain on their
+  current Workers.
 - AfuChat Worker tests pass, including a test that distinguishes API and CDN
   requests sharing `/chat/*`.

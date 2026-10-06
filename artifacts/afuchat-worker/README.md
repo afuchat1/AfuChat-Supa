@@ -1,9 +1,10 @@
-# AfuChat media and Supabase compatibility handler
+# AfuChat media and Supabase compatibility module
 
-This Worker source contains the existing AfuChat media handler and Supabase
-Auth, REST, and Realtime compatibility proxy. It is composed into the
-independently deployed `afuchat-api` Worker by `backend/afu-chat-api/deploy.mjs`.
-It does not use or deploy the AfuCloud Worker, bucket, or data.
+This source module contains the AfuChat media handler and Supabase Auth, REST,
+and Realtime compatibility proxy. It is composed into the independently
+deployed `afuchat-api` Worker by `backend/afu-chat-api/deploy.mjs`; it is not a
+standalone Worker and must not be deployed separately. It does not use the
+AfuCloud Worker, bucket, or data.
 
 Canonical AfuChat product APIs use `https://api.afuchat.com/v1/chat/*`;
 storage APIs use `/v1/chat/storage/*`. The deploy wrapper maps those canonical
@@ -17,23 +18,7 @@ Supabase compatibility paths (`/chat/auth/v1`, `/chat/rest/v1`, and
 remains authoritative. Public media is served from
 `cdn.afuchat.com/chat/*`.
 
-## Local checks
-
-```sh
-pnpm install --ignore-workspace
-pnpm typecheck
-pnpm dev
-```
-
-## Production prerequisites
-
-Before deploying, verify in Cloudflare that the `afuchat.com` zone, both
-non-overlapping routes, and the `afu-chat-assets` bucket are AfuChat-owned and
-available. Then authenticate Wrangler with a Cloudflare API token that has
-Worker and R2 permissions. The configured API key alone is not accepted by
-Wrangler in this workspace.
-
-Do not use the shared `afuchat` schema for file metadata: this Worker stores
-files and their owner/container identifiers in the AfuChat R2 bucket. Only the
-Supabase public anon key and caller-authenticated requests are forwarded; never
-add a service-role key or database password to this Worker.
+The AfuChat deployment wrapper transpiles this module and composes it into the
+`afuchat-api` bundle. Keep production checks and deployment in
+`backend/afu-chat-api/`; do not add a separate Wrangler config or deploy command
+for this module.

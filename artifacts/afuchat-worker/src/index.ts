@@ -371,7 +371,7 @@ async function serveObject(request: Request, key: string, env: Env): Promise<Res
 
 async function handleApi(request: Request, env: Env, path: string): Promise<Response> {
   if (path === "/healthz" && request.method === "GET") {
-    return json({ status: "ok", service: "afuchat-media-worker" });
+    return json({ status: "ok", service: "afuchat-api", component: "media" });
   }
 
   if (path === "/v1/auth/session" && request.method === "POST") {
@@ -535,7 +535,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   }
 
   if (url.pathname === "/healthz" && request.method === "GET") {
-    return json({ status: "ok", service: "afuchat-media-worker" });
+    return json({ status: "ok", service: "afuchat-api", component: "media" });
   }
   return error("Route not found", 404);
 }

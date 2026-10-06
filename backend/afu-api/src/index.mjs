@@ -5,30 +5,8 @@ const EXACT_ROUTES = new Map([
   ["/v1/auth-resolve-identifier", "AFUAUTH_API"],
 ]);
 
-const PREFIX_ROUTES = [
-  { prefix: "/v1/auth", service: "AFUAUTH_API" },
-  { prefix: "/v1/chat", service: "AFUCHAT_API" },
-  { prefix: "/chat", service: "AFUCHAT_API" },
-  { prefix: "/v1/storage", service: "AFUCHAT_API", rawPrefix: true },
-  { prefix: "/v1/cloud", service: "AFUCLOUD_API" },
-  { prefix: "/afucloud", service: "AFUCLOUD_API" },
-  { prefix: "/v1/ai", service: "AFUAI_API" },
-  { prefix: "/v1/ads", service: "AFUADS_API" },
-  { prefix: "/v1/mail", service: "AFUMAIL_API" },
-];
-
 export function resolveService(pathname) {
-  const exact = EXACT_ROUTES.get(pathname);
-  if (exact) return exact;
-
-  for (const route of PREFIX_ROUTES) {
-    const matches = route.rawPrefix
-      ? pathname.startsWith(route.prefix)
-      : pathname === route.prefix || pathname.startsWith(`${route.prefix}/`);
-    if (matches) return route.service;
-  }
-
-  return null;
+  return EXACT_ROUTES.get(pathname) ?? null;
 }
 
 function json(status, body) {

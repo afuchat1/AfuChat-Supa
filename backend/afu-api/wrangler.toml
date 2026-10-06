@@ -3,36 +3,11 @@ main = "src/index.mjs"
 compatibility_date = "2026-10-06"
 account_id = "42e79186125e8ff83e51f15816e074de"
 workers_dev = false
-routes = [{ pattern = "api.afuchat.com", custom_domain = true }]
+routes = [{ pattern = "api.afuchat.com/", zone_name = "afuchat.com" }]
 
 [[services]]
 binding = "AFUAUTH_API"
 service = "afuauth-api"
-environment = "production"
-
-[[services]]
-binding = "AFUCHAT_API"
-service = "afuchat-api"
-environment = "production"
-
-[[services]]
-binding = "AFUCLOUD_API"
-service = "afucloud-api"
-environment = "production"
-
-[[services]]
-binding = "AFUAI_API"
-service = "afuai-api"
-environment = "production"
-
-[[services]]
-binding = "AFUADS_API"
-service = "afuads-api"
-environment = "production"
-
-[[services]]
-binding = "AFUMAIL_API"
-service = "afumail-api"
 environment = "production"
 
 [observability]
