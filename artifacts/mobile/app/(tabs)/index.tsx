@@ -39,6 +39,7 @@ import { CHAT_FAST_SPRING } from "@/lib/chatMotion";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { rewardXp } from "@/lib/rewardXp";
 import { getAfuChatConversations } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -1260,7 +1261,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
   useEffect(() => {
     if (!user) return;
-    import("../../lib/rewardXp").then(({ rewardXp }) => rewardXp("daily_login")).catch(() => {});
+    rewardXp("daily_login").catch(() => {});
   }, [user]);
 
   useEffect(() => {
