@@ -116,6 +116,7 @@ test("AfuChat API router serves only API namespaces, leaving CDN delivery to afu
 
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/storage/usage"), {}, {});
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/conversations"), {}, {});
+  await router.fetch(new Request("https://api.afuchat.com/v1/chat/me"), {}, {});
   const oldApiPath = await router.fetch(
     new Request("https://api.afuchat.com/chat/v1/storage/usage"),
     {},
@@ -140,6 +141,7 @@ test("AfuChat API router serves only API namespaces, leaving CDN delivery to afu
   assert.deepEqual(calls, [
     { handler: "media", path: "/chat/v1/storage/usage" },
     { handler: "chat", path: "/v1/chat/conversations" },
+    { handler: "chat", path: "/v1/chat/me" },
   ]);
   assert.equal(oldApiPath.status, 404);
   assert.equal(oldStoragePath.status, 404);
@@ -284,6 +286,30 @@ test("current profile rejects missing or invalid sessions before reading Supabas
   assert.equal(authCalls, 1);
   assert.equal(databaseCalls, 0);
   assert.doesNotMatch(await invalid.text(), /Supabase|Worker|service binding/i);
+});
+
+test("current profile only accepts GET and supports the AfuChat CORS preflight", async () => {
+  const post = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/me", { method: "POST" }),
+    makeEnv(),
+  );
+  const preflight = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/me", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://afuchat.com",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "authorization",
+      },
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.get("Allow"), "GET, OPTIONS");
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), "https://afuchat.com");
+  assert.match(preflight.headers.get("Access-Control-Allow-Headers") ?? "", /Authorization/i);
 });
 
 test("current profile returns a safe not-found response when the shared profile row is absent", async () => {
