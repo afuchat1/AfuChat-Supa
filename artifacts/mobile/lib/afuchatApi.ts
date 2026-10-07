@@ -153,6 +153,67 @@ export async function afuChatApiJson<T>(
   return { response, data };
 }
 
+export type AfuChatCreateMessageInput = {
+  chat_id: string;
+  client_message_id: string;
+  encrypted_content: string;
+  reply_to_message_id?: string | null;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
+  audio_url?: string | null;
+  expected_user_id?: string;
+};
+
+export function createAfuChatClientMessageId(): string {
+  const cryptoApi = globalThis.crypto as Crypto | undefined;
+  if (typeof cryptoApi?.randomUUID === "function") return cryptoApi.randomUUID();
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export async function postAfuChatMessage(
+  body: AfuChatCreateMessageInput,
+): Promise<{ data: { id: string } | null; error: AfuChatApiError | null }> {
+  try {
+    const { response, data: payload } = await afuChatApiJson<{
+      message?: { id?: unknown };
+      error?: unknown;
+      request_id?: unknown;
+    }>("/messages", body);
+    if (!response.ok) {
+      const record = payload as Record<string, unknown> | null;
+      return {
+        data: null,
+        error: {
+          message: typeof record?.error === "string"
+            ? record.error
+            : `Message could not be sent (HTTP ${response.status})`,
+          code: String(response.status),
+          requestId: typeof record?.request_id === "string"
+            ? record.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    if (!payload || typeof payload.message?.id !== "string") {
+      return {
+        data: null,
+        error: { message: "Chat service returned an invalid message.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: { id: payload.message.id }, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
 export type AfuChatSavedPost = {
   id: string;
   post_id: string;

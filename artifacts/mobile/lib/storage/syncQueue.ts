@@ -4,7 +4,7 @@
 
 import { getDB } from "./db";
 import { supabase } from "@/lib/supabase";
-import { setAfuChatBookmark } from "@/lib/afuchatApi";
+import { postAfuChatMessage, setAfuChatBookmark } from "@/lib/afuchatApi";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export type QueueActionType =
@@ -192,15 +192,12 @@ async function executeAction(
               (payload.content == null || m.content === payload.content),
             );
         if (!msg) return true; // already sent or not found — remove from queue
-        const { data, error } = await supabase
-          .from("messages")
-          .insert({
-            chat_id: msg.conversation_id,
-            sender_id: msg.sender_id,
-            encrypted_content: msg.content,
-          })
-          .select("id")
-          .single();
+        const { data, error } = await postAfuChatMessage({
+          chat_id: msg.conversation_id,
+          client_message_id: msg.id,
+          encrypted_content: msg.content,
+          expected_user_id: msg.sender_id,
+        });
         if (!error && data?.id) {
           await markMessageSynced(msg.id, data.id);
           return true;

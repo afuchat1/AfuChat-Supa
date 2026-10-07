@@ -1071,3 +1071,155 @@ test("conversation endpoint rejects a session response that changes the shared t
   assert.equal(response.status, 503);
   assert.equal(rpcCalls, 0);
 });
+
+test("message endpoint derives sender identity and makes offline retries idempotent", async () => {
+  const token = "message-session-token";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const chatId = "123e4567-e89b-42d3-a456-426614174000";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async (input) => {
+    const request = input instanceof Request ? input : new Request(input);
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    return Response.json({ user: { id: userId }, accessToken: token });
+  };
+
+  let stored = null;
+  let inserts = 0;
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    assert.equal(request.headers.get("Accept-Profile"), "public");
+    const url = new URL(request.url);
+    assert.equal(url.pathname, "/rest/v1/messages");
+
+    if (request.method === "GET") {
+      return Response.json(stored ? [stored] : []);
+    }
+
+    inserts += 1;
+    const body = await request.json();
+    assert.equal(body.sender_id, userId);
+    assert.equal(body.chat_id, chatId);
+    stored = {
+      ...body,
+      sent_at: "2026-10-07T12:00:00.000Z",
+      reply_to_message_id: body.reply_to_message_id ?? null,
+      attachment_url: body.attachment_url ?? null,
+      attachment_type: body.attachment_type ?? null,
+      attachment_name: body.attachment_name ?? null,
+      attachment_size: body.attachment_size ?? null,
+      audio_url: body.audio_url ?? null,
+      edited_at: null,
+    };
+    return Response.json([stored], { status: 201 });
+  };
+
+  const makeRequest = () => new Request("https://api.afuchat.com/v1/chat/messages", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      client_message_id: "pending-legacy-offline-42",
+      encrypted_content: "retry me",
+      expected_user_id: userId,
+    }),
+  });
+
+  const first = await worker.fetch(makeRequest(), env);
+  assert.equal(first.status, 201);
+  const firstPayload = await first.json();
+  assert.equal(firstPayload.message.sender_id, userId);
+  assert.match(firstPayload.message.id, /^[0-9a-f-]{36}$/i);
+
+  const retry = await worker.fetch(makeRequest(), env);
+  assert.equal(retry.status, 200);
+  const retryPayload = await retry.json();
+  assert.equal(retryPayload.message.id, firstPayload.message.id);
+  assert.equal(inserts, 1);
+});
+
+test("message endpoint rejects spoofed ownership and stale account queue items", async () => {
+  const token = "message-owner-token";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+
+  const makeRequest = (payload) => new Request("https://api.afuchat.com/v1/chat/messages", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const base = {
+    chat_id: excludedChatId,
+    client_message_id: "stable-local-id",
+    encrypted_content: "hello",
+  };
+
+  const spoofed = await worker.fetch(
+    makeRequest({ ...base, sender_id: "123e4567-e89b-42d3-a456-426614174001" }),
+    env,
+  );
+  assert.equal(spoofed.status, 400);
+
+  const stale = await worker.fetch(
+    makeRequest({ ...base, expected_user_id: "123e4567-e89b-42d3-a456-426614174001" }),
+    env,
+  );
+  assert.equal(stale.status, 409);
+  assert.equal(databaseCalls, 0);
+});
+
+test("message endpoint requires a shared session and sanitizes database errors", async () => {
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    if (databaseCalls === 1) return Response.json([]);
+    return Response.json(
+      { code: "42501", message: "sensitive RLS policy details" },
+      { status: 403 },
+    );
+  };
+
+  const unauthenticated = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: excludedChatId,
+        client_message_id: "stable-local-id",
+        encrypted_content: "hello",
+      }),
+    }),
+    makeEnv(401),
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(databaseCalls, 0);
+
+  const token = "message-rls-token";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: excludedChatId,
+        client_message_id: "stable-local-id",
+        encrypted_content: "hello",
+      }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 403);
+  const payload = await response.json();
+  assert.equal(payload.error, "Message could not be sent.");
+  assert.equal(JSON.stringify(payload).includes("sensitive RLS policy details"), false);
+});

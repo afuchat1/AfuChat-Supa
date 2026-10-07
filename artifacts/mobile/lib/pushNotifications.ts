@@ -2,7 +2,11 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { supabase } from "@/lib/supabase";
-import { afuChatApiJson } from "@/lib/afuchatApi";
+import {
+  afuChatApiJson,
+  createAfuChatClientMessageId,
+  postAfuChatMessage,
+} from "@/lib/afuchatApi";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
@@ -131,12 +135,13 @@ async function markNotificationRead(response: PushResponse, userId: string) {
 async function sendSuggestedReply(response: PushResponse, userId: string, text: string) {
   const { chatId, messageId } = getTarget(response);
   if (!chatId) return;
-  await supabase.from("messages").insert({
+  const { error } = await postAfuChatMessage({
     chat_id: chatId,
-    sender_id: userId,
+    client_message_id: createAfuChatClientMessageId(),
     encrypted_content: text,
     ...(messageId ? { reply_to_message_id: messageId } : {}),
   });
+  if (error) return;
   await markRead(response, userId);
 }
 

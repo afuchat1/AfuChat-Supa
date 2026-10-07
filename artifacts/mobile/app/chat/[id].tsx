@@ -65,6 +65,10 @@ import { useChatAppearance } from "@/lib/chatAppearance";
 import ChatAppearanceSheet from "@/components/chat/ChatAppearanceSheet";
 import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
 import {
+  createAfuChatClientMessageId,
+  postAfuChatMessage,
+} from "@/lib/afuchatApi";
+import {
   ACCOUNT_PROFILE_CHAT_COLUMNS,
   fetchAccountProfileMap,
 } from "@/lib/sharedProfiles";
@@ -5422,10 +5426,11 @@ STRICT RULES:
     }
 
     try {
-      const { error } = await supabase.from("messages").insert({
+      const { error } = await postAfuChatMessage({
         chat_id: targetChatId,
-        sender_id: user.id,
+        client_message_id: createAfuChatClientMessageId(),
         encrypted_content: content,
+        expected_user_id: user.id,
       });
       if (error) throw error;
       setForwardMsg(null);
@@ -5636,9 +5641,25 @@ STRICT RULES:
       const activeChatId = await getOrCreateChatId();
       if (activeChatId) {
         const payloadStr = JSON.stringify({ currency: walletCurrency, amount: amt, note: noteText, sender_handle: profile.handle, recipient_handle: recipient.handle, recipient_name: recipient.display_name });
-        const msgResult = await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: payloadStr, attachment_type: "payment" }).select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type").single();
+        const msgResult = await postAfuChatMessage({
+          chat_id: activeChatId,
+          client_message_id: createAfuChatClientMessageId(),
+          encrypted_content: payloadStr,
+          attachment_type: "payment",
+          expected_user_id: user.id,
+        });
         if (msgResult.data) {
-          const newMsg: Message = { ...msgResult.data, sender: { display_name: profile.display_name || "You", avatar_url: profile.avatar_url || null, handle: profile.handle || "" }, reactions: [], status: "sent" };
+          const newMsg: Message = {
+            id: msgResult.data.id,
+            chat_id: activeChatId,
+            sender_id: user.id,
+            encrypted_content: payloadStr,
+            sent_at: new Date().toISOString(),
+            attachment_type: "payment",
+            sender: { display_name: profile.display_name || "You", avatar_url: profile.avatar_url || null, handle: profile.handle || "" },
+            reactions: [],
+            status: "sent",
+          };
           setMessages((prev) => [newMsg, ...prev]);
           flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
           notifyInsertedChatMessage({
@@ -5683,7 +5704,7 @@ STRICT RULES:
     }
 
     const now = new Date().toISOString();
-    const msgId = `msg_${Date.now()}`;
+    const msgId = createAfuChatClientMessageId();
 
     const userMsg: Message = {
       id: msgId,
@@ -5738,14 +5759,15 @@ STRICT RULES:
         return;
       }
 
-      const insertPayload: any = {
+      const { data: inserted, error: aiInsertErr } = await postAfuChatMessage({
         chat_id: activeChatId,
-        sender_id: user.id,
+        client_message_id: msgId,
         encrypted_content: text,
-      };
-      if (userMsg.reply_to_message_id) insertPayload.reply_to_message_id = userMsg.reply_to_message_id;
-
-      const { data: inserted, error: aiInsertErr } = await supabase.from("messages").insert(insertPayload).select("id").single();
+        ...(userMsg.reply_to_message_id
+          ? { reply_to_message_id: userMsg.reply_to_message_id }
+          : {}),
+        expected_user_id: user.id,
+      });
       if (aiInsertErr) {
         console.error("[sendMessage/afuai] insert error:", JSON.stringify(aiInsertErr));
       }
@@ -5772,14 +5794,13 @@ STRICT RULES:
       return;
     }
 
-    const insertPayload: any = {
+    const { data: inserted, error } = await postAfuChatMessage({
       chat_id: activeChatId,
-      sender_id: user.id,
+      client_message_id: msgId,
       encrypted_content: text,
-    };
-    if (replyTo) insertPayload.reply_to_message_id = replyTo.id;
-
-    const { data: inserted, error } = await supabase.from("messages").insert(insertPayload).select("id").single();
+      ...(replyTo ? { reply_to_message_id: replyTo.id } : {}),
+      expected_user_id: user.id,
+    });
     if (inserted) {
       setMessages((prev) =>
         prev.map((m) => m.id === msgId ? { ...m, id: inserted.id, status: "sent" as const, _pending: false } : m)
@@ -5852,11 +5873,12 @@ STRICT RULES:
     }
 
     const envId = envResult?.envelope_id || "";
-    const { data: insertedEnvelope } = await supabase.from("messages").insert({
+    const { data: insertedEnvelope } = await postAfuChatMessage({
       chat_id: activeChatId,
-      sender_id: user.id,
+      client_message_id: createAfuChatClientMessageId(),
       encrypted_content: `🧧 Red Envelope [${envId}] - ${envelopeMsg || "Good luck!"}`,
-    }).select("id").single();
+      expected_user_id: user.id,
+    });
     notifyInsertedChatMessage({
       chatId: activeChatId,
       messageId: insertedEnvelope?.id,
@@ -5951,11 +5973,12 @@ STRICT RULES:
         last_updated: new Date().toISOString(),
       }, { onConflict: "gift_id" });
 
-    const { data: insertedGift } = await supabase.from("messages").insert({
+    const { data: insertedGift } = await postAfuChatMessage({
       chat_id: activeChatId,
-      sender_id: user.id,
+      client_message_id: createAfuChatClientMessageId(),
       encrypted_content: `🎁 ${gift.emoji} ${gift.name}${message.trim() ? ` - ${message.trim()}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
-    }).select("id").single();
+      expected_user_id: user.id,
+    });
     notifyInsertedChatMessage({
       chatId: activeChatId,
       messageId: insertedGift?.id,
@@ -6098,13 +6121,14 @@ STRICT RULES:
           throw new Error("One or more images could not be uploaded. Please try again.");
         }
         const label = caption || "📷 Photo";
-        const { data: inserted, error: insertError } = await supabase.from("messages").insert({
+        const { data: inserted, error: insertError } = await postAfuChatMessage({
           chat_id: activeChatId,
-          sender_id: user.id,
+          client_message_id: tempId,
           encrypted_content: label,
           attachment_url: JSON.stringify(uploaded),
           attachment_type: "image_group",
-        }).select("id").single();
+          expected_user_id: user.id,
+        });
         if (insertError) throw insertError;
         setMessages((prev) => prev.map((m) =>
           m.id === tempId
@@ -6124,7 +6148,7 @@ STRICT RULES:
     if (selectedImages.length > 0) {
       const attachments = selectedImages.slice(0, 6);
       const caption = input.trim();
-      const pendingIds = attachments.map((_, index) => `pending-${Date.now()}-${index}`);
+      const pendingIds = attachments.map(() => `pending-${createAfuChatClientMessageId()}`);
       setMessages((prev) => [
         ...attachments.map((attachment, index) => ({
           id: pendingIds[index],
@@ -6174,13 +6198,14 @@ STRICT RULES:
                 ? `File · ${attachment.name || "Shared file"}`
                 : "Shared media"
           );
-          const { data: inserted, error: insertError } = await supabase.from("messages").insert({
+          const { data: inserted, error: insertError } = await postAfuChatMessage({
             chat_id: activeChatId,
-            sender_id: user.id,
+            client_message_id: pendingIds[index],
             encrypted_content: label,
             attachment_url: publicUrl,
             attachment_type: attachment.type,
-          }).select("id").single();
+            expected_user_id: user.id,
+          });
           if (insertError) throw insertError;
           setMessages((prev) => prev.map((message) =>
             message.id === pendingIds[index]
@@ -6202,7 +6227,7 @@ STRICT RULES:
     const label = caption || (type === "image" ? "📷 Photo" : type === "video" ? "🎥 Video" : `📎 ${name || "File"}`);
 
     // Show optimistic message immediately with local URI — user sees their content right away
-    const tempId = `pending-${Date.now()}`;
+    const tempId = `pending-${createAfuChatClientMessageId()}`;
     setMessages((prev) => [{
       id: tempId,
       chat_id: activeChatId,
@@ -6238,13 +6263,15 @@ STRICT RULES:
         return;
       }
 
-      const { data: inserted } = await supabase.from("messages").insert({
+      const { data: inserted, error: insertError } = await postAfuChatMessage({
         chat_id: activeChatId,
-        sender_id: user.id,
+        client_message_id: tempId,
         encrypted_content: label,
         attachment_url: publicUrl,
         attachment_type: type,
-      }).select("id").single();
+        expected_user_id: user.id,
+      });
+      if (insertError) throw new Error(insertError.message);
 
       // Replace optimistic bubble with real message (real URL + real DB id)
       setMessages((prev) => prev.map((m) =>
@@ -6281,7 +6308,7 @@ STRICT RULES:
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) return;
 
-    const tempId = `sticker_${Date.now()}`;
+    const tempId = `sticker_${createAfuChatClientMessageId()}`;
     const now = new Date().toISOString();
     setMessages((prev) => [{
       id: tempId,
@@ -6294,12 +6321,13 @@ STRICT RULES:
       reactions: [],
     }, ...prev]);
 
-    const { data: inserted } = await supabase.from("messages").insert({
+    const { data: inserted } = await postAfuChatMessage({
       chat_id: activeChatId,
-      sender_id: user.id,
+      client_message_id: tempId,
       encrypted_content: emoji,
       attachment_type: "sticker",
-    }).select("id").single();
+      expected_user_id: user.id,
+    });
 
     if (inserted) {
       setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: inserted.id } : m));
@@ -6593,7 +6621,7 @@ STRICT RULES:
         const activeChatId = await getOrCreateChatId();
         if (!activeChatId) return;
 
-        const tempId = `pending-audio-${Date.now()}`;
+        const tempId = `pending-audio-${createAfuChatClientMessageId()}`;
         const optimisticMsg: Message = {
           id: tempId,
           chat_id: activeChatId,
@@ -6628,13 +6656,14 @@ STRICT RULES:
           return;
         }
 
-        const { data: insertedVoice, error: insertErr } = await supabase.from("messages").insert({
+        const { data: insertedVoice, error: insertErr } = await postAfuChatMessage({
           chat_id: activeChatId,
-          sender_id: user.id,
+          client_message_id: tempId,
           encrypted_content: "🎤 Voice message",
           attachment_url: publicUrl,
           attachment_type: "audio",
-        }).select("id").single();
+          expected_user_id: user.id,
+        });
         if (insertErr) {
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
           showAlert("Error", "Failed to send voice message.");
@@ -6720,13 +6749,14 @@ STRICT RULES:
         return;
       }
 
-      const { data: insertedVoice, error: insertErr } = await supabase.from("messages").insert({
+      const { data: insertedVoice, error: insertErr } = await postAfuChatMessage({
         chat_id: activeChatId,
-        sender_id: user.id,
+        client_message_id: tempId,
         encrypted_content: "🎤 Voice message",
         attachment_url: publicUrl,
         attachment_type: "audio",
-      }).select("id").single();
+        expected_user_id: user.id,
+      });
       if (insertErr) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         showAlert("Error", "Failed to send voice message.");
@@ -8419,11 +8449,12 @@ STRICT RULES:
                           try {
                             const activeChatId = await getOrCreateChatId();
                             if (!activeChatId || !user) return;
-                            const { data: insertedContact } = await supabase.from("messages").insert({
+                            const { data: insertedContact } = await postAfuChatMessage({
                               chat_id: activeChatId,
-                              sender_id: user.id,
+                              client_message_id: createAfuChatClientMessageId(),
                               encrypted_content: `👤 ${item.name}${item.phone ? `\n${item.phone}` : ""}`,
-                            }).select("id").single();
+                              expected_user_id: user.id,
+                            });
                             notifyInsertedChatMessage({
                               chatId: activeChatId,
                               messageId: insertedContact?.id,

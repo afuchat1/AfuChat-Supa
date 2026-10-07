@@ -1,5 +1,6 @@
 import { InteractionManager } from "react-native";
 import { supabase } from "./supabase";
+import { postAfuChatMessage } from "./afuchatApi";
 import {
   getPendingMessages,
   removePendingMessage,
@@ -26,27 +27,11 @@ export async function syncPendingMessages(): Promise<void> {
     const pending = await getPendingMessages();
     for (const msg of pending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
-        // Deduplication: check if a message with the same content+chat+sender
-        // was already inserted (e.g., sent on a previous retry before the ack
-        // arrived). If found, just remove from queue without re-inserting.
-        const { data: existing } = await supabase
-          .from("messages")
-          .select("id")
-          .eq("chat_id", msg.chat_id)
-          .eq("sender_id", msg.sender_id)
-          .eq("encrypted_content", msg.encrypted_content)
-          .gte("sent_at", new Date(Date.now() - 60_000).toISOString())
-          .maybeSingle();
-
-        if (existing) {
-          await removePendingMessage(msg.id);
-          continue;
-        }
-
-        const { error } = await supabase.from("messages").insert({
+        const { error } = await postAfuChatMessage({
           chat_id: msg.chat_id,
-          sender_id: msg.sender_id,
+          client_message_id: msg.id,
           encrypted_content: msg.encrypted_content,
+          expected_user_id: msg.sender_id,
         });
         if (!error) {
           await removePendingMessage(msg.id);
@@ -61,30 +46,12 @@ export async function syncPendingMessages(): Promise<void> {
     const localPending = await getPendingLocalMessages();
     for (const msg of localPending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
-        // Deduplication: same guard as above
-        const { data: existing } = await supabase
-          .from("messages")
-          .select("id")
-          .eq("chat_id", msg.conversation_id)
-          .eq("sender_id", msg.sender_id)
-          .eq("encrypted_content", msg.content)
-          .gte("sent_at", new Date(Date.now() - 60_000).toISOString())
-          .maybeSingle();
-
-        if (existing) {
-          await markMessageSynced(msg.id, existing.id);
-          continue;
-        }
-
-        const { data, error } = await supabase
-          .from("messages")
-          .insert({
-            chat_id: msg.conversation_id,
-            sender_id: msg.sender_id,
-            encrypted_content: msg.content,
-          })
-          .select("id")
-          .single();
+        const { data, error } = await postAfuChatMessage({
+          chat_id: msg.conversation_id,
+          client_message_id: msg.id,
+          encrypted_content: msg.content,
+          expected_user_id: msg.sender_id,
+        });
         if (!error && data?.id) {
           await markMessageSynced(msg.id, data.id);
         }

@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { supabase } from "@/lib/supabase";
+import { createAfuChatClientMessageId, postAfuChatMessage } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -500,12 +501,13 @@ export default function ViewStoryScreen() {
           other_user_id: s.user_id,
         });
         if (chatId) {
-          await supabase.from("messages").insert({
+          await postAfuChatMessage({
             chat_id: chatId,
-            sender_id: user.id,
+            client_message_id: createAfuChatClientMessageId(),
             encrypted_content: `storyUserId:${s.user_id}|${trimmed}`,
             attachment_url: s.media_url,
             attachment_type: "story_reply",
+            expected_user_id: user.id,
           });
         }
       }
@@ -557,12 +559,13 @@ export default function ViewStoryScreen() {
     closeShareSheet();
     try {
       const caption = story.caption ? `"${story.caption}"` : "Shared a story";
-      await supabase.from("messages").insert({
+      await postAfuChatMessage({
         chat_id: chatId,
-        sender_id: user.id,
+        client_message_id: createAfuChatClientMessageId(),
         encrypted_content: `storyUserId:${story.user_id}|${caption}`,
         attachment_url: story.media_url,
         attachment_type: "story_reply",
+        expected_user_id: user.id,
       });
     } catch {
       // send failed — already navigated away, nothing to revert

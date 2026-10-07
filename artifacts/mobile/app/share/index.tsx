@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useDataMode } from "@/context/DataModeContext";
 import { supabase } from "@/lib/supabase";
+import { createAfuChatClientMessageId, postAfuChatMessage } from "@/lib/afuchatApi";
 import { getAfuChatConversations } from "@/lib/afuchatApi";
 import {
   ACCOUNT_PROFILE_CHAT_COLUMNS,
@@ -372,10 +373,11 @@ export default function ShareToAfuChatScreen() {
       // Text and links can be delivered immediately. Media is passed to the
       // composer so the user can review it before uploading and sending.
        if (sharedText && sharedFiles.length === 0) {
-        const { error } = await supabase.from("messages").insert({
+        const { error } = await postAfuChatMessage({
           chat_id: chatId,
-          sender_id: user.id,
+          client_message_id: createAfuChatClientMessageId(),
           encrypted_content: sharedText,
+          expected_user_id: user.id,
         });
         if (error) throw error;
         resetShareIntent(false);
