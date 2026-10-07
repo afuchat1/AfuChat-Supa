@@ -17,3 +17,5 @@ from `/home/runner/workspace` (the workspace root, not artifacts/mobile).
 **How to apply:** Whenever the Start application workflow fails with `PluginError: Failed to resolve plugin`, `Cannot find module`, or an unexpected missing package shim, run the install command above first. Takes ~35s with the lockfile cached.
 
 If a frozen reinstall reports that the Expo version in the mobile manifest differs from the lockfile, use `CI=true pnpm install --no-frozen-lockfile` from the workspace root to reconcile it before restarting the workflow.
+
+A stale or incomplete install can also resolve TypeScript 5.9 even though the lockfile pins 6.0.3, causing the `ignoreDeprecations: "6.0"` check to fail and leaving declared Expo packages missing. After a frozen reinstall, verify the compiler version before changing the TypeScript config.
