@@ -49,6 +49,10 @@ if (_AvPlatform.OS !== "web" && !isExpoGo()) {
 import * as ImagePicker from "expo-image-picker";
 
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { audioFocus } from "@/lib/audioFocus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
@@ -727,7 +731,7 @@ export function VideoCommentsSheet({
     const requestId = ++repliesLoadSeqRef.current;
     const { data, error } = await supabase
       .from("post_replies")
-      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
+      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(50);
@@ -738,6 +742,12 @@ export function VideoCommentsSheet({
       return;
     }
     if (!data || requestId !== repliesLoadSeqRef.current || !visibleRef.current) return;
+
+    const { profiles } = await fetchAccountProfileMap(
+      data.map((reply: any) => reply.author_id),
+      ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+    );
+    if (requestId !== repliesLoadSeqRef.current || !visibleRef.current) return;
 
     const replyIds = data.map((r: any) => r.id);
     const [likesRes, myLikesRes] = await Promise.all([
@@ -766,9 +776,9 @@ export function VideoCommentsSheet({
       voice_duration: r.voice_duration ?? null,
       image_url: r.image_url || null,
       profile: {
-        display_name: r.profiles?.display_name || "User",
-        handle: r.profiles?.handle || "user",
-        avatar_url: r.profiles?.avatar_url || null,
+        display_name: profiles.get(r.author_id)?.display_name || "User",
+        handle: profiles.get(r.author_id)?.handle || "user",
+        avatar_url: profiles.get(r.author_id)?.avatar_url ?? null,
       },
     })));
     setLoading(false);

@@ -16,6 +16,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { showAlert } from "@/lib/alert";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -135,16 +139,22 @@ export default function ContactsScreen() {
     }
 
     try {
-      const { data: followRows } = await supabase
+      const { data: followRows, error } = await supabase
         .from("follows")
-        .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified)")
+        .select("following_id")
         .eq("follower_id", user.id);
+      if (error) throw error;
 
       if (followRows) {
+        const { profiles, error: profileError } = await fetchAccountProfileMap<Contact>(
+          followRows.map((row: any) => row.following_id),
+          ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+        );
+        if (profileError) throw profileError;
         const list = followRows
-          .map((f: any) => f.profiles)
+          .map((row: any) => profiles.get(row.following_id))
           .filter(Boolean)
-          .sort((a: Contact, b: Contact) => a.display_name.localeCompare(b.display_name));
+          .sort((a: any, b: any) => a.display_name.localeCompare(b.display_name)) as Contact[];
         setContacts(list);
         // Persist permanently to SQLite so contacts are available offline.
         saveLocalContacts(list).catch(() => {});

@@ -52,6 +52,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { SmartSheet } from "@/components/ui/SmartSheet";
@@ -1255,7 +1259,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     let query = supabase
       .from("posts")
-      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+      .select("id, author_id, content, video_url, image_url, created_at, audio_name")
       .not("video_url", "is", null)
       .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false });
@@ -1284,6 +1288,10 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))] as string[];
+      const { profiles: profilesById } = await fetchAccountProfileMap(
+        authorIds,
+        ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+      );
 
       const [
         { data: likesData }, { data: repliesData }, { data: viewsData },
@@ -1313,7 +1321,13 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
         view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
-        profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified, is_organization_verified: !!p.profiles?.is_organization_verified },
+        profile: {
+          display_name: profilesById.get(p.author_id)?.display_name || "User",
+          handle: profilesById.get(p.author_id)?.handle || "user",
+          avatar_url: profilesById.get(p.author_id)?.avatar_url || null,
+          is_verified: !!profilesById.get(p.author_id)?.is_verified,
+          is_organization_verified: !!profilesById.get(p.author_id)?.is_organization_verified,
+        },
         liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
       }));
@@ -1417,14 +1431,25 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           } else if (existingIdx === -1) {
             const { data: tRow } = await supabase
               .from("posts")
-              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+              .select("id, author_id, content, video_url, image_url, created_at, audio_name")
               .eq("id", id).not("video_url", "is", null).maybeSingle();
             if (tRow) {
+              const { profiles: targetProfiles } = await fetchAccountProfileMap(
+                [tRow.author_id],
+                ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+              );
+              const targetProfile = targetProfiles.get(tRow.author_id);
               newVideos = [{
                 id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
                 video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
                 view_count: 0, audio_name: tRow.audio_name || null,
-                profile: { display_name: (tRow.profiles as any)?.display_name || "User", handle: (tRow.profiles as any)?.handle || "user", avatar_url: (tRow.profiles as any)?.avatar_url || null, is_verified: !!(tRow.profiles as any)?.is_verified, is_organization_verified: !!(tRow.profiles as any)?.is_organization_verified },
+                profile: {
+                  display_name: targetProfile?.display_name || "User",
+                  handle: targetProfile?.handle || "user",
+                  avatar_url: targetProfile?.avatar_url || null,
+                  is_verified: !!targetProfile?.is_verified,
+                  is_organization_verified: !!targetProfile?.is_organization_verified,
+                },
                 liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
               }, ...newVideos];
             }

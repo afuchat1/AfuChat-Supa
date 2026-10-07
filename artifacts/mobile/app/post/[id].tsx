@@ -35,6 +35,10 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { audioFocus } from "@/lib/audioFocus";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -344,10 +348,16 @@ export default function PostDetailScreen() {
         if (org === "1") {
           const { data: orgPost } = await supabase
             .from("organization_page_posts")
-            .select("id, content, image_url, created_at, author_id, likes, organization_pages!inner(name, slug, logo_url, is_verified)")
+            .select("id, content, image_url, created_at, author_id, likes, page_id")
             .eq("id", id)
-            .single();
-          const page = (orgPost as any)?.organization_pages;
+            .maybeSingle();
+          const { data: page } = orgPost?.page_id
+            ? await supabase
+                .from("organization_pages")
+                .select("name, slug, logo_url, is_verified")
+                .eq("id", orgPost.page_id)
+                .maybeSingle()
+            : { data: null };
           data = orgPost
             ? {
                 ...orgPost,
@@ -367,16 +377,31 @@ export default function PostDetailScreen() {
               }
             : null;
         } else {
-          const result = await supabase
+          const { data: postRow } = await supabase
             .from("posts")
-            .select(`
-              id, author_id, content, image_url, created_at, view_count, like_count, post_type,
-              profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
-              post_images(image_url, display_order)
-            `)
+            .select("id, author_id, content, image_url, created_at, view_count, like_count, post_type")
             .eq("id", id)
-            .single();
-          data = result.data;
+            .maybeSingle();
+          if (postRow) {
+            const [{ profiles }, { data: imageRows }] = await Promise.all([
+              fetchAccountProfileMap(
+                [postRow.author_id],
+                ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+              ),
+              supabase
+                .from("post_images")
+                .select("post_id, image_url, display_order")
+                .eq("post_id", postRow.id)
+                .order("display_order", { ascending: true }),
+            ]);
+            data = {
+              ...postRow,
+              profiles: profiles.get(postRow.author_id) || null,
+              post_images: imageRows || [],
+            };
+          } else {
+            data = null;
+          }
         }
 
         if (!data || cancelled) { setLoading(false); return; }
@@ -429,13 +454,17 @@ export default function PostDetailScreen() {
     if (!id) return;
     Promise.resolve(supabase
       .from("post_replies")
-      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url, profiles!post_replies_author_id_fkey(display_name, handle, avatar_url)")
+      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url")
       .eq("post_id", id)
       .order("created_at", { ascending: true })
       .limit(100))
       .then(async ({ data, error }) => {
         if (error) console.error("[PostDetail] loadReplies:", error.message);
         if (data) {
+          const { profiles } = await fetchAccountProfileMap(
+            data.map((reply: any) => reply.author_id),
+            ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+          );
           const replyIds = data.map((r: any) => r.id);
           const [likesRes, myLikesRes] = await Promise.all([
             replyIds.length > 0
@@ -461,9 +490,9 @@ export default function PostDetailScreen() {
             voice_duration: r.voice_duration ?? null,
             image_url: r.image_url || null,
             profile: {
-              display_name: r.profiles?.display_name || "User",
-              handle: r.profiles?.handle || "user",
-              avatar_url: r.profiles?.avatar_url || null,
+              display_name: profiles.get(r.author_id)?.display_name || "User",
+              handle: profiles.get(r.author_id)?.handle || "user",
+              avatar_url: profiles.get(r.author_id)?.avatar_url ?? null,
             },
           })));
         }

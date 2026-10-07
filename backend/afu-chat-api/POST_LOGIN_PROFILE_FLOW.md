@@ -70,3 +70,28 @@ This verifies the web client's persisted-session restore. A native Android runti
 
 - `GET /v1/chat/videos` and `/v1/chat/videos/*` are routed but return `501` while the server-side video-processing pipeline is unavailable; the mobile client retains its source-video fallback.
 - A separate probe of AfuAuth's `GET /v1/auth/me` returned `503`. AfuChat does not call that route: its identity verification uses `POST /v1/auth/session`, which succeeds. AfuAuth login and other product APIs were not changed.
+
+## Update: AfuChat data lists and post details
+
+### Confirmed rendering failure
+
+The profile request above was working, but several product-data screens still used PostgREST embedded selects such as `profiles!posts_author_id_fkey(...)`, `post_images(...)`, or `profiles!messages_sender_id_fkey(...)`. The live public compatibility views do not expose relationship metadata for these cross-schema foreign keys. Those selects returned `400 PGRST200` (“Could not find a relationship ... in the schema cache”), while equivalent flat table reads returned `200`. Screens that ignored the query error then appeared empty or stayed in a loading state.
+
+### Client correction
+
+The app now fetches product rows and child rows as flat queries, then batch-loads display profiles from the canonical shared `accounts.profiles` resource using the existing authenticated Supabase client. It does not trust client-supplied identity for protected data. The updated user-facing paths are:
+
+- Discover feed, following feed, new-post polling, and the story row.
+- My posts, followers/following, and followed contacts.
+- Video feed, post detail, and post/video comments.
+- Chat history, older-message pagination, notification-target messages, and related chat transaction/envelope profile labels.
+
+`GET /v1/chat/me`, the working AfuAuth login/session flow, `/v1/chat/conversations`, and the shared Supabase database are unchanged. No Worker route deployment, database migration, data copy, or account change was made for this client correction.
+
+### Verification and limits
+
+- The direct live probes confirmed embedded joins fail with `400 PGRST200` and the corresponding flat reads succeed with `200`.
+- The updated target screens no longer contain those embedded relationship selects.
+- Mobile TypeScript check passed. `pnpm run build:web` exported 144 static routes, and the `Start application` workflow restarted and served on port 5000.
+- The preview capture was unauthenticated: it showed the sign-in control and a discover loading skeleton, with generic HTTP 400 browser-console entries. It did not exercise the signed-in data screens. No real session was available to verify chat, posts, followers, logout, or re-login after this client change.
+- This is not yet an app-wide join cleanup. A repository search still finds embedded relationship selects in other areas, including search, groups, moments, stories, sharing, shop, gifts, and support. Those paths need the same flat-query treatment before claiming all app data views are repaired.

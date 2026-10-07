@@ -20,6 +20,10 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDataMode } from "@/context/DataModeContext";
 import { supabase } from "@/lib/supabase";
 import { getAfuChatConversations } from "@/lib/afuchatApi";
+import {
+  ACCOUNT_PROFILE_CHAT_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { safeRouter } from "@/lib/navUtils";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
@@ -289,11 +293,16 @@ export default function ShareToAfuChatScreen() {
       try {
         const { data } = await supabase
           .from("follows")
-          .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url)")
+          .select("following_id")
           .eq("follower_id", user.id);
         if (cancelled) return;
+        const { profiles } = await fetchAccountProfileMap<Contact>(
+          (data ?? []).map((row: any) => row.following_id),
+          ACCOUNT_PROFILE_CHAT_COLUMNS,
+        );
+        if (cancelled) return;
         const next = (data ?? [])
-          .map((row: any) => row.profiles)
+          .map((row: any) => profiles.get(row.following_id))
           .filter(Boolean) as Contact[];
         next.sort((a, b) => a.display_name.localeCompare(b.display_name));
         setContacts(next);

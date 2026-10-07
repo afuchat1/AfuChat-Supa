@@ -38,6 +38,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer, type PostViewerMeta } from "@/components/ImageViewer";
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  ACCOUNT_PROFILE_FEED_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -79,6 +84,48 @@ import { getCachedStoryMedia } from "@/lib/storyMediaCache";
 import { prefetchAvatars, prefetchThumbnails, prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { useThrottledFocusEffect } from "@/lib/hooks/useThrottledFocusEffect";
 import FindPeopleTab from "@/components/discover/FindPeopleTab";
+
+async function hydrateFeedPostRows(rows: any[]) {
+  if (rows.length === 0) return rows;
+
+  const postIds = [...new Set(rows.map((row) => row.id).filter(Boolean))];
+  const authorIds = [...new Set(rows.map((row) => row.author_id).filter(Boolean))];
+  const assetIds = [...new Set(rows.map((row) => row.video_asset_id).filter(Boolean))];
+  const [profileResult, imageResult, assetResult] = await Promise.all([
+    fetchAccountProfileMap(authorIds, ACCOUNT_PROFILE_FEED_COLUMNS),
+    postIds.length > 0
+      ? supabase
+          .from("post_images")
+          .select("post_id, image_url, display_order")
+          .in("post_id", postIds)
+          .order("display_order", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    assetIds.length > 0
+      ? supabase
+          .from("video_assets")
+          .select("id, duration_seconds")
+          .in("id", assetIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const imagesByPost = new Map<string, any[]>();
+  for (const image of imageResult.data || []) {
+    const images = imagesByPost.get(image.post_id) || [];
+    images.push(image);
+    imagesByPost.set(image.post_id, images);
+  }
+  const assetsById = new Map<string, any>();
+  for (const asset of assetResult.data || []) {
+    assetsById.set((asset as any).id, asset);
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    profiles: profileResult.profiles.get(row.author_id) || null,
+    post_images: imagesByPost.get(row.id) || [],
+    video_assets: row.video_asset_id ? assetsById.get(row.video_asset_id) || null : null,
+  }));
+}
 
 type PostItem = {
   id: string;
@@ -345,14 +392,22 @@ const DISCOVER_STORY_CACHE_KEY = "@afuchat:discover_story_list";
     }
 
     try {
-      const { data } = await supabase
+      const { data: storyRows } = await supabase
         .from("stories")
-        .select("id, user_id, media_url, media_type, caption, created_at, expires_at, view_count, privacy, profiles!stories_user_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
+        .select("id, user_id, media_url, media_type, caption, created_at, expires_at, view_count, privacy")
           .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
         .limit(100);
-      if (data) {
-        const visible = (data as any[]).filter((s) => s.user_id === userId || s.privacy === "everyone");
+      if (storyRows) {
+        const { profiles: storyProfiles } = await fetchAccountProfileMap(
+          storyRows.map((story: any) => story.user_id),
+          ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+        );
+        const data = storyRows.map((story: any) => ({
+          ...story,
+          profiles: storyProfiles.get(story.user_id) || null,
+        }));
+        const visible = data.filter((s: any) => s.user_id === userId || s.privacy === "everyone");
         const storyIds = visible.map((s) => s.id).filter(Boolean);
         const { data: viewed } = userId && storyIds.length
           ? await supabase.from("story_views").select("story_id").eq("viewer_id", userId).in("story_id", storyIds)
@@ -1664,21 +1719,19 @@ export default function DiscoverScreen() {
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
-          post_type, article_title, article_body, video_url,
-          profiles!posts_author_id_fkey(display_name, handle, avatar_url, bio, is_verified, is_organization_verified),
-          post_images(image_url, display_order),
-          video_assets!posts_video_asset_id_fkey(duration_seconds)
+          post_type, article_title, article_body, video_url, video_asset_id
         `)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
         .order("created_at", { ascending: false });
-      const { data } = await (followOlderThan
+      const { data: rawData } = await (followOlderThan
         ? followBaseQ.lt("created_at", followOlderThan).limit(PAGE_SIZE)
         : followNewerThan
           ? followBaseQ.gt("created_at", followNewerThan).limit(PAGE_SIZE)
           : followBaseQ.limit(PAGE_SIZE));
 
-      if (data) {
+      if (rawData) {
+        const data = await hydrateFeedPostRows(rawData);
         if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
 
         const postIds = data.map((p: any) => p.id);
@@ -1786,10 +1839,7 @@ export default function DiscoverScreen() {
 
     const fySelect = `
       id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
-      post_type, article_title, article_body, video_url,
-      profiles!posts_author_id_fkey(display_name, handle, avatar_url, bio, is_verified, is_organization_verified, country, interests, hide_posts_non_followers),
-      post_images(image_url, display_order),
-      video_assets!posts_video_asset_id_fkey(duration_seconds)
+      post_type, article_title, article_body, video_url, video_asset_id
     `;
 
     // Kick off SQLite reads immediately so they overlap with query-building and network.
@@ -1877,9 +1927,9 @@ export default function DiscoverScreen() {
       const j = Math.floor(Math.random() * (i + 1));
       [allRaw[i], allRaw[j]] = [allRaw[j], allRaw[i]];
     }
-    const data = allRaw;
+    const data = await hydrateFeedPostRows(allRaw);
     // Seed handle→id cache — makes mention-taps to these authors instant
-    for (const p of allRaw) {
+    for (const p of data) {
       if (p.author_id && p.profiles?.handle) setHandleId(p.profiles.handle, p.author_id);
     }
 
@@ -1895,7 +1945,7 @@ export default function DiscoverScreen() {
       // rather than sequentially after them.
       let _orgQ: any = supabase
         .from("organization_page_posts")
-        .select("id, content, image_url, created_at, author_id, likes, page_id, organization_pages!inner(id, slug, name, org_type, logo_url, is_verified)")
+        .select("id, content, image_url, created_at, author_id, likes, page_id")
         .order("created_at", { ascending: false })
         .limit(6);
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
@@ -1904,11 +1954,10 @@ export default function DiscoverScreen() {
       const [
         { data: myLikes },
         { data: replyCounts },
-        { data: myAuthorLikes },
         { data: followingData },
-        { data: myReplies },
         { data: myBookmarks },
         _orgResult,
+        authorPostsResult,
       ] = await Promise.all([
         postIds.length > 0 && user
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
@@ -1917,28 +1966,60 @@ export default function DiscoverScreen() {
           ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_fyLimit)
           : { data: [] },
         authorIds.length > 0 && user
-          ? supabase.from("post_acknowledgments")
-              .select("post_id, posts!inner(author_id)")
-              .eq("user_id", user.id)
-              .in("posts.author_id", authorIds)
-              .limit(100)
-          : { data: [] },
-        authorIds.length > 0 && user
           ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
-          : { data: [] },
-        authorIds.length > 0 && user
-          ? supabase.from("post_replies")
-              .select("post_id, posts!inner(author_id)")
-              .eq("author_id", user.id)
-              .in("posts.author_id", authorIds)
-              .limit(100)
           : { data: [] },
         postIds.length > 0 && user
           ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
           : { data: [] },
         Promise.resolve(_orgQ).catch(() => ({ data: null })),
+        authorIds.length > 0
+          ? supabase.from("posts").select("id, author_id").in("author_id", authorIds).limit(500)
+          : { data: [] },
       ]);
-      const _orgData: any[] | null = (_orgResult as any)?.data ?? null;
+      const authorPostRows: any[] = (authorPostsResult as any)?.data ?? [];
+      const authorPostIds = authorPostRows.map((post) => post.id);
+      const authorByPostId = new Map<string, string>();
+      for (const post of authorPostRows) {
+        authorByPostId.set(post.id, post.author_id);
+      }
+      let myAuthorLikes: any[] = [];
+      let myReplies: any[] = [];
+      if (user && authorPostIds.length > 0) {
+        const [authorLikesResult, authorRepliesResult] = await Promise.all([
+          supabase
+            .from("post_acknowledgments")
+            .select("post_id")
+            .eq("user_id", user.id)
+            .in("post_id", authorPostIds)
+            .limit(100),
+          supabase
+            .from("post_replies")
+            .select("post_id")
+            .eq("author_id", user.id)
+            .in("post_id", authorPostIds)
+            .limit(100),
+        ]);
+        myAuthorLikes = authorLikesResult.data || [];
+        myReplies = authorRepliesResult.data || [];
+      }
+
+      let _orgData: any[] = (_orgResult as any)?.data ?? [];
+      if (_orgData.length > 0) {
+        const pageIds = [...new Set(_orgData.map((post) => post.page_id).filter(Boolean))];
+        const { data: pageRows } = pageIds.length > 0
+          ? await supabase
+              .from("organization_pages")
+              .select("id, slug, name, org_type, logo_url, is_verified")
+              .in("id", pageIds)
+          : { data: [] };
+        const pagesById = new Map<string, any>();
+        for (const page of pageRows || []) {
+          pagesById.set((page as any).id, page);
+        }
+        _orgData = _orgData
+          .map((post) => ({ ...post, organization_pages: pagesById.get(post.page_id) }))
+          .filter((post) => post.organization_pages);
+      }
 
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
@@ -1959,11 +2040,11 @@ export default function DiscoverScreen() {
 
       const authorInteractionMap: Record<string, number> = {};
       for (const al of (myAuthorLikes || [])) {
-        const authorId = (al as any).posts?.author_id;
+        const authorId = authorByPostId.get(al.post_id);
         if (authorId) authorInteractionMap[authorId] = (authorInteractionMap[authorId] || 0) + 1;
       }
       for (const ar of (myReplies || [])) {
-        const authorId = (ar as any).posts?.author_id;
+        const authorId = authorByPostId.get(ar.post_id);
         if (authorId) authorInteractionMap[authorId] = (authorInteractionMap[authorId] || 0) + 2;
       }
 
@@ -2404,10 +2485,7 @@ export default function DiscoverScreen() {
       const activeTab = feedTabRef.current;
       const fySelect = `
         id, author_id, content, image_url, created_at, view_count, like_count, visibility,
-        post_type, article_title, article_body, video_url,
-        profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
-        post_images(image_url, display_order),
-        video_assets!posts_video_asset_id_fkey(duration_seconds)
+        post_type, article_title, article_body, video_url, video_asset_id
       `;
 
       let newPostsData: any[] = [];
@@ -2443,6 +2521,8 @@ export default function DiscoverScreen() {
       }
 
       if (!newPostsData.length || cancelled) return;
+      newPostsData = await hydrateFeedPostRows(newPostsData);
+      if (cancelled) return;
 
       // Map to PostItem
       const mappedPosts: PostItem[] = newPostsData.map((p: any) => ({

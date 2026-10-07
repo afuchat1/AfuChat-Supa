@@ -14,6 +14,12 @@ import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  ACCOUNT_PROFILE_PRIVACY_COLUMNS,
+  fetchAccountProfileMap,
+  type SharedProfile,
+} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -29,8 +35,6 @@ type FollowUser = {
   bio: string | null;
   is_verified: boolean;
   is_organization_verified: boolean;
-  acoin: number;
-  follower_count: number;
 };
 
 export default function FollowersScreen() {
@@ -47,6 +51,7 @@ export default function FollowersScreen() {
   const [filtered, setFiltered] = useState<FollowUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [listHidden, setListHidden] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [myFollowerIds, setMyFollowerIds] = useState<Set<string>>(new Set());
@@ -80,15 +85,20 @@ export default function FollowersScreen() {
 
   const loadPrivacyAndUsers = async (page: number) => {
     const isReset = page === 0;
-    if (isReset) { setLoading(true); setUsers([]); }
+    if (isReset) {
+      setLoading(true);
+      setUsers([]);
+      setLoadError(false);
+    }
     try {
       // Enforce visibility privacy: if the list owner has hidden this list, block non-owners
       if (isReset && !isOwnProfile && userId) {
-        const { data: privData } = await supabase
-          .from("profiles")
-          .select("hide_followers_list, hide_following_list")
-          .eq("id", userId)
-          .single();
+        const { profiles, error } = await fetchAccountProfileMap<SharedProfile>(
+          [userId],
+          ACCOUNT_PROFILE_PRIVACY_COLUMNS,
+        );
+        if (error) throw error;
+        const privData = profiles.get(userId);
         const fieldName = type === "followers" ? "hide_followers_list" : "hide_following_list";
         if (privData?.[fieldName]) {
           setListHidden(true);
@@ -101,17 +111,23 @@ export default function FollowersScreen() {
 
       const followCol = type === "followers" ? "following_id" : "follower_id";
       const joinCol = type === "followers" ? "follower_id" : "following_id";
-      const profileKey = type === "followers" ? "follower" : "following";
-      const fkName = type === "followers"
-        ? "follows_follower_id_fkey"
-        : "follows_following_id_fkey";
-
-      const { data: followRows } = await supabase
+      const { data: followRows, error: followsError } = await supabase
         .from("follows")
-        .select(`${joinCol}, ${profileKey}:profiles!${fkName}(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, acoin, follower_count)`)
+        .select(joinCol)
         .eq(followCol, userId)
         .order("created_at", { ascending: false })
         .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      if (followsError) throw followsError;
+
+      const profileIds = (followRows || [])
+        .map((row: any) => row[joinCol] as string)
+        .filter(Boolean);
+      const { profiles: profilesById, error: profilesError } =
+        await fetchAccountProfileMap<FollowUser>(
+          profileIds,
+          ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+        );
+      if (profilesError) throw profilesError;
 
       let blockedIds: string[] = [];
       if (user) {
@@ -126,8 +142,9 @@ export default function FollowersScreen() {
         }
       }
 
-      const rawProfiles = (followRows || []).map((r: any) => r[profileKey]).filter(Boolean);
-      const profiles = rawProfiles.filter((p: any) => !blockedIds.includes(p.id));
+      const profiles = profileIds
+        .map((id) => profilesById.get(id))
+        .filter((p): p is FollowUser => !!p && !blockedIds.includes(p.id));
 
       if (isReset) {
         setUsers(profiles as FollowUser[]);
@@ -161,7 +178,9 @@ export default function FollowersScreen() {
           setMyFollowerIds(prev => new Set([...prev, ...visibleIds]));
         }
       }
-    } catch (_) {} finally {
+    } catch {
+      if (isReset) setLoadError(true);
+    } finally {
       setLoading(false);
       setLoadingMore(false);
     }
@@ -352,21 +371,40 @@ export default function FollowersScreen() {
             )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Ionicons
-                  name={type === "followers" ? "people" : "person-add"}
-                  size={48}
-                  color={colors.textMuted}
-                />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  {search ? "No results" : `No ${type}`}
-                </Text>
-                <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
-                  {search
-                    ? `No users matching "${search}"`
-                    : type === "followers"
-                    ? "No one is following this account yet."
-                    : "This account isn't following anyone yet."}
-                </Text>
+                {loadError ? (
+                  <>
+                    <Ionicons name="cloud-offline" size={48} color={colors.textMuted} />
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn't load this list</Text>
+                    <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>Check your connection and try again.</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        pageRef.current = 0;
+                        loadPrivacyAndUsers(0);
+                      }}
+                      style={{ paddingVertical: 12 }}
+                    >
+                      <Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold" }}>Try again</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name={type === "followers" ? "people" : "person-add"}
+                      size={48}
+                      color={colors.textMuted}
+                    />
+                    <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                      {search ? "No results" : `No ${type}`}
+                    </Text>
+                    <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
+                      {search
+                        ? `No users matching "${search}"`
+                        : type === "followers"
+                        ? "No one is following this account yet."
+                        : "This account isn't following anyone yet."}
+                    </Text>
+                  </>
+                )}
               </View>
             }
           />

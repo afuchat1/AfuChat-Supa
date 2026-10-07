@@ -15,6 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
@@ -52,15 +56,19 @@ export default function CreateGroupScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("follows")
-        .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
+        .select("following_id")
         .eq("follower_id", user.id);
+      if (error) throw error;
 
-      if (data) {
-        setFollowedUsers(
-          data.map((f: any) => f.profiles).filter(Boolean)
+      if (data?.length) {
+        const { profiles, error: profilesError } = await fetchAccountProfileMap<FollowedUser>(
+          data.map((row: any) => row.following_id),
+          ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
         );
+        if (profilesError) throw profilesError;
+        setFollowedUsers(data.map((row: any) => profiles.get(row.following_id)).filter(Boolean) as FollowedUser[]);
       }
     } catch (_) {} finally {
       setLoading(false);

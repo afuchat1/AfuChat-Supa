@@ -11,6 +11,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -53,12 +57,32 @@ export default function BlockedUsersScreen() {
 
   const load = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("blocked_users")
-      .select("id, blocked_at, profiles!blocked_users_blocked_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)")
+      .select("id, blocked_id, blocked_at")
       .eq("blocker_id", user.id)
       .order("blocked_at", { ascending: false });
-    if (data) setItems(data.map((b: any) => ({ ...b, profile: b.profiles })));
+    if (!error && data) {
+      const { profiles } = await fetchAccountProfileMap(
+        data.map((row: any) => row.blocked_id),
+        ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
+      );
+      setItems(data.map((row: any) => {
+        const profile = profiles.get(row.blocked_id);
+        return {
+          id: row.id,
+          blocked_at: row.blocked_at,
+          profile: {
+            id: row.blocked_id,
+            display_name: profile?.display_name || "Unknown",
+            handle: profile?.handle || "",
+            avatar_url: profile?.avatar_url ?? null,
+            is_verified: !!profile?.is_verified,
+            is_organization_verified: !!profile?.is_organization_verified,
+          },
+        };
+      }));
+    }
     setLoading(false);
   }, [user]);
 

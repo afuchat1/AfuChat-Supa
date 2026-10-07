@@ -12,3 +12,9 @@ The similarly named `chat`/`social` and `afuchat` relations are separate physica
 **Why:** Earlier inventory used an API path that returned 403 and led to the incorrect conclusion that the schema was absent. The schema exists, but its current PostgREST configuration and cross-product contents make a direct cutover unsafe.
 
 **How to apply:** Re-check live schema configuration before each migration. Do not expose all of `afuchat` or `public`, or move AfuMail/Afu Ads relations under AfuChat-only scope. Preserve the compatibility contract until client calls and RPC ownership are reviewed individually; audit security-definer search paths and cross-schema foreign keys before routing RPCs. Keep divergent legacy data intact and resolve conflicts explicitly; never promote plaintext into encrypted columns. Coordinate shared PostgREST settings with affected owners, inventory table grants/policies, and preserve rollback data until consumers pass. Never infer row counts from anonymous RLS-filtered results.
+
+PostgREST cannot infer some relationships used through the `public` compatibility views when their underlying foreign keys cross schemas (for example, AfuChat product rows referencing canonical `accounts.profiles`). A nested embed then fails with `PGRST200` even when the flat product query and the profile query both succeed.
+
+**Why:** Live probes on 2026-10-07 returned `400 PGRST200` for post/profile, follow/profile, post/image, and message/sender embeds; the corresponding flat reads returned `200`.
+
+**How to apply:** For affected client reads, query the product view and child rows by ID, then batch-load only the needed display fields from `accounts.profiles` using the same authenticated Supabase client. Keep privacy checks fail-closed. Do not create duplicate profile data, widen PostgREST schema exposure, or add a migration solely to restore implicit embeds.

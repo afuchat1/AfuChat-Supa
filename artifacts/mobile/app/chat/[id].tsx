@@ -64,6 +64,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useChatAppearance } from "@/lib/chatAppearance";
 import ChatAppearanceSheet from "@/components/chat/ChatAppearanceSheet";
 import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
+import {
+  ACCOUNT_PROFILE_CHAT_COLUMNS,
+  fetchAccountProfileMap,
+} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useGiftPrices } from "@/hooks/useGiftPrices";
@@ -3068,7 +3072,7 @@ function ChatScreen() {
     if (!isCurrentLoad()) return;
     let msgQuery = supabase
       .from("messages")
-      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+      .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
       .eq("chat_id", chatId)
       .order("sent_at", { ascending: false })
       .limit(100);
@@ -3078,8 +3082,20 @@ function ChatScreen() {
     if (clearedAtServer && (!newestStored || clearedAtServer > newestStored)) {
       msgQuery = msgQuery.gt("sent_at", clearedAtServer);
     }
-      const { data } = await msgQuery;
+      const { data: rawData } = await msgQuery;
       if (!isCurrentLoad()) return;
+      let data = rawData;
+      if (rawData && rawData.length > 0) {
+        const { profiles } = await fetchAccountProfileMap(
+          rawData.map((message: any) => message.sender_id),
+          ACCOUNT_PROFILE_CHAT_COLUMNS,
+        );
+        if (!isCurrentLoad()) return;
+        data = rawData.map((message: any) => ({
+          ...message,
+          profiles: profiles.get(message.sender_id) || null,
+        }));
+      }
 
     if (data) {
       const msgIds = data.map((m: any) => m.id);
@@ -3266,12 +3282,16 @@ function ChatScreen() {
       const cursor = oldestCursorRef.current;
       const { data } = await supabase
         .from("messages")
-        .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+        .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
         .eq("chat_id", chatId)
         .lt("sent_at", cursor)
         .order("sent_at", { ascending: false })
         .limit(50);
       if (data && data.length > 0) {
+        const { profiles } = await fetchAccountProfileMap(
+          data.map((message: any) => message.sender_id),
+          ACCOUNT_PROFILE_CHAT_COLUMNS,
+        );
         const msgIds = data.map((m: any) => m.id);
         const [{ data: reactions }, { data: statuses }] = await Promise.all([
           supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds),
@@ -3296,7 +3316,12 @@ function ChatScreen() {
             encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
             sent_at: m.sent_at, reply_to_message_id: m.reply_to_message_id,
             attachment_url: m.attachment_url, attachment_type: m.attachment_type, edited_at: m.edited_at,
-            sender: m.profiles, reactions: reactionMap[m.id] || [],
+            sender: {
+              display_name: profiles.get(m.sender_id)?.display_name || "User",
+              avatar_url: profiles.get(m.sender_id)?.avatar_url ?? null,
+              handle: profiles.get(m.sender_id)?.handle || "user",
+            },
+            reactions: reactionMap[m.id] || [],
             status: m.sender_id === user.id
               ? (statusMap2.get(m.id)?.read_at ? "read" : statusMap2.get(m.id)?.delivered_at ? "delivered" : "sent")
               : undefined,
@@ -4320,12 +4345,24 @@ function ChatScreen() {
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
         supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
         supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
-        supabase.from("user_subscriptions").select("plan_id, is_active, expires_at, subscription_plans(name, tier)").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
+        supabase.from("user_subscriptions").select("plan_id, is_active, expires_at").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
         supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-        supabase.from("xp_transfers").select("id, amount, created_at, status, receiver:profiles!xp_transfers_receiver_id_fkey(handle, display_name)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
-        supabase.from("xp_transfers").select("id, amount, created_at, status, sender:profiles!xp_transfers_sender_id_fkey(handle, display_name)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
+        supabase.from("xp_transfers").select("id, amount, created_at, status, receiver_id").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
+        supabase.from("xp_transfers").select("id, amount, created_at, status, sender_id").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
       ]);
-      const premium = subData ? `${(subData as any).subscription_plans?.name} (${(subData as any).subscription_plans?.tier})` : "None";
+      const [transferProfiles, planResult] = await Promise.all([
+        fetchAccountProfileMap(
+          [
+            ...(recentNexaSent || []).map((row: any) => row.receiver_id),
+            ...(recentNexaRecv || []).map((row: any) => row.sender_id),
+          ],
+          ACCOUNT_PROFILE_CHAT_COLUMNS,
+        ),
+        subData?.plan_id
+          ? supabase.from("subscription_plans").select("name, tier").eq("id", subData.plan_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      const premium = planResult.data ? `${planResult.data.name} (${planResult.data.tier})` : "None";
       const txLines: string[] = [];
       (recentAcoinTx || []).forEach((t: any) => {
         const date = new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -4333,11 +4370,11 @@ function ChatScreen() {
         txLines.push(`  - [ref:${t.id}] ${date}: ${t.transaction_type} ${t.amount > 0 ? "+" : ""}${t.amount} ACoin${meta.plan_name ? ` (${meta.plan_name})` : ""}${meta.to_handle ? ` to @${meta.to_handle}` : ""}${meta.from_handle ? ` from @${meta.from_handle}` : ""}${t.nexa_spent ? ` [${t.nexa_spent} Nexa spent]` : ""}${t.fee_charged ? ` [fee: ${t.fee_charged}]` : ""}`);
       });
       (recentNexaSent || []).forEach((t: any) => {
-        const recv = t.receiver;
+        const recv = transferProfiles.profiles.get(t.receiver_id);
         txLines.push(`  - [ref:${t.id}] ${new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}: Sent ${t.amount} Nexa to @${recv?.handle || "unknown"}`);
       });
       (recentNexaRecv || []).forEach((t: any) => {
-        const sndr = t.sender;
+        const sndr = transferProfiles.profiles.get(t.sender_id);
         txLines.push(`  - [ref:${t.id}] ${new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}: Received ${t.amount} Nexa from @${sndr?.handle || "unknown"}`);
       });
       const afuId = profile.id ? String(parseInt(profile.id.replace(/-/g, "").slice(0, 8), 16) % 100000000).padStart(8, "0") : "00000000";
@@ -6833,7 +6870,7 @@ STRICT RULES:
 
     const { data: env } = await supabase
       .from("red_envelopes")
-      .select("id, sender_id, total_amount, recipient_count, claimed_count, message, is_expired, profiles!red_envelopes_sender_id_fkey(display_name)")
+      .select("id, sender_id, total_amount, recipient_count, claimed_count, message, is_expired")
       .eq("id", envelopeId)
       .single();
 
@@ -6843,7 +6880,11 @@ STRICT RULES:
       return;
     }
 
-    const senderName = (env as any).profiles?.display_name || "Someone";
+    const { profiles: senderProfiles } = await fetchAccountProfileMap(
+      [env.sender_id],
+      ACCOUNT_PROFILE_CHAT_COLUMNS,
+    );
+    const senderName = senderProfiles.get(env.sender_id)?.display_name || "Someone";
     const isSender = env.sender_id === user?.id;
 
     const { data: existingClaim } = await supabase
@@ -7063,15 +7104,21 @@ STRICT RULES:
     }
     notificationTargetLoadRef.current = messageId;
     let cancelled = false;
-    supabase
-      .from("messages")
-      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
-      .eq("id", messageId)
-      .eq("chat_id", chatId)
-      .maybeSingle()
-      .then(({ data }) => {
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from("messages")
+          .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
+          .eq("id", messageId)
+          .eq("chat_id", chatId)
+          .maybeSingle();
         if (cancelled || !data) return;
         const row = data as any;
+        const { profiles } = await fetchAccountProfileMap(
+          [row.sender_id],
+          ACCOUNT_PROFILE_CHAT_COLUMNS,
+        );
+        if (cancelled) return;
         const isBot = row.sender_id === AFUAI_BOT_ID;
         const aiParsed = isBot ? parseAfuAiTags(row.encrypted_content || "") : null;
         const targetMessage: Message = {
@@ -7084,7 +7131,11 @@ STRICT RULES:
           attachment_url: row.attachment_url,
           attachment_type: row.attachment_type,
           edited_at: row.edited_at,
-          sender: row.profiles,
+          sender: {
+            display_name: profiles.get(row.sender_id)?.display_name || "User",
+            avatar_url: profiles.get(row.sender_id)?.avatar_url ?? null,
+            handle: profiles.get(row.sender_id)?.handle || "user",
+          },
           reactions: [],
           _isAi: isBot || undefined,
           _aiActions: aiParsed && aiParsed.actions.length > 0 ? aiParsed.actions : undefined,
@@ -7096,7 +7147,10 @@ STRICT RULES:
             (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime(),
           );
         });
-      }, () => {});
+      } catch {
+        // Ignore notification hydration failures; the message can be loaded on scroll.
+      }
+    })();
     return () => {
       cancelled = true;
     };

@@ -120,15 +120,28 @@ export default function MyPostsScreen() {
 
   const load = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("posts")
-      .select(`id, content, image_url, post_type, created_at, view_count, visibility, post_images(image_url, display_order)`)
+      .select("id, content, image_url, post_type, created_at, view_count, visibility")
       .eq("author_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
 
-    if (data) {
+    if (!error && data) {
       const postIds = data.map((p: any) => p.id);
+      const { data: imageRows } = postIds.length > 0
+        ? await supabase
+            .from("post_images")
+            .select("post_id, image_url, display_order")
+            .in("post_id", postIds)
+            .order("display_order", { ascending: true })
+        : { data: [] };
+      const imagesByPost = new Map<string, { image_url: string; display_order: number }[]>();
+      for (const image of imageRows || []) {
+        const group = imagesByPost.get(image.post_id) || [];
+        group.push(image);
+        imagesByPost.set(image.post_id, group);
+      }
       const [{ data: likes }, { data: replies }] = await Promise.all([
         postIds.length > 0 ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds) : { data: [] },
         postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds) : { data: [] },
@@ -143,7 +156,7 @@ export default function MyPostsScreen() {
         id: p.id,
         content: p.content || "",
         image_url: p.image_url,
-        images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
+        images: (imagesByPost.get(p.id) || []).map((i) => i.image_url),
         created_at: p.created_at,
         view_count: p.view_count || 0,
         visibility: p.visibility || "public",
