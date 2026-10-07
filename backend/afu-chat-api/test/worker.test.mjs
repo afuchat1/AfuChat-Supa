@@ -186,6 +186,157 @@ test("AfuChat status reports health without exposing provider or database detail
   assert.deepEqual(Object.keys(payload).sort(), ["ok", "timestamp"]);
 });
 
+test("current profile uses the verified AfuAuth identity and returns the mobile profile shape", async () => {
+  const token = "profile-session-token";
+  const env = makeEnv();
+  const profile = {
+    id: "user-123",
+    handle: "test-user",
+    display_name: "Test User",
+    avatar_url: null,
+    banner_url: null,
+    bio: null,
+    phone_number: null,
+    xp: 20,
+    acoin: 5,
+    current_grade: "Bronze",
+    is_verified: false,
+    is_private: false,
+    show_online_status: true,
+    country: null,
+    website_url: null,
+    language: "en",
+    tipping_enabled: true,
+    is_admin: false,
+    is_support_staff: false,
+    is_organization_verified: false,
+    is_business_mode: false,
+    gender: null,
+    date_of_birth: null,
+    region: null,
+    interests: [],
+    onboarding_completed: true,
+    scheduled_deletion_at: null,
+    created_at: "2026-10-01T00:00:00.000Z",
+    platinum_until: null,
+  };
+  let authRequest;
+  let profileRequest;
+  env.AFUAUTH_API.fetch = async (input) => {
+    authRequest = input instanceof Request ? input : new Request(input);
+    return Response.json({ user: { id: "user-123" }, accessToken: token });
+  };
+  globalThis.fetch = async (input) => {
+    profileRequest = input instanceof Request ? input : new Request(input);
+    return Response.json([profile]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/me?id=attacker-selected-id", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const query = new URL(profileRequest.url).searchParams;
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), profile);
+  assert.equal(authRequest.url, "https://afuauth-api/v1/auth/session");
+  assert.equal(authRequest.method, "POST");
+  assert.equal(authRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(profileRequest.method, "GET");
+  assert.equal(query.get("id"), "eq.user-123");
+  assert.notEqual(query.get("id"), "eq.attacker-selected-id");
+  assert.equal(query.get("limit"), "2");
+  assert.match(query.get("select"), /platinum_until/);
+  assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "public");
+  assert.match(response.headers.get("Cache-Control"), /private, no-store/);
+});
+
+test("current profile rejects missing or invalid sessions before reading Supabase", async () => {
+  const env = makeEnv();
+  let authCalls = 0;
+  let databaseCalls = 0;
+  env.AFUAUTH_API.fetch = async () => {
+    authCalls += 1;
+    return Response.json({ error: "Invalid token" }, { status: 401 });
+  };
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+
+  const missing = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/me"),
+    env,
+  );
+  const invalid = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/me", {
+      headers: { Authorization: "Bearer invalid-session" },
+    }),
+    env,
+  );
+
+  assert.equal(missing.status, 401);
+  assert.equal(invalid.status, 401);
+  assert.equal(authCalls, 1);
+  assert.equal(databaseCalls, 0);
+  assert.doesNotMatch(await invalid.text(), /Supabase|Worker|service binding/i);
+});
+
+test("current profile returns a safe not-found response when the shared profile row is absent", async () => {
+  const token = "valid-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  globalThis.fetch = async () => Response.json([]);
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.error, "User profile was not found.");
+  assert.equal(typeof payload.request_id, "string");
+  assert.doesNotMatch(JSON.stringify(payload), /database|schema|Worker|Supabase/i);
+});
+
+test("current profile sanitizes shared-database failures", async () => {
+  const token = "valid-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  globalThis.fetch = async () =>
+    Response.json(
+      { code: "PGRST123", message: "internal database detail" },
+      { status: 500 },
+    );
+  const previousConsoleError = console.error;
+  console.error = () => {};
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://api.afuchat.com/v1/chat/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+    const payload = await response.json();
+
+    assert.equal(response.status, 502);
+    assert.equal(payload.error, "User profile could not be loaded.");
+    assert.doesNotMatch(JSON.stringify(payload), /PGRST|database|internal|Supabase/i);
+  } finally {
+    console.error = previousConsoleError;
+  }
+});
+
 test("account export verifies AfuAuth and sends only the selected export to the signed-in email", async () => {
   const token = "account-export-session";
   const env = makeEnv();
@@ -224,7 +375,7 @@ test("account export verifies AfuAuth and sends only the selected export to the 
   assert.equal(resendPayload.from, env.RESEND_FROM_EMAIL);
   assert.deepEqual(resendPayload.to, ["user@example.test"]);
   assert.deepEqual(resendPayload.attachments.map((attachment) => attachment.filename), [
-    "afuchat-data-export-2026-10-06.json",
+    `afuchat-data-export-${new Date().toISOString().slice(0, 10)}.json`,
   ]);
   const exported = JSON.parse(atob(resendPayload.attachments[0].content));
   assert.deepEqual(exported.included_types, ["profile"]);

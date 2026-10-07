@@ -31,6 +31,7 @@ import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync, stopOfflineSync } from "@/lib/offlineSync";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
 import { safeRouter } from "@/lib/navUtils";
+import { getAfuChatCurrentProfile } from "@/lib/afuchatApi";
 
 type Profile = {
   id: string;
@@ -174,13 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { data: subData, error: subscriptionError },
         { data: goodsData, error: goodsError },
       ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            "id, handle, display_name, avatar_url, banner_url, bio, phone_number, xp, acoin, current_grade, is_verified, is_private, show_online_status, country, website_url, language, tipping_enabled, is_admin, is_support_staff, is_organization_verified, is_business_mode, gender, date_of_birth, region, interests, onboarding_completed, scheduled_deletion_at, created_at, platinum_until"
-          )
-          .eq("id", userId)
-          .single(),
+        getAfuChatCurrentProfile<Profile>(userId),
         supabase
           .from("user_subscriptions")
           .select("id, plan_id, started_at, expires_at, is_active, acoin_paid")
@@ -203,6 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("[AuthContext] Profile fetch failed", {
           code: profileError.code,
           message: profileError.message,
+          requestId: profileError.requestId,
         });
         const cached = await getCachedProfile();
         const ownedCached =

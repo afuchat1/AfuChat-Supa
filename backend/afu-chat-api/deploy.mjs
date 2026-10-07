@@ -271,6 +271,17 @@ async function assertProductionPostflight() {
     throw new Error(`Invalid-session request returned HTTP ${invalidSession.status}.`);
   }
 
+  const unauthenticatedProfile = await fetch("https://api.afuchat.com/v1/chat/me");
+  if (unauthenticatedProfile.status !== 401) {
+    throw new Error(`Unauthenticated profile request returned HTTP ${unauthenticatedProfile.status}.`);
+  }
+  const invalidProfileSession = await fetch("https://api.afuchat.com/v1/chat/me", {
+    headers: { Authorization: "Bearer invalid-deployment-probe" },
+  });
+  if (invalidProfileSession.status !== 401) {
+    throw new Error(`Invalid profile session returned HTTP ${invalidProfileSession.status}.`);
+  }
+
   for (const path of [
     "/v1/chat/storage/usage",
   ]) {
@@ -489,6 +500,7 @@ if (!APPLY) {
       "GET /v1/chat/healthz",
       "GET|POST /v1/chat/status",
       "GET /v1/chat/conversations",
+      "GET /v1/chat/me",
       "POST /v1/chat/account/export",
       "POST /v1/chat/payments/pesapal-initiate",
       "GET|POST /v1/chat/payments/pesapal-callback",
@@ -552,6 +564,7 @@ console.log(JSON.stringify({
     "CORS preflight",
     "unauthenticated rejection",
     "AfuAuth shared-session rejection",
+    "current-profile unauthenticated rejection",
     "storage handler route",
     "shared AfuChat/legacy media bucket binding",
     "canonical chat API and storage routing",

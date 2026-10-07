@@ -1,6 +1,10 @@
 import { handleAccountExport } from "./account-export.ts";
 import { handlePayments } from "./payments.ts";
-import type { Env } from "./shared.ts";
+import {
+  supabaseConfig,
+  verifySharedSession,
+  type Env,
+} from "./shared.ts";
 
 const PREFIX = "/v1/chat";
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
@@ -74,12 +78,155 @@ function privateJsonResponse(
   });
 }
 
-function supabaseConfig(env: Env): { url: string; anonKey: string } | null {
-  const url = (env.AFUCHAT_SUPABASE_URL || env.SUPABASE_URL || "")
-    .trim()
-    .replace(/\/+$/, "");
-  const anonKey = (env.AFUCHAT_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "").trim();
-  return url && anonKey ? { url, anonKey } : null;
+const CURRENT_PROFILE_FIELDS = [
+  "id",
+  "handle",
+  "display_name",
+  "avatar_url",
+  "banner_url",
+  "bio",
+  "phone_number",
+  "xp",
+  "acoin",
+  "current_grade",
+  "is_verified",
+  "is_private",
+  "show_online_status",
+  "country",
+  "website_url",
+  "language",
+  "tipping_enabled",
+  "is_admin",
+  "is_support_staff",
+  "is_organization_verified",
+  "is_business_mode",
+  "gender",
+  "date_of_birth",
+  "region",
+  "interests",
+  "onboarding_completed",
+  "scheduled_deletion_at",
+  "created_at",
+  "platinum_until",
+].join(",");
+
+async function handleCurrentUser(request: Request, env: Env): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (request.method !== "GET") {
+    const response = privateJsonResponse(
+      request,
+      requestId,
+      { error: "Method not allowed", request_id: requestId },
+      405,
+    );
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, OPTIONS");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
+  const verification = await verifySharedSession(request, env, requestId);
+  if (!verification.session) return verification.response;
+
+  const schema = env.AFUCHAT_DATABASE_SCHEMA?.trim() || "public";
+  const supabase = supabaseConfig(env);
+  if (!supabase || !/^[a-z][a-z0-9_]*$/i.test(schema)) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "User profile could not be loaded.", request_id: requestId },
+      503,
+    );
+  }
+
+  const target = new URL(supabase.url);
+  target.pathname = "/rest/v1/profiles";
+  target.search = new URLSearchParams({
+    select: CURRENT_PROFILE_FIELDS,
+    id: `eq.${verification.session.user.id}`,
+    limit: "2",
+  }).toString();
+
+  try {
+    const upstream = await fetch(new Request(target, {
+      method: "GET",
+      headers: {
+        apikey: supabase.anonKey,
+        Authorization: `Bearer ${verification.session.token}`,
+        Accept: "application/json",
+        "Accept-Profile": schema,
+      },
+      redirect: "manual",
+    }));
+    if (!upstream.ok) {
+      const diagnostic = await upstream.clone().json().catch(() => null) as {
+        code?: unknown;
+      } | null;
+      console.error("[afuchat-api] current profile lookup failed", {
+        requestId,
+        status: upstream.status,
+        code: typeof diagnostic?.code === "string" ? diagnostic.code : undefined,
+      });
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "User profile could not be loaded.", request_id: requestId },
+        502,
+      );
+    }
+
+    const rows: unknown = await upstream.json();
+    if (!Array.isArray(rows)) {
+      console.error("[afuchat-api] current profile lookup returned an invalid response", {
+        requestId,
+      });
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "User profile could not be loaded.", request_id: requestId },
+        502,
+      );
+    }
+    if (rows.length === 0) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "User profile was not found.", request_id: requestId },
+        404,
+      );
+    }
+    const profile = rows[0] as Record<string, unknown> | null;
+    if (
+      rows.length !== 1 ||
+      !profile ||
+      typeof profile !== "object" ||
+      profile.id !== verification.session.user.id
+    ) {
+      console.error("[afuchat-api] current profile lookup did not return one matching profile", {
+        requestId,
+        count: rows.length,
+      });
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "User profile could not be loaded.", request_id: requestId },
+        502,
+      );
+    }
+
+    return privateJsonResponse(request, requestId, profile, 200);
+  } catch {
+    console.error("[afuchat-api] current profile lookup failed", { requestId });
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "User profile could not be loaded.", request_id: requestId },
+      502,
+    );
+  }
 }
 
 async function handleChatConversations(request: Request, env: Env): Promise<Response> {
@@ -360,6 +507,10 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
       statusText: response.statusText,
       headers,
     });
+  }
+
+  if (incoming.pathname === `${PREFIX}/me`) {
+    return handleCurrentUser(request, env);
   }
 
   if (incoming.pathname === `${PREFIX}/account/export`) {

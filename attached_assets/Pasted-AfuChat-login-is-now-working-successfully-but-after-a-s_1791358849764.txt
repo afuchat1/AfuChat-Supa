@@ -1,0 +1,215 @@
+AfuChat login is now working successfully, but after a successful login the app fails to fetch the authenticated user's data.
+
+Fix the post-login user-data flow without breaking the working AfuAuth login.
+
+Critical requirement
+
+Do NOT modify or replace the working AfuAuth login flow unless the investigation proves it is the cause.
+
+The problem is specifically:
+
+Login
+  ↓
+Successful authentication
+  ↓
+Session/token exists
+  ↓
+AfuChat attempts to fetch authenticated user data
+  ↓
+User data fetch fails
+
+The goal is to make the final step work correctly.
+
+First: inspect the actual app flow
+
+Use the existing AfuChat application as the source of truth.
+
+Trace exactly what happens immediately after successful login:
+
+1. Where the authentication token/session is stored.
+2. Whether the token is available to the AfuChat API request.
+3. Which endpoint AfuChat calls to retrieve the current user.
+4. The exact HTTP method and request headers.
+5. The exact response status and response body.
+6. Whether the request reaches "afuchat-api".
+7. Whether "afuchat-api" correctly resolves the authenticated Afu identity through "afuauth-api".
+8. Whether the user record exists in the existing shared Supabase project.
+9. Whether the response returned by the API matches what the mobile app expects.
+
+Do not guess the endpoint. Inspect the existing frontend/API implementation.
+
+Required API ownership
+
+AfuChat user-data endpoints must remain under:
+
+https://api.afuchat.com/v1/chat/*
+
+For example, if the existing application uses a current-user endpoint, it must follow the AfuChat namespace:
+
+/v1/chat/me
+
+or whatever equivalent endpoint already exists in the current implementation.
+
+Do not create a new endpoint simply because the existing one has not yet been located.
+
+Authentication architecture
+
+Keep the centralized authentication architecture:
+
+AfuChat App
+     ↓
+afuauth-api
+     ↓
+Authenticated Afu identity
+     ↓
+afuchat-api
+     ↓
+AfuChat user/profile/data
+
+"afuchat-api" must not implement a separate login system.
+
+The authenticated identity must come from the trusted authentication/session mechanism.
+
+Do not trust a client-supplied user ID as the source of truth for protected user data.
+
+Check the token/session handoff
+
+Specifically verify whether the successful login response contains the expected authentication/session information and whether AfuChat actually sends it to the subsequent API request.
+
+Check for issues such as:
+
+- access token not persisted
+- wrong token field name
+- expired token being used
+- missing "Authorization" header
+- incorrect "Bearer" format
+- session not restored after login
+- frontend calling the API before the session is available
+- API request using the wrong base URL
+- API request still pointing to an old endpoint
+- API request using an old Worker hostname
+- CORS failure
+- incorrect response parsing
+
+Do not change multiple components blindly. Identify the actual failure first.
+
+API base URL
+
+AfuChat API requests must use:
+
+https://api.afuchat.com/v1/chat/*
+
+Do not use:
+
+https://api.afuchat.com/v1/*
+
+for AfuChat user-data requests.
+
+Do not use an old Worker URL.
+
+Do not call "afucloud-api" for AfuChat user data.
+
+Shared Supabase data
+
+All current Afu products use the existing shared Supabase project.
+
+Do not create another user database.
+
+Do not migrate users.
+
+Do not duplicate the user table.
+
+Verify that the authenticated identity correctly maps to the existing user/profile data in the shared Supabase infrastructure.
+
+If the user exists but the API cannot resolve the profile, fix the lookup/mapping rather than creating a duplicate record.
+
+Debug the complete request chain
+
+Verify this exact flow:
+
+1. User logs in
+       ↓
+2. afuauth-api authenticates user
+       ↓
+3. Session/access token returned
+       ↓
+4. AfuChat stores/restores session
+       ↓
+5. AfuChat calls api.afuchat.com/v1/chat/...
+       ↓
+6. afuchat-api receives request
+       ↓
+7. afuchat-api validates/resolves authenticated identity
+       ↓
+8. Existing shared Supabase data is queried
+       ↓
+9. User data returned
+       ↓
+10. AfuChat app hydrates the authenticated user
+
+Find exactly which step fails.
+
+Error handling
+
+Do not expose internal infrastructure details to the mobile app.
+
+Do not return:
+
+- Worker names
+- internal service bindings
+- Supabase credentials
+- database details
+- internal stack traces
+- Cloudflare implementation details
+
+Return a clean API error appropriate for the client while logging the detailed diagnostic information internally.
+
+Do not break working functionality
+
+Do not change:
+
+- AfuAuth registration unnecessarily
+- AfuAuth login unnecessarily
+- existing users
+- existing Supabase data
+- AfuCloud
+- CDN configuration
+- other Afu product APIs
+
+Do not perform migrations unless technically required.
+
+If a migration is genuinely required, stop and report the exact reason before executing it.
+
+Verification
+
+After fixing the issue, test the complete flow with a real test account:
+
+Login
+→ receive session
+→ persist session
+→ fetch current user
+→ fetch profile/user data
+→ successfully load AfuChat home/app state
+
+Also test:
+
+Logout
+→ session removed
+→ protected AfuChat requests rejected
+
+Then log in again and verify that the user data loads correctly.
+
+Document the fix
+
+After the update, document:
+
+- the actual post-login request flow
+- the AfuChat endpoint used to retrieve the user
+- authentication/session mechanism
+- how "afuchat-api" resolves the Afu identity
+- the shared Supabase user/profile lookup
+- the root cause of the failure
+- the exact fix applied
+- verification results
+
+Do not simply document the intended architecture. Document the actual working implementation and the confirmed root cause.

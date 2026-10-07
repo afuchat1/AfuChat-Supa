@@ -21,11 +21,11 @@ Before adding a route, identify its product owner and exact prefix. Create a pla
 
 **How to apply:** Query the Cloudflare Worker-script and route inventories before deployment. Preserve every existing script and route owner, then verify the new Worker health and placeholder responses.
 
-All six products use the same Supabase project and one Supabase-issued account identity. Never create product-specific user identities, duplicate login systems, or mint product-specific session tokens. Supabase SDK auth/data calls use the shared project directly; product business APIs use their owning versioned Worker route.
+All six products use the same Supabase project and one Supabase-issued account identity. Never create product-specific user identities, duplicate login systems, or mint product-specific session tokens. Supabase SDK remains the shared sign-in/session mechanism. AfuChat current-profile hydration uses `GET /v1/chat/me`; other product business APIs stay on their owning versioned Worker route.
 
-**Why:** The user explicitly requires one Afu account across all current Afu products and identified AfuChat ↔ AfuAuth as the first integration.
+**Why:** The user explicitly requires one Afu account across all current Afu products, preserving the working login while keeping AfuChat user/profile API ownership under `/v1/chat/*`.
 
-**How to apply:** Verify a shared Supabase-issued token through AfuAuth and forward that exact token to Supabase/RLS for product data. Keep product logic and Worker routes isolated; use the canonical product API paths.
+**How to apply:** For AfuChat profile reads, validate the shared bearer through AfuAuth, derive the lookup ID only from the verified session, and forward that exact bearer to the existing Supabase/RLS profile source. Never accept a client-supplied user ID as authority or change AfuAuth login unnecessarily.
 
 The API root route `api.afuchat.com/` belongs to the `afu-api` gateway and forwards only `/` through its AfuAuth service binding. Product API namespaces remain direct routes to their owning Workers. Each product CDN prefix must use that product's isolated R2 bucket. Keep the existing `cloud.afuchat.com/*` website route.
 

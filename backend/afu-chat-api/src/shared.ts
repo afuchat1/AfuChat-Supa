@@ -161,6 +161,10 @@ export async function verifySharedSession(
       };
     }
     if (!verified.ok) {
+      console.error("[afuchat-api] shared session verification returned an error", {
+        requestId,
+        status: verified.status,
+      });
       return {
         response: privateJsonResponse(
           request,
@@ -175,6 +179,10 @@ export async function verifySharedSession(
       !payload.user.id ||
       payload.accessToken !== token
     ) {
+      console.error("[afuchat-api] shared session response was invalid", {
+        requestId,
+        status: verified.status,
+      });
       return {
         response: privateJsonResponse(
           request,
