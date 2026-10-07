@@ -1957,13 +1957,15 @@ test("my posts list is scoped to the authenticated author and returns aggregated
     requests.push(request);
     const path = new URL(request.url).pathname;
     if (path.endsWith("/posts")) {
-      return Response.json([{
-        id: postId,
-        content: "Mine",
-        image_url: null,
-        post_type: "post",
-        visibility: "public",
-      }]);
+      return new Response(JSON.stringify([{
+          id: postId,
+          content: "Mine",
+          image_url: null,
+          post_type: "post",
+          visibility: "public",
+        }]), {
+        headers: { "Content-Range": "0-0/1" },
+      });
     }
     if (path.endsWith("/post_images")) {
       return Response.json([{ post_id: postId, image_url: "https://example.test/a.jpg", display_order: 0 }]);
@@ -1989,10 +1991,51 @@ test("my posts list is scoped to the authenticated author and returns aggregated
   assert.equal(payload.items[0].likeCount, 2);
   assert.equal(payload.items[0].replyCount, 1);
   assert.deepEqual(payload.items[0].images, ["https://example.test/a.jpg"]);
+  assert.equal(payload.total_count, 1);
   const query = new URL(requests[0].url).searchParams;
   assert.equal(query.get("author_id"), `eq.${userId}`);
   assert.equal(query.get("limit"), "50");
+  assert.equal(requests[0].headers.get("Prefer"), "count=exact");
   assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
+});
+
+test("profile posts respect the authenticated visibility policy and include an exact count", async () => {
+  const token = "profile-posts-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const postId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let queryRequest;
+  globalThis.fetch = async (input, init) => {
+    queryRequest = new Request(input, init);
+    return new Response(JSON.stringify([{
+      id: postId,
+      author_id: profileId,
+      content: "Visible post",
+      visibility: "public",
+    }]), {
+      headers: { "Content-Range": "0-0/4" },
+    });
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/profile/${profileId}?limit=90`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload.items.map((item) => item.id), [postId]);
+  assert.equal(payload.total_count, 4);
+  const query = new URL(queryRequest.url).searchParams;
+  assert.equal(query.get("author_id"), `eq.${profileId}`);
+  assert.equal(query.get("or"), "(visibility.eq.public,visibility.eq.followers,visibility.is.null)");
+  assert.equal(queryRequest.headers.get("Prefer"), "count=exact");
+  assert.equal(queryRequest.headers.get("Authorization"), `Bearer ${token}`);
 });
 
 test("post deletion requires the verified author and returns representation", async () => {
@@ -2491,4 +2534,195 @@ test("follow status batches return both relationship directions for authenticate
       { user_id: followsYouId, is_following: false, follows_you: true },
     ],
   });
+});
+
+test("for-you feed keeps its server-backed streams and hydrates the original ranking inputs", async () => {
+  const token = "discover-for-you-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const authorId = "123e4567-e89b-42d3-a456-426614174098";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/posts")) {
+      const fields = url.searchParams.get("select");
+      if (fields === "id,author_id") return Response.json([]);
+      if (url.searchParams.get("limit") === "12") {
+        return Response.json([{
+          id: postId,
+          author_id: authorId,
+          content: "Candidate",
+          image_url: null,
+          created_at: "2026-10-07T12:00:00.000Z",
+          view_count: 42,
+          like_count: 7,
+          visibility: "public",
+          post_type: "post",
+          video_asset_id: null,
+        }]);
+      }
+      return Response.json([]);
+    }
+    if (url.pathname.endsWith("/profiles")) {
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      return Response.json([{
+        id: authorId,
+        display_name: "Author",
+        handle: "author",
+        avatar_url: "https://cdn.example.test/avatar.jpg",
+        bio: "A bio",
+        is_verified: true,
+        is_organization_verified: false,
+        country: "UG",
+        interests: ["music"],
+        hide_posts_non_followers: false,
+      }]);
+    }
+    if (url.pathname.endsWith("/post_images")) return Response.json([]);
+    if (url.pathname.endsWith("/post_acknowledgments")) return Response.json([]);
+    if (url.pathname.endsWith("/post_replies")) return Response.json([{ post_id: postId }]);
+    if (url.pathname.endsWith("/follows")) return Response.json([{ following_id: authorId }]);
+    return Response.json({ error: "unexpected query" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://api.afuchat.com/v1/chat/feed/for-you?mid_offset=13&throwback_offset=24&recent_since=2026-10-03T12%3A00%3A00.000Z&mid_before=2026-10-03T12%3A00%3A00.000Z&mid_since=2026-09-07T12%3A00%3A00.000Z&throwback_before=2026-09-07T12%3A00%3A00.000Z",
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.recent[0].id, postId);
+  assert.equal(payload.recent[0].profiles.handle, "author");
+  assert.equal(payload.recent[0].post_images.length, 0);
+  assert.equal(payload.recent[0].replyCount, 1);
+  assert.equal(payload.recent[0].isFollowing, true);
+  assert.equal(payload.recent[0].authorInteractionCount, 0);
+  assert.deepEqual(payload.mid, []);
+  assert.deepEqual(payload.throwback, []);
+  const midQuery = requests.find((request) => {
+    const url = new URL(request.url);
+    return url.pathname.endsWith("/posts") && url.searchParams.get("limit") === "10";
+  });
+  assert.equal(new URL(midQuery.url).searchParams.getAll("created_at").length, 2);
+  assert.ok(requests.every((request) => request.headers.get("Authorization") === `Bearer ${token}`));
+});
+
+test("following feed derives followed authors from AfuAuth and returns hydrated items", async () => {
+  const token = "discover-following-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const authorId = "123e4567-e89b-42d3-a456-426614174098";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/follows")) {
+      return Response.json([{ following_id: authorId }]);
+    }
+    if (url.pathname.endsWith("/posts")) {
+      assert.equal(url.searchParams.get("author_id"), `in.(${authorId})`);
+      return Response.json([{
+        id: postId,
+        author_id: authorId,
+        content: "Following",
+        image_url: null,
+        created_at: "2026-10-07T12:00:00.000Z",
+        view_count: 5,
+        like_count: 2,
+        visibility: "followers",
+        post_type: "post",
+        video_asset_id: null,
+      }]);
+    }
+    if (url.pathname.endsWith("/profiles")) {
+      return Response.json([{
+        id: authorId,
+        display_name: "Followed author",
+        handle: "followed",
+        avatar_url: null,
+        bio: null,
+        is_verified: false,
+        is_organization_verified: false,
+        country: null,
+        interests: [],
+        hide_posts_non_followers: false,
+      }]);
+    }
+    if (url.pathname.endsWith("/post_images") ||
+        url.pathname.endsWith("/post_acknowledgments") ||
+        url.pathname.endsWith("/post_replies")) return Response.json([]);
+    return Response.json({ error: "unexpected query" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/feed/following?limit=20&newer_than=2026-10-07T11%3A00%3A00.000Z", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.following_ids, [authorId]);
+  assert.equal(payload.items[0].id, postId);
+  assert.equal(payload.items[0].isFollowing, true);
+  assert.equal(new URL(requests.find((request) =>
+    new URL(request.url).pathname.endsWith("/posts")
+  ).url).searchParams.get("created_at"), "gt.2026-10-07T11:00:00.000Z");
+});
+
+test("post view batches derive the viewer from AfuAuth and reject stale accounts", async () => {
+  const token = "post-views-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let insertRequest;
+  let postgrestCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    postgrestCalls += 1;
+    insertRequest = new Request(input, init);
+    return new Response(null, { status: 201 });
+  };
+
+  const recorded = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/feed/views", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ post_ids: [postId], expected_user_id: userId }),
+    }),
+    env,
+  );
+  assert.equal(recorded.status, 200);
+  assert.deepEqual(await recorded.json(), { recorded: true, count: 1 });
+  assert.deepEqual(await insertRequest.json(), [{ post_id: postId, viewer_id: userId }]);
+  assert.equal(insertRequest.headers.get("Authorization"), `Bearer ${token}`);
+
+  const stale = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/feed/views", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        post_ids: [postId],
+        expected_user_id: "123e4567-e89b-42d3-a456-426614174000",
+      }),
+    }),
+    env,
+  );
+  assert.equal(stale.status, 409);
+  assert.equal(postgrestCalls, 1);
 });

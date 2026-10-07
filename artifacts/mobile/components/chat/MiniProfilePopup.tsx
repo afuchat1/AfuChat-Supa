@@ -20,6 +20,12 @@ import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { setProfileCache } from "@/lib/profileCache";
+import {
+  getAfuChatFollowSummary,
+  getAfuChatProfilePosts,
+  setAfuChatFollow,
+} from "@/lib/afuchatApi";
+import { showToast } from "@/lib/toast";
 
 const AVATAR_SIZE   = 68;
 const BANNER_H      = 130;
@@ -98,18 +104,15 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
       supabase.from("profiles")
         .select("id,display_name,handle,avatar_url,banner_url,bio,is_verified,is_organization_verified,is_business_mode,last_seen,show_online_status,website_url,country,xp")
         .eq("id", userId).single(),
-      supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", userId),
-      supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", userId),
-      supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", userId).in("visibility", ["public","followers"]),
-      user ? supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", userId).maybeSingle() : Promise.resolve({ data: null }),
-      user ? supabase.from("follows").select("id").eq("follower_id", userId).eq("following_id", user.id).maybeSingle() : Promise.resolve({ data: null }),
-    ]).then(([pRes, flrRes, flgRes, psRes, iFlwRes, theyRes]) => {
+      user ? getAfuChatFollowSummary(userId) : Promise.resolve({ data: null, error: null }),
+      user ? getAfuChatProfilePosts(userId, 1) : Promise.resolve({ data: null, totalCount: null, error: null }),
+    ]).then(([pRes, followResult, postResult]) => {
       if (pRes.data) { setProfile(pRes.data as MiniProfile); setProfileCache(pRes.data.id, pRes.data as any); }
-      setFollowers(flrRes.count ?? 0);
-      setFollowing(flgRes.count ?? 0);
-      setPosts(psRes.count ?? 0);
-      setIsFollowing(!!(iFlwRes as any)?.data);
-      setTheyFollow(!!(theyRes as any)?.data);
+      setFollowers(followResult.data?.followers_count ?? 0);
+      setFollowing(followResult.data?.following_count ?? 0);
+      setPosts(postResult.totalCount ?? 0);
+      setIsFollowing(followResult.data?.is_following ?? false);
+      setTheyFollow(followResult.data?.follows_you ?? false);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [visible, userId, user?.id]);
@@ -118,16 +121,21 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
     if (!user || !userId || followBusy) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFollowBusy(true);
-    if (isFollowing) {
-      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", userId);
-      setIsFollowing(false);
-      setFollowers(v => (v ?? 1) - 1);
-    } else {
-      await supabase.from("follows").insert({ follower_id: user.id, following_id: userId });
-      setIsFollowing(true);
-      setFollowers(v => (v ?? 0) + 1);
+    try {
+      const { error } = await setAfuChatFollow(userId, !isFollowing, user.id);
+      if (error) throw new Error(error.message);
+      if (isFollowing) {
+        setIsFollowing(false);
+        setFollowers(v => Math.max(0, (v ?? 1) - 1));
+      } else {
+        setIsFollowing(true);
+        setFollowers(v => (v ?? 0) + 1);
+      }
+    } catch {
+      showToast("Could not update follow status", { type: "error" });
+    } finally {
+      setFollowBusy(false);
     }
-    setFollowBusy(false);
   }, [user, userId, isFollowing, followBusy]);
 
   const handleMessage = useCallback(async () => {

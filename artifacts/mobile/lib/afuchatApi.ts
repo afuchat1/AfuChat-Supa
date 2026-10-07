@@ -1042,25 +1042,73 @@ export async function getAfuChatPost(postId: string): Promise<{
 
 export async function getAfuChatMyPosts(): Promise<{
   data: Record<string, unknown>[] | null;
+  totalCount: number | null;
   error: AfuChatApiError | null;
 }> {
-  const result = await postEndpointRequest<{ items?: unknown }>(
+  const result = await postEndpointRequest<{ items?: unknown; total_count?: unknown }>(
     "/posts/mine",
     { method: "GET" },
     "Your posts could not be loaded",
   );
-  if (result.error) return { data: null, error: result.error };
+  if (result.error) return { data: null, totalCount: null, error: result.error };
   if (!Array.isArray(result.data?.items) ||
+      !Number.isSafeInteger(result.data.total_count) ||
+      Number(result.data.total_count) < 0 ||
       !result.data.items.every((item) =>
         !!item && typeof item === "object" &&
         typeof (item as Record<string, unknown>).id === "string"
       )) {
     return {
       data: null,
+      totalCount: null,
       error: { message: "Post service returned an invalid response.", code: "INVALID_RESPONSE" },
     };
   }
-  return { data: result.data.items as Record<string, unknown>[], error: null };
+  return {
+    data: result.data.items as Record<string, unknown>[],
+    totalCount: Number(result.data.total_count),
+    error: null,
+  };
+}
+
+export async function getAfuChatProfilePosts(
+  profileId: string,
+  limit = 90,
+): Promise<{
+  data: AfuChatPostRecord[] | null;
+  totalCount: number | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const result = await postEndpointRequest<{
+    items?: unknown;
+    total_count?: unknown;
+  }>(
+    `/posts/profile/${encodeURIComponent(profileId)}?${params.toString()}`,
+    { method: "GET" },
+    "The profile posts could not be loaded",
+  );
+  if (result.error) return { data: null, totalCount: null, error: result.error };
+  if (
+    !Array.isArray(result.data?.items) ||
+    !Number.isSafeInteger(result.data.total_count) ||
+    Number(result.data.total_count) < 0 ||
+    !result.data.items.every((item) =>
+      !!item && typeof item === "object" &&
+      typeof (item as Record<string, unknown>).id === "string"
+    )
+  ) {
+    return {
+      data: null,
+      totalCount: null,
+      error: { message: "Post service returned an invalid profile response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return {
+    data: result.data.items as AfuChatPostRecord[],
+    totalCount: Number(result.data.total_count),
+    error: null,
+  };
 }
 
 export async function createAfuChatPost(input: AfuChatPostCreateInput): Promise<{
@@ -1157,9 +1205,13 @@ async function setPostLike(
   path: string,
   liked: boolean,
   fallback: string,
+  expectedUserId?: string,
 ): Promise<{ error: AfuChatApiError | null }> {
+  const requestPath = expectedUserId
+    ? `${path}?expected_user_id=${encodeURIComponent(expectedUserId)}`
+    : path;
   const result = await postEndpointRequest<{ liked?: unknown }>(
-    path,
+    requestPath,
     { method: liked ? "POST" : "DELETE" },
     fallback,
   );
@@ -1175,11 +1227,13 @@ async function setPostLike(
 export function setAfuChatPostLike(
   postId: string,
   liked: boolean,
+  expectedUserId?: string,
 ): Promise<{ error: AfuChatApiError | null }> {
   return setPostLike(
     `/posts/${encodeURIComponent(postId)}/like`,
     liked,
     liked ? "Post could not be liked" : "Post like could not be removed",
+    expectedUserId,
   );
 }
 
@@ -1193,6 +1247,143 @@ export function setAfuChatReplyLike(
     liked,
     liked ? "Reply could not be liked" : "Reply like could not be removed",
   );
+}
+
+export type AfuChatForYouFeedQuery = {
+  olderThan?: string | null;
+  newerThan?: string | null;
+  recentLimit?: number;
+  excludeSelf?: boolean;
+  recentSince?: string;
+  midBefore?: string;
+  midSince?: string;
+  throwbackBefore?: string;
+  midOffset?: number;
+  throwbackOffset?: number;
+  midExhausted?: boolean;
+  throwbackExhausted?: boolean;
+};
+
+export async function getAfuChatForYouFeed(query: AfuChatForYouFeedQuery): Promise<{
+  recent: AfuChatPostRecord[] | null;
+  mid: AfuChatPostRecord[] | null;
+  throwback: AfuChatPostRecord[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams();
+  if (query.olderThan) params.set("older_than", query.olderThan);
+  if (query.newerThan) params.set("newer_than", query.newerThan);
+  if (query.recentLimit !== undefined) params.set("recent_limit", String(query.recentLimit));
+  if (query.excludeSelf) params.set("exclude_self", "true");
+  if (query.recentSince) params.set("recent_since", query.recentSince);
+  if (query.midBefore) params.set("mid_before", query.midBefore);
+  if (query.midSince) params.set("mid_since", query.midSince);
+  if (query.throwbackBefore) params.set("throwback_before", query.throwbackBefore);
+  if (query.midOffset !== undefined) params.set("mid_offset", String(query.midOffset));
+  if (query.throwbackOffset !== undefined) params.set("throwback_offset", String(query.throwbackOffset));
+  if (query.midExhausted !== undefined) params.set("mid_exhausted", String(query.midExhausted));
+  if (query.throwbackExhausted !== undefined) {
+    params.set("throwback_exhausted", String(query.throwbackExhausted));
+  }
+  const result = await postEndpointRequest<{
+    recent?: unknown;
+    mid?: unknown;
+    throwback?: unknown;
+  }>(`/feed/for-you?${params.toString()}`, { method: "GET" }, "Feed could not be loaded");
+  if (result.error) return { recent: null, mid: null, throwback: null, error: result.error };
+  const validItems = (value: unknown): value is AfuChatPostRecord[] =>
+    Array.isArray(value) && value.every((item) =>
+      !!item && typeof item === "object" &&
+      typeof (item as Record<string, unknown>).id === "string"
+    );
+  if (
+    !validItems(result.data?.recent) ||
+    !validItems(result.data?.mid) ||
+    !validItems(result.data?.throwback)
+  ) {
+    return {
+      recent: null,
+      mid: null,
+      throwback: null,
+      error: { message: "Feed service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return {
+    recent: result.data.recent,
+    mid: result.data.mid,
+    throwback: result.data.throwback,
+    error: null,
+  };
+}
+
+export async function getAfuChatFollowingFeed(query: {
+  olderThan?: string | null;
+  newerThan?: string | null;
+  limit?: number;
+}): Promise<{
+  items: AfuChatPostRecord[] | null;
+  followingIds: string[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams();
+  if (query.olderThan) params.set("older_than", query.olderThan);
+  if (query.newerThan) params.set("newer_than", query.newerThan);
+  if (query.limit !== undefined) params.set("limit", String(query.limit));
+  const result = await postEndpointRequest<{
+    items?: unknown;
+    following_ids?: unknown;
+  }>(`/feed/following?${params.toString()}`, { method: "GET" }, "Following feed could not be loaded");
+  if (result.error) return { items: null, followingIds: null, error: result.error };
+  if (!result.data) {
+    return {
+      items: null,
+      followingIds: null,
+      error: { message: "Feed service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  const validItems = Array.isArray(result.data?.items) && result.data.items.every((item) =>
+    !!item && typeof item === "object" &&
+    typeof (item as Record<string, unknown>).id === "string"
+  );
+  const validIds = Array.isArray(result.data?.following_ids) &&
+    result.data.following_ids.every((id) => typeof id === "string");
+  if (!validItems || !validIds) {
+    return {
+      items: null,
+      followingIds: null,
+      error: { message: "Feed service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return {
+    items: result.data.items as AfuChatPostRecord[],
+    followingIds: result.data.following_ids as string[],
+    error: null,
+  };
+}
+
+export async function recordAfuChatPostViews(
+  postIds: string[],
+  expectedUserId: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  const ids = [...new Set(postIds)];
+  if (ids.length > 100 || ids.some((id) => typeof id !== "string")) {
+    return { error: { message: "The post view batch is invalid.", code: "INVALID_INPUT" } };
+  }
+  const result = await postEndpointRequest<{ recorded?: unknown }>(
+    "/feed/views",
+    {
+      method: "POST",
+      body: JSON.stringify({ post_ids: ids, expected_user_id: expectedUserId }),
+    },
+    "Post views could not be recorded",
+  );
+  if (result.error) return { error: result.error };
+  if (result.data?.recorded !== true) {
+    return {
+      error: { message: "Feed service returned an invalid view response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { error: null };
 }
 
 export type AfuChatFollowProfile = {
@@ -1222,7 +1413,12 @@ export type AfuChatFollowSummary = {
   is_following: boolean;
 };
 
-type FollowEndpointError = { message?: unknown; code?: unknown; request_id?: unknown };
+type FollowEndpointError = {
+  message?: unknown;
+  error?: unknown;
+  code?: unknown;
+  request_id?: unknown;
+};
 
 function isFollowProfile(value: unknown): value is AfuChatFollowProfile {
   return !!value &&

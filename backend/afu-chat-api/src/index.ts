@@ -1,6 +1,7 @@
 import { handleAccountExport } from "./account-export.ts";
 import { handleBookmarks } from "./bookmarks.ts";
 import { handleFollows } from "./follows.ts";
+import { handleDiscoverFeed, handleRecordPostViews } from "./feed.ts";
 import { handleMessages } from "./messages.ts";
 import { handleMessageCount, handleMessageQueries } from "./message-queries.ts";
 import { handleMessageReactions } from "./message-reactions.ts";
@@ -17,6 +18,7 @@ import {
   handleCreatePost,
   handleDeletePost,
   handleGetMyPosts,
+  handleGetProfilePosts,
   handleGetPost,
   handlePostSubroute,
   isPostUuid,
@@ -802,8 +804,23 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     return handleFollows(request, env, "list");
   }
 
+  if (incoming.pathname === `${PREFIX}/feed/for-you`) {
+    return handleDiscoverFeed(request, env, "for-you");
+  }
+  if (incoming.pathname === `${PREFIX}/feed/following`) {
+    return handleDiscoverFeed(request, env, "following");
+  }
+  if (incoming.pathname === `${PREFIX}/feed/views`) {
+    return handleRecordPostViews(request, env);
+  }
+
   if (incoming.pathname === `${PREFIX}/posts/mine`) {
     return handleGetMyPosts(request, env);
+  }
+
+  const profilePostsMatch = incoming.pathname.match(/^\/v1\/chat\/posts\/profile\/([^/]+)$/);
+  if (profilePostsMatch) {
+    return handleGetProfilePosts(request, env, profilePostsMatch[1]);
   }
 
   if (incoming.pathname === `${PREFIX}/posts`) {

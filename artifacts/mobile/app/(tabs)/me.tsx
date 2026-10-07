@@ -31,6 +31,7 @@ import { showAlert } from "@/lib/alert";
 import { getCachedProfileSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getLocalProfile } from "@/lib/storage/localProfile";
 import { showToast } from "@/lib/toast";
+import { getAfuChatFollowSummary, getAfuChatMyPosts } from "@/lib/afuchatApi";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -287,12 +288,15 @@ export default function MeScreen() {
     const loadRemoteStats = () => {
       if (cancelled || !isOnline()) return;
       Promise.all([
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id),
-        supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id),
-        supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", user.id),
-      ]).then(([{ count: fc }, { count: fgc }, { count: pc }]) => {
+        getAfuChatFollowSummary(user.id),
+        getAfuChatMyPosts(),
+      ]).then(([followResult, postsResult]) => {
         if (cancelled) return;
-        setFollowerCount(fc ?? 0); setFollowingCount(fgc ?? 0); setPostCount(pc ?? 0);
+        if (followResult.error || !followResult.data || postsResult.error || postsResult.totalCount === null) return;
+        const fc = followResult.data.followers_count;
+        const fgc = followResult.data.following_count;
+        const pc = postsResult.totalCount;
+        setFollowerCount(fc); setFollowingCount(fgc); setPostCount(pc);
         AsyncStorage.setItem(STATS_KEY, JSON.stringify({ fc, fgc, pc })).catch(() => {});
       }).catch(() => {});
     };
@@ -324,27 +328,30 @@ export default function MeScreen() {
         .on("postgres_changes", { event: "*", schema: "public", table: "follows", filter: `following_id=eq.${user.id}` }, () =>
           void (async () => {
             try {
-              const { count } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("following_id", user.id);
-              setFollowerCount(count ?? 0);
-              persist({ fc: count ?? 0 });
+              const { data, error } = await getAfuChatFollowSummary(user.id);
+              if (error || !data) return;
+              setFollowerCount(data.followers_count);
+              persist({ fc: data.followers_count });
             } catch {}
           })()
         )
         .on("postgres_changes", { event: "*", schema: "public", table: "follows", filter: `follower_id=eq.${user.id}` }, () =>
           void (async () => {
             try {
-              const { count } = await supabase.from("follows").select("*", { count: "exact", head: true }).eq("follower_id", user.id);
-              setFollowingCount(count ?? 0);
-              persist({ fgc: count ?? 0 });
+              const { data, error } = await getAfuChatFollowSummary(user.id);
+              if (error || !data) return;
+              setFollowingCount(data.following_count);
+              persist({ fgc: data.following_count });
             } catch {}
           })()
         )
         .on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `author_id=eq.${user.id}` }, () =>
           void (async () => {
             try {
-              const { count } = await supabase.from("posts").select("*", { count: "exact", head: true }).eq("author_id", user.id);
-              setPostCount(count ?? 0);
-              persist({ pc: count ?? 0 });
+              const { totalCount, error } = await getAfuChatMyPosts();
+              if (error || totalCount === null) return;
+              setPostCount(totalCount);
+              persist({ pc: totalCount });
             } catch {}
           })()
         )

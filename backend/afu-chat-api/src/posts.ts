@@ -18,7 +18,9 @@ const PROFILE_FIELDS =
 const MAX_IMAGES = 10;
 const MAX_BODY_BYTES = 128 * 1024;
 
-type RestResult<T> = { ok: true; data: T } | { ok: false; response: Response; code?: string };
+type RestResult<T> =
+  | { ok: true; data: T; response: Response }
+  | { ok: false; response: Response; code?: string };
 
 function errorResponse(
   request: Request,
@@ -58,7 +60,8 @@ async function restRequest<T>(
   if (body !== undefined) {
     headers.set("Content-Type", "application/json");
   }
-  if (method !== "GET") headers.set("Prefer", prefer ?? "return=representation");
+  if (prefer) headers.set("Prefer", prefer);
+  else if (method !== "GET") headers.set("Prefer", "return=representation");
   try {
     const response = await fetch(url, {
       method,
@@ -74,10 +77,17 @@ async function restRequest<T>(
         : undefined;
       return { ok: false, response, code };
     }
-    return { ok: true, data: payload as T };
+    return { ok: true, data: payload as T, response };
   } catch {
     return { ok: false, response: new Response(null, { status: 502 }) };
   }
+}
+
+function exactCount(response: Response): number | null {
+  const match = response.headers.get("Content-Range")?.match(/\/(\d+)$/);
+  if (!match) return null;
+  const count = Number(match[1]);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
 }
 
 function logRestFailure(label: string, requestId: string, result: RestResult<unknown>): void {
@@ -299,16 +309,26 @@ export async function handleGetMyPosts(request: Request, env: Env): Promise<Resp
     "GET",
     auth.session,
     auth.anonKey,
+    undefined,
+    undefined,
+    "count=exact",
   );
   if (!postsResult.ok || !Array.isArray(postsResult.data)) {
     logRestFailure("my posts query", requestId, postsResult);
+    return errorResponse(request, requestId, "Your posts could not be loaded.", 502);
+  }
+  const totalCount = exactCount(postsResult.response);
+  if (totalCount === null) {
+    console.error("[afuchat-api] my posts query omitted exact count", { requestId });
     return errorResponse(request, requestId, "Your posts could not be loaded.", 502);
   }
   const posts = postsResult.data;
   const postIds = posts.map((post) => post.id).filter(
     (id): id is string => typeof id === "string" && UUID_PATTERN.test(id),
   );
-  if (!postIds.length) return privateJsonResponse(request, requestId, { items: [] }, 200);
+  if (!postIds.length) {
+    return privateJsonResponse(request, requestId, { items: [], total_count: totalCount }, 200);
+  }
 
   const batch = `in.(${postIds.join(",")})`;
   const [imagesResult, acknowledgmentsResult, repliesResult] = await Promise.all([
@@ -382,7 +402,62 @@ export async function handleGetMyPosts(request: Request, env: Env): Promise<Resp
       replyCount: replyCounts.get(id) ?? 0,
     };
   });
-  return privateJsonResponse(request, requestId, { items }, 200);
+  return privateJsonResponse(request, requestId, { items, total_count: totalCount }, 200);
+}
+
+export async function handleGetProfilePosts(
+  request: Request,
+  env: Env,
+  profileId: string,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (request.method !== "GET") {
+    const response = errorResponse(request, requestId, "Method not allowed.", 405);
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, OPTIONS");
+    return new Response(response.body, { status: response.status, headers });
+  }
+  if (!UUID_PATTERN.test(profileId)) {
+    return errorResponse(request, requestId, "The profile ID is invalid.", 400);
+  }
+  const auth = await loadSession(request, env, requestId);
+  if (!auth.ok) return auth.response;
+
+  const params = new URL(request.url).searchParams;
+  const limit = Number(params.get("limit") ?? "90");
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    return errorResponse(request, requestId, "The post limit is invalid.", 400);
+  }
+  const result = await restRequest<Record<string, unknown>[]>(
+    makeUrl(auth.base, "posts", {
+      select: POST_FIELDS,
+      author_id: `eq.${profileId}`,
+      or: "(visibility.eq.public,visibility.eq.followers,visibility.is.null)",
+      order: "created_at.desc",
+      limit: String(limit),
+    }),
+    "GET",
+    auth.session,
+    auth.anonKey,
+    undefined,
+    undefined,
+    "count=exact",
+  );
+  if (!result.ok || !Array.isArray(result.data)) {
+    logRestFailure("profile posts query", requestId, result);
+    return errorResponse(request, requestId, "The profile posts could not be loaded.", 502);
+  }
+  const totalCount = exactCount(result.response);
+  if (totalCount === null) {
+    console.error("[afuchat-api] profile posts query omitted exact count", { requestId });
+    return errorResponse(request, requestId, "The profile posts could not be loaded.", 502);
+  }
+  return privateJsonResponse(
+    request,
+    requestId,
+    { items: result.data, total_count: totalCount },
+    200,
+  );
 }
 
 export async function handleGetPost(request: Request, env: Env, postId: string): Promise<Response> {
@@ -506,6 +581,16 @@ export async function handlePostSubroute(
   }
   const auth = await loadSession(request, env, requestId);
   if (!auth.ok) return auth.response;
+
+  if (action === "like" || action === "reply-like") {
+    const expectedUserId = new URL(request.url).searchParams.get("expected_user_id");
+    if (expectedUserId !== null && !UUID_PATTERN.test(expectedUserId)) {
+      return errorResponse(request, requestId, "The expected account ID is invalid.", 400);
+    }
+    if (expectedUserId && expectedUserId !== auth.session.user.id) {
+      return errorResponse(request, requestId, "The active account changed before this action was sent.", 409);
+    }
+  }
 
   if (action === "like") {
     if (request.method === "POST") {

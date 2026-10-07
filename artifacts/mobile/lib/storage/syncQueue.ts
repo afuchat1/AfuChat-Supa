@@ -3,12 +3,13 @@
 // device reconnects. Exactly how Instagram/WhatsApp defer network operations.
 
 import { getDB } from "./db";
-import { supabase } from "@/lib/supabase";
 import {
   postAfuChatMessage,
   setAfuChatBookmark,
+  setAfuChatFollow,
   setAfuChatMessageReaction,
   setAfuChatMessageStatus,
+  setAfuChatPostLike,
 } from "@/lib/afuchatApi";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
@@ -113,19 +114,14 @@ async function executeAction(
   try {
     switch (type) {
       case "like_post": {
-        const { error } = await supabase.from("post_acknowledgments").upsert({
-          post_id: payload.post_id,
-          user_id: payload.user_id,
-        }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
-        return !error;
+        if (typeof payload.post_id !== "string" || typeof payload.user_id !== "string") return false;
+        const { error } = await setAfuChatPostLike(payload.post_id, true, payload.user_id);
+        return !error || error.code === "409";
       }
       case "unlike_post": {
-        const { error } = await supabase
-          .from("post_acknowledgments")
-          .delete()
-          .eq("post_id", payload.post_id)
-          .eq("user_id", payload.user_id);
-        return !error;
+        if (typeof payload.post_id !== "string" || typeof payload.user_id !== "string") return false;
+        const { error } = await setAfuChatPostLike(payload.post_id, false, payload.user_id);
+        return !error || error.code === "409";
       }
       case "bookmark_post": {
         if (typeof payload.post_id !== "string" || typeof payload.user_id !== "string") return false;
@@ -142,19 +138,22 @@ async function executeAction(
         return !error || error.code === "409";
       }
       case "follow_user": {
-        const { error } = await supabase.from("follows").insert({
-          follower_id: payload.follower_id,
-          following_id: payload.following_id,
-        });
-        return !error;
+        if (typeof payload.follower_id !== "string" || typeof payload.following_id !== "string") return false;
+        const { error } = await setAfuChatFollow(
+          payload.following_id,
+          true,
+          payload.follower_id,
+        );
+        return !error || error.code === "409";
       }
       case "unfollow_user": {
-        const { error } = await supabase
-          .from("follows")
-          .delete()
-          .eq("follower_id", payload.follower_id)
-          .eq("following_id", payload.following_id);
-        return !error;
+        if (typeof payload.follower_id !== "string" || typeof payload.following_id !== "string") return false;
+        const { error } = await setAfuChatFollow(
+          payload.following_id,
+          false,
+          payload.follower_id,
+        );
+        return !error || error.code === "409";
       }
       case "mark_read": {
         const messageIds = Array.isArray(payload.message_ids)

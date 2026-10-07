@@ -18,6 +18,13 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import {
+  getAfuChatFollowRecords,
+  getAfuChatFollowStatuses,
+  getAfuChatFollowSummary,
+  getAfuChatProfilePosts,
+  setAfuChatFollow,
+} from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
@@ -163,25 +170,29 @@ export default function ContactScreen() {
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) { setNotFound(true); setLoading(false); return; }
+    setGridLoading(true);
     (async () => {
-      const [pRes, flrRes, flgRes, psRes, iFlwRes, theyRes] = await Promise.all([
+      const [pRes, followResult, postResult] = await Promise.all([
         supabase.from("profiles")
           .select("id,display_name,handle,avatar_url,banner_url,bio,is_verified,is_organization_verified,is_business_mode,is_private,country,website_url,xp,current_grade,acoin,last_seen,show_online_status,created_at")
           .eq("id", id).maybeSingle(),
-        supabase.from("follows").select("id",{count:"exact",head:true}).eq("following_id", id),
-        supabase.from("follows").select("id",{count:"exact",head:true}).eq("follower_id", id),
-        supabase.from("posts").select("id",{count:"exact",head:true}).eq("author_id", id).in("visibility",["public","followers"]),
-        user ? supabase.from("follows").select("id").eq("follower_id", user.id).eq("following_id", id).maybeSingle() : { data: null },
-        user ? supabase.from("follows").select("id").eq("follower_id", id).eq("following_id", user.id).maybeSingle() : { data: null },
+        user ? getAfuChatFollowSummary(id) : Promise.resolve({ data: null, error: null }),
+        user ? getAfuChatProfilePosts(id, 90) : Promise.resolve({ data: null, totalCount: null, error: null }),
       ]);
-      if (!pRes.data) { setNotFound(true); setLoading(false); return; }
+      if (!pRes.data) { setNotFound(true); setLoading(false); setGridLoading(false); return; }
       const p = pRes.data as FullProfile;
       setProfile(p); setProfileCache(p.id, p as any);
-      setCounts({ followers: flrRes.count ?? 0, following: flgRes.count ?? 0, posts: psRes.count ?? 0 });
-      setIsFollowing(!!(iFlwRes as any)?.data);
-      setTheyFollowMe(!!(theyRes as any)?.data);
+      setCounts({
+        followers: followResult.data?.followers_count ?? 0,
+        following: followResult.data?.following_count ?? 0,
+        posts: postResult.totalCount ?? 0,
+      });
+      setIsFollowing(followResult.data?.is_following ?? false);
+      setTheyFollowMe(followResult.data?.follows_you ?? false);
+      setAllGridPosts((postResult.data ?? []) as unknown as GridPost[]);
+      setGridLoading(false);
       setLoading(false);
-    })().catch(() => setLoading(false));
+    })().catch(() => { setLoading(false); setGridLoading(false); });
   }, [id, user?.id]);
 
   // ── Load aliases + mutuals ────────────────────────────────────────────────
@@ -196,37 +207,34 @@ export default function ContactScreen() {
         .select("handle").eq("owner_id", id).limit(8);
       setAliases((aliasData ?? []).map((a: any) => a.handle).filter((h: string) => h !== profile?.handle));
       if (user && !isSelf) {
-        const { data: myFlwData } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
-        const myIds = (myFlwData ?? []).map((f: any) => f.following_id);
-        if (myIds.length > 0) {
-          const { data: mData } = await supabase.from("follows")
-            .select("follower_id, profiles!follows_follower_id_fkey(id,handle,avatar_url,display_name)")
-            .eq("following_id", id).in("follower_id", myIds).limit(10);
-          const list: MutualUser[] = (mData ?? []).map((m: any) => ({
-            id: m.follower_id,
-            handle: m.profiles?.handle ?? "",
-            avatar_url: m.profiles?.avatar_url ?? null,
-            display_name: m.profiles?.display_name ?? null,
-          })).filter((m: MutualUser) => m.handle);
-          setMutuals(list);
-          setMutualTotal(list.length);
+        const list: MutualUser[] = [];
+        let offset = 0;
+        let pageCount = 0;
+        while (list.length < 10 && pageCount < 10) {
+          const page = await getAfuChatFollowRecords(id, "followers", 100, offset);
+          if (page.error || page.hidden || !page.items?.length) break;
+          const statuses = await getAfuChatFollowStatuses(page.items.map((item) => item.profile.id));
+          if (statuses.error || !statuses.data) break;
+          for (const item of page.items) {
+            if (!statuses.data.get(item.profile.id)?.isFollowing) continue;
+            const profile = item.profile;
+            if (!profile.handle) continue;
+            list.push({
+              id: profile.id,
+              handle: profile.handle,
+              avatar_url: profile.avatar_url ?? null,
+            });
+            if (list.length >= 10) break;
+          }
+          pageCount += 1;
+          if (list.length >= 10 || page.nextOffset === null) break;
+          offset = page.nextOffset;
         }
+        setMutuals(list);
+        setMutualTotal(list.length);
       }
     })().catch(() => {});
   }, [id, loading, user?.id, isSelf, profile?.handle]);
-
-  // ── Load grid (fetch all post types once so tab switching is instant) ────
-  useEffect(() => {
-    if (!id || loading) return;
-    setGridLoading(true);
-    supabase.from("posts")
-      .select("id,image_url,article_cover_url,video_url,post_type,content,article_title")
-      .eq("author_id", id)
-      .or("visibility.eq.public,visibility.eq.followers,visibility.is.null")
-      .order("created_at", { ascending: false })
-      .limit(90)
-      .then(({ data }) => { setAllGridPosts((data as GridPost[]) ?? []); setGridLoading(false); }, () => { setAllGridPosts([]); setGridLoading(false); });
-  }, [id, loading]);
 
   // ── Derive visible posts for the active tab (instant, no network) ─────────
   const gridPosts = React.useMemo(() => {
@@ -242,11 +250,11 @@ export default function ContactScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFollowLoading(true);
     try {
+      const { error } = await setAfuChatFollow(id, !isFollowing, user.id);
+      if (error) throw new Error(error.message);
       if (isFollowing) {
-        await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", id);
         setIsFollowing(false); setCounts(c => ({ ...c, followers: Math.max(0, c.followers - 1) }));
       } else {
-        await supabase.from("follows").insert({ follower_id: user.id, following_id: id });
         setIsFollowing(true); setCounts(c => ({ ...c, followers: c.followers + 1 }));
       }
     } catch { showToast("Could not update follow status", { type: "error" }); }
@@ -260,34 +268,24 @@ export default function ContactScreen() {
     setExpandedUsers([]);
     setExpandedLoading(true);
     try {
-      const followCol  = type === "followers" ? "following_id" : "follower_id";
-      const joinCol    = type === "followers" ? "follower_id"  : "following_id";
-      const profileKey = type === "followers" ? "follower"     : "following";
-      const fkName     = type === "followers"
-        ? "follows_follower_id_fkey"
-        : "follows_following_id_fkey";
-
-      const { data: rows } = await supabase
-        .from("follows")
-        .select(`${joinCol}, ${profileKey}:profiles!${fkName}(id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified,acoin)`)
-        .eq(followCol, id)
-        .order("created_at", { ascending: false })
-        .limit(6);
-
-      const profiles: ExpandUser[] = (rows ?? [])
-        .map((r: any) => r[profileKey])
-        .filter(Boolean) as ExpandUser[];
+      const { items, hidden, error } = await getAfuChatFollowRecords(id, type, 6, 0);
+      if (error) throw new Error(error.message);
+      const profiles = hidden
+        ? []
+        : (items ?? []).map((item) => item.profile as ExpandUser);
 
       setExpandedUsers(profiles);
 
       if (user && profiles.length > 0) {
         const ids = profiles.map((p) => p.id);
-        const { data: myFlw } = await supabase
-          .from("follows")
-          .select("following_id")
-          .eq("follower_id", user.id)
-          .in("following_id", ids);
-        if (myFlw) setExpandedFollowIds(new Set(myFlw.map((f: any) => f.following_id)));
+        const statuses = await getAfuChatFollowStatuses(ids);
+        if (statuses.data) {
+          setExpandedFollowIds(new Set(
+            [...statuses.data.entries()]
+              .filter(([, status]) => status.isFollowing)
+              .map(([profileId]) => profileId),
+          ));
+        }
       }
     } catch {}
     setExpandedLoading(false);
@@ -297,11 +295,15 @@ export default function ContactScreen() {
     if (!user || expandedToggling) return;
     setExpandedToggling(targetId);
     const isNowFollowing = expandedFollowIds.has(targetId);
+    const { error } = await setAfuChatFollow(targetId, !isNowFollowing, user.id);
+    if (error) {
+      showToast("Could not update follow status", { type: "error" });
+      setExpandedToggling(null);
+      return;
+    }
     if (isNowFollowing) {
-      await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", targetId);
       setExpandedFollowIds((prev) => { const s = new Set(prev); s.delete(targetId); return s; });
     } else {
-      await supabase.from("follows").insert({ follower_id: user.id, following_id: targetId });
       setExpandedFollowIds((prev) => new Set(prev).add(targetId));
     }
     setExpandedToggling(null);

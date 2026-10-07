@@ -1,0 +1,1031 @@
+CONTINUE AFUCHAT MIGRATION FROM THE ACTUAL LATEST REPOSITORY STATE
+
+Continue from the actual latest state of "afuchat1/AfuChat-Supa".
+
+Do NOT start over.
+
+Do NOT revert working changes.
+
+Do NOT rebuild functionality that already exists.
+
+The latest repository commit currently is:
+
+d947be3f5cfe75b22e80c91d9cde11c06fe38be0
+
+Previous commits immediately before it include:
+
+b94e84738de542248aefd3e4e3dfcffdc1a3db61
+540f45a50997e4c0c88a556e128414277c3f46c9
+82c9c9790091a4194e59c343d435cdc3e02a0f34
+
+The repository has already moved substantially toward the AfuChat API architecture.
+
+Your job now is to continue from this exact state, integrate the new backend functionality into the remaining mobile data paths, finish the migration domain by domain, test everything, commit and push the resulting implementation, and deploy it to the current "afuchat-api" Worker. All changes must be deployed and production verification must be completed before reporting success.
+
+---
+
+1. IMPORTANT: WHAT THE LATEST COMMITS ALREADY ADDED
+
+The latest "d947be3" work added a significant AfuChat API slice for posts.
+
+Existing API functionality now includes:
+
+POST   /v1/chat/posts
+GET    /v1/chat/posts/mine
+GET    /v1/chat/posts/{postId}
+DELETE /v1/chat/posts/{postId}
+
+POST   /v1/chat/posts/{postId}/like
+DELETE /v1/chat/posts/{postId}/like
+
+GET    /v1/chat/posts/{postId}/replies
+POST   /v1/chat/posts/{postId}/replies
+
+POST   /v1/chat/posts/{postId}/replies/{replyId}/like
+DELETE /v1/chat/posts/{postId}/replies/{replyId}/like
+
+These routes derive author identity from the verified AfuAuth session and have Worker tests.
+
+Do NOT recreate these routes.
+
+Use and extend them where necessary.
+
+---
+
+2. FOLLOW API ALSO EXISTS
+
+The latest source contains follow API client functionality for:
+
+GET  /v1/chat/follows/list
+GET  /v1/chat/follows/ids
+GET  /v1/chat/follows/summary
+GET  /v1/chat/follows/status
+POST /v1/chat/follows
+DELETE /v1/chat/follows
+
+The client already has helpers such as:
+
+getAfuChatFollowRecords()
+getAfuChatFollowIds()
+getAfuChatFollowSummary()
+getAfuChatFollowStatuses()
+setAfuChatFollow()
+
+Do NOT build a second follow system.
+
+Replace remaining direct Supabase follow callers with these existing helpers and add only genuinely missing API functionality.
+
+---
+
+3. CURRENT MIGRATION STATUS
+
+The repository's own current audit reports:
+
+706 direct .from(...) call sites
+89 relation names
+89 direct RPC call sites
+36 RPC function names
+
+These numbers are from the latest documented audit and must be refreshed after your changes.
+
+Do NOT assume the goal is blindly:
+
+0 supabase.from()
+0 supabase.rpc()
+
+The goal is:
+
+0 unexplained direct AfuChat product CRUD from the mobile client
+
+Legitimate access may remain for:
+
+Supabase Auth
+Supabase Realtime
+local SQLite
+offline infrastructure
+explicitly approved infrastructure access
+
+Every remaining direct product-data call must be explicitly classified.
+
+---
+
+4. FIRST: AUDIT THE ACTUAL CURRENT CODE
+
+Before modifying code:
+
+1. Inspect the latest repository.
+2. Confirm the current HEAD.
+3. Inspect the changes after "540f45...".
+4. Inspect the implementation introduced by "d947be3...".
+5. Search the entire mobile application again.
+
+Search for:
+
+supabase.from(
+supabase.rpc(
+
+and specifically:
+
+posts
+post_images
+post_replies
+post_reply_likes
+post_acknowledgments
+
+follows
+
+profiles
+
+stories
+story_views
+story_likes
+story_replies
+
+messages
+conversations
+chats
+chat_members
+
+Also search for existing:
+
+getAfuChat*
+postAfuChat*
+setAfuChat*
+deleteAfuChat*
+
+Do not create duplicate client helpers.
+
+---
+
+5. IMMEDIATE PRIORITY: INTEGRATE THE NEW POST API
+
+The Worker now supports the initial post API, but the mobile application still directly accesses "posts".
+
+Current direct post access remains in areas including:
+
+artifacts/mobile/app/(tabs)/me.tsx
+artifacts/mobile/app/my-posts/index.tsx
+artifacts/mobile/app/contact/[id].tsx
+artifacts/mobile/app/achievements.tsx
+artifacts/mobile/app/(tabs)/search.tsx
+artifacts/mobile/app/chat-info/[id].tsx
+artifacts/mobile/app/moments/create.tsx
+artifacts/mobile/app/moments/create-article.tsx
+artifacts/mobile/app/moments/create-video.tsx
+artifacts/mobile/app/(tabs)/discover.tsx
+artifacts/mobile/components/chat/MiniProfilePopup.tsx
+
+Audit every one.
+
+Where an existing API route supports the operation, switch the mobile caller to the API.
+
+Do not leave the app doing:
+
+screen A → afuchat-api
+screen B → Supabase PostgREST
+screen C → Supabase PostgREST
+
+for the same product operation.
+
+---
+
+6. POST CREATION
+
+The latest Worker already supports:
+
+POST /v1/chat/posts
+
+Use it for:
+
+moments/create.tsx
+moments/create-article.tsx
+moments/create-video.tsx
+
+Do not directly call:
+
+supabase.from("posts").insert(...)
+
+from those screens.
+
+The server must derive:
+
+author_id
+
+from the verified AfuAuth session.
+
+Never trust:
+
+author_id
+user_id
+profile_id
+
+sent by the mobile client.
+
+Preserve the current UI behavior, media upload flow, article fields, video fields, visibility, location, language, and all other existing fields.
+
+If the current API schema does not support a required existing field, extend the existing "/v1/chat/posts" operation rather than bypassing it.
+
+---
+
+7. MY POSTS
+
+Use the existing:
+
+GET /v1/chat/posts/mine
+
+for My Posts.
+
+Remove the remaining direct delete:
+
+supabase.from("posts").delete(...)
+
+from:
+
+artifacts/mobile/app/my-posts/index.tsx
+
+Use:
+
+DELETE /v1/chat/posts/{postId}
+
+The Worker must enforce ownership using the verified session.
+
+Do not rely on a client-supplied author ID.
+
+---
+
+8. PROFILE POST DATA
+
+Audit:
+
+contact/[id].tsx
+chat-info/[id].tsx
+MiniProfilePopup.tsx
+me.tsx
+
+These screens currently query post counts/details directly.
+
+Use appropriate existing API functionality.
+
+If the existing post API lacks a specific profile-post listing operation, add a named route under:
+
+/v1/chat/*
+
+For example:
+
+GET /v1/chat/posts/profile/{profileId}
+
+may be used if that is the cleanest existing architecture.
+
+Do NOT create:
+
+/v1/posts/*
+
+Do NOT create:
+
+/v1/profile/posts/*
+
+Everything AfuChat owns stays under:
+
+/v1/chat/*
+
+---
+
+9. FEED / DISCOVER
+
+This is a major remaining area.
+
+Current "discover.tsx" still directly reads:
+
+posts
+follows
+
+The Worker's current post slice explicitly does NOT yet cover the complete feed/discover ranking system.
+
+Do not pretend that:
+
+GET /v1/chat/posts
+
+automatically solves this.
+
+Understand the existing Discover implementation first.
+
+Preserve:
+
+For You
+Following
+pagination
+feed ranking
+local feed cache
+view tracking
+dismissed users/topics
+recommendations
+Premium cards
+video filtering
+
+Then implement the appropriate AfuChat API operations.
+
+Possible architecture:
+
+GET /v1/chat/feed
+GET /v1/chat/feed/following
+
+or another clean "/v1/chat/*" design.
+
+Choose based on the actual current application behavior.
+
+Do not duplicate feed algorithms unnecessarily.
+
+---
+
+10. FOLLOW MIGRATION
+
+The API already has follow functionality.
+
+Replace direct calls such as:
+
+supabase.from("follows")
+
+in:
+
+me.tsx
+contact/[id].tsx
+discover.tsx
+contacts.tsx
+MiniProfilePopup.tsx
+UserRecsCard.tsx
+SuggestedUsers.tsx
+FindPeopleTab.tsx
+video/[id].tsx
+syncQueue.ts
+
+with the existing AfuChat follow API helpers wherever applicable.
+
+Handle:
+
+follow
+unfollow
+is following
+follows you
+followers count
+following count
+followers list
+following list
+follow IDs
+batch follow status
+
+Do not implement another follow API.
+
+---
+
+11. OFFLINE FOLLOW QUEUE
+
+This is especially important.
+
+"syncQueue.ts" still contains direct:
+
+supabase.from("follows").insert(...)
+
+Do not simply delete it.
+
+Preserve offline functionality.
+
+Change the queued server mutation to call the appropriate AfuChat API when connectivity returns.
+
+The queue may remain local.
+
+The server mutation must use:
+
+AfuAuth bearer
+→ afuchat-api
+→ authoritative database operation
+
+The client must not submit another user's ID as proof of identity.
+
+---
+
+12. STORIES REMAIN TO BE MIGRATED
+
+The latest commits do not complete the story migration.
+
+Audit:
+
+stories
+story_views
+story_likes
+story_replies
+
+including:
+
+artifacts/mobile/app/stories/view.tsx
+
+and all story creation, loading, reply, view-tracking, sharing, and deletion paths.
+
+Implement named:
+
+/v1/chat/*
+
+routes where required.
+
+Do not create:
+
+/v1/stories/*
+
+Do not break story media caching or the existing CDN/storage architecture.
+
+---
+
+13. MESSAGE MIGRATION IS NOT FINISHED
+
+The message migration is much further along, but direct operations still remain.
+
+Current direct message operations include places such as:
+
+app/join/[code].tsx
+app/group/[id].tsx
+app/chat-info/danger/[id].tsx
+
+Audit all remaining:
+
+messages.insert
+messages.update
+messages.delete
+
+and related:
+
+chat_members
+conversations
+chats
+
+operations.
+
+Use the existing AfuChat message API where applicable.
+
+If a required group operation does not yet have an API route, add it under:
+
+/v1/chat/*
+
+Do not bypass the API from the mobile app.
+
+---
+
+14. GROUPS AND CHANNELS
+
+Audit:
+
+group/create.tsx
+channel/create.tsx
+chat/new.tsx
+join/[code].tsx
+group/[id].tsx
+chat-info/*
+
+There are still direct RPC calls including operations related to:
+
+create_group_chat
+create_channel_chat
+get_or_create_direct_chat
+get_my_channels
+count_my_groups
+count_my_channels
+
+Do not blindly remove these RPCs.
+
+Determine whether each should:
+
+remain as an internal database function called by afuchat-api
+
+or:
+
+be exposed through an explicit named AfuChat API operation
+
+The mobile app should not become an unrestricted RPC client.
+
+Never create:
+
+/v1/chat/rpc
+
+---
+
+15. ECONOMY / WALLET / ACOIN / XP
+
+There are still direct RPCs for:
+
+ACoin
+Nexa
+XP
+payments
+subscriptions
+music
+wallet
+
+including functions such as:
+
+deduct_acoin
+credit_acoin
+award_xp
+reward_activity_xp
+purchase_music_track
+
+Audit them individually.
+
+Financial and balance-changing operations must be server-authoritative.
+
+The API must derive the authenticated user from the bearer token.
+
+Never trust:
+
+p_user_id
+user_id
+sender_id
+recipient_id
+
+from an untrusted client.
+
+Do not expose arbitrary RPC execution.
+
+Preserve transaction atomicity.
+
+Do not create duplicate balance tables.
+
+---
+
+16. PRESERVE EXISTING DATABASE ARCHITECTURE
+
+The repository's current backend audit confirms a shared Supabase project with schemas including:
+
+public
+accounts
+afuchat
+afucloud
+afuai
+mail
+ads
+
+Do not switch the entire client wholesale to:
+
+Accept-Profile: afuchat
+
+without verifying ownership and grants.
+
+Existing shared compatibility views and RLS behavior must be respected.
+
+Current-user profile data belongs to:
+
+accounts.profiles
+
+Do not create duplicate:
+
+afuchat.profiles
+
+or another user store.
+
+---
+
+17. PRESERVE EXISTING MEDIA
+
+Do not break existing AfuChat media.
+
+The infrastructure audit found the existing:
+
+afuchat-media
+
+bucket still contains existing production objects.
+
+Do not bulk-copy or delete it.
+
+Keep existing compatibility URLs working.
+
+Keep AfuChat CDN delivery under:
+
+https://cdn.afuchat.com/chat/*
+
+Do not route normal object delivery through:
+
+/v1/chat/*
+
+unless the existing storage architecture specifically requires an API operation.
+
+---
+
+18. ERROR HANDLING
+
+Do not turn failed API requests into empty successful data.
+
+Never do:
+
+500 → []
+404 → []
+401 → []
+network error → []
+
+A valid empty result is different from a failed request.
+
+Apply this especially to:
+
+feed
+posts
+followers
+following
+stories
+messages
+conversations
+profiles
+search
+discover
+
+---
+
+19. AUTHENTICATION
+
+Keep the existing shared AfuAuth architecture.
+
+The authoritative flow remains:
+
+mobile
+↓
+AfuAuth session
+↓
+Bearer access token
+↓
+afuchat-api
+↓
+verified identity
+↓
+authorized operation
+
+Client-supplied:
+
+expected_user_id
+author_id
+user_id
+sender_id
+owner_id
+profile_id
+
+may only be consistency assertions where explicitly needed.
+
+They must never determine authorization.
+
+---
+
+20. API NAMESPACE
+
+Every AfuChat operation remains under:
+
+/v1/chat/*
+
+Do NOT create:
+
+/v1/posts/*
+/v1/follows/*
+/v1/feed/*
+/v1/messages/*
+/v1/stories/*
+/v1/profile/*
+/v1/storage/*
+
+The existing product namespace is:
+
+/v1/chat/*
+
+---
+
+21. DO NOT CREATE A GENERIC API GATEWAY
+
+Do not create a new generic Worker just to dispatch:
+
+/v1/chat/*
+
+The intended Worker is:
+
+afuchat-api
+
+Other products remain independent:
+
+afuauth-api
+afucloud-api
+afumail-api
+afuai-api
+afuads-api
+
+Do not modify their ownership.
+
+---
+
+22. TEST THE ACTUAL DATA FLOWS
+
+Do not only test Worker functions in isolation.
+
+Test the actual application paths.
+
+At minimum verify:
+
+Authentication
+
+login
+session restoration
+token refresh
+logout
+account switching
+
+Profile
+
+own profile
+other profile
+profile counts
+
+Posts
+
+create post
+create article
+create video
+my posts
+post detail
+delete
+likes
+comments
+replies
+bookmarks
+
+Social
+
+follow
+unfollow
+followers
+following
+follows-you
+follow suggestions
+
+Feed
+
+For You
+Following
+pagination
+refresh
+cached feed
+view tracking
+
+Stories
+
+create
+load
+view
+view tracking
+reply
+share
+delete
+
+Chat
+
+conversations
+messages
+groups
+channels
+membership
+reactions
+editing
+deletion
+offline queue
+reconnect
+Realtime
+
+---
+
+23. RE-RUN THE REPOSITORY AUDIT AFTER CHANGES
+
+After migration, search again for:
+
+supabase.from("posts")
+supabase.from("follows")
+supabase.from("stories")
+supabase.from("messages")
+supabase.from("conversations")
+supabase.from("chat_members")
+supabase.rpc(
+
+Update the actual counts.
+
+Do not use the historical:
+
+706
+89
+
+numbers as the final result.
+
+Every remaining direct product-data call must be explicitly classified.
+
+---
+
+24. UPDATE THE MIGRATION DOCUMENTATION
+
+Update:
+
+docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md
+docs/AFUCHAT_API.md
+backend/afu-chat-api/MIGRATION.md
+
+with the actual state after the work.
+
+Document only routes that really exist.
+
+Do not document hypothetical routes.
+
+For every migrated domain list:
+
+route
+method
+purpose
+authentication
+authorization
+database source
+mobile caller
+test status
+deployment status
+
+---
+
+25. COMMIT AND PUSH THE WORK
+
+After testing:
+
+git status
+git diff
+
+Ensure no accidental changes are included.
+
+Commit the completed migration with a clear message.
+
+Push to the correct repository and default branch.
+
+---
+
+26. DEPLOY TO THE CURRENT AFUCHAT WORKER
+
+This is mandatory.
+
+Do NOT stop at the GitHub commit.
+
+Deploy the resulting backend implementation to the actual current:
+
+afuchat-api
+
+Worker.
+
+The production API must remain:
+
+https://api.afuchat.com/v1/chat/*
+
+Do not deploy AfuChat code to:
+
+afuauth-api
+afucloud-api
+afumail-api
+afuai-api
+afuads-api
+
+Do not create a duplicate "afuchat-api" Worker.
+
+Use the current/latest Worker.
+
+All changes, including backend and mobile integration changes, must be committed, pushed, deployed where applicable, and verified.
+
+---
+
+27. VERIFY THE PRODUCTION DEPLOYMENT
+
+After deployment, verify the real production Worker.
+
+Test:
+
+https://api.afuchat.com
+
+and representative authenticated AfuChat routes including:
+
+/v1/chat/me
+/v1/chat/conversations
+/v1/chat/posts
+/v1/chat/posts/mine
+/v1/chat/follows/summary
+/v1/chat/messages
+
+plus every newly migrated route.
+
+Confirm:
+
+production response
+correct Worker
+correct authentication
+correct database
+correct response shape
+no internal Worker leakage
+no stack traces
+no accidental Vercel fallback
+
+Do not claim deployment unless it was actually performed and verified.
+
+---
+
+28. WORKER ISOLATION
+
+Deployment of:
+
+afuchat-api
+
+must not redeploy or alter:
+
+afuauth-api
+afucloud-api
+afumail-api
+afuai-api
+afuads-api
+
+Do not modify:
+
+cloud.afuchat.com
+img.afuchat.com
+cdn.afuchat.com
+
+unless specifically required for an AfuChat change.
+
+---
+
+29. FINAL REPORT
+
+At completion provide the actual:
+
+latest repository commit
+new commit
+deployed Worker
+production URL
+deployment result
+
+Then provide:
+
+direct .from() count before
+direct .from() count after
+
+direct RPC count before
+direct RPC count after
+
+remaining direct product CRUD
+legitimate retained direct Supabase access
+
+List any remaining migration work explicitly.
+
+Do not say “fully migrated” if significant product CRUD remains.
+
+---
+
+30. FINAL SUCCESS CONDITION
+
+The task is complete only when:
+
+latest repo inspected
+AND
+new d947be3 work preserved
+AND
+posts API integrated into mobile callers
+AND
+follow API integrated into mobile callers
+AND
+remaining feed paths handled
+AND
+stories audited/migrated
+AND
+remaining chat/group mutations handled
+AND
+RPCs audited individually
+AND
+auth remains centralized through AfuAuth
+AND
+identity is server-derived
+AND
+existing data is preserved
+AND
+offline functionality remains
+AND
+Realtime remains
+AND
+CDN/storage remains intact
+AND
+tests pass
+AND
+documentation is updated
+AND
+changes are committed
+AND
+changes are pushed
+AND
+latest implementation is deployed to afuchat-api
+AND
+production API is verified
+
+Do not stop after adding API functions.
+
+Do not stop after updating the mobile client.
+
+Do not stop after tests.
+
+Do not stop after committing.
+
+The final state must be implemented, integrated, tested, committed, pushed, deployed to the current "afuchat-api" Worker, and verified against production.

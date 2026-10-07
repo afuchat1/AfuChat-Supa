@@ -38,10 +38,18 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer, type PostViewerMeta } from "@/components/ImageViewer";
 import { supabase } from "@/lib/supabase";
-import { getAfuChatBookmarkedPostIds, setAfuChatBookmark } from "@/lib/afuchatApi";
+import {
+  getAfuChatBookmarkedPostIds,
+  getAfuChatForYouFeed,
+  getAfuChatFollowingFeed,
+  getAfuChatFollowIds,
+  recordAfuChatPostViews,
+  setAfuChatFollow,
+  setAfuChatBookmark,
+  setAfuChatPostLike,
+} from "@/lib/afuchatApi";
 import {
   ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-  ACCOUNT_PROFILE_FEED_COLUMNS,
   fetchAccountProfileMap,
 } from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
@@ -85,48 +93,6 @@ import { getCachedStoryMedia } from "@/lib/storyMediaCache";
 import { prefetchAvatars, prefetchThumbnails, prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { useThrottledFocusEffect } from "@/lib/hooks/useThrottledFocusEffect";
 import FindPeopleTab from "@/components/discover/FindPeopleTab";
-
-async function hydrateFeedPostRows(rows: any[]) {
-  if (rows.length === 0) return rows;
-
-  const postIds = [...new Set(rows.map((row) => row.id).filter(Boolean))];
-  const authorIds = [...new Set(rows.map((row) => row.author_id).filter(Boolean))];
-  const assetIds = [...new Set(rows.map((row) => row.video_asset_id).filter(Boolean))];
-  const [profileResult, imageResult, assetResult] = await Promise.all([
-    fetchAccountProfileMap(authorIds, ACCOUNT_PROFILE_FEED_COLUMNS),
-    postIds.length > 0
-      ? supabase
-          .from("post_images")
-          .select("post_id, image_url, display_order")
-          .in("post_id", postIds)
-          .order("display_order", { ascending: true })
-      : Promise.resolve({ data: [] }),
-    assetIds.length > 0
-      ? supabase
-          .from("video_assets")
-          .select("id, duration_seconds")
-          .in("id", assetIds)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const imagesByPost = new Map<string, any[]>();
-  for (const image of imageResult.data || []) {
-    const images = imagesByPost.get(image.post_id) || [];
-    images.push(image);
-    imagesByPost.set(image.post_id, images);
-  }
-  const assetsById = new Map<string, any>();
-  for (const asset of assetResult.data || []) {
-    assetsById.set((asset as any).id, asset);
-  }
-
-  return rows.map((row) => ({
-    ...row,
-    profiles: profileResult.profiles.get(row.author_id) || null,
-    post_images: imagesByPost.get(row.id) || [],
-    video_assets: row.video_asset_id ? assetsById.get(row.video_asset_id) || null : null,
-  }));
-}
 
 type PostItem = {
   id: string;
@@ -1446,10 +1412,8 @@ export default function DiscoverScreen() {
           const ids = pendingViewsRef.current.splice(0);
           const uid = userIdRef.current;
           if (ids.length === 0 || !uid) return;
-          supabase
-            .from("post_views")
-            .insert(ids.map((id) => ({ post_id: id, viewer_id: uid })))
-            .then(() => {
+          recordAfuChatPostViews(ids, uid).then(({ error }) => {
+            if (error) return;
               const idSet = new Set(ids);
               setPosts((prev) =>
                 prev.map((p) => idSet.has(p.id) ? { ...p, view_count: (p.view_count || 0) + 1 } : p)
@@ -1694,12 +1658,9 @@ export default function DiscoverScreen() {
       if (_fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
         followingIds = _fidCache.ids;
       } else {
-        const { data: followData } = await supabase
-          .from("follows")
-          .select("following_id")
-          .eq("follower_id", user.id)
-          .limit(1000);
-        followingIds = (followData || []).map((f: any) => f.following_id);
+        const followResult = await getAfuChatFollowIds(user.id, "following", 1000);
+        if (followResult.error) throw new Error(followResult.error.message);
+        followingIds = followResult.ids ?? [];
         followingIdsCacheRef.current = { ids: followingIds, cachedAt: Date.now() };
       }
 
@@ -1716,43 +1677,45 @@ export default function DiscoverScreen() {
         : null;
       // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
       const followNewerThan = isRefresh ? await getNewestFeedPostDate("following") : null;
-      const followBaseQ = supabase
-        .from("posts")
-        .select(`
-          id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
-          post_type, article_title, article_body, video_url, video_asset_id
-        `)
-        .in("author_id", followingIds)
-        .in("visibility", ["public", "followers"])
-        .order("created_at", { ascending: false });
-      const { data: rawData } = await (followOlderThan
-        ? followBaseQ.lt("created_at", followOlderThan).limit(PAGE_SIZE)
-        : followNewerThan
-          ? followBaseQ.gt("created_at", followNewerThan).limit(PAGE_SIZE)
-          : followBaseQ.limit(PAGE_SIZE));
+      const followFeedResult = await getAfuChatFollowingFeed({
+        olderThan: followOlderThan,
+        newerThan: followNewerThan,
+        limit: PAGE_SIZE,
+      });
+      if (followFeedResult.error) throw new Error(followFeedResult.error.message);
+      const rawData = followFeedResult.items;
+      if (followFeedResult.followingIds) {
+        followingIdsCacheRef.current = {
+          ids: followFeedResult.followingIds,
+          cachedAt: Date.now(),
+        };
+      }
 
       if (rawData) {
-        const data = await hydrateFeedPostRows(rawData);
+        const data = rawData;
         if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
 
         const postIds = data.map((p: any) => p.id);
-        const _followLimit = PAGE_SIZE * 3;
-        const [{ data: myLikes }, { data: replyCounts }, myBookmarksResult] = await Promise.all([
-          postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
-          postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
-          postIds.length > 0 && user
+        const myLikes = data
+          .filter((post: any) => post.liked)
+          .map((post: any) => ({ post_id: post.id }));
+        const replyCounts = data.map((post: any) => ({
+          post_id: post.id,
+          reply_count: Number(post.replyCount) || 0,
+        }));
+        const myBookmarksResult = postIds.length > 0 && user
             ? getAfuChatBookmarkedPostIds(postIds)
-            : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
-        ]);
-        if (myBookmarksResult.error) {
-          showAlert("Saved status unavailable", myBookmarksResult.error.message);
+            : Promise.resolve({ data: [] as { post_id: string }[], error: null });
+        const bookmarksResult = await myBookmarksResult;
+        if (bookmarksResult.error) {
+          showAlert("Saved status unavailable", bookmarksResult.error.message);
         }
-        const myBookmarks = myBookmarksResult.data ?? [];
+        const myBookmarks = bookmarksResult.data ?? [];
 
         const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
         const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
         const replyMap: Record<string, number> = {};
-        for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
+        for (const r of replyCounts) replyMap[r.post_id] = r.reply_count;
 
         const mapped: PostItem[] = data.map((p: any) => ({
           id: p.id, author_id: p.author_id, content: p.content || "",
@@ -1766,7 +1729,7 @@ export default function DiscoverScreen() {
           liked: myLikeSet.has(p.id), likeCount: p.like_count || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
-          isFollowing: true,
+          isFollowing: p.isFollowing === true,
           language_code: p.language_code || null,
         }));
 
@@ -1776,7 +1739,12 @@ export default function DiscoverScreen() {
         InteractionManager.runAfterInteractions(() => {
           for (const p of data) {
             const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
-            if (p.author_id && profile?.handle) setHandleId(profile.handle, p.author_id);
+            if (
+              typeof p.author_id === "string" &&
+              typeof profile?.handle === "string"
+            ) {
+              setHandleId(profile.handle, p.author_id);
+            }
           }
           prefetchAvatars(mapped.slice(0, 8).map((p) => p.profile?.avatar_url));
           prefetchThumbnails(mapped.slice(0, 6).map((p) => p.image_url));
@@ -1833,8 +1801,6 @@ export default function DiscoverScreen() {
     //  3. THROWBACK — posts older than 30 days, random window per session
     // Streams are shuffled before scoring so every pull-to-refresh feels different.
     const RECENT_SIZE = 12;
-    const MID_SIZE = 10;
-    const THROWBACK_SIZE = 8;
 
     const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -1843,11 +1809,6 @@ export default function DiscoverScreen() {
       !isRefresh && postsRef.current.length > 0
         ? postsRef.current[postsRef.current.length - 1]?.created_at
         : null;
-
-    const fySelect = `
-      id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
-      post_type, article_title, article_body, video_url, video_asset_id
-    `;
 
     // Kick off SQLite reads immediately so they overlap with query-building and network.
     const seenPostIdsPromise = getSeenPostIds();
@@ -1864,58 +1825,33 @@ export default function DiscoverScreen() {
       midExhaustedRef.current = false;
     }
 
-    // ── Stream 1: Recent posts (last 4 days) ──
-    let fyQ: any = supabase.from("posts").select(fySelect).eq("visibility", "public")
-      .order("created_at", { ascending: false });
-    if (fyOlderThan) {
-      fyQ = fyQ.lt("created_at", fyOlderThan);
-    } else if (fyNewerThan) {
-      fyQ = fyQ.gt("created_at", fyNewerThan);
-    } else {
-      fyQ = fyQ.gte("created_at", fourDaysAgo);
+    const feedResult = await getAfuChatForYouFeed({
+      olderThan: fyOlderThan,
+      newerThan: fyNewerThan,
+      recentLimit: RECENT_SIZE,
+      recentSince: fourDaysAgo,
+      midBefore: fourDaysAgo,
+      midSince: thirtyDaysAgo,
+      throwbackBefore: thirtyDaysAgo,
+      midOffset: midOffsetRef.current,
+      throwbackOffset: throwbackOffsetRef.current,
+      midExhausted: midExhaustedRef.current,
+      throwbackExhausted: throwbackExhaustedRef.current,
+    });
+    if (feedResult.error) throw new Error(feedResult.error.message);
+    const recentData = feedResult.recent ?? [];
+    const midData = feedResult.mid ?? [];
+    const throwbackData = feedResult.throwback ?? [];
+    if (midData.length === 0 && !fyOlderThan && !midExhaustedRef.current) {
+      midExhaustedRef.current = true;
+    } else if (midData.length > 0) {
+      midOffsetRef.current += midData.length;
     }
-    fyQ = fyQ.limit(RECENT_SIZE);
-
-    // ── Stream 2: Mid posts (4–30 days old, random window) ──
-    const mdOffset = midOffsetRef.current;
-    const midPromise = midExhaustedRef.current || fyOlderThan
-      ? Promise.resolve({ data: [] as any[] })
-      : supabase.from("posts")
-          .select(fySelect)
-          .eq("visibility", "public")
-          .lt("created_at", fourDaysAgo)
-          .gte("created_at", thirtyDaysAgo)
-          .order("view_count", { ascending: false })
-          .range(mdOffset, mdOffset + MID_SIZE - 1)
-          .then((res) => {
-            if (!res.data || res.data.length === 0) {
-              midExhaustedRef.current = true;
-            } else {
-              midOffsetRef.current += MID_SIZE;
-            }
-            return res;
-          });
-
-    // ── Stream 3: Throwback posts (older than 30 days, high engagement) ──
-    const tbOffset = throwbackOffsetRef.current;
-    const throwbackPromise = throwbackExhaustedRef.current || fyOlderThan
-      ? Promise.resolve({ data: [] as any[] })
-      : supabase.from("posts")
-          .select(fySelect)
-          .eq("visibility", "public")
-          .lt("created_at", thirtyDaysAgo)
-          .order("view_count", { ascending: false })
-          .range(tbOffset, tbOffset + THROWBACK_SIZE - 1)
-          .then((res) => {
-            if (!res.data || res.data.length === 0) {
-              throwbackExhaustedRef.current = true;
-            } else {
-              throwbackOffsetRef.current += THROWBACK_SIZE;
-            }
-            return res;
-          });
-
-    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([fyQ, midPromise, throwbackPromise]);
+    if (throwbackData.length === 0 && !fyOlderThan && !throwbackExhaustedRef.current) {
+      throwbackExhaustedRef.current = true;
+    } else if (throwbackData.length > 0) {
+      throwbackOffsetRef.current += throwbackData.length;
+    }
 
     // Merge all streams, deduplicate, then Fisher-Yates shuffle so the scoring
     // algorithm picks the best content from a randomly ordered pool — making
@@ -1934,7 +1870,7 @@ export default function DiscoverScreen() {
       const j = Math.floor(Math.random() * (i + 1));
       [allRaw[i], allRaw[j]] = [allRaw[j], allRaw[i]];
     }
-    const data = await hydrateFeedPostRows(allRaw);
+    const data = allRaw;
     // Seed handle→id cache — makes mention-taps to these authors instant
     for (const p of data) {
       if (p.author_id && p.profiles?.handle) setHandleId(p.profiles.handle, p.author_id);
@@ -1957,62 +1893,24 @@ export default function DiscoverScreen() {
         .limit(6);
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
 
-      const _fyLimit = PAGE_SIZE * 3;
-      const [
-        { data: myLikes },
-        { data: replyCounts },
-        { data: followingData },
-        myBookmarksResult,
-        _orgResult,
-        authorPostsResult,
-      ] = await Promise.all([
-        postIds.length > 0 && user
-          ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
-          : { data: [] },
-        postIds.length > 0
-          ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_fyLimit)
-          : { data: [] },
-        authorIds.length > 0 && user
-          ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
-          : { data: [] },
+      const [myBookmarksResult, _orgResult] = await Promise.all([
         postIds.length > 0 && user
           ? getAfuChatBookmarkedPostIds(postIds)
           : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
         Promise.resolve(_orgQ).catch(() => ({ data: null })),
-        authorIds.length > 0
-          ? supabase.from("posts").select("id, author_id").in("author_id", authorIds).limit(500)
-          : { data: [] },
       ]);
       if (myBookmarksResult.error) {
         showAlert("Saved status unavailable", myBookmarksResult.error.message);
       }
       const myBookmarks = myBookmarksResult.data ?? [];
-      const authorPostRows: any[] = (authorPostsResult as any)?.data ?? [];
-      const authorPostIds = authorPostRows.map((post) => post.id);
-      const authorByPostId = new Map<string, string>();
-      for (const post of authorPostRows) {
-        authorByPostId.set(post.id, post.author_id);
-      }
-      let myAuthorLikes: any[] = [];
-      let myReplies: any[] = [];
-      if (user && authorPostIds.length > 0) {
-        const [authorLikesResult, authorRepliesResult] = await Promise.all([
-          supabase
-            .from("post_acknowledgments")
-            .select("post_id")
-            .eq("user_id", user.id)
-            .in("post_id", authorPostIds)
-            .limit(100),
-          supabase
-            .from("post_replies")
-            .select("post_id")
-            .eq("author_id", user.id)
-            .in("post_id", authorPostIds)
-            .limit(100),
-        ]);
-        myAuthorLikes = authorLikesResult.data || [];
-        myReplies = authorRepliesResult.data || [];
-      }
+      const myLikes = data.filter((post: any) => post.liked).map((post: any) => ({ post_id: post.id }));
+      const replyCounts = data.map((post: any) => ({
+        post_id: post.id,
+        reply_count: Number(post.replyCount) || 0,
+      }));
+      const followingData = data
+        .filter((post: any) => post.isFollowing)
+        .map((post: any) => ({ following_id: post.author_id }));
 
       let _orgData: any[] = (_orgResult as any)?.data ?? [];
       if (_orgData.length > 0) {
@@ -2036,7 +1934,7 @@ export default function DiscoverScreen() {
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
 
       const replyMap: Record<string, number> = {};
-      for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
+      for (const r of replyCounts) { replyMap[r.post_id] = r.reply_count; }
 
       const followingSet = new Set((followingData || []).map((f: any) => f.following_id));
 
@@ -2050,13 +1948,8 @@ export default function DiscoverScreen() {
       });
 
       const authorInteractionMap: Record<string, number> = {};
-      for (const al of (myAuthorLikes || [])) {
-        const authorId = authorByPostId.get(al.post_id);
-        if (authorId) authorInteractionMap[authorId] = (authorInteractionMap[authorId] || 0) + 1;
-      }
-      for (const ar of (myReplies || [])) {
-        const authorId = authorByPostId.get(ar.post_id);
-        if (authorId) authorInteractionMap[authorId] = (authorInteractionMap[authorId] || 0) + 2;
+      for (const p of data as any[]) {
+        if (p.author_id) authorInteractionMap[p.author_id] = Number(p.authorInteractionCount) || 0;
       }
 
       const authorPostCount: Record<string, number> = {};
@@ -2494,45 +2387,23 @@ export default function DiscoverScreen() {
       pollInFlightRef.current = true;
       try {
       const activeTab = feedTabRef.current;
-      const fySelect = `
-        id, author_id, content, image_url, created_at, view_count, like_count, visibility,
-        post_type, article_title, article_body, video_url, video_asset_id
-      `;
-
       let newPostsData: any[] = [];
 
       if (activeTab === "for_you") {
-        const { data } = await supabase
-          .from("posts")
-          .select(fySelect)
-          .eq("visibility", "public")
-          .gt("created_at", newestAt)
-          .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-          .order("created_at", { ascending: false })
-          .limit(20);
-        newPostsData = data ?? [];
+        const result = await getAfuChatForYouFeed({
+          newerThan: newestAt,
+          recentLimit: 20,
+          excludeSelf: true,
+        });
+        if (result.error) return;
+        newPostsData = result.recent ?? [];
       } else if (activeTab === "following" && user?.id) {
-        const { data: followData } = await supabase
-          .from("follows")
-          .select("following_id")
-          .eq("follower_id", user.id)
-          .limit(500);
-        const followingIds = (followData ?? []).map((f: any) => f.following_id);
-        if (followingIds.length > 0) {
-          const { data } = await supabase
-            .from("posts")
-            .select(fySelect)
-            .in("author_id", followingIds)
-            .in("visibility", ["public", "followers"])
-            .gt("created_at", newestAt)
-            .order("created_at", { ascending: false })
-            .limit(20);
-          newPostsData = data ?? [];
-        }
+        const result = await getAfuChatFollowingFeed({ newerThan: newestAt, limit: 20 });
+        if (result.error) return;
+        newPostsData = result.items ?? [];
       }
 
       if (!newPostsData.length || cancelled) return;
-      newPostsData = await hydrateFeedPostRows(newPostsData);
       if (cancelled) return;
 
       // Map to PostItem
@@ -2555,9 +2426,9 @@ export default function DiscoverScreen() {
           avatar_url: p.profiles?.avatar_url || null,
           bio: null,
         },
-        liked: false,
+        liked: p.liked === true,
         likeCount: p.like_count ?? 0,
-        replyCount: 0,
+        replyCount: Number(p.replyCount) || 0,
         score: 0,
         bookmarked: false,
         post_type: p.post_type ?? "text",
@@ -2568,7 +2439,7 @@ export default function DiscoverScreen() {
           const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []);
           return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null;
         })(),
-        isFollowing: activeTab === "following",
+        isFollowing: p.isFollowing === true,
       }));
 
       // Deduplicate against current feed and existing pending buffer
@@ -2713,7 +2584,7 @@ export default function DiscoverScreen() {
       setPosts((prev) =>
         prev.map((p) => p.id === postId ? { ...p, liked: false, likeCount: Math.max(0, p.likeCount - 1) } : p)
       );
-      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
+      const { error } = await setAfuChatPostLike(postId, false, user.id);
       if (error) {
         // Revert on failure
         setPosts((prev) =>
@@ -2735,7 +2606,7 @@ export default function DiscoverScreen() {
       });
       trackEvent("like_post", { post_id: postId, author_id: post.author_id });
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
-      const { error } = await supabase.from("post_acknowledgments").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+      const { error } = await setAfuChatPostLike(postId, true, user.id);
       if (error) {
         // Revert on failure
         setPosts((prev) =>
@@ -2752,7 +2623,7 @@ export default function DiscoverScreen() {
   const toggleFollow = useCallback(async (authorId: string) => {
     if (!user) { setShowSignInPrompt(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { error } = await supabase.from("follows").upsert({ follower_id: user.id, following_id: authorId }, { onConflict: "follower_id,following_id" });
+    const { error } = await setAfuChatFollow(authorId, true, user.id);
     if (!error) {
       setPosts((prev) => prev.map((p) => p.author_id === authorId ? { ...p, isFollowing: true } : p));
     }
@@ -2787,13 +2658,9 @@ export default function DiscoverScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-      supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id)
-        .then(({ data }) => {
-          if (!data) return;
-          const followed = new Set(data.map((f: any) => f.following_id as string));
+      getAfuChatFollowIds(user.id, "following", 1000).then((result) => {
+          if (result.error || !result.ids) return;
+          const followed = new Set(result.ids);
           setPosts((prev) =>
             prev.map((p) =>
               p.isFollowing !== followed.has(p.author_id)
