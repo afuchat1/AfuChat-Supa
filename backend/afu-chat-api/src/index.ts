@@ -471,6 +471,251 @@ async function handleStatus(request: Request, env: Env): Promise<Response> {
   );
 }
 
+const MAX_EDGE_FUNCTION_BODY_BYTES = 32 * 1024;
+const OPTIONAL_PUSH_FIELDS = [
+  "senderAvatarUrl",
+  "body",
+  "chatId",
+  "messageId",
+  "attachmentUrl",
+  "attachmentType",
+  "title",
+  "callId",
+  "categoryId",
+  "channelId",
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isOptionalText(value: unknown, maxLength: number): boolean {
+  return value === undefined || value === null ||
+    (typeof value === "string" && value.length <= maxLength);
+}
+
+async function readJsonRecord(request: Request): Promise<Record<string, unknown> | null> {
+  const declaredLength = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_EDGE_FUNCTION_BODY_BYTES) {
+    return null;
+  }
+
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_EDGE_FUNCTION_BODY_BYTES) return null;
+  try {
+    const payload: unknown = JSON.parse(text);
+    return isRecord(payload) ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+function validPushRegistration(payload: Record<string, unknown>): boolean {
+  return typeof payload.token === "string" &&
+    payload.token.length >= 20 &&
+    payload.token.length <= 8192 &&
+    !/^(Expo|Exponent)PushToken\[/i.test(payload.token) &&
+    (payload.platform === "android" || payload.platform === "ios") &&
+    payload.provider === "fcm" &&
+    (payload.appVersion === undefined ||
+      (typeof payload.appVersion === "string" && payload.appVersion.length <= 80));
+}
+
+function validPushSend(payload: Record<string, unknown>, userId: string): boolean {
+  const recipients = payload.recipientUserIds;
+  if (
+    !Array.isArray(recipients) ||
+    recipients.length === 0 ||
+    recipients.length > 100 ||
+    recipients.some((id) => typeof id !== "string" || id.length === 0 || id.length > 128) ||
+    new Set(recipients).size !== recipients.length ||
+    recipients.includes(userId) ||
+    (payload.senderId !== undefined && payload.senderId !== userId) ||
+    typeof payload.senderName !== "string" ||
+    payload.senderName.length > 120 ||
+    typeof payload.body !== "string" ||
+    payload.body.length > 4096 ||
+    !isOptionalText(payload.senderAvatarUrl, 2048) ||
+    !isOptionalText(payload.chatId, 128) ||
+    !isOptionalText(payload.messageId, 128) ||
+    !isOptionalText(payload.attachmentUrl, 2048) ||
+    !isOptionalText(payload.attachmentType, 80) ||
+    !isOptionalText(payload.title, 160) ||
+    !isOptionalText(payload.callId, 128) ||
+    !isOptionalText(payload.categoryId, 80) ||
+    !isOptionalText(payload.channelId, 80)
+  ) {
+    return false;
+  }
+
+  const hasMessageTarget =
+    typeof payload.chatId === "string" &&
+    payload.chatId.length > 0 &&
+    typeof payload.messageId === "string" &&
+    payload.messageId.length > 0;
+  const hasCallTarget = typeof payload.callId === "string" && payload.callId.length > 0;
+  if (!hasMessageTarget && !hasCallTarget) return false;
+
+  if (payload.data !== undefined) {
+    if (!isRecord(payload.data) || Object.keys(payload.data).length > 32) return false;
+    if (
+      Object.entries(payload.data).some(
+        ([key, value]) => !key || key.length > 80 || typeof value !== "string" || value.length > 2048,
+      )
+    ) {
+      return false;
+    }
+    if (
+      payload.data.callerId !== undefined &&
+      payload.data.callerId !== userId
+    ) {
+      return false;
+    }
+    if (
+      typeof payload.data.chatId === "string" &&
+      typeof payload.chatId === "string" &&
+      payload.data.chatId !== payload.chatId
+    ) {
+      return false;
+    }
+    if (
+      typeof payload.data.messageId === "string" &&
+      typeof payload.messageId === "string" &&
+      payload.data.messageId !== payload.messageId
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function handleSupabaseFunctionProxy(
+  request: Request,
+  env: Env,
+  functionName: "support-ai-reply" | "register-push-token" | "send-push-notification",
+  errorMessage: string,
+  validate: (payload: Record<string, unknown>, userId: string) => boolean,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (request.method !== "POST") {
+    const response = privateJsonResponse(
+      request,
+      requestId,
+      { error: "Method not allowed", request_id: requestId },
+      405,
+    );
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "POST, OPTIONS");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
+  const verification = await verifySharedSession(request, env, requestId);
+  if (!verification.session) return verification.response;
+
+  const payload = await readJsonRecord(request);
+  if (!payload || !validate(payload, verification.session.user.id)) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "The request is invalid.", request_id: requestId },
+      400,
+    );
+  }
+
+  const supabase = supabaseConfig(env);
+  if (!supabase) {
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: "This request is temporarily unavailable.", request_id: requestId },
+      503,
+    );
+  }
+
+  const forwardedPayload: Record<string, unknown> = {};
+  if (functionName === "support-ai-reply") {
+    forwardedPayload.ticket_id = payload.ticket_id;
+  } else if (functionName === "register-push-token") {
+    for (const key of ["token", "platform", "provider", "appVersion"]) {
+      if (payload[key] !== undefined) forwardedPayload[key] = payload[key];
+    }
+  } else {
+    for (const key of OPTIONAL_PUSH_FIELDS) {
+      if (payload[key] !== undefined) forwardedPayload[key] = payload[key];
+    }
+    forwardedPayload.recipientUserIds = payload.recipientUserIds;
+    // Never forward a caller-supplied identity as the authority.
+    forwardedPayload.senderId = verification.session.user.id;
+    if (payload.data !== undefined) forwardedPayload.data = payload.data;
+  }
+
+  const target = new URL(`/functions/v1/${functionName}`, `${supabase.url}/`);
+  try {
+    const upstream = await fetch(target, {
+      method: "POST",
+      headers: {
+        apikey: supabase.anonKey,
+        Authorization: `Bearer ${verification.session.token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(forwardedPayload),
+      redirect: "manual",
+      signal: AbortSignal.timeout(12_000),
+    });
+    const text = await upstream.text();
+    let result: unknown = null;
+    try {
+      result = text ? JSON.parse(text) : null;
+    } catch {
+      // Successful functions may have an empty response; only status and an
+      // explicit JSON error determine whether the operation failed.
+    }
+    const resultRecord = isRecord(result) ? result : null;
+    const applicationFailed =
+      resultRecord?.ok === false ||
+      resultRecord?.success === false ||
+      (typeof resultRecord?.error === "string" && resultRecord.error.length > 0);
+    if (!upstream.ok || applicationFailed) {
+      console.error("[afuchat-api] Supabase function request failed", {
+        requestId,
+        functionName,
+        status: upstream.status,
+      });
+      const safeStatus =
+        upstream.ok ||
+        upstream.status === 404 ||
+        upstream.status >= 500 ||
+        ![400, 401, 403, 409, 422, 429].includes(upstream.status)
+          ? 502
+          : upstream.status;
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: errorMessage, request_id: requestId },
+        safeStatus,
+      );
+    }
+
+    return privateJsonResponse(request, requestId, { ok: true }, 200);
+  } catch {
+    console.error("[afuchat-api] Supabase function request failed", {
+      requestId,
+      functionName,
+    });
+    return privateJsonResponse(
+      request,
+      requestId,
+      { error: errorMessage, request_id: requestId },
+      502,
+    );
+  }
+}
+
 async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   const requestId = crypto.randomUUID();
   const incoming = new URL(request.url);
@@ -511,6 +756,37 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   if (incoming.pathname === `${PREFIX}/me`) {
     return handleCurrentUser(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/support/ai-reply`) {
+    return handleSupabaseFunctionProxy(
+      request,
+      env,
+      "support-ai-reply",
+      "Support reply could not be generated.",
+      (payload) => typeof payload.ticket_id === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.ticket_id),
+    );
+  }
+
+  if (incoming.pathname === `${PREFIX}/push/register`) {
+    return handleSupabaseFunctionProxy(
+      request,
+      env,
+      "register-push-token",
+      "Push registration could not be completed.",
+      (payload) => validPushRegistration(payload),
+    );
+  }
+
+  if (incoming.pathname === `${PREFIX}/push/send`) {
+    return handleSupabaseFunctionProxy(
+      request,
+      env,
+      "send-push-notification",
+      "Push notifications could not be sent.",
+      (payload, userId) => validPushSend(payload, userId),
+    );
   }
 
   if (incoming.pathname === `${PREFIX}/account/export`) {

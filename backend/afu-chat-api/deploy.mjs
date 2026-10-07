@@ -195,6 +195,26 @@ async function removeCreatedRoutes(zoneId, routes) {
 }
 
 async function assertProductionPreflight() {
+  for (const functionName of [
+    "support-ai-reply",
+    "register-push-token",
+    "send-push-notification",
+  ]) {
+    const functionResponse = await fetch(
+      `${SUPABASE_URL}/functions/v1/${functionName}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      },
+    );
+    if (functionResponse.status !== 401) {
+      throw new Error(
+        `The existing ${functionName} function is unavailable or does not require authentication.`,
+      );
+    }
+  }
+
   const chat = await fetch("https://api.afuchat.com/v1/chat/healthz");
   const chatBody = await chat.json().catch(() => null);
   if (
@@ -280,6 +300,21 @@ async function assertProductionPostflight() {
   });
   if (invalidProfileSession.status !== 401) {
     throw new Error(`Invalid profile session returned HTTP ${invalidProfileSession.status}.`);
+  }
+
+  for (const path of [
+    "/v1/chat/support/ai-reply",
+    "/v1/chat/push/register",
+    "/v1/chat/push/send",
+  ]) {
+    const response = await fetch(`https://api.afuchat.com${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (response.status !== 401) {
+      throw new Error(`Unauthenticated request ${path} returned HTTP ${response.status}.`);
+    }
   }
 
   for (const path of [
@@ -501,6 +536,9 @@ if (!APPLY) {
       "GET|POST /v1/chat/status",
       "GET /v1/chat/conversations",
       "GET /v1/chat/me",
+      "POST /v1/chat/support/ai-reply",
+      "POST /v1/chat/push/register",
+      "POST /v1/chat/push/send",
       "POST /v1/chat/account/export",
       "POST /v1/chat/payments/pesapal-initiate",
       "GET|POST /v1/chat/payments/pesapal-callback",
@@ -513,7 +551,7 @@ if (!APPLY) {
       "DELETE /v1/chat/storage/containers/{containerId}/objects/by-key",
       "GET /v1/chat/storage/usage",
       "GET|HEAD /v1/chat/storage/objects/{key}",
-      "non-OPTIONS methods on /v1/chat/videos and /v1/chat/videos/* currently return 501",
+      "non-OPTIONS methods on /v1/chat/videos and /v1/chat/videos/* currently return 501; video client keeps its source fallback",
       "POST /v1/auth/session (AfuAuth service binding; not an AfuChat route)",
     ],
     nextStep: "Run with --apply to deploy the Worker and add any missing canonical routes.",
@@ -565,6 +603,8 @@ console.log(JSON.stringify({
     "unauthenticated rejection",
     "AfuAuth shared-session rejection",
     "current-profile unauthenticated rejection",
+    "support and direct-FCM routes require a shared session",
+    "support and direct-FCM Supabase functions are present",
     "storage handler route",
     "shared AfuChat/legacy media bucket binding",
     "canonical chat API and storage routing",

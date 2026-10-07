@@ -363,6 +363,217 @@ test("current profile sanitizes shared-database failures", async () => {
   }
 });
 
+test("support AI reply proxies the authenticated ticket request to its existing Supabase function", async () => {
+  const token = "support-session-token";
+  const ticketId = "123e4567-e89b-42d3-a456-426614174001";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let functionRequest;
+  globalThis.fetch = async (input, init) => {
+    functionRequest = input instanceof Request ? input : new Request(input, init);
+    return Response.json({ ok: true, skipped: true });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/support/ai-reply", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ticket_id: ticketId, ignored: "not forwarded" }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.equal(functionRequest.url, "https://supabase.example.test/functions/v1/support-ai-reply");
+  assert.equal(functionRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(functionRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
+  assert.deepEqual(await functionRequest.json(), { ticket_id: ticketId });
+});
+
+test("push registration validates direct FCM tokens and proxies the authenticated request", async () => {
+  const token = "push-session-token";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let functionRequest;
+  globalThis.fetch = async (input, init) => {
+    functionRequest = input instanceof Request ? input : new Request(input, init);
+    return Response.json({ ok: true });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/push/register", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        token: "native-fcm-device-token-0123456789",
+        platform: "android",
+        provider: "fcm",
+        appVersion: "1.0.0",
+        ignored: "not forwarded",
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.equal(functionRequest.url, "https://supabase.example.test/functions/v1/register-push-token");
+  assert.equal(functionRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.deepEqual(await functionRequest.json(), {
+    token: "native-fcm-device-token-0123456789",
+    platform: "android",
+    provider: "fcm",
+    appVersion: "1.0.0",
+  });
+});
+
+test("push registration rejects Expo tokens without calling the sender function", async () => {
+  const token = "push-session-token";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let functionCalls = 0;
+  globalThis.fetch = async () => {
+    functionCalls += 1;
+    return Response.json({ ok: true });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/push/register", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        token: "ExponentPushToken[legacy-token-value]",
+        platform: "android",
+        provider: "fcm",
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(functionCalls, 0);
+});
+
+test("push sending derives sender identity from AfuAuth before forwarding", async () => {
+  const token = "push-session-token";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let functionRequest;
+  globalThis.fetch = async (input, init) => {
+    functionRequest = input instanceof Request ? input : new Request(input, init);
+    return Response.json({ ok: true });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/push/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipientUserIds: ["recipient-456"],
+        senderId: "user-123",
+        senderName: "Test User",
+        senderAvatarUrl: null,
+        body: "A new message",
+        chatId: "chat-123",
+        messageId: "message-123",
+        categoryId: "message",
+        data: { chatId: "chat-123", messageId: "message-123" },
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.equal(functionRequest.url, "https://supabase.example.test/functions/v1/send-push-notification");
+  assert.equal(functionRequest.headers.get("Authorization"), `Bearer ${token}`);
+  const forwarded = await functionRequest.json();
+  assert.equal(forwarded.senderId, "user-123");
+  assert.deepEqual(forwarded.recipientUserIds, ["recipient-456"]);
+  assert.deepEqual(forwarded.data, { chatId: "chat-123", messageId: "message-123" });
+});
+
+test("push sending rejects spoofed sender IDs and sanitizes upstream errors", async () => {
+  const token = "push-session-token";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let functionCalls = 0;
+  globalThis.fetch = async () => {
+    functionCalls += 1;
+    return Response.json({ ok: true });
+  };
+
+  const spoofed = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/push/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipientUserIds: ["recipient-456"],
+        senderId: "other-user",
+        senderName: "Test User",
+        body: "A new message",
+        chatId: "chat-123",
+        messageId: "message-123",
+      }),
+    }),
+    env,
+  );
+  assert.equal(spoofed.status, 400);
+  assert.equal(functionCalls, 0);
+
+  const previousConsoleError = console.error;
+  console.error = () => {};
+  globalThis.fetch = async () =>
+    Response.json({ message: "internal function stack trace" }, { status: 500 });
+  try {
+    const failed = await worker.fetch(
+      new Request("https://api.afuchat.com/v1/chat/push/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipientUserIds: ["recipient-456"],
+          senderId: "user-123",
+          senderName: "Test User",
+          body: "A new message",
+          chatId: "chat-123",
+          messageId: "message-123",
+        }),
+      }),
+      env,
+    );
+    const payload = await failed.json();
+    assert.equal(failed.status, 502);
+    assert.equal(payload.error, "Push notifications could not be sent.");
+    assert.doesNotMatch(JSON.stringify(payload), /internal function|stack trace/i);
+  } finally {
+    console.error = previousConsoleError;
+  }
+});
+
 test("account export verifies AfuAuth and sends only the selected export to the signed-in email", async () => {
   const token = "account-export-session";
   const env = makeEnv();
