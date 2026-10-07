@@ -40,6 +40,29 @@ PostgREST probes against the new project confirmed `accounts.profiles` and
 `public.get_chat_list` are present. No database migration is needed for this
 Worker integration.
 
+### Fresh application/catalog audit (2026-10-07)
+
+The current audit and exact source inventories are recorded in
+[`docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](../../docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
+The read-only Management API catalog query now succeeds from this workspace;
+direct PostgreSQL connections still fail from Replit. The mobile baseline
+before the bookmark work was 723 direct table-query sites across 92 relation
+names and 36 RPC names. Current source has 706 direct table-query sites over
+89 relation names. All 36 called RPCs exist in `public` and are
+`SECURITY DEFINER`.
+
+The first migrated domain is saved posts: a named `/v1/chat/bookmarks` route
+uses the existing `post_bookmarks`, `posts`, and `profiles` relations and
+derives the acting user from AfuAuth verification. The mobile saved-post,
+bookmark status/mutation, feed, video-feed, and queued-offline bookmark paths
+use that route. The Worker change is local source only and has not been
+deployed.
+
+The current source still references four absent relation names
+(`blocks`, `business_verification_requests`, `life_earth_leaderboard`, and
+`org_page_jobs`); `orders` exists in `shop`, not `public`. These need explicit
+domain mappings, not new tables or a general-purpose database proxy.
+
 - The `afuchat` schema exists and has 201 base tables; all 201 currently have
   row-level security enabled. The schema also contains relations named for
   AfuMail (`afumail_*`) and Afu Ads (`ad_*`). Do not change those relations.

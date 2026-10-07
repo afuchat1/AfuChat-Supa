@@ -152,3 +152,186 @@ export async function afuChatApiJson<T>(
   const data = await response.json().catch(() => null) as T | null;
   return { response, data };
 }
+
+export type AfuChatSavedPost = {
+  id: string;
+  post_id: string;
+  saved_at: string;
+  post: {
+    id: string;
+    content: string;
+    media_url: string | null;
+    created_at: string;
+    author: {
+      handle: string;
+      display_name: string;
+      avatar_url: string | null;
+      is_verified: boolean;
+    } | null;
+  } | null;
+};
+
+function bookmarkApiError(
+  response: Response,
+  payload: unknown,
+  fallback: string,
+): AfuChatApiError {
+  const record = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : null;
+  return {
+    message: typeof record?.error === "string"
+      ? record.error
+      : `${fallback} (HTTP ${response.status})`,
+    code: String(response.status),
+    requestId: typeof record?.request_id === "string"
+      ? record.request_id
+      : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+  };
+}
+
+export async function getAfuChatSavedPosts(): Promise<{
+  data: AfuChatSavedPost[] | null;
+  error: AfuChatApiError | null;
+}> {
+  try {
+    const { response, data } = await afuChatApiJson<{ items?: unknown }>("/bookmarks");
+    if (!response.ok) {
+      return {
+        data: null,
+        error: bookmarkApiError(response, data, "Saved posts could not be loaded"),
+      };
+    }
+    if (!Array.isArray(data?.items)) {
+      return {
+        data: null,
+        error: { message: "Saved posts service returned an invalid response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: data.items as AfuChatSavedPost[], error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Saved posts service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatBookmarkStatus(postId: string): Promise<{
+  data: boolean | null;
+  error: AfuChatApiError | null;
+}> {
+  try {
+    const { response, data } = await afuChatApiJson<{ bookmarked?: unknown }>(
+      `/bookmarks?post_id=${encodeURIComponent(postId)}`,
+    );
+    if (!response.ok) {
+      return {
+        data: null,
+        error: bookmarkApiError(response, data, "Bookmark status could not be loaded"),
+      };
+    }
+    if (typeof data?.bookmarked !== "boolean") {
+      return {
+        data: null,
+        error: { message: "Bookmark service returned an invalid response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: data.bookmarked, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Bookmark service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatBookmarkedPostIds(postIds: string[]): Promise<{
+  data: { post_id: string }[] | null;
+  error: AfuChatApiError | null;
+}> {
+  if (postIds.length === 0) return { data: [], error: null };
+  try {
+    const query = new URLSearchParams({ post_ids: postIds.join(",") });
+    const { response, data } = await afuChatApiJson<{ post_ids?: unknown }>(
+      `/bookmarks?${query.toString()}`,
+    );
+    if (!response.ok) {
+      return {
+        data: null,
+        error: bookmarkApiError(response, data, "Bookmark status could not be loaded"),
+      };
+    }
+    if (!Array.isArray(data?.post_ids) || !data.post_ids.every((id) => typeof id === "string")) {
+      return {
+        data: null,
+        error: { message: "Bookmark service returned an invalid response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: data.post_ids.map((post_id) => ({ post_id })), error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Bookmark service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function setAfuChatBookmark(
+  postId: string,
+  bookmarked: boolean,
+  expectedUserId?: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  try {
+    const expected = expectedUserId
+      ? `&expected_user_id=${encodeURIComponent(expectedUserId)}`
+      : "";
+    const response = bookmarked
+      ? await afuChatApiFetch("/bookmarks", {
+          method: "POST",
+          body: JSON.stringify({
+            post_id: postId,
+            ...(expectedUserId ? { expected_user_id: expectedUserId } : {}),
+          }),
+        })
+      : await afuChatApiFetch(
+          `/bookmarks?post_id=${encodeURIComponent(postId)}${expected}`,
+          { method: "DELETE" },
+        );
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      return {
+        error: bookmarkApiError(
+          response,
+          payload,
+          bookmarked ? "Bookmark could not be saved" : "Bookmark could not be removed",
+        ),
+      };
+    }
+    const record = payload && typeof payload === "object"
+      ? payload as Record<string, unknown>
+      : null;
+    if (record?.bookmarked !== bookmarked) {
+      return {
+        error: { message: "Bookmark service returned an invalid response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { error: null };
+  } catch (error) {
+    return {
+      error: {
+        message: error instanceof Error ? error.message : "Bookmark service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}

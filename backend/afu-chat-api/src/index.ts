@@ -1,4 +1,5 @@
 import { handleAccountExport } from "./account-export.ts";
+import { handleBookmarks } from "./bookmarks.ts";
 import { handlePayments } from "./payments.ts";
 import {
   supabaseConfig,
@@ -759,6 +760,10 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   if (incoming.pathname === `${PREFIX}/me`) {
     return handleCurrentUser(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/bookmarks`) {
+    return handleBookmarks(request, env);
   }
 
   if (incoming.pathname === `${PREFIX}/support/ai-reply`) {

@@ -4,6 +4,7 @@
 
 import { getDB } from "./db";
 import { supabase } from "@/lib/supabase";
+import { setAfuChatBookmark } from "@/lib/afuchatApi";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export type QueueActionType =
@@ -122,19 +123,18 @@ async function executeAction(
         return !error;
       }
       case "bookmark_post": {
-        const { error } = await supabase.from("bookmarks").insert({
-          post_id: payload.post_id,
-          user_id: payload.user_id,
-        });
-        return !error;
+        if (typeof payload.post_id !== "string" || typeof payload.user_id !== "string") return false;
+        const { error } = await setAfuChatBookmark(payload.post_id, true, payload.user_id);
+        // If the active account changed before this queued action drained, do
+        // not apply it to the new account or let it block the shared queue.
+        return !error || error.code === "409";
       }
       case "unbookmark_post": {
-        const { error } = await supabase
-          .from("bookmarks")
-          .delete()
-          .eq("post_id", payload.post_id)
-          .eq("user_id", payload.user_id);
-        return !error;
+        if (typeof payload.post_id !== "string" || typeof payload.user_id !== "string") return false;
+        const { error } = await setAfuChatBookmark(payload.post_id, false, payload.user_id);
+        // A stale account-scoped queue item is discarded rather than replayed
+        // against whichever account happens to be signed in now.
+        return !error || error.code === "409";
       }
       case "follow_user": {
         const { error } = await supabase.from("follows").insert({

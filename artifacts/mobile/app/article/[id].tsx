@@ -18,7 +18,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 
+import { showAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabase";
+import { getAfuChatBookmarkStatus, setAfuChatBookmark } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -148,10 +150,11 @@ export default function ArticleDetailScreen() {
       if (user) {
         const [likeRes, bmRes] = await Promise.all([
           supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
-          supabase.from("bookmarks").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
+          getAfuChatBookmarkStatus(id),
         ]);
         setLiked(!!likeRes.data);
-        setBookmarked(!!bmRes.data);
+        if (bmRes.error) showAlert("Could not load saved status", bmRes.error.message);
+        else setBookmarked(!!bmRes.data);
       }
       setLoading(false);
     })();
@@ -182,10 +185,18 @@ export default function ArticleDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (bookmarked) {
       setBookmarked(false);
-      await supabase.from("bookmarks").delete().eq("post_id", article.id).eq("user_id", user.id);
+      const { error } = await setAfuChatBookmark(article.id, false, user.id);
+      if (error) {
+        setBookmarked(true);
+        showAlert("Could not remove saved post", error.message);
+      }
     } else {
       setBookmarked(true);
-      await supabase.from("bookmarks").insert({ post_id: article.id, user_id: user.id });
+      const { error } = await setAfuChatBookmark(article.id, true, user.id);
+      if (error) {
+        setBookmarked(false);
+        showAlert("Could not save post", error.message);
+      }
     }
   }, [user, article, bookmarked]);
 

@@ -143,11 +143,16 @@ pnpm run typecheck
   `cloud.afuchat.com/*` → `afucloud-web` were left unchanged by the CDN and
   storage changes. AfuCloud, AfuMail, AfuAI, and AfuAds health/implementation
   were not changed after their route and bucket ownership was confirmed.
-- The live Supabase PostgREST API exposes `public` and `chat` schemas but does
-  not expose `afuchat`. The available Supabase management token cannot query
-  the database, and anonymous PostgREST access cannot migrate protected data.
-  Resolve this with a privileged, reversible schema migration; do not assume
-  the older schema-migration notes reflect the live database.
+- AfuChat uses the shared Supabase identity; the Worker verifies the same
+  bearer through AfuAuth and preserves it for RLS. The mobile app's product
+  data calls are being migrated to named `/v1/chat/*` routes. Do not add a
+  generic PostgREST proxy, expose the `afuchat` schema, create duplicate
+  identity/data stores, or bulk-copy divergent schemas. The current source and
+  live catalog audit is in `docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md`.
+- Read-only catalog queries through the Supabase Management API are available
+  in this workspace; direct PostgreSQL connections remain blocked from Replit.
+  Treat older table/RPC counts as historical and refresh them before using
+  them to guide a migration.
 - Old API aliases were explicitly retired; do not restore redirects or proxy
   fallbacks for them. Keep parsing of old stored media URLs separate from new
   API calls, and preserve the existing R2 custom domains and objects.

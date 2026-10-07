@@ -38,6 +38,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer, type PostViewerMeta } from "@/components/ImageViewer";
 import { supabase } from "@/lib/supabase";
+import { getAfuChatBookmarkedPostIds, setAfuChatBookmark } from "@/lib/afuchatApi";
 import {
   ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
   ACCOUNT_PROFILE_FEED_COLUMNS,
@@ -1736,11 +1737,17 @@ export default function DiscoverScreen() {
 
         const postIds = data.map((p: any) => p.id);
         const _followLimit = PAGE_SIZE * 3;
-        const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
+        const [{ data: myLikes }, { data: replyCounts }, myBookmarksResult] = await Promise.all([
           postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
           postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
-          postIds.length > 0 && user ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
+          postIds.length > 0 && user
+            ? getAfuChatBookmarkedPostIds(postIds)
+            : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
         ]);
+        if (myBookmarksResult.error) {
+          showAlert("Saved status unavailable", myBookmarksResult.error.message);
+        }
+        const myBookmarks = myBookmarksResult.data ?? [];
 
         const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
         const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
@@ -1955,7 +1962,7 @@ export default function DiscoverScreen() {
         { data: myLikes },
         { data: replyCounts },
         { data: followingData },
-        { data: myBookmarks },
+        myBookmarksResult,
         _orgResult,
         authorPostsResult,
       ] = await Promise.all([
@@ -1969,13 +1976,17 @@ export default function DiscoverScreen() {
           ? supabase.from("follows").select("following_id").eq("follower_id", user.id).in("following_id", authorIds)
           : { data: [] },
         postIds.length > 0 && user
-          ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
-          : { data: [] },
+          ? getAfuChatBookmarkedPostIds(postIds)
+          : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
         Promise.resolve(_orgQ).catch(() => ({ data: null })),
         authorIds.length > 0
           ? supabase.from("posts").select("id, author_id").in("author_id", authorIds).limit(500)
           : { data: [] },
       ]);
+      if (myBookmarksResult.error) {
+        showAlert("Saved status unavailable", myBookmarksResult.error.message);
+      }
+      const myBookmarks = myBookmarksResult.data ?? [];
       const authorPostRows: any[] = (authorPostsResult as any)?.data ?? [];
       const authorPostIds = authorPostRows.map((post) => post.id);
       const authorByPostId = new Map<string, string>();
@@ -2670,10 +2681,18 @@ export default function DiscoverScreen() {
     const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
     if (post.bookmarked) {
-      await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", user.id);
+      const { error } = await setAfuChatBookmark(postId, false, user.id);
+      if (error) {
+        showAlert("Could not remove saved post", error.message);
+        return;
+      }
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, bookmarked: false } : p));
     } else {
-      await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id" });
+      const { error } = await setAfuChatBookmark(postId, true, user.id);
+      if (error) {
+        showAlert("Could not save post", error.message);
+        return;
+      }
       setPosts((prev) => prev.map((p) => p.id === postId ? { ...p, bookmarked: true } : p));
       const content = [post.content, post.article_title].filter(Boolean).join(" ");
       recordInteraction(content, "bookmark").then(async () => {

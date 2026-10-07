@@ -39,6 +39,7 @@ import {
   ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
   fetchAccountProfileMap,
 } from "@/lib/sharedProfiles";
+import { getAfuChatBookmarkStatus, setAfuChatBookmark } from "@/lib/afuchatApi";
 import { audioFocus } from "@/lib/audioFocus";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -436,9 +437,13 @@ export default function PostDetailScreen() {
         if (user && !cancelled) {
           const [likeRes, bmRes] = await Promise.all([
             supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
-            supabase.from("bookmarks").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
+            getAfuChatBookmarkStatus(id),
           ]);
-          if (!cancelled) { setLiked(!!likeRes.data); setBookmarked(!!bmRes.data); }
+          if (!cancelled) {
+            setLiked(!!likeRes.data);
+            if (bmRes.error) showAlert("Could not load saved status", bmRes.error.message);
+            else setBookmarked(!!bmRes.data);
+          }
         }
       } catch {
         // fetch failed — show empty state
@@ -562,14 +567,18 @@ export default function PostDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (bookmarked) {
       setBookmarked(false);
-      try {
-        await supabase.from("bookmarks").delete().eq("post_id", post.id).eq("user_id", user.id);
-      } catch { setBookmarked(true); }
+      const { error } = await setAfuChatBookmark(post.id, false, user.id);
+      if (error) {
+        setBookmarked(true);
+        showAlert("Could not remove saved post", error.message);
+      }
     } else {
       setBookmarked(true);
-      try {
-        await supabase.from("bookmarks").insert({ post_id: post.id, user_id: user.id });
-      } catch { setBookmarked(false); }
+      const { error } = await setAfuChatBookmark(post.id, true, user.id);
+      if (error) {
+        setBookmarked(false);
+        showAlert("Could not save post", error.message);
+      }
     }
   }, [user, post, bookmarked]);
 

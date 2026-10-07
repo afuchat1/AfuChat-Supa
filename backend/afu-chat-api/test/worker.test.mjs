@@ -363,6 +363,179 @@ test("current profile sanitizes shared-database failures", async () => {
   }
 });
 
+test("bookmark batch lookup scopes results to the verified account", async () => {
+  const token = "bookmark-session";
+  const postA = "123e4567-e89b-42d3-a456-426614174001";
+  const postB = "123e4567-e89b-42d3-a456-426614174002";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let databaseRequest;
+  globalThis.fetch = async (input, init) => {
+    databaseRequest = input instanceof Request ? input : new Request(input, init);
+    return Response.json([{ post_id: postA, created_at: "2026-10-07T10:00:00.000Z" }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/bookmarks?post_ids=${postA},${postB}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { post_ids: [postA] });
+  assert.equal(new URL(databaseRequest.url).pathname, "/rest/v1/post_bookmarks");
+  assert.equal(new URL(databaseRequest.url).searchParams.get("user_id"), "eq.user-123");
+  assert.equal(
+    new URL(databaseRequest.url).searchParams.get("post_id"),
+    `in.(${postA},${postB})`,
+  );
+  assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(databaseRequest.headers.get("Accept-Profile"), "public");
+});
+
+test("bookmark list hydrates the existing post and author without relying on saved_posts", async () => {
+  const token = "bookmark-session";
+  const postId = "123e4567-e89b-42d3-a456-426614174001";
+  const authorId = "123e4567-e89b-42d3-a456-426614174002";
+  const savedAt = "2026-10-07T10:00:00.000Z";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const path = new URL(request.url).pathname;
+    if (path === "/rest/v1/post_bookmarks") {
+      return Response.json([{ post_id: postId, created_at: savedAt }]);
+    }
+    if (path === "/rest/v1/posts") {
+      return Response.json([{
+        id: postId,
+        author_id: authorId,
+        content: "Saved post",
+        image_url: "https://cdn.example.test/chat/post.jpg",
+        created_at: "2026-10-06T09:00:00.000Z",
+      }]);
+    }
+    if (path === "/rest/v1/profiles") {
+      return Response.json([{
+        id: authorId,
+        handle: "author",
+        display_name: "Author",
+        avatar_url: null,
+        is_verified: true,
+      }]);
+    }
+    throw new Error(`Unexpected Supabase path ${path}`);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/bookmarks", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    items: [{
+      id: postId,
+      post_id: postId,
+      saved_at: savedAt,
+      post: {
+        id: postId,
+        content: "Saved post",
+        media_url: "https://cdn.example.test/chat/post.jpg",
+        created_at: "2026-10-06T09:00:00.000Z",
+        author: {
+          handle: "author",
+          display_name: "Author",
+          avatar_url: null,
+          is_verified: true,
+        },
+      },
+    }],
+  });
+});
+
+test("bookmark mutations always use the verified user and reject a mismatched queued owner", async () => {
+  const token = "bookmark-session";
+  const postId = "123e4567-e89b-42d3-a456-426614174001";
+  const userId = "123e4567-e89b-42d3-a456-426614174002";
+  const otherUserId = "123e4567-e89b-42d3-a456-426614174003";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push(request);
+    if (request.method === "GET") return Response.json([]);
+    return new Response(null, { status: 201 });
+  };
+
+  const saved = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/bookmarks", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ post_id: postId }),
+    }),
+    env,
+  );
+  assert.equal(saved.status, 200);
+  assert.deepEqual(await saved.json(), { bookmarked: true });
+  assert.equal(requests[1].method, "POST");
+  assert.deepEqual(await requests[1].json(), { post_id: postId, user_id: userId });
+
+  const removed = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/bookmarks?post_id=${postId}&expected_user_id=${userId}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(removed.status, 200);
+  assert.deepEqual(await removed.json(), { bookmarked: false });
+  assert.equal(new URL(requests[2].url).searchParams.get("user_id"), `eq.${userId}`);
+
+  const beforeMismatch = requests.length;
+  const mismatch = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/bookmarks?post_id=${postId}&expected_user_id=${otherUserId}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(mismatch.status, 409);
+  assert.equal(requests.length, beforeMismatch);
+});
+
+test("bookmark routes reject invalid IDs and unauthenticated access", async () => {
+  const env = makeEnv(401);
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+
+  const invalidId = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/bookmarks?post_id=not-a-uuid", {
+      headers: { Authorization: "Bearer invalid-session" },
+    }),
+    makeEnv(),
+  );
+  const unauthenticated = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/bookmarks"),
+    env,
+  );
+
+  assert.equal(invalidId.status, 400);
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(databaseCalls, 0);
+});
+
 test("support AI reply proxies the authenticated ticket request to its existing Supabase function", async () => {
   const token = "support-session-token";
   const ticketId = "123e4567-e89b-42d3-a456-426614174001";

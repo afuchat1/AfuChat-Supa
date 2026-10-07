@@ -9,10 +9,11 @@
 - All AfuChat-owned product API operations, including storage, use `/v1/chat`.
 - AfuAuth owns `/v1/auth/*`; AfuAI owns `/v1/ai/*`. Those routes are not AfuChat endpoints and are not moved by this contract.
 
-The mobile Supabase SDK continues to use the shared Supabase project for Auth,
-PostgREST, and Realtime. Those shared database-provider requests are not
-AfuChat Worker endpoints; their schema, URLs, and compatibility relations are
-unchanged.
+The mobile app keeps shared Supabase Auth and Realtime. Product data operations
+are being moved to named AfuChat Worker routes, rather than a general database
+proxy. Until each operation is migrated, its existing PostgREST call remains a
+temporary direct-Supabase path. The current inventory and migration status are
+tracked in [`AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](./AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
 
 ## AfuChat endpoints
 
@@ -29,6 +30,16 @@ unchanged.
 |---|---|---|---|
 | `GET /v1/chat/conversations?unread_excluded_ids={uuid,...}` | Returns the signed-in user's chat list. The optional query can be repeated or comma-separated and accepts at most 100 UUIDs. | `Authorization: Bearer <Supabase access token>`; verified through shared authentication, then the same token is forwarded for row-level authorization. | Successful chat-list JSON is returned. Invalid IDs return `400`; missing/invalid session returns `401`; upstream failures return a generic `502` without upstream error details. |
 | `POST /v1/chat/account/export` | Requests an email export. JSON body: `{ "types": ["profile", "posts", "messages", "activity", "transactions"] }`. Omitted or unrecognized selections fall back to `profile`. | Bearer token verified through shared authentication; account email required. | `200 { ok: true, email }` after the JSON attachment is emailed. Missing email is `400`; unavailable delivery returns a generic `503` or `502`. |
+
+### Saved posts and bookmarks
+
+| Method and path | Purpose and inputs | Authentication | Response |
+|---|---|---|---|
+| `GET /v1/chat/bookmarks` | Lists up to 50 saved posts, including the post and public author fields needed by the Saved Posts screen. | Shared-session bearer verified through AfuAuth; all reads are scoped to that user. | `200 { items: [{ id, post_id, saved_at, post }] }`; missing/invalid session is `401`; upstream failures return a generic `502`. |
+| `GET /v1/chat/bookmarks?post_id={uuid}` | Checks whether the current user saved one post. | Shared-session bearer. | `200 { bookmarked: boolean }`; malformed IDs return `400`. |
+| `GET /v1/chat/bookmarks?post_ids={uuid,...}` | Checks saved status for a batch of up to 100 posts. | Shared-session bearer. | `200 { post_ids: [uuid, ...] }`; malformed or oversized batches return `400`. |
+| `POST /v1/chat/bookmarks` | Saves a post. JSON body: `{ "post_id": "..." }`. An optional `expected_user_id` is accepted only as an offline-queue account check; the target user is always derived from the verified session. | Shared-session bearer. | Idempotent `200 { bookmarked: true }`; invalid input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
+| `DELETE /v1/chat/bookmarks?post_id={uuid}&expected_user_id={uuid}` | Removes a saved post. `expected_user_id` is optional and only prevents an offline action from crossing accounts. | Shared-session bearer; the delete filter always uses the verified user ID. | Idempotent `200 { bookmarked: false }`; invalid input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
 
 ### Payments
 
@@ -111,9 +122,11 @@ The `afu-cdn` Worker owns `cdn.afuchat.com/*` and dispatches
 object URLs use `LEGACY_MEDIA`, which points to that same bucket. The separate
 URL paths remain intact; no objects were moved or copied.
 
-No `/v1/posts`, `/v1/messages`, `/v1/profile`, `/v1/upload`, or `/v1/feed`
-endpoints are registered by this AfuChat Worker. Unimplemented AfuChat paths
-return `501`; no speculative handlers are documented here.
+There is no general-purpose PostgREST forwarding route. The bookmark endpoints
+are a narrow operation over the existing `post_bookmarks`, `posts`, and
+`profiles` relations; they do not expose caller-selected tables, columns, or
+filters. Other product data operations remain in the migration inventory until
+their own route and client flow are migrated.
 
 ## Deployment verification
 

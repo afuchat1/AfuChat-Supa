@@ -15,22 +15,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
-import { supabase } from "@/lib/supabase";
+import { getAfuChatSavedPosts, setAfuChatBookmark, type AfuChatSavedPost } from "@/lib/afuchatApi";
 import Colors from "@/constants/colors";
 import { PostSkeleton } from "@/components/ui/Skeleton";
 
-type SavedPost = {
-  id: string;
-  post_id: string;
-  saved_at: string;
-  post: {
-    id: string;
-    content: string;
-    media_url: string | null;
-    created_at: string;
-    author: { handle: string; display_name: string; avatar_url: string | null; is_verified: boolean } | null;
-  } | null;
-};
+type SavedPost = AfuChatSavedPost;
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -50,24 +39,33 @@ export default function AfuSavedApp() {
   const [saved, setSaved] = useState<SavedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-    const { data } = await supabase
-      .from("saved_posts")
-      .select("id,post_id,saved_at,post:posts(id,content,media_url,created_at,author:profiles(handle,display_name,avatar_url,is_verified))")
-      .eq("user_id", user.id)
-      .order("saved_at", { ascending: false })
-      .limit(50);
-    setSaved((data as unknown as SavedPost[]) || []);
-    setLoading(false);
-    setRefreshing(false);
+    try {
+      const result = await getAfuChatSavedPosts();
+      if (result.error) {
+        setLoadError(result.error.message);
+        return;
+      }
+      setLoadError(null);
+      setSaved(result.data ?? []);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
 
   async function unsave(itemId: string, postId: string) {
-    await supabase.from("saved_posts").delete().eq("id", itemId);
+    const result = await setAfuChatBookmark(postId, false, user?.id);
+    if (result.error) {
+      setLoadError(result.error.message);
+      return;
+    }
+    setLoadError(null);
     setSaved(prev => prev.filter(s => s.id !== itemId));
   }
 
@@ -122,7 +120,18 @@ export default function AfuSavedApp() {
         <Text style={[s.headerTitle, { color: colors.text }]}>Saved Posts</Text>
         <Text style={[s.headerCount, { color: colors.textMuted }]}>{saved.length} item{saved.length !== 1 ? "s" : ""}</Text>
       </View>
-      {saved.length === 0 ? (
+      {loadError && saved.length > 0 ? (
+        <Text style={[s.errorText, { color: colors.textMuted }]}>{loadError}</Text>
+      ) : null}
+      {loadError && saved.length === 0 ? (
+        <View style={s.empty}>
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+          <Text style={[s.emptyTitle, { color: colors.text }]}>{loadError}</Text>
+          <TouchableOpacity onPress={() => { setLoading(true); void load(); }}>
+            <Text style={[s.emptySub, { color: Colors.brand }]}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : saved.length === 0 ? (
         <View style={s.empty}>
           <Ionicons name="bookmark-outline" size={56} color={colors.textMuted} />
           <Text style={[s.emptyTitle, { color: colors.text }]}>No saved posts</Text>
@@ -157,6 +166,7 @@ const s = StyleSheet.create({
   content: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21 },
   media: { width: "100%", height: 180, borderRadius: 10 },
   savedAt: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  errorText: { paddingHorizontal: 16, paddingVertical: 8, fontSize: 12, fontFamily: "Inter_400Regular" },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptySub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },

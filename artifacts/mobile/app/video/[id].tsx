@@ -52,6 +52,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 
 import { supabase } from "@/lib/supabase";
+import { getAfuChatBookmarkedPostIds, setAfuChatBookmark } from "@/lib/afuchatApi";
 import {
   ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
   fetchAccountProfileMap,
@@ -1295,15 +1296,21 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
       const [
         { data: likesData }, { data: repliesData }, { data: viewsData },
-        { data: myLikes }, { data: myBookmarks }, { data: myFollows },
+        { data: myLikes }, myBookmarksResult, { data: myFollows },
       ] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         supabase.from("post_views").select("post_id").in("post_id", postIds),
         currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
-        currentUser ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
+        currentUser
+          ? getAfuChatBookmarkedPostIds(postIds)
+          : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
         currentUser ? supabase.from("follows").select("following_id").eq("follower_id", currentUser.id).in("following_id", authorIds) : { data: [] },
       ]);
+      if (myBookmarksResult.error) {
+        showAlert("Saved status unavailable", myBookmarksResult.error.message);
+      }
+      const myBookmarks = myBookmarksResult.data ?? [];
 
       setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
 
@@ -1632,11 +1639,17 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     // Optimistic update first
     setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: !currentlyBookmarked } : v));
     if (currentlyBookmarked) {
-      const { error } = await supabase.from("post_bookmarks").delete().eq("post_id", postId).eq("user_id", currentUser.id);
-      if (error) setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: true } : v));
+      const { error } = await setAfuChatBookmark(postId, false, currentUser.id);
+      if (error) {
+        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: true } : v));
+        showAlert("Could not remove saved post", error.message);
+      }
     } else {
-      const { error } = await supabase.from("post_bookmarks").upsert({ post_id: postId, user_id: currentUser.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
-      if (error) setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: false } : v));
+      const { error } = await setAfuChatBookmark(postId, true, currentUser.id);
+      if (error) {
+        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, bookmarked: false } : v));
+        showAlert("Could not save post", error.message);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
