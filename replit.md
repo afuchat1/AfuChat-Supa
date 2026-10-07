@@ -48,8 +48,7 @@ The app ships with hardcoded production-safe fallbacks in `artifacts/mobile/lib/
 
 | Variable | Purpose | Required? |
 |---|---|---|
-| `EXPO_PUBLIC_AFUCLOUD_API_URL` | Legacy-named API origin override; used only as the fallback origin for product API URLs | No — defaults to `https://api.afuchat.com` |
-| `EXPO_PUBLIC_AFUCHAT_API_URL` | AfuChat API origin; AfuChat product requests use `/v1/chat/*` | No — defaults to `https://api.afuchat.com` |
+| `EXPO_PUBLIC_AFUCLOUD_API_URL`, `EXPO_PUBLIC_AFUCHAT_API_URL` | Deprecated and ignored for AfuChat; its API origin is pinned to `https://api.afuchat.com` and data routes use `/v1/chat/*` | No |
 | `EXPO_PUBLIC_AFUAI_API_URL` | AfuAI API origin; AI requests use `/v1/ai/*` | No — defaults to `https://api.afuchat.com` |
 | `EXPO_PUBLIC_AFUCHAT_MEDIA_CDN_URL` | AfuChat public media CDN base | No — defaults to `https://cdn.afuchat.com/chat` |
 | `EXPO_PUBLIC_SUPABASE_URL` | Legacy project URL used only for public client metadata | No |

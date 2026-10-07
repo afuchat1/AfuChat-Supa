@@ -22,18 +22,11 @@ export const APP_DOMAIN: string =
 
 export const APP_ORIGIN: string = `https://${APP_DOMAIN}`;
 
-/** Legacy shared API origin retained only as a default for product API origins. */
-export const AFUCLOUD_API_URL: string =
-  (process.env.EXPO_PUBLIC_AFUCLOUD_API_URL ?? "").trim() || "https://api.afuchat.com";
+/** Canonical Afu product API gateway; product paths remain explicitly namespaced. */
+const API_GATEWAY_ORIGIN = "https://api.afuchat.com";
 
-const API_GATEWAY_ORIGIN = new URL(AFUCLOUD_API_URL).origin;
-
-/** AfuChat Worker API origin. Product routes are explicit, e.g. /v1/chat. */
-export const AFUCHAT_API_URL: string =
-  new URL(
-    (process.env.EXPO_PUBLIC_AFUCHAT_API_URL ?? "").trim() || API_GATEWAY_ORIGIN,
-    API_GATEWAY_ORIGIN,
-  ).origin;
+/** AfuChat and AfuAuth client requests must use the canonical API gateway. */
+export const AFUCHAT_API_URL: string = API_GATEWAY_ORIGIN;
 
 /** AfuAI owns AI requests under /v1/ai; provider credentials remain server-side. */
 export const AFUAI_API_URL: string =
