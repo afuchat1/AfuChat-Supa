@@ -240,14 +240,26 @@ async function waitForChatHealth() {
     if (healthIsReady) {
       const appStatus = await fetch("https://api.afuchat.com/v1/chat/status");
       const appStatusBody = await appStatus.json().catch(() => null);
-      lastStatus = appStatus.status;
       if (appStatus.status === 200 && appStatusBody?.ok === true) {
-        return;
+        // Health and status are also served by the previous Worker version.
+        // Wait until the newly deployed current-profile handler is live at the
+        // public route before running postflight checks or rolling back.
+        const profile = await fetch("https://api.afuchat.com/v1/chat/me");
+        lastStatus = profile.status;
+        if (profile.status === 401) {
+          return;
+        }
+      } else {
+        lastStatus = appStatus.status;
       }
+    } else {
+      lastStatus = health.status;
     }
     if (attempt < 29) await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error(`Chat health/status check failed after 30 attempts (HTTP ${lastStatus}).`);
+  throw new Error(
+    `Chat health/status/profile readiness check failed after 30 attempts (profile HTTP ${lastStatus}).`,
+  );
 }
 
 async function assertProductionPostflight() {
