@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, InteractionManager } from "react-native";
+import { AppState, InteractionManager, Platform } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -646,6 +646,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const bootstrapGeneration = ++authGenerationRef.current;
     const isCurrentBootstrap = () => authGenerationRef.current === bootstrapGeneration;
+    const hasTerminalSessionError = (error: unknown) => {
+      const detail = error as { status?: number; code?: string; message?: string } | null;
+      const code = detail?.code?.toLowerCase() ?? "";
+      const message = detail?.message?.toLowerCase() ?? "";
+      return [400, 401, 403].includes(detail?.status ?? 0) ||
+        ["invalid_grant", "refresh_token_not_found", "session_not_found"].includes(code) ||
+        /invalid refresh token|refresh token (has )?(expired|not found)|session not found|invalid jwt/.test(message);
+    };
+    const requireBrowserSignIn = () => {
+      if (Platform.OS !== "web" || !isOnline() || !isCurrentBootstrap()) return;
+      console.warn("[AuthContext] No verified browser session; returning to sign in");
+      authGenerationRef.current += 1;
+      clearCachedUserId();
+      setSession(null);
+      setProfile(null);
+      setUser(null);
+      safeRouter.replace("/(auth)/login");
+    };
 
     // ── FAST PATH: synchronous MMKV identity check ──────────────────────────
     // MMKV is synchronous and survives all app restarts (online or offline).
@@ -810,11 +828,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 // supabase.auth.refreshSession() with no args can silently fail.
                 supabase.auth
                   .refreshSession({ refresh_token: primaryAccount.refreshToken })
-                  .then(({ error }) => {
+                  .then(({ data, error }) => {
                     // On success: TOKEN_REFRESHED fires and replaces the synthetic
                     // session with a real one — no further action needed here.
+                    if (!isCurrentBootstrap()) return;
+                    if (error) {
+                      if (hasTerminalSessionError(error)) requireBrowserSignIn();
+                      return;
+                    }
+                    if (!data.session) requireBrowserSignIn();
                   })
                   .catch((error) => {
+                    if (hasTerminalSessionError(error)) requireBrowserSignIn();
                   });
               } else {
                 // SecureStore was temporarily unavailable (Android Keystore race on
@@ -825,14 +850,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     const retried = await getStoredAccounts();
                     if (!isCurrentBootstrap()) return;
                     const stored = retried[0] ?? null;
-                    if (!stored) return;
+                    if (!stored) {
+                      // On the web there is no Android Keystore race to wait out.
+                      // A cached identity without any restorable credentials is
+                      // not an authenticated session; don't leave protected pages
+                      // looking signed in forever. Local offline data is retained.
+                      requireBrowserSignIn();
+                      return;
+                    }
                     // Try to promote the synthetic session to a real one.
-                    await supabase.auth.setSession({
+                    const restored = await supabase.auth.setSession({
                       access_token: stored.accessToken,
                       refresh_token: stored.refreshToken,
                     });
                     // On success: TOKEN_REFRESHED fires and updates session state.
+                    if (!isCurrentBootstrap()) return;
+                    if (restored.error) {
+                      if (hasTerminalSessionError(restored.error)) requireBrowserSignIn();
+                    } else if (!restored.data.session) {
+                      requireBrowserSignIn();
+                    }
                   } catch (error) {
+                    if (hasTerminalSessionError(error)) requireBrowserSignIn();
                   }
                 }, 3000);
               }

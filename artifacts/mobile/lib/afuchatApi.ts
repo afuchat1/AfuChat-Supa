@@ -7,10 +7,21 @@ export interface AfuChatApiError {
 
 export async function getAfuChatAccessToken(): Promise<string> {
   try {
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    const now = Math.floor(Date.now() / 1000);
+    if (session?.access_token && (!session.expires_at || session.expires_at > now + 60)) {
+      return session.access_token;
+    }
+
+    // Refresh only near expiry. Refreshing on every API call rotates the
+    // refresh token repeatedly and can disrupt concurrent chat/API requests.
     const { data: refreshed } = await supabase.auth.refreshSession();
     if (refreshed.session?.access_token) return refreshed.session.access_token;
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? "";
+    if (session?.access_token && (!session.expires_at || session.expires_at > now)) {
+      return session.access_token;
+    }
+    return "";
   } catch {
     return "";
   }
