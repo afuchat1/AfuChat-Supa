@@ -1,6 +1,6 @@
 import { InteractionManager } from "react-native";
 import { supabase } from "./supabase";
-import { postAfuChatMessage } from "./afuchatApi";
+import { getAfuChatMessages, postAfuChatMessage } from "./afuchatApi";
 import {
   getPendingMessages,
   removePendingMessage,
@@ -49,7 +49,7 @@ export async function syncPendingMessages(): Promise<void> {
         const { data, error } = await postAfuChatMessage({
           chat_id: msg.conversation_id,
           client_message_id: msg.id,
-          encrypted_content: msg.content,
+          encrypted_content: msg.content ?? "",
           expected_user_id: msg.sender_id,
         });
         if (!error && data?.id) {
@@ -187,20 +187,17 @@ export async function preloadConversationMessages(
       const count = await getLocalMessageCount(chatId);
       if (count > 0) continue;
 
-      const { data } = await supabase
-        .from("messages")
-        .select(
-          "id, chat_id, sender_id, encrypted_content, sent_at, attachment_url, attachment_type, reply_to_message_id, edited_at, status",
-        )
-        .eq("chat_id", chatId)
-        .order("sent_at", { ascending: false })
-        .limit(30);
+      const { data, error } = await getAfuChatMessages({ chatId, limit: 30 });
 
-      if (data && data.length > 0) {
-        await saveMessages(chatId, data);
+      if (error || !data) {
+        console.warn("[offlineSync] message pre-cache failed", error?.message);
+        continue;
       }
-    } catch {
-      // Ignore per-conversation errors — keep going for other chats
+      if (data.length > 0) {
+        await saveMessages(chatId, data as any);
+      }
+    } catch (error) {
+      console.warn("[offlineSync] message pre-cache failed", error);
     }
   }
 }

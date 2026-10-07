@@ -6,6 +6,7 @@ import {
   afuChatApiJson,
   createAfuChatClientMessageId,
   postAfuChatMessage,
+  setAfuChatMessageStatus,
 } from "@/lib/afuchatApi";
 
 type NotificationsModule = typeof import("expo-notifications");
@@ -105,20 +106,13 @@ function getTarget(response: PushResponse) {
 async function markRead(response: PushResponse, userId: string) {
   const { chatId, messageId } = getTarget(response);
   if (!chatId && !messageId) return;
-  const now = new Date().toISOString();
-  if (messageId) {
-    await supabase.from("message_status").upsert(
-      { message_id: messageId, user_id: userId, delivered_at: now, read_at: now },
-      { onConflict: "message_id,user_id" },
-    );
-    return;
-  }
-  const { data } = await supabase.from("messages").select("id").eq("chat_id", chatId).neq("sender_id", userId).limit(200);
-  if (data?.length) {
-    await supabase.from("message_status").upsert(
-      data.map((message) => ({ message_id: message.id, user_id: userId, delivered_at: now, read_at: now })),
-      { onConflict: "message_id,user_id" },
-    );
+  const { error } = await setAfuChatMessageStatus({
+    ...(messageId ? { messageIds: [messageId] } : { chatId: chatId! }),
+    expectedUserId: userId,
+    readReceipts: true,
+  });
+  if (error) {
+    console.warn("[Notifications] failed to mark chat read", error.message);
   }
 }
 

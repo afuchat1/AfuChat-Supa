@@ -66,7 +66,18 @@ import ChatAppearanceSheet from "@/components/chat/ChatAppearanceSheet";
 import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
 import {
   createAfuChatClientMessageId,
+  deleteAfuChatMessage,
+  editAfuChatMessage,
+  getAfuChatMessageCount,
+  getAfuChatMessageEditHistory,
+  getAfuChatMessages,
+  getAfuChatMessageReactions,
+  getAfuChatMessageStatuses,
   postAfuChatMessage,
+  reportAfuChatMessage,
+  setAfuChatMessageReaction,
+  setAfuChatMessageStatus,
+  starAfuChatMessage,
 } from "@/lib/afuchatApi";
 import {
   ACCOUNT_PROFILE_CHAT_COLUMNS,
@@ -151,23 +162,17 @@ async function persistIncomingStatus(
   if (messageIds.length === 0) return;
 
   await Promise.all(messageIds.map((messageId) => markMessageRead(messageId)));
-  const now = new Date().toISOString();
-  const rows = messageIds.map((messageId) => ({
-    message_id: messageId,
-    user_id: userId,
-    delivered_at: now,
-    ...(readReceipts ? { read_at: now } : {}),
-  }));
-
   if (!isOnline()) {
     await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
     return;
   }
 
-  const { error } = await supabase
-    .from("message_status")
-    .upsert(rows, { onConflict: "message_id,user_id" });
-  if (error) {
+  const { error } = await setAfuChatMessageStatus({
+    messageIds,
+    expectedUserId: userId,
+    readReceipts,
+  });
+  if (error && error.code !== "409") {
     await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
   }
 }
@@ -189,12 +194,12 @@ async function markSystemChatRead(
     await clearAIUnread();
   }
 
-  const [{ data: incoming }, notificationResult] = await Promise.all([
-    supabase
-      .from("messages")
-      .select("id")
-      .eq("chat_id", chatId)
-      .neq("sender_id", userId),
+  const [messageStatusResult, notificationResult] = await Promise.all([
+    setAfuChatMessageStatus({
+      chatId,
+      expectedUserId: userId,
+      readReceipts: true,
+    }),
     options.notifications
       ? supabase
           .from("notification_events")
@@ -208,9 +213,8 @@ async function markSystemChatRead(
     console.warn("[Notifications] failed to mark events read", notificationResult.error.message);
   }
 
-  const messageIds = (incoming ?? []).map((message: { id: string }) => message.id);
-  if (messageIds.length > 0) {
-    await persistIncomingStatus(messageIds, chatId, userId, true);
+  if (messageStatusResult.error) {
+    console.warn("[Chat] failed to mark system chat messages read", messageStatusResult.error.message);
   }
 }
 
@@ -3008,6 +3012,7 @@ function ChatScreen() {
     }
 
     // ── Load from local SQLite cache first (instant render, no network) ──
+    let cachedMessageCount = 0;
     {
       // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
       // must be the NEWEST message. Reverse to get newest-first.
@@ -3015,6 +3020,7 @@ function ChatScreen() {
       const allCached = await getLocalMessages(chatId, 5000);
       if (!isCurrentLoad()) return;
       const cached = clearedAt ? allCached.filter((m) => m.sent_at > clearedAt) : allCached;
+      cachedMessageCount = cached.length;
       if (cached.length > 0) {
         const newestFirst = [...cached].reverse();
         setMessages(newestFirst.map((m) => ({
@@ -3043,7 +3049,7 @@ function ChatScreen() {
         // Background: refresh reactions for cached messages so they reappear after navigation.
         const cachedIds = cached.map((m) => m.id).filter((cid) => !cid.startsWith("pending"));
         if (cachedIds.length > 0) {
-          void supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", cachedIds).then(({ data: cacheReactions }) => {
+          void getAfuChatMessageReactions(cachedIds).then(({ data: cacheReactions }) => {
              if (!isCurrentLoad()) return;
             if (!cacheReactions || cacheReactions.length === 0) return;
             const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
@@ -3074,20 +3080,21 @@ function ChatScreen() {
     const newestStored = await getNewestMessageDate(chatId);
     const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
     if (!isCurrentLoad()) return;
-    let msgQuery = supabase
-      .from("messages")
-      .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
-      .eq("chat_id", chatId)
-      .order("sent_at", { ascending: false })
-      .limit(100);
-    if (newestStored) {
-      msgQuery = msgQuery.gt("sent_at", newestStored);
-    }
-    if (clearedAtServer && (!newestStored || clearedAtServer > newestStored)) {
-      msgQuery = msgQuery.gt("sent_at", clearedAtServer);
-    }
-      const { data: rawData } = await msgQuery;
+    const afterCursor = [newestStored, clearedAtServer]
+      .filter((value): value is string => !!value)
+      .sort((a, b) => Date.parse(a) - Date.parse(b))
+      .at(-1);
+    const { data: rawData, error: messageLoadError } = await getAfuChatMessages({
+      chatId,
+      limit: 100,
+      ...(afterCursor ? { after: afterCursor } : {}),
+    });
       if (!isCurrentLoad()) return;
+      if (messageLoadError || !rawData) {
+        console.warn("[Chat] message history request failed", messageLoadError?.message);
+        if (cachedMessageCount === 0) setLoading(false);
+        return;
+      }
       let data = rawData;
       if (rawData && rawData.length > 0) {
         const { profiles } = await fetchAccountProfileMap(
@@ -3187,10 +3194,14 @@ function ChatScreen() {
       // Fired after the UI already shows the messages — zero perceived latency.
       if (msgIds.length > 0) {
         Promise.all([
-          supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds),
-          supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds),
-        ]).then(([{ data: reactions }, { data: statuses }]) => {
+          getAfuChatMessageReactions(msgIds),
+          getAfuChatMessageStatuses(msgIds),
+        ]).then(([reactionResult, statusResult]) => {
           if (!isCurrentLoad()) return;
+          if (reactionResult.error) console.warn("[Chat] message reactions failed", reactionResult.error.message);
+          if (statusResult.error) console.warn("[Chat] message statuses failed", statusResult.error.message);
+          const reactions = reactionResult.data;
+          const statuses = statusResult.data;
           const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
           for (const r of (reactions || []) as any[]) {
             if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
@@ -3230,7 +3241,9 @@ function ChatScreen() {
               };
             })
           );
-        }).catch(() => {});
+        }).catch((error) => {
+          console.warn("[Chat] message metadata refresh failed", error);
+        });
       }
 
       // ── Background: mark incoming messages as read ────────────────────────────
@@ -3241,11 +3254,18 @@ function ChatScreen() {
         const shouldMarkRead = isNotificationsChat || isAfuAiDirectChat || chatPrefs.read_receipts;
         const now = new Date().toISOString();
         const unreadIds = unreadFromOthers.map((m: any) => m.id);
-        supabase.from("message_status")
-          .select("message_id").eq("user_id", user.id).not("read_at", "is", null).in("message_id", unreadIds)
-          .then(({ data: myReadRows }) => {
+        getAfuChatMessageStatuses(unreadIds)
+          .then(({ data: myReadRows, error }) => {
             if (!isCurrentLoad()) return;
-            const alreadyRead = new Set((myReadRows || []).map((r: any) => r.message_id));
+            if (error || !myReadRows) {
+              console.warn("[Chat] existing read receipts could not be loaded", error?.message);
+              return;
+            }
+            const alreadyRead = new Set(
+              myReadRows
+                .filter((row) => row.user_id === user.id && row.read_at)
+                .map((row) => row.message_id),
+            );
             const toMark = unreadFromOthers.filter((m: any) => !alreadyRead.has(m.id));
             if (toMark.length > 0) {
               void persistIncomingStatus(
@@ -3262,6 +3282,8 @@ function ChatScreen() {
                 typingChannelRef.current?.send({ type: "broadcast", event: "read", payload: { reader_id: user.id, message_ids: msgIds, chat_id: id, read_at: now } });
               }
             }
+          }).catch((error) => {
+            console.warn("[Chat] existing read receipts could not be loaded", error);
           });
       }
     }
@@ -3284,23 +3306,29 @@ function ChatScreen() {
     setLoadingMore(true);
     try {
       const cursor = oldestCursorRef.current;
-      const { data } = await supabase
-        .from("messages")
-        .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
-        .eq("chat_id", chatId)
-        .lt("sent_at", cursor)
-        .order("sent_at", { ascending: false })
-        .limit(50);
+      const { data, error } = await getAfuChatMessages({
+        chatId,
+        before: cursor,
+        limit: 50,
+      });
+      if (error || !data) {
+        console.warn("[Chat] older message history request failed", error?.message);
+        return;
+      }
       if (data && data.length > 0) {
         const { profiles } = await fetchAccountProfileMap(
           data.map((message: any) => message.sender_id),
           ACCOUNT_PROFILE_CHAT_COLUMNS,
         );
         const msgIds = data.map((m: any) => m.id);
-        const [{ data: reactions }, { data: statuses }] = await Promise.all([
-          supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds),
-          supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds),
+        const [reactionResult, statusResult] = await Promise.all([
+          getAfuChatMessageReactions(msgIds),
+          getAfuChatMessageStatuses(msgIds),
         ]);
+        if (reactionResult.error) console.warn("[Chat] older message reactions failed", reactionResult.error.message);
+        if (statusResult.error) console.warn("[Chat] older message statuses failed", statusResult.error.message);
+        const reactions = reactionResult.data;
+        const statuses = statusResult.data;
         const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
         for (const r of (reactions || []) as any[]) {
           if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
@@ -3484,12 +3512,11 @@ function ChatScreen() {
       return;
     }
 
-    const { data: theirReplies, error: replyError } = await supabase
-      .from("messages")
-      .select("id")
-      .eq("chat_id", chatId)
-      .eq("sender_id", otherId)
-      .limit(1);
+    const { data: theirReplies, error: replyError } = await getAfuChatMessages({
+      chatId,
+      sender: "others",
+      limit: 1,
+    });
     if (replyError) {
       applyGateState(fallbackStatus(cachedStatus, localOutgoingMessage));
       return;
@@ -3502,11 +3529,11 @@ function ChatScreen() {
 
     // The existing product limit is one outgoing message until the recipient
     // replies or follows. A chat with no outgoing message has no limit.
-    const { count: outgoingCount, error: outgoingError } = await supabase
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("chat_id", chatId)
-      .eq("sender_id", user.id);
+    const { data: outgoingCount, error: outgoingError } = await getAfuChatMessageCount({
+      chatId,
+      sender: "me",
+      expectedUserId: user.id,
+    });
     if (outgoingError) {
       applyGateState(fallbackStatus(cachedStatus, localOutgoingMessage));
       return;
@@ -3540,13 +3567,21 @@ function ChatScreen() {
 
     const chatId = isDraft ? realChatId : id;
     if (!chatId) { setIsStranger(false); return; }
-    const { data: theirMsgs } = await supabase
-      .from("messages").select("id").eq("chat_id", chatId).eq("sender_id", otherId).limit(1);
+    const { data: theirMsgs, error: theirMessagesError } = await getAfuChatMessages({
+      chatId,
+      sender: "others",
+      limit: 1,
+    });
+    if (theirMessagesError) return;
     const theyMessagedMe = theirMsgs && theirMsgs.length > 0;
     if (!theyMessagedMe) { setIsStranger(false); return; }
 
-    const { data: myMsgs } = await supabase
-      .from("messages").select("id").eq("chat_id", chatId).eq("sender_id", user.id).limit(1);
+    const { data: myMsgs, error: myMessagesError } = await getAfuChatMessages({
+      chatId,
+      sender: "me",
+      limit: 1,
+    });
+    if (myMessagesError) return;
     const iReplied = myMsgs && myMsgs.length > 0;
     if (iReplied) { setIsStranger(false); return; }
 
@@ -3713,12 +3748,13 @@ function ChatScreen() {
             const autoReplyText = kf.auto_reply_message;
             const replyChatId = activeChatId;
             try {
-              const { data: autoMsg } = await supabase
-                .from("messages")
-                .insert({ chat_id: replyChatId, sender_id: user.id, encrypted_content: autoReplyText })
-                .select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type")
-                .single();
-              if (autoMsg) {
+              const { data: autoMsg, error: autoMsgError } = await postAfuChatMessage({
+                chat_id: replyChatId,
+                client_message_id: createAfuChatClientMessageId(),
+                encrypted_content: autoReplyText,
+                expected_user_id: user.id,
+              });
+              if (autoMsg && !autoMsgError) {
                 const autoMsgFull = {
                   ...autoMsg,
                   sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
@@ -5116,11 +5152,11 @@ STRICT RULES:
       ...REASONS.map((r) => ({
         text: r,
         onPress: async () => {
-          const { error } = await supabase.from("message_reports").insert({
-            reporter_id: user?.id,
-            message_id: msg.id,
+          const { error } = await reportAfuChatMessage({
+            messageId: msg.id,
             reason: r,
-            message_content: msg.encrypted_content?.slice(0, 500) || "",
+            messageContent: msg.encrypted_content?.slice(0, 500) || "",
+            expectedUserId: user?.id,
           });
           if (error) showAlert("Error", "Could not submit report. Please try again.");
           else {
@@ -5171,13 +5207,16 @@ STRICT RULES:
     setEditHistoryMsg(msg);
     setEditHistoryLoading(true);
     setShowReactions(null);
-    const { data } = await supabase
-      .from("message_edit_history")
-      .select("id, previous_content, edited_at")
-      .eq("message_id", msg.id)
-      .order("edited_at", { ascending: false });
-    setEditHistoryItems(data ?? []);
-    setEditHistoryLoading(false);
+    try {
+      const { data, error } = await getAfuChatMessageEditHistory(msg.id);
+      if (error || !data) {
+        showAlert("Error", "Could not load edit history. Please try again.");
+        return;
+      }
+      setEditHistoryItems(data);
+    } finally {
+      setEditHistoryLoading(false);
+    }
   }
 
   async function saveEditMessage() {
@@ -5205,26 +5244,34 @@ STRICT RULES:
       setSending(false);
       return;
     }
-    await supabase.from("message_edit_history").insert({
-      message_id: editingMessage.id,
-      edited_by: user.id,
-      previous_content: editingMessage.encrypted_content,
-      edited_at: new Date().toISOString(),
-    });
-    const { error } = await supabase
-      .from("messages")
-      .update({ encrypted_content: text, edited_at: new Date().toISOString() })
-      .eq("id", editingMessage.id)
-      .eq("sender_id", user.id);
-
-    if (error) {
-      showAlert("Edit failed", error.message.includes("time") ? "Messages can only be edited within 15 minutes of sending." : "Could not edit message. Please try again.");
-    } else {
-      setMessages((prev) => prev.map((m) => m.id === editingMessage.id ? { ...m, encrypted_content: text, edited_at: new Date().toISOString() } : m));
+    try {
+      const { data, error } = await editAfuChatMessage({
+        messageId: editingMessage.id,
+        encryptedContent: text,
+        expectedUserId: user.id,
+      });
+      if (error || !data) {
+        showAlert(
+          "Edit failed",
+          error?.code === "409" && error.message.includes("15 minutes")
+            ? error.message
+            : "Could not edit message. Please try again.",
+        );
+      } else {
+        setMessages((prev) => prev.map((m) => m.id === editingMessage.id
+          ? { ...m, encrypted_content: data.message.encrypted_content, edited_at: data.message.edited_at }
+          : m));
+        if (!data.historySaved) {
+          showAlert("Message edited", "The edit was saved, but its history could not be recorded.");
+        }
+      }
+    } catch {
+      showAlert("Edit failed", "Could not edit message. Please try again.");
+    } finally {
+      setEditingMessage(null);
+      setInput("");
+      setSending(false);
     }
-    setEditingMessage(null);
-    setInput("");
-    setSending(false);
   }
 
   function cancelEdit() {
@@ -5249,11 +5296,7 @@ STRICT RULES:
             globalShowToast("Message deleted", { type: "info", icon: "trash" });
             return;
           }
-          const { error } = await supabase
-            .from("messages")
-            .delete()
-            .eq("id", msg.id)
-            .eq("sender_id", user?.id);
+          const { error } = await deleteAfuChatMessage(msg.id, user?.id);
           if (error) {
             showAlert("Error", "Could not delete message. Please try again.");
           } else {
@@ -5273,24 +5316,7 @@ STRICT RULES:
     setAiResult(null);
     setAiResultType(null);
     setAiReplies([]);
-    const isSpecial = !msg.encrypted_content ||
-      ["📷 Photo", "🎥 Video", "GIF"].includes(msg.encrypted_content) ||
-      msg.encrypted_content.startsWith("🎁 ") ||
-      msg.encrypted_content.startsWith("🧧");
-    const senderProfile = msg.sender;
-    const { error } = await supabase
-      .from("starred_messages")
-      .upsert({
-        user_id: user.id,
-        message_id: msg.id,
-        chat_id: msg.chat_id,
-        content: isSpecial ? (msg.attachment_type === "audio" ? "🎤 Voice message" : msg.encrypted_content) : msg.encrypted_content,
-        sender_id: msg.sender_id,
-        sender_name: senderProfile?.display_name || "Unknown",
-        sender_avatar: senderProfile?.avatar_url || null,
-        attachment_url: msg.attachment_url || null,
-        attachment_type: msg.attachment_type || null,
-      }, { onConflict: "user_id,message_id" });
+    const { error } = await starAfuChatMessage(msg.id, user.id);
     if (!error) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert("Starred", "Message saved to your Saved tab.");
@@ -5471,11 +5497,27 @@ STRICT RULES:
       })
     );
 
-    // Persist to database
-    if (isRemoving) {
-      await supabase.from("message_reactions").delete().eq("message_id", msg.id).eq("user_id", user.id).eq("reaction", emoji);
-    } else {
-      await supabase.from("message_reactions").insert({ message_id: msg.id, user_id: user.id, reaction: emoji });
+    const { error } = await setAfuChatMessageReaction({
+      messageId: msg.id,
+      reaction: emoji,
+      active: !isRemoving,
+      expectedUserId: user.id,
+    });
+    if (error) {
+      const canRetry = !isOnline() || error.code === "NETWORK_ERROR" ||
+        error.code === "502" || error.code === "503";
+      if (canRetry && !isRemoving) {
+        await enqueue("add_reaction", {
+          message_id: msg.id,
+          user_id: user.id,
+          emoji,
+        });
+      } else if (error.code !== "409") {
+        setMessages((prev) => prev.map((message) =>
+          message.id === msg.id ? { ...message, reactions: msg.reactions || [] } : message
+        ));
+        showAlert("Reaction not saved", error.message);
+      }
     }
   }
 
@@ -7136,14 +7178,13 @@ STRICT RULES:
     let cancelled = false;
     void (async () => {
       try {
-        const { data } = await supabase
-          .from("messages")
-          .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
-          .eq("id", messageId)
-          .eq("chat_id", chatId)
-          .maybeSingle();
-        if (cancelled || !data) return;
-        const row = data as any;
+        const { data, error } = await getAfuChatMessages({
+          chatId,
+          messageId,
+          limit: 1,
+        });
+        if (cancelled || error || !data?.length) return;
+        const row = data[0] as any;
         const { profiles } = await fetchAccountProfileMap(
           [row.sender_id],
           ACCOUNT_PROFILE_CHAT_COLUMNS,
@@ -8209,11 +8250,14 @@ STRICT RULES:
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               const activeChatId = await getOrCreateChatId();
               if (!activeChatId) return;
-              const { data: insertedGif, error: gifError } = await supabase
-                .from("messages")
-                .insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: "GIF", attachment_url: url, attachment_type: "gif" })
-                .select("id")
-                .single();
+              const { data: insertedGif, error: gifError } = await postAfuChatMessage({
+                chat_id: activeChatId,
+                client_message_id: createAfuChatClientMessageId(),
+                encrypted_content: "GIF",
+                attachment_url: url,
+                attachment_type: "gif",
+                expected_user_id: user.id,
+              });
               if (!gifError && insertedGif?.id) {
                 notifyInsertedChatMessage({
                   chatId: activeChatId,

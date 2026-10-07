@@ -1,6 +1,16 @@
 import { handleAccountExport } from "./account-export.ts";
 import { handleBookmarks } from "./bookmarks.ts";
 import { handleMessages } from "./messages.ts";
+import { handleMessageCount, handleMessageQueries } from "./message-queries.ts";
+import { handleMessageReactions } from "./message-reactions.ts";
+import { handleMessageStatus } from "./message-status.ts";
+import {
+  handleMessageClear,
+  handleMessageDelete,
+  handleMessageReport,
+  handleStarredMessage,
+} from "./message-actions.ts";
+import { handleMessageEdit, handleMessageEditHistory } from "./message-edit.ts";
 import { handlePayments } from "./payments.ts";
 import {
   supabaseConfig,
@@ -768,7 +778,45 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   }
 
   if (incoming.pathname === `${PREFIX}/messages`) {
-    return handleMessages(request, env);
+    return request.method === "GET"
+      ? handleMessageQueries(request, env)
+      : handleMessages(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/count`) {
+    return handleMessageCount(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/status`) {
+    return handleMessageStatus(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/reactions`) {
+    return handleMessageReactions(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/edit`) {
+    return handleMessageEdit(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/edit-history`) {
+    return handleMessageEditHistory(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/delete`) {
+    return handleMessageDelete(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/clear`) {
+    return handleMessageClear(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/report`) {
+    return handleMessageReport(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/messages/starred`) {
+    return handleStarredMessage(request, env);
   }
 
   if (incoming.pathname === `${PREFIX}/support/ai-reply`) {

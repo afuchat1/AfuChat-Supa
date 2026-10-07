@@ -1,0 +1,1200 @@
+CONTINUE AFUCHAT MIGRATION FROM THE LATEST COMMIT
+
+You are continuing the AfuChat backend migration from the current latest repository state.
+
+Do NOT start the migration over.
+
+Do NOT undo the existing working implementation.
+
+Do NOT redesign the architecture.
+
+Build on what has already been implemented and finish the migration correctly.
+
+The latest repository state already contains significant work around:
+
+- shared AfuAuth identity
+- "/v1/chat/me"
+- "/v1/chat/conversations"
+- AfuChat API client
+- bookmark/saved-post API
+- "afuchat-api"
+- message creation through "postAfuChatMessage()"
+- client-generated message IDs
+- authenticated message API writes
+- existing storage/API infrastructure
+- offline/local persistence
+- Supabase Realtime
+
+Continue from that exact state.
+
+---
+
+1. CURRENT STATE YOU MUST RESPECT
+
+The latest commit is:
+
+82c9c9790091a4194e59c343d435cdc3e02a0f34
+
+The previous migration work includes:
+
+/v1/chat/me
+/v1/chat/conversations
+/v1/chat/bookmarks
+/v1/chat/messages
+
+and the mobile app has already moved many message-send paths from:
+
+supabase.from("messages").insert(...)
+
+to:
+
+postAfuChatMessage(...)
+
+This includes normal messages and several specialized message types.
+
+Do not revert that work.
+
+However, this is only a partial migration.
+
+---
+
+2. THE MIGRATION IS NOT COMPLETE
+
+The repository audit currently identifies approximately:
+
+706 direct Supabase .from() call sites
+89 direct RPC call sites
+
+across the mobile application.
+
+That means the migration is still incomplete.
+
+The objective now is to finish it.
+
+Do not declare the project migrated merely because login, profile, conversations, bookmarks, or message sending work.
+
+The entire AfuChat product data flow must be migrated to its correct product boundary.
+
+---
+
+3. EXACT ARCHITECTURE
+
+AfuChat owns:
+
+/v1/chat/*
+
+and the Worker is:
+
+afuchat-api
+
+The shared identity remains:
+
+AfuAuth
+
+The canonical architecture is:
+
+AfuChat Mobile
+      │
+      ▼
+api.afuchat.com/v1/chat/*
+      │
+      ▼
+afuchat-api
+      │
+      ├── shared Supabase database
+      ├── AfuChat product data
+      ├── AfuChat authorization
+      └── AfuChat business logic
+
+Authentication remains centralized:
+
+AfuAuth
+   ↓
+shared identity
+   ↓
+AfuChat API
+
+Do not create another login system.
+
+Do not create another user identity.
+
+Do not create another profile table simply to satisfy an API.
+
+---
+
+4. DO NOT TURN THIS INTO A GENERIC GATEWAY
+
+"afuchat-api" is the AfuChat product API.
+
+It is NOT:
+
+generic API gateway
+AfuMail gateway
+AfuCloud gateway
+AfuAI gateway
+AfuAds gateway
+
+Keep product ownership separated.
+
+The ecosystem remains:
+
+/v1/auth/*  → afuauth-api
+/v1/chat/*  → afuchat-api
+/v1/mail/*  → afumail-api
+/v1/cloud/* → afucloud-api
+/v1/ai/*    → afuai-api
+/v1/ads/*   → afuads-api
+
+Do not create catch-all "/v1/*" routing.
+
+---
+
+5. MOST IMPORTANT RULE: FINISH THE MIGRATION, DON'T JUST ADD MORE HELPERS
+
+Do not keep creating individual API helpers while leaving the same functionality directly connected to Supabase elsewhere.
+
+For example, if:
+
+messages
+
+has an API route, then audit ALL message operations.
+
+Do not end up with:
+
+send message → API
+offline send → Supabase
+push helper → Supabase
+join message → Supabase
+group system message → Supabase
+delete message → Supabase
+message count → Supabase
+
+That is still a split architecture.
+
+Every AfuChat product operation must have one deliberate ownership path.
+
+---
+
+6. MESSAGE MIGRATION MUST NOW BE COMPLETED
+
+The latest commit migrated many message INSERT operations.
+
+Now audit every remaining message operation.
+
+Search the entire repository for:
+
+supabase.from("messages")
+messages
+message_status
+message_reactions
+message_edit_history
+message_reports
+starred_messages
+
+Audit:
+
+send
+receive
+history
+pagination
+conversation loading
+message status
+read receipts
+delivery state
+editing
+deleting
+reactions
+reply
+forward
+attachments
+voice
+images
+videos
+stickers
+gifts
+payments
+red envelopes
+story replies
+contact sharing
+group system messages
+push-related message handling
+offline queue
+retry
+
+Every protected AfuChat business/data operation must have a deliberate backend ownership path.
+
+Do not leave hidden direct database writes behind.
+
+---
+
+7. OFFLINE SYNC MUST BE FIXED CORRECTLY
+
+The latest audit still finds direct message insertion inside offline synchronization.
+
+This is a high-risk area.
+
+Do NOT simply remove offline support.
+
+The correct architecture is:
+
+User sends message
+       │
+       ├── optimistic local state
+       │
+       ├── API request
+       │
+       └── durable offline queue if network unavailable
+                         │
+                         ▼
+                  AfuChat API
+
+The offline queue may remain local.
+
+But when the queue synchronizes a server-side message, it must use the authoritative AfuChat API rather than bypassing the backend boundary with direct PostgREST.
+
+Preserve:
+
+retry
+deduplication
+client_message_id
+optimistic state
+rollback
+reconnection
+idempotency
+
+Do not cause duplicate messages during retry.
+
+---
+
+8. IMPORTANT: NEVER TRUST "expected_user_id"
+
+The current API client sometimes sends:
+
+expected_user_id
+
+This may be retained as an optional consistency assertion.
+
+But it must NEVER establish identity.
+
+The server must do:
+
+Bearer token
+    ↓
+AfuAuth verification
+    ↓
+authenticated user ID
+    ↓
+authorization
+
+NOT:
+
+expected_user_id
+    ↓
+assume this is the caller
+
+If "expected_user_id" is supplied, the server may verify that it matches the authenticated identity.
+
+If it does not match:
+
+401 or 403
+
+But the token-derived identity remains authoritative.
+
+Apply the same rule to:
+
+sender_id
+author_id
+owner_id
+user_id
+account_id
+profile_id
+
+The client must not be able to impersonate another user simply by changing an ID.
+
+---
+
+9. COMPLETE CONVERSATION MIGRATION
+
+Conversations already have:
+
+/v1/chat/conversations
+
+Now audit all other conversation operations.
+
+Search for:
+
+supabase.from("conversations")
+supabase.from("chats")
+supabase.from("chat_members")
+
+including:
+
+create conversation
+get/create direct chat
+group creation
+group membership
+member removal
+chat information
+chat deletion
+group changes
+mute settings
+chat preferences
+channel membership
+
+The API must own protected business operations.
+
+Do not leave "MiniProfilePopup", group screens, join flows, chat-info screens, etc. bypassing the API.
+
+---
+
+10. POSTS MUST BE FULLY MIGRATED
+
+The current repository still contains direct access to:
+
+posts
+post_images
+post_replies
+post_reply_likes
+post_views
+post_acknowledgments
+
+Audit all of them.
+
+This includes:
+
+feed
+discover
+search
+profile
+my posts
+post detail
+video
+articles
+create post
+create article
+create video
+edit
+delete
+likes
+comments
+replies
+views
+bookmarks
+sharing
+counts
+
+All AfuChat product operations must ultimately belong to:
+
+/v1/chat/*
+
+Do not create:
+
+/v1/posts
+/v1/feed
+/v1/comments
+
+as separate product namespaces.
+
+If separate route paths are useful, they must still be under:
+
+/v1/chat/*
+
+---
+
+11. FOLLOW SYSTEM MUST BE FULLY MIGRATED
+
+Audit every use of:
+
+follows
+followers
+following
+follow requests
+
+including:
+
+profile
+discover
+contacts
+suggestions
+mini profile
+video
+search
+sync queue
+
+Do not leave different screens using different backend mechanisms for the same relationship.
+
+The same operation must have one authoritative backend implementation.
+
+---
+
+12. STORIES MUST BE FULLY MIGRATED
+
+Audit:
+
+stories
+story_views
+story_likes
+story_replies
+
+including:
+
+create
+load
+view
+view count
+reply
+share
+delete
+expiration
+feed
+profile
+notifications
+
+Story replies that create messages must use the proper AfuChat message path.
+
+Story data itself must have the correct AfuChat API ownership.
+
+Do not leave half the story system on direct Supabase.
+
+---
+
+13. PROFILES MUST USE THE SHARED IDENTITY CORRECTLY
+
+AfuAuth owns shared identity.
+
+AfuChat can expose product-specific profile information through:
+
+/v1/chat/*
+
+but must not create duplicate identities.
+
+Use the existing shared profile source.
+
+Do not create:
+
+afuchat.profiles
+
+just because another query expects it.
+
+Do not create compatibility rows merely to make an endpoint return 200.
+
+If another user's public profile is needed, implement a properly authorized AfuChat profile endpoint.
+
+---
+
+14. WALLET / ACOIN / XP / PURCHASES
+
+Audit all:
+
+acoin_transactions
+xp_transfers
+user_gifts
+gift_transactions
+status_goods_purchases
+user_subscriptions
+subscription_plans
+money_requests
+red_envelopes
+red_envelope_claims
+
+and related operations.
+
+This area is especially sensitive.
+
+Do NOT blindly expose existing SECURITY DEFINER RPCs to the mobile client.
+
+Do NOT blindly replace RPCs with direct database operations.
+
+For every financial/economic operation determine:
+
+who is authenticated
+what resource is being changed
+who owns it
+what authorization is required
+whether it changes balance
+whether it must be atomic
+whether it requires idempotency
+
+Sensitive operations must be protected by server-side business logic.
+
+Do not create duplicate transactions.
+
+Do not create a new balance source of truth.
+
+---
+
+15. RPC MIGRATION
+
+The repository currently calls many SECURITY DEFINER RPCs.
+
+Audit all of them individually.
+
+For every RPC determine:
+
+purpose
+arguments
+tables affected
+identity assumptions
+authorization
+financial impact
+whether it is safe for direct client invocation
+whether it should be behind afuchat-api
+
+Do NOT implement a generic endpoint such as:
+
+/v1/chat/rpc?name=<client supplied function>
+
+That would be a serious security boundary failure.
+
+Each required operation gets an explicit API operation.
+
+---
+
+16. FOUR MISSING RELATION NAMES
+
+The audit identified names that do not exist in the inspected database:
+
+blocks
+business_verification_requests
+life_earth_leaderboard
+org_page_jobs
+
+Do NOT create these tables simply because the mobile code references them.
+
+First inspect how each feature is actually intended to work.
+
+Find the current authoritative schema/relation/API.
+
+If the feature is obsolete, repair the client to the current model.
+
+If it belongs to another current product/domain, respect that ownership.
+
+Never create duplicate schema just to make stale client code compile.
+
+---
+
+17. "shop.orders" MUST NOT BE TREATED AS "public.orders"
+
+The audit identified:
+
+orders
+
+as existing under:
+
+shop.orders
+
+rather than:
+
+public.orders
+
+Do not create:
+
+public.orders
+
+to satisfy the client.
+
+Trace the existing shop architecture and use the authoritative relation/API.
+
+Do not move or duplicate shop data.
+
+---
+
+18. MEDIA AND CDN
+
+Keep the existing AfuChat media boundary.
+
+AfuChat CDN:
+
+https://cdn.afuchat.com/chat/*
+
+Do not move existing objects unnecessarily.
+
+Do not point AfuChat CDN paths to:
+
+/cloud/*
+/mail/*
+/ai/*
+/ads/*
+
+Do not route CDN object delivery through:
+
+/v1/chat/*
+
+API manages business logic and object metadata.
+
+CDN delivers the object.
+
+---
+
+19. REALTIME MUST NOT BE BROKEN
+
+Supabase Realtime may remain where it is legitimately the live event transport.
+
+Do not interpret:
+
+direct Supabase Realtime
+
+as equivalent to:
+
+direct Supabase database CRUD
+
+These are different concerns.
+
+Preserve realtime where required.
+
+However, make sure the authoritative mutations happen through the correct backend.
+
+Do not create duplicate event systems unnecessarily.
+
+---
+
+20. LOCAL SQLITE MUST REMAIN
+
+The existing SQLite/offline layer must remain functional.
+
+The target architecture is:
+
+Server:
+AfuChat API + existing database
+
+Local:
+SQLite/cache/offline queue
+
+Realtime:
+live event transport
+
+Do not delete local persistence.
+
+Do not force every screen to become network-only.
+
+Do not allow local state to permanently override authoritative server state.
+
+---
+
+21. NO EMPTY-ARRAY MASKING
+
+Do not turn:
+
+API failure
+
+into:
+
+[]
+
+and make the UI believe there is simply no data.
+
+The app must distinguish:
+
+successful empty result
+
+from:
+
+backend failure
+
+This is particularly important for the original issue:
+
+login works
+profile works
+posts/chats/followers do not render
+
+Fix the data flow rather than hiding errors.
+
+---
+
+22. NO MOCK DATA
+
+Absolutely no:
+
+fake posts
+fake users
+fake followers
+fake conversations
+fake messages
+fake counts
+placeholder records
+
+The app must render actual existing AfuChat data.
+
+---
+
+23. DO NOT REWRITE WORKING AUTH
+
+Do not modify the working authentication architecture merely to simplify the migration.
+
+Keep:
+
+AfuAuth
+shared Supabase identity
+Bearer token
+session restoration
+refresh
+logout
+account switching
+
+AfuChat consumes the authenticated identity.
+
+It does not own a separate login system.
+
+---
+
+24. DO NOT PERFORM DATABASE MIGRATION AS A SHORTCUT
+
+Do not:
+
+copy tables
+duplicate profiles
+duplicate users
+rename production tables
+drop tables
+change schemas
+change grants
+disable RLS
+
+just to make the API easier.
+
+If a database migration is genuinely required, stop before executing it and document:
+
+why
+what changes
+what data is affected
+rollback plan
+
+No destructive database operation without explicit approval.
+
+---
+
+25. MIGRATION ORDER
+
+Use this order:
+
+Phase 1 — Complete chat
+
+conversations
+chats
+chat_members
+messages
+message status
+reactions
+editing
+deletion
+offline sync
+group operations
+
+Phase 2 — Social
+
+posts
+comments
+replies
+follows
+profiles
+stories
+views
+likes
+sharing
+
+Phase 3 — Economy
+
+ACoin
+XP
+gifts
+transactions
+subscriptions
+purchases
+wallet operations
+
+Phase 4 — Remaining AfuChat domains
+
+music
+shops
+business
+organizations
+support
+match
+channels
+communities
+
+Only migrate functionality that actually belongs to AfuChat.
+
+Do not absorb another Afu product's responsibility into "afuchat-api".
+
+---
+
+26. FOR EACH MIGRATION, FOLLOW THIS PATTERN
+
+Before changing a client operation:
+
+1. Find every caller.
+2. Identify the database relation/RPC.
+3. Identify the existing response shape.
+4. Identify authentication requirements.
+5. Identify authorization/ownership.
+6. Implement the explicit Worker operation.
+7. Add Worker tests.
+8. Switch all callers.
+9. Test the UI/data flow.
+10. Remove obsolete direct access.
+
+Do not stop at step 7.
+
+The mobile application must actually stop using the obsolete path.
+
+---
+
+27. SEARCH AGAIN AFTER EACH DOMAIN
+
+After migrating a domain, repeat repository searches.
+
+For example, after messages:
+
+search for supabase.from("messages")
+
+The result should contain only explicitly justified infrastructure cases.
+
+Do the same for:
+
+posts
+follows
+stories
+conversations
+chats
+chat_members
+
+Do not rely on memory.
+
+---
+
+28. FINAL DIRECT SUPABASE RULE
+
+Direct Supabase access may remain only when it is intentionally part of:
+
+authentication infrastructure
+Realtime transport
+local/offline support
+explicitly documented infrastructure
+
+Product business/data CRUD should not remain scattered throughout UI components.
+
+Every retained direct Supabase call must have a documented reason.
+
+---
+
+29. RESPONSE SHAPES
+
+Preserve the application's expected data structures.
+
+Do not make the UI adapt to arbitrary new response formats simply because the Worker is easier to implement.
+
+Where necessary:
+
+Worker response
+      ↓
+existing mobile model
+
+should preserve compatibility.
+
+A successful HTTP 200 with the wrong shape is a migration failure.
+
+---
+
+30. SECURITY REQUIREMENTS
+
+Every protected API operation must:
+
+verify bearer token
+derive authenticated identity
+authorize resource
+perform operation
+return safe response
+
+Never:
+
+client user_id
+↓
+database query
+
+without authoritative identity verification.
+
+Never expose:
+
+service role
+database credentials
+privileged secrets
+
+to the mobile app.
+
+Never disable RLS to make the migration easier.
+
+---
+
+31. TEST REAL USER FLOWS
+
+After each major migration, test real authenticated flows.
+
+At minimum:
+
+Login
+
+fresh login
+session restoration
+refresh
+logout
+account switching
+
+Profile
+
+own profile
+other user's profile
+counts
+profile updates
+
+Posts
+
+feed
+discover
+search
+create
+view
+edit
+delete
+comments
+replies
+likes
+bookmark
+share
+
+Social
+
+follow
+unfollow
+followers
+following
+suggestions
+
+Stories
+
+create
+view
+reply
+share
+views
+expiration
+
+Chat
+
+conversation list
+open conversation
+history
+send
+receive
+reply
+forward
+media
+voice
+gift
+payment
+group
+membership
+read status
+offline send
+reconnect
+
+Economy
+
+Use safe test paths where possible and do not accidentally alter real production balances.
+
+---
+
+32. DO NOT CLAIM COMPLETION TOO EARLY
+
+The migration is NOT complete if any of these remain unexplained:
+
+direct Supabase product CRUD
+unmigrated RPCs
+duplicate identity sources
+duplicate product routes
+duplicate storage paths
+unowned product operations
+broken offline sync
+broken realtime
+UI-only workarounds
+empty-array failure masking
+mock data
+
+The final report must contain actual evidence.
+
+---
+
+33. REQUIRED FINAL AUDIT
+
+When you believe the migration is complete, run another repository-wide audit.
+
+Report:
+
+total .from() calls remaining
+total RPC calls remaining
+total Auth calls
+total Realtime channels
+remaining direct product CRUD
+
+For every remaining ".from()" and RPC, classify it:
+
+AUTH
+REALTIME
+OFFLINE
+INFRASTRUCTURE
+INTENTIONAL PRODUCT ACCESS
+MIGRATION BUG
+
+There must be no unexplained product CRUD remaining.
+
+---
+
+34. REQUIRED API INVENTORY
+
+Produce the actual final AfuChat API inventory.
+
+For every route:
+
+METHOD
+PATH
+PURPOSE
+AUTHENTICATION
+AUTHORIZATION
+DATABASE SOURCE
+RESPONSE SHAPE
+
+Example:
+
+GET /v1/chat/me
+GET /v1/chat/conversations
+POST /v1/chat/messages
+GET /v1/chat/bookmarks
+POST /v1/chat/bookmarks
+DELETE /v1/chat/bookmarks
+...
+
+Only list routes that actually exist and have been tested.
+
+Do not document hypothetical routes as if they exist.
+
+---
+
+35. REQUIRED FINAL ARCHITECTURE
+
+The final state should look like:
+
+                         AfuAuth
+                            │
+                     shared identity
+                            │
+                            ▼
+                    ┌──────────────┐
+                    │ AfuChat App  │
+                    └──────┬───────┘
+                           │
+                           ▼
+                api.afuchat.com/v1/chat/*
+                           │
+                           ▼
+                     afuchat-api
+                           │
+             ┌─────────────┴─────────────┐
+             │                           │
+             ▼                           ▼
+       AfuChat data                 AfuChat storage
+       existing DB                       │
+                                         ▼
+                              cdn.afuchat.com/chat/*
+
+With:
+
+AfuAuth → identity
+AfuChat → AfuChat product
+AfuCloud → AfuCloud product
+AfuMail → AfuMail product
+AfuAI → AfuAI product
+AfuAds → AfuAds product
+
+No product should silently become responsible for another product's data.
+
+---
+
+36. WHAT WOULD COUNT AS A SUCCESSFUL MIGRATION
+
+Success means:
+
+Login works
+AND
+Profile works
+AND
+Posts work
+AND
+Feed works
+AND
+Discover works
+AND
+Followers/following work
+AND
+Stories work
+AND
+Conversations work
+AND
+Messages work
+AND
+Groups work
+AND
+Realtime works
+AND
+Offline sync works
+AND
+Media works
+AND
+Bookmarks work
+AND
+Economy operations work
+AND
+Existing data remains intact
+AND
+Authorization is correct
+AND
+No duplicate identity exists
+AND
+No unexplained direct product CRUD remains
+AND
+The deployed afuchat-api Worker serves the latest migrated implementation
+
+Do not stop when one screen works.
+
+---
+
+37. FINAL RULE
+
+The objective is not to make the code look migrated.
+
+The objective is to make the AfuChat ecosystem actually migrated.
+
+Do not optimize for the smallest number of code changes.
+
+Do not optimize for the easiest implementation.
+
+Do not optimize for making tests green by bypassing the architecture.
+
+Implement the architecture correctly based on the existing database, existing functionality, existing users, existing storage, and existing Afu ecosystem boundaries.
+
+Preserve what works.
+
+Replace what is incomplete.
+
+Remove what is obsolete.
+
+Never duplicate what already exists.
+
+Never invent data.
+
+Never bypass authentication.
+
+Never trust client identity.
+
+Never hide failures.
+
+And do not declare the migration finished until the entire AfuChat product data flow has been audited, reconciled, and the resulting implementation has been deployed to the latest "afuchat-api" Worker.

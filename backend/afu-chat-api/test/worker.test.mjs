@@ -1223,3 +1223,603 @@ test("message endpoint requires a shared session and sanitizes database errors",
   assert.equal(payload.error, "Message could not be sent.");
   assert.equal(JSON.stringify(payload).includes("sensitive RLS policy details"), false);
 });
+
+test("message history uses the verified session, a fixed projection, and bounded cursors", async () => {
+  const token = "message-read-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const chatId = "123e4567-e89b-42d3-a456-426614174000";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let databaseRequest;
+  const rows = [{
+    id: "123e4567-e89b-42d3-a456-426614174010",
+    chat_id: chatId,
+    sender_id: userId,
+    encrypted_content: "ciphertext",
+    sent_at: "2026-10-07T12:00:00.000Z",
+    reply_to_message_id: null,
+    attachment_url: null,
+    attachment_type: null,
+    attachment_name: null,
+    attachment_size: null,
+    audio_url: null,
+    edited_at: null,
+  }];
+  globalThis.fetch = async (input, init) => {
+    databaseRequest = new Request(input, init);
+    return Response.json(rows);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/messages?chat_id=${chatId}&sender=others&after=2026-10-01T00%3A00%3A00.000Z&limit=50`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  const databaseUrl = new URL(databaseRequest.url);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { messages: rows });
+  assert.equal(databaseUrl.pathname, "/rest/v1/messages");
+  assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
+  assert.equal(databaseUrl.searchParams.get("sender_id"), `neq.${userId}`);
+  assert.equal(databaseUrl.searchParams.get("sent_at"), "gt.2026-10-01T00:00:00.000Z");
+  assert.equal(databaseUrl.searchParams.get("limit"), "50");
+  assert.equal(databaseUrl.searchParams.get("order"), "sent_at.desc");
+  assert.equal(databaseUrl.searchParams.has("select"), true);
+  assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(databaseRequest.headers.get("Accept-Profile"), "public");
+  assert.match(response.headers.get("Cache-Control"), /private, no-store/);
+});
+
+test("message history rejects arbitrary projections, malformed IDs, and missing sessions", async () => {
+  const env = makeEnv();
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+  const token = "message-read-invalid-session";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "123e4567-e89b-42d3-a456-426614174099" }, accessToken: token });
+
+  const invalidQuery = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages?chat_id=bad&select=*", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const unauthenticated = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/messages?chat_id=${excludedChatId}`),
+    makeEnv(401),
+  );
+
+  assert.equal(invalidQuery.status, 400);
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(databaseCalls, 0);
+});
+
+test("message count is exact and always derives the current sender from AfuAuth", async () => {
+  const token = "message-count-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const chatId = "123e4567-e89b-42d3-a456-426614174000";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let databaseRequest;
+  globalThis.fetch = async (input, init) => {
+    databaseRequest = new Request(input, init);
+    return new Response(null, {
+      status: 200,
+      headers: { "Content-Range": "0-0/17" },
+    });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/messages/count?chat_id=${chatId}&sender=others`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  const databaseUrl = new URL(databaseRequest.url);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { count: 17 });
+  assert.equal(databaseRequest.method, "HEAD");
+  assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
+  assert.equal(databaseUrl.searchParams.get("sender_id"), `neq.${userId}`);
+  assert.equal(databaseRequest.headers.get("Prefer"), "count=exact");
+  assert.equal(databaseRequest.headers.get("Range"), "0-0");
+  assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
+});
+
+test("message status reads and updates use the authenticated user, not caller identity", async () => {
+  const token = "message-status-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const chatId = "123e4567-e89b-42d3-a456-426614174000";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const databaseRequests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    databaseRequests.push(request);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/messages")) {
+      return Response.json([{ id: messageId }]);
+    }
+    if (request.method === "GET") {
+      return Response.json([{
+        message_id: messageId,
+        user_id: userId,
+        delivered_at: "2026-10-07T12:00:00.000Z",
+        read_at: "2026-10-07T12:00:01.000Z",
+      }]);
+    }
+    const rows = await request.json();
+    assert.equal(request.method, "POST");
+    assert.equal(request.headers.get("Prefer"), "resolution=merge-duplicates,return=minimal");
+    assert.deepEqual(rows.map((row) => row.user_id), [userId]);
+    assert.deepEqual(rows.map((row) => row.message_id), [messageId]);
+    assert.equal(typeof rows[0].delivered_at, "string");
+    assert.equal(typeof rows[0].read_at, "string");
+    return new Response(null, { status: 204 });
+  };
+
+  const read = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/messages/status?message_ids=${messageId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  const update = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/status", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        read_receipts: true,
+        expected_user_id: userId,
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(read.status, 200);
+  assert.deepEqual((await read.json()).statuses[0].message_id, messageId);
+  assert.equal(update.status, 200);
+  assert.deepEqual(await update.json(), { ok: true, updated: 1 });
+  assert.equal(databaseRequests.length, 3);
+  const targetQuery = new URL(databaseRequests[1].url);
+  assert.equal(targetQuery.searchParams.get("chat_id"), `eq.${chatId}`);
+  assert.equal(targetQuery.searchParams.get("sender_id"), `neq.${userId}`);
+  assert.equal(databaseRequests[1].headers.get("Authorization"), `Bearer ${token}`);
+});
+
+test("message status rejects spoofed owners and invalid batches before database access", async () => {
+  const token = "message-status-owner-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return new Response(null, { status: 204 });
+  };
+
+  const spoofed = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/status", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message_ids: [messageId], expected_user_id: excludedChatId }),
+    }),
+    env,
+  );
+  const invalidBatch = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/status", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message_ids: ["not-a-uuid"] }),
+    }),
+    env,
+  );
+
+  assert.equal(spoofed.status, 409);
+  assert.equal(invalidBatch.status, 400);
+  assert.equal(databaseCalls, 0);
+});
+
+test("message reactions use a fixed read shape and derive mutation ownership", async () => {
+  const token = "message-reactions-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const databaseRequests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    databaseRequests.push(request);
+    if (request.method === "GET") {
+      return Response.json([{ message_id: messageId, reaction: "💙", user_id: userId }]);
+    }
+    if (request.method === "POST") {
+      const body = await request.json();
+      assert.deepEqual(body, { message_id: messageId, user_id: userId, reaction: "💙" });
+      return new Response(null, { status: 201 });
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  const read = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/messages/reactions?message_ids=${messageId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  const add = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/reactions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message_id: messageId, reaction: "💙" }),
+    }),
+    env,
+  );
+  const remove = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/messages/reactions?message_id=${messageId}&reaction=%F0%9F%92%99&expected_user_id=${userId}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  const readUrl = new URL(databaseRequests[0].url);
+  const deleteUrl = new URL(databaseRequests[2].url);
+  assert.equal(read.status, 200);
+  assert.deepEqual((await read.json()).reactions[0], {
+    message_id: messageId,
+    reaction: "💙",
+    user_id: userId,
+  });
+  assert.equal(readUrl.searchParams.get("select"), "message_id,reaction,user_id");
+  assert.equal(add.status, 200);
+  assert.equal(remove.status, 200);
+  assert.equal(deleteUrl.searchParams.get("message_id"), `eq.${messageId}`);
+  assert.equal(deleteUrl.searchParams.get("user_id"), `eq.${userId}`);
+  assert.equal(databaseRequests[1].headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(databaseRequests.length, 3);
+});
+
+test("message edit history uses a fixed projection and the caller's Supabase session", async () => {
+  const token = "message-edit-history-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const editedAt = "2026-10-07T10:00:00.000Z";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let databaseRequest;
+  globalThis.fetch = async (input, init) => {
+    databaseRequest = new Request(input, init);
+    return Response.json([{ id: "edit-1", previous_content: "old text", edited_at: editedAt }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/messages/edit-history?message_id=${messageId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  const query = new URL(databaseRequest.url).searchParams;
+  const history = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(query.get("select"), "id,previous_content,edited_at");
+  assert.equal(query.get("message_id"), `eq.${messageId}`);
+  assert.equal(query.get("order"), "edited_at.desc");
+  assert.equal(query.get("limit"), "100");
+  assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.deepEqual(history.history, [
+    { id: "edit-1", previous_content: "old text", edited_at: editedAt },
+  ]);
+});
+
+test("message edit derives ownership and records the previous text", async () => {
+  const token = "message-edit-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const original = {
+    id: messageId,
+    sender_id: userId,
+    encrypted_content: "before",
+    sent_at: new Date().toISOString(),
+  };
+  let updated;
+  let patch;
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.method === "GET") return Response.json([original]);
+    if (request.method === "PATCH") {
+      patch = await request.json();
+      updated = {
+        ...original,
+        chat_id: "123e4567-e89b-42d3-a456-426614174000",
+        ...patch,
+        reply_to_message_id: null,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null,
+        audio_url: null,
+      };
+      return Response.json([updated]);
+    }
+    if (request.method === "POST") return new Response(null, { status: 201 });
+    throw new Error(`Unexpected request ${request.method}`);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/edit", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message_id: messageId,
+        encrypted_content: "after",
+        expected_user_id: userId,
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { message: updated, history_saved: true });
+  assert.equal(requests.length, 3);
+  assert.equal(new URL(requests[0].url).searchParams.get("sender_id"), `eq.${userId}`);
+  assert.equal(new URL(requests[1].url).searchParams.get("sender_id"), `eq.${userId}`);
+  assert.equal(requests[1].method, "PATCH");
+  assert.equal(requests[2].method, "POST");
+  const historyInsert = await requests[2].json();
+  assert.deepEqual(historyInsert, {
+    message_id: messageId,
+    edited_by: userId,
+    previous_content: "before",
+    edited_at: patch.edited_at,
+  });
+  assert.equal(requests.every((request) =>
+    request.headers.get("Authorization") === `Bearer ${token}`
+  ), true);
+});
+
+test("expired message edits are rejected before update or history writes", async () => {
+  const token = "message-edit-expired-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([{
+      id: messageId,
+      sender_id: userId,
+      encrypted_content: "before",
+      sent_at: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+    }]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/edit", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message_id: messageId, encrypted_content: "after" }),
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.match(payload.error, /within 15 minutes/);
+  assert.equal(databaseCalls, 1);
+});
+
+test("message delete and report mutations derive their owner from AfuAuth", async () => {
+  const token = "message-actions-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.method === "DELETE") return Response.json([{ id: messageId }]);
+    return new Response(null, { status: 201 });
+  };
+
+  const deleted = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/delete", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ message_id: messageId, expected_user_id: userId }),
+    }),
+    env,
+  );
+  const reported = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/report", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message_id: messageId,
+        reason: "Spam",
+        message_content: "reported text",
+        reporter_id: "attacker-value",
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(deleted.status, 200);
+  assert.deepEqual(await deleted.json(), { deleted: true });
+  assert.equal(new URL(requests[0].url).searchParams.get("sender_id"), `eq.${userId}`);
+  assert.equal(requests[0].method, "DELETE");
+  assert.equal(reported.status, 400);
+  assert.equal(requests.length, 1);
+
+  const validReport = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/report", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message_id: messageId,
+        reason: "Spam",
+        message_content: "reported text",
+        expected_user_id: userId,
+      }),
+    }),
+    env,
+  );
+  assert.equal(validReport.status, 200);
+  assert.deepEqual(await requests[1].json(), {
+    reporter_id: userId,
+    message_id: messageId,
+    reason: "Spam",
+    message_content: "reported text",
+  });
+});
+
+test("saving a starred message derives the saved owner and message fields server-side", async () => {
+  const token = "starred-message-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const senderId = "123e4567-e89b-42d3-a456-426614174011";
+  const chatId = "123e4567-e89b-42d3-a456-426614174000";
+  const messageId = "123e4567-e89b-42d3-a456-426614174010";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const path = new URL(request.url).pathname;
+    if (path.endsWith("/messages")) {
+      return Response.json([{
+        id: messageId,
+        chat_id: chatId,
+        sender_id: senderId,
+        encrypted_content: "GIF",
+        attachment_url: "https://media.example.test/gif",
+        attachment_type: "gif",
+      }]);
+    }
+    if (path.endsWith("/profiles")) {
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      return Response.json([{ id: senderId, display_name: "Sender", avatar_url: null }]);
+    }
+    if (path.endsWith("/starred_messages")) return new Response(null, { status: 201 });
+    throw new Error(`Unexpected request ${path}`);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/starred", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ message_id: messageId }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { saved: true });
+  assert.equal(requests.length, 3);
+  assert.equal(new URL(requests[0].url).searchParams.get("select"), "id,chat_id,sender_id,encrypted_content,attachment_url,attachment_type");
+  assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
+  assert.deepEqual(await requests[2].json(), {
+    user_id: userId,
+    message_id: messageId,
+    chat_id: chatId,
+    content: "GIF",
+    sender_id: senderId,
+    sender_name: "Sender",
+    sender_avatar: null,
+    attachment_url: "https://media.example.test/gif",
+    attachment_type: "gif",
+  });
+});
+
+test("clear chat history is scoped to the verified member and only their messages", async () => {
+  const token = "clear-chat-history-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const chatIds = [
+    "123e4567-e89b-42d3-a456-426614174000",
+    "123e4567-e89b-42d3-a456-426614174001",
+  ];
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.method === "GET") {
+      return Response.json(chatIds.map((chat_id) => ({ chat_id })));
+    }
+    return new Response(null, { status: 204 });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/messages/clear", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ archive: true, expected_user_id: userId }),
+    }),
+    env,
+  );
+  const membershipQuery = new URL(requests[0].url).searchParams;
+  const updateQuery = new URL(requests[1].url).searchParams;
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, archive: true, chats: 2 });
+  assert.equal(membershipQuery.get("user_id"), `eq.${userId}`);
+  assert.equal(membershipQuery.get("limit"), "1000");
+  assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(requests[1].method, "PATCH");
+  assert.equal(updateQuery.get("chat_id"), `in.(${chatIds.join(",")})`);
+  assert.equal(updateQuery.get("sender_id"), `eq.${userId}`);
+  assert.deepEqual(await requests[1].json(), { is_archived: true });
+  assert.equal(requests[1].headers.get("Authorization"), `Bearer ${token}`);
+});

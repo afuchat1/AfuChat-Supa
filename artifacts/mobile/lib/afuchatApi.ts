@@ -174,10 +174,10 @@ export function createAfuChatClientMessageId(): string {
 
 export async function postAfuChatMessage(
   body: AfuChatCreateMessageInput,
-): Promise<{ data: { id: string } | null; error: AfuChatApiError | null }> {
+): Promise<{ data: AfuChatMessage | null; error: AfuChatApiError | null }> {
   try {
     const { response, data: payload } = await afuChatApiJson<{
-      message?: { id?: unknown };
+      message?: unknown;
       error?: unknown;
       request_id?: unknown;
     }>("/messages", body);
@@ -196,16 +196,577 @@ export async function postAfuChatMessage(
         },
       };
     }
-    if (!payload || typeof payload.message?.id !== "string") {
+    if (!isAfuChatMessage(payload?.message)) {
       return {
         data: null,
         error: { message: "Chat service returned an invalid message.", code: "INVALID_RESPONSE" },
       };
     }
-    return { data: { id: payload.message.id }, error: null };
+    return { data: payload.message, error: null };
   } catch (error) {
     return {
       data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export type AfuChatMessageQuery = {
+  chatId: string;
+  limit?: number;
+  before?: string;
+  after?: string;
+  messageId?: string;
+  sender?: "me" | "others";
+};
+
+export type AfuChatMessage = {
+  id: string;
+  chat_id: string;
+  sender_id: string;
+  encrypted_content: string;
+  sent_at: string;
+  reply_to_message_id: string | null;
+  attachment_url: string | null;
+  attachment_type: string | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  audio_url: string | null;
+  edited_at: string | null;
+};
+
+function isOptionalMessageText(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isAfuChatMessage(value: unknown): value is AfuChatMessage {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "string" &&
+    typeof row.chat_id === "string" &&
+    typeof row.sender_id === "string" &&
+    typeof row.encrypted_content === "string" &&
+    typeof row.sent_at === "string" &&
+    isOptionalMessageText(row.reply_to_message_id) &&
+    isOptionalMessageText(row.attachment_url) &&
+    isOptionalMessageText(row.attachment_type) &&
+    isOptionalMessageText(row.attachment_name) &&
+    (row.attachment_size === null ||
+      (Number.isSafeInteger(row.attachment_size) && Number(row.attachment_size) >= 0)) &&
+    isOptionalMessageText(row.audio_url) &&
+    isOptionalMessageText(row.edited_at);
+}
+
+export async function getAfuChatMessages(
+  query: AfuChatMessageQuery,
+): Promise<{ data: AfuChatMessage[] | null; error: AfuChatApiError | null }> {
+  try {
+    const params = new URLSearchParams({ chat_id: query.chatId });
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    if (query.before) params.set("before", query.before);
+    if (query.after) params.set("after", query.after);
+    if (query.messageId) params.set("message_id", query.messageId);
+    if (query.sender) params.set("sender", query.sender);
+    const response = await afuChatApiFetch(`/messages?${params.toString()}`, { method: "GET" });
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      const record = payload && typeof payload === "object"
+        ? payload as Record<string, unknown>
+        : null;
+      return {
+        data: null,
+        error: {
+          message: typeof record?.error === "string"
+            ? record.error
+            : `Messages could not be loaded (HTTP ${response.status})`,
+          code: String(response.status),
+          requestId: typeof record?.request_id === "string"
+            ? record.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    const rows = payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>).messages
+      : null;
+    if (!Array.isArray(rows) || !rows.every(isAfuChatMessage)) {
+      return {
+        data: null,
+        error: { message: "Chat service returned an invalid message response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: rows, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatMessageCount(query: {
+  chatId?: string;
+  sender?: "me" | "others";
+  expectedUserId?: string;
+} = {}): Promise<{ data: number | null; error: AfuChatApiError | null }> {
+  try {
+    const params = new URLSearchParams();
+    if (query.chatId) params.set("chat_id", query.chatId);
+    if (query.sender) params.set("sender", query.sender);
+    if (query.expectedUserId) params.set("expected_user_id", query.expectedUserId);
+    const queryString = params.toString();
+    const suffix = queryString ? `?${queryString}` : "";
+    const { response, data } = await afuChatApiJson<{ count?: unknown }>(
+      `/messages/count${suffix}`,
+    );
+    if (!response.ok) {
+      const record = data && typeof data === "object"
+        ? data as Record<string, unknown>
+        : null;
+      return {
+        data: null,
+        error: {
+          message: typeof record?.error === "string"
+            ? record.error
+            : `Message count could not be loaded (HTTP ${response.status})`,
+          code: String(response.status),
+          requestId: typeof record?.request_id === "string"
+            ? record.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    if (!Number.isSafeInteger(data?.count) || Number(data?.count) < 0) {
+      return {
+        data: null,
+        error: { message: "Chat service returned an invalid message count.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: Number(data?.count), error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export type AfuChatMessageStatus = {
+  message_id: string;
+  user_id: string;
+  read_at: string | null;
+  delivered_at: string | null;
+};
+
+async function messageActionError(
+  response: Response,
+  payload: unknown,
+  fallback: string,
+): Promise<AfuChatApiError> {
+  const record = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : null;
+  return {
+    message: typeof record?.error === "string"
+      ? record.error
+      : `${fallback} (HTTP ${response.status})`,
+    code: String(response.status),
+    requestId: typeof record?.request_id === "string"
+      ? record.request_id
+      : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+  };
+}
+
+export async function getAfuChatMessageStatuses(messageIds: string[]): Promise<{
+  data: AfuChatMessageStatus[] | null;
+  error: AfuChatApiError | null;
+}> {
+  if (messageIds.length === 0) return { data: [], error: null };
+  const uniqueIds = [...new Set(messageIds)];
+  if (uniqueIds.length > 100) {
+    const combined: AfuChatMessageStatus[] = [];
+    for (let index = 0; index < uniqueIds.length; index += 100) {
+      const batch = await getAfuChatMessageStatuses(uniqueIds.slice(index, index + 100));
+      if (batch.error || !batch.data) return batch;
+      combined.push(...batch.data);
+    }
+    return { data: combined, error: null };
+  }
+  try {
+    const query = new URLSearchParams({ message_ids: uniqueIds.join(",") });
+    const { response, data } = await afuChatApiJson<{ statuses?: unknown }>(
+      `/messages/status?${query.toString()}`,
+    );
+    if (!response.ok) {
+      return {
+        data: null,
+        error: await messageActionError(response, data, "Message status could not be loaded"),
+      };
+    }
+    if (!Array.isArray(data?.statuses)) {
+      return {
+        data: null,
+        error: { message: "Chat service returned an invalid status response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: data.statuses as AfuChatMessageStatus[], error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function setAfuChatMessageStatus(input: {
+  messageIds?: string[];
+  chatId?: string;
+  readReceipts?: boolean;
+  expectedUserId?: string;
+}): Promise<{ error: AfuChatApiError | null }> {
+  const messageIds = input.messageIds ? [...new Set(input.messageIds)] : undefined;
+  if (messageIds && messageIds.length > 100) {
+    for (let index = 0; index < messageIds.length; index += 100) {
+      const result = await setAfuChatMessageStatus({
+        messageIds: messageIds.slice(index, index + 100),
+        readReceipts: input.readReceipts,
+        expectedUserId: input.expectedUserId,
+      });
+      if (result.error) return result;
+    }
+    return { error: null };
+  }
+  try {
+    const { response, data } = await afuChatApiJson<{ ok?: unknown }>(
+      "/messages/status",
+      {
+        ...(messageIds ? { message_ids: messageIds } : {}),
+        ...(input.chatId ? { chat_id: input.chatId } : {}),
+        ...(input.readReceipts === undefined ? {} : { read_receipts: input.readReceipts }),
+        ...(input.expectedUserId ? { expected_user_id: input.expectedUserId } : {}),
+      },
+    );
+    if (!response.ok) {
+      return {
+        error: await messageActionError(response, data, "Message status could not be updated"),
+      };
+    }
+    if (data?.ok !== true) {
+      return {
+        error: { message: "Chat service returned an invalid status response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { error: null };
+  } catch (error) {
+    return {
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export type AfuChatMessageReaction = {
+  message_id: string;
+  reaction: string;
+  user_id: string;
+};
+
+export async function getAfuChatMessageReactions(messageIds: string[]): Promise<{
+  data: AfuChatMessageReaction[] | null;
+  error: AfuChatApiError | null;
+}> {
+  if (messageIds.length === 0) return { data: [], error: null };
+  const uniqueIds = [...new Set(messageIds)];
+  if (uniqueIds.length > 100) {
+    const combined: AfuChatMessageReaction[] = [];
+    for (let index = 0; index < uniqueIds.length; index += 100) {
+      const batch = await getAfuChatMessageReactions(uniqueIds.slice(index, index + 100));
+      if (batch.error || !batch.data) return batch;
+      combined.push(...batch.data);
+    }
+    return { data: combined, error: null };
+  }
+  try {
+    const query = new URLSearchParams({ message_ids: uniqueIds.join(",") });
+    const { response, data } = await afuChatApiJson<{ reactions?: unknown }>(
+      `/messages/reactions?${query.toString()}`,
+    );
+    if (!response.ok) {
+      return {
+        data: null,
+        error: await messageActionError(response, data, "Message reactions could not be loaded"),
+      };
+    }
+    if (!Array.isArray(data?.reactions)) {
+      return {
+        data: null,
+        error: { message: "Chat service returned an invalid reaction response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: data.reactions as AfuChatMessageReaction[], error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function setAfuChatMessageReaction(input: {
+  messageId: string;
+  reaction: string;
+  active: boolean;
+  expectedUserId?: string;
+}): Promise<{ error: AfuChatApiError | null }> {
+  try {
+    const expected = input.expectedUserId
+      ? `&expected_user_id=${encodeURIComponent(input.expectedUserId)}`
+      : "";
+    const response = input.active
+      ? await afuChatApiFetch("/messages/reactions", {
+          method: "POST",
+          body: JSON.stringify({
+            message_id: input.messageId,
+            reaction: input.reaction,
+            ...(input.expectedUserId ? { expected_user_id: input.expectedUserId } : {}),
+          }),
+        })
+      : await afuChatApiFetch(
+          `/messages/reactions?message_id=${encodeURIComponent(input.messageId)}&reaction=${encodeURIComponent(input.reaction)}${expected}`,
+          { method: "DELETE" },
+        );
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      return {
+        error: await messageActionError(response, payload, "Message reaction could not be updated"),
+      };
+    }
+    const record = payload && typeof payload === "object"
+      ? payload as Record<string, unknown>
+      : null;
+    if (record?.reacted !== input.active) {
+      return {
+        error: { message: "Chat service returned an invalid reaction response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { error: null };
+  } catch (error) {
+    return {
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export type AfuChatMessageEditHistory = {
+  id: string;
+  previous_content: string;
+  edited_at: string;
+};
+
+export async function getAfuChatMessageEditHistory(messageId: string): Promise<{
+  data: AfuChatMessageEditHistory[] | null;
+  error: AfuChatApiError | null;
+}> {
+  try {
+    const query = new URLSearchParams({ message_id: messageId });
+    const { response, data } = await afuChatApiJson<{ history?: unknown }>(
+      `/messages/edit-history?${query.toString()}`,
+    );
+    if (!response.ok) {
+      return {
+        data: null,
+        error: await messageActionError(response, data, "Edit history could not be loaded"),
+      };
+    }
+    if (!Array.isArray(data?.history) || !data.history.every((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+      const row = item as Record<string, unknown>;
+      return typeof row.id === "string" &&
+        typeof row.previous_content === "string" &&
+        typeof row.edited_at === "string";
+    })) {
+      return {
+        data: null,
+        error: { message: "Chat service returned invalid edit history.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { data: data.history as AfuChatMessageEditHistory[], error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function editAfuChatMessage(input: {
+  messageId: string;
+  encryptedContent: string;
+  expectedUserId?: string;
+}): Promise<{
+  data: { message: AfuChatMessage; historySaved: boolean } | null;
+  error: AfuChatApiError | null;
+}> {
+  try {
+    const { response, data } = await afuChatApiJson<{
+      message?: unknown;
+      history_saved?: unknown;
+    }>("/messages/edit", {
+      message_id: input.messageId,
+      encrypted_content: input.encryptedContent,
+      ...(input.expectedUserId ? { expected_user_id: input.expectedUserId } : {}),
+    });
+    if (!response.ok) {
+      return {
+        data: null,
+        error: await messageActionError(response, data, "Message could not be edited"),
+      };
+    }
+    if (!isAfuChatMessage(data?.message) || typeof data.history_saved !== "boolean") {
+      return {
+        data: null,
+        error: { message: "Chat service returned an invalid edit response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return {
+      data: { message: data.message, historySaved: data.history_saved },
+      error: null,
+    };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+async function postMessageAction(
+  path: string,
+  body: Record<string, unknown>,
+  responseKey: "deleted" | "submitted" | "saved",
+  fallback: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  try {
+    const { response, data } = await afuChatApiJson<Record<string, unknown>>(path, body);
+    if (!response.ok) {
+      return { error: await messageActionError(response, data, fallback) };
+    }
+    if (data?.[responseKey] !== true) {
+      return {
+        error: { message: "Chat service returned an invalid response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { error: null };
+  } catch (error) {
+    return {
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export function deleteAfuChatMessage(
+  messageId: string,
+  expectedUserId?: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  return postMessageAction(
+    "/messages/delete",
+    {
+      message_id: messageId,
+      ...(expectedUserId ? { expected_user_id: expectedUserId } : {}),
+    },
+    "deleted",
+    "Message could not be deleted",
+  );
+}
+
+export function reportAfuChatMessage(input: {
+  messageId: string;
+  reason: string;
+  messageContent: string;
+  expectedUserId?: string;
+}): Promise<{ error: AfuChatApiError | null }> {
+  return postMessageAction(
+    "/messages/report",
+    {
+      message_id: input.messageId,
+      reason: input.reason,
+      message_content: input.messageContent.slice(0, 500),
+      ...(input.expectedUserId ? { expected_user_id: input.expectedUserId } : {}),
+    },
+    "submitted",
+    "Message report could not be submitted",
+  );
+}
+
+export function starAfuChatMessage(
+  messageId: string,
+  expectedUserId?: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  return postMessageAction(
+    "/messages/starred",
+    {
+      message_id: messageId,
+      ...(expectedUserId ? { expected_user_id: expectedUserId } : {}),
+    },
+    "saved",
+    "Message could not be saved",
+  );
+}
+
+export async function clearAfuChatHistory(input: {
+  archive: boolean;
+  expectedUserId?: string;
+}): Promise<{ error: AfuChatApiError | null }> {
+  try {
+    const { response, data } = await afuChatApiJson<{
+      ok?: unknown;
+      archive?: unknown;
+    }>("/messages/clear", {
+      archive: input.archive,
+      ...(input.expectedUserId ? { expected_user_id: input.expectedUserId } : {}),
+    });
+    if (!response.ok) {
+      return {
+        error: await messageActionError(response, data, "Chat history could not be cleared"),
+      };
+    }
+    if (data?.ok !== true || data.archive !== input.archive) {
+      return {
+        error: { message: "Chat service returned an invalid clear-history response.", code: "INVALID_RESPONSE" },
+      };
+    }
+    return { error: null };
+  } catch (error) {
+    return {
       error: {
         message: error instanceof Error ? error.message : "Chat service is unavailable.",
         code: "NETWORK_ERROR",

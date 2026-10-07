@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { getAfuChatMessageCount } from "@/lib/afuchatApi";
 import { askAi } from "@/lib/aiHelper";
 import { buildNavigationContext, ACTION_ROUTES_GUIDE } from "@/lib/platformKnowledge";
 
@@ -29,11 +30,12 @@ async function _ensureAfuAiChatInner(userId: string, displayName?: string): Prom
 
     // Quick pre-check to avoid an unnecessary AI call when the message already exists.
     // The real guard is the atomic DB function below — this just saves an LLM round-trip.
-    const { count } = await supabase
-      .from("messages")
-      .select("id", { count: "exact", head: true })
-      .eq("chat_id", chatId);
+    const { data: count, error: countError } = await getAfuChatMessageCount({
+      chatId,
+      expectedUserId: userId,
+    });
 
+    if (countError || count === null) return;
     if ((count ?? 0) > 0) return;
 
     const name = displayName || "there";

@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassHeader } from "@/components/ui/GlassHeader";
+import { clearAfuChatHistory } from "@/lib/afuchatApi";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -69,29 +70,11 @@ export default function ChatSettingsScreen() {
             if (!user) return;
             setClearing(true);
             try {
-              const { data: memberRows, error: memberError } = await supabase
-                .from("chat_members")
-                .select("chat_id")
-                .eq("user_id", user.id);
-              if (memberError) throw memberError;
-              if (memberRows && memberRows.length > 0) {
-                const chatIds = memberRows.map((r) => r.chat_id);
-                if (prefs.archive_on_delete) {
-                  const { error } = await supabase
-                    .from("messages")
-                    .update({ is_archived: true })
-                    .in("chat_id", chatIds)
-                    .eq("sender_id", user.id);
-                  if (error) throw error;
-                } else {
-                  const { error } = await supabase
-                    .from("messages")
-                    .delete()
-                    .in("chat_id", chatIds)
-                    .eq("sender_id", user.id);
-                  if (error) throw error;
-                }
-              }
+              const { error } = await clearAfuChatHistory({
+                archive: prefs.archive_on_delete,
+                expectedUserId: user.id,
+              });
+              if (error) throw error;
               showAlert("Done", prefs.archive_on_delete ? "Your messages have been archived." : "All chat history has been cleared.");
             } catch (e: any) {
               showAlert("Error", e?.message || "Failed to clear chats");

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { getAfuChatMessageCount } from "@/lib/afuchatApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ const RANK_TIERS = [
 type Stats = {
   posts: number;
   stories: number;
-  messages: number;
+  messages: number | null;
 };
 
 async function fetchStats(userId: string): Promise<Stats> {
@@ -84,19 +85,20 @@ async function fetchStats(userId: string): Promise<Stats> {
     try { return await p; } catch { return fallback; }
   };
 
-  const [posts, stories, messages] = await Promise.all([
+  const [posts, stories, messageCount] = await Promise.all([
     safe(
       supabase.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId)
         .then(r => r.count ?? 0), 0),
     safe(
       supabase.from("stories").select("id", { count: "exact", head: true }).eq("user_id", userId)
         .then(r => r.count ?? 0), 0),
-    safe(
-      supabase.from("messages").select("id", { count: "exact", head: true }).eq("sender_id", userId)
-        .then(r => r.count ?? 0), 0),
+    getAfuChatMessageCount({ sender: "me", expectedUserId: userId }),
   ]);
 
-  return { posts, stories, messages };
+  if (messageCount.error || messageCount.data === null) {
+    throw new Error(messageCount.error?.message ?? "Message count is unavailable.");
+  }
+  return { posts, stories, messages: messageCount.data };
 }
 
 // ─── Achievement definitions ──────────────────────────────────────────────────
@@ -143,11 +145,11 @@ function buildAchievements(profile: any, isPremium: boolean, stats: Stats): Achi
     mk("stories_100", "Director's Cut",    "Posted 100 stories",                 "A true storyteller",                  "videocam",       "Creator", "epic",      1_000,  stories >= 100, Math.min(stories, 100), 100),
 
     // ── Messenger ────────────────────────────────────────────────────────────
-    mk("msg_1",     "Ice Breaker",        "Sent your first message",            "Start a conversation with anyone",    "chatbubble",      "Messenger", "common",    50,     messages >= 1,     Math.min(messages, 1),     1),
-    mk("msg_50",    "Chatterbox",         "Sent 50 messages",                   "Keep the conversations going",        "chatbubbles",     "Messenger", "common",    100,    messages >= 50,    Math.min(messages, 50),    50),
-    mk("msg_500",   "Social Butterfly",   "Sent 500 messages",                  "You love to chat!",                   "chatbubbles",     "Messenger", "rare",      300,    messages >= 500,   Math.min(messages, 500),   500),
-    mk("msg_2k",    "Talk of the Town",   "Sent 2,000 messages",                "One of AfuChat's most active chatters","mic",            "Messenger", "epic",      1_000,  messages >= 2_000, Math.min(messages, 2_000), 2_000),
-    mk("msg_10k",   "Motormouth",         "Sent 10,000 messages",               "You never stop talking. We love it", "radio",           "Messenger", "legendary", 5_000,  messages >= 10_000,Math.min(messages, 10_000),10_000),
+    mk("msg_1",     "Ice Breaker",        "Sent your first message",            "Start a conversation with anyone",    "chatbubble",      "Messenger", "common",    50,     messages !== null && messages >= 1,      messages === null ? undefined : Math.min(messages, 1),       1),
+    mk("msg_50",    "Chatterbox",         "Sent 50 messages",                   "Keep the conversations going",        "chatbubbles",     "Messenger", "common",    100,    messages !== null && messages >= 50,     messages === null ? undefined : Math.min(messages, 50),      50),
+    mk("msg_500",   "Social Butterfly",   "Sent 500 messages",                  "You love to chat!",                   "chatbubbles",     "Messenger", "rare",      300,    messages !== null && messages >= 500,    messages === null ? undefined : Math.min(messages, 500),     500),
+    mk("msg_2k",    "Talk of the Town",   "Sent 2,000 messages",                "One of AfuChat's most active chatters","mic",            "Messenger", "epic",      1_000,  messages !== null && messages >= 2_000, messages === null ? undefined : Math.min(messages, 2_000),  2_000),
+    mk("msg_10k",   "Motormouth",         "Sent 10,000 messages",               "You never stop talking. We love it", "radio",           "Messenger", "legendary", 5_000,  messages !== null && messages >= 10_000,messages === null ? undefined : Math.min(messages, 10_000), 10_000),
 
     // ── Wallet ───────────────────────────────────────────────────────────────
     mk("coins_1",    "First Coins",       "Earned your first ACoins",           "Complete any action that rewards ACoins","cash",          "Wallet", "common",    50,     acoin >= 1,      Math.min(acoin, 1),      1),
@@ -549,14 +551,22 @@ export default function AchievementsScreen() {
 
   const [selectedCategory, setSelectedCategory] = useState<Category>("All");
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
-  const [stats, setStats] = useState<Stats>({ posts: 0, stories: 0, messages: 0 });
+  const [stats, setStats] = useState<Stats>({ posts: 0, stories: 0, messages: null });
   const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) { setLoadingStats(false); return; }
+    setLoadingStats(true);
+    setStatsError(null);
     fetchStats(user.id)
       .then(s => { setStats(s); setLoadingStats(false); })
-      .catch(() => setLoadingStats(false));
+      .catch((error) => {
+        console.warn("[Achievements] stats request failed", error);
+        setStats((previous) => ({ ...previous, messages: null }));
+        setStatsError("Message achievement progress is unavailable right now.");
+        setLoadingStats(false);
+      });
   }, [user?.id]);
 
   const achievements = useMemo(
@@ -588,6 +598,11 @@ export default function AchievementsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 + insets.bottom }}>
         {/* Hero */}
         <HeroCard achievements={achievements} />
+        {statsError && (
+          <Text style={{ marginHorizontal: 16, marginTop: 10, color: colors.textSecondary, fontSize: 13 }}>
+            {statsError}
+          </Text>
+        )}
 
         {/* Almost There */}
         <AlmostThere achievements={achievements} onPress={setSelectedAchievement} />

@@ -4,7 +4,12 @@
 
 import { getDB } from "./db";
 import { supabase } from "@/lib/supabase";
-import { postAfuChatMessage, setAfuChatBookmark } from "@/lib/afuchatApi";
+import {
+  postAfuChatMessage,
+  setAfuChatBookmark,
+  setAfuChatMessageReaction,
+  setAfuChatMessageStatus,
+} from "@/lib/afuchatApi";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export type QueueActionType =
@@ -156,25 +161,21 @@ async function executeAction(
           ? payload.message_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
           : [];
         if (messageIds.length === 0) return true;
-        const now = new Date().toISOString();
-        const rows = messageIds.map((messageId) => ({
-          message_id: messageId,
-          user_id: payload.user_id,
-          delivered_at: now,
-          ...(payload.read_receipts !== false ? { read_at: now } : {}),
-        }));
-        const { error } = await supabase
-          .from("message_status")
-          .upsert(rows, { onConflict: "message_id,user_id" });
-        return !error;
+        const { error } = await setAfuChatMessageStatus({
+          messageIds,
+          expectedUserId: payload.user_id,
+          readReceipts: payload.read_receipts !== false,
+        });
+        return !error || error.code === "409";
       }
       case "add_reaction": {
-        const { error } = await supabase.from("message_reactions").insert({
-          message_id: payload.message_id,
-          user_id: payload.user_id,
-          emoji: payload.emoji,
+        const { error } = await setAfuChatMessageReaction({
+          messageId: payload.message_id,
+          reaction: payload.emoji,
+          active: true,
+          expectedUserId: payload.user_id,
         });
-        return !error;
+        return !error || error.code === "409";
       }
       case "send_message": {
         // Pending messages are primarily tracked via the SQLite messages table
@@ -195,7 +196,7 @@ async function executeAction(
         const { data, error } = await postAfuChatMessage({
           chat_id: msg.conversation_id,
           client_message_id: msg.id,
-          encrypted_content: msg.content,
+          encrypted_content: msg.content ?? "",
           expected_user_id: msg.sender_id,
         });
         if (!error && data?.id) {
