@@ -1,25 +1,16 @@
 ---
-name: Shared Supabase auth cookie between afuchat.com and web.afuchat.com
-description: How the mobile app's web export shares login state with the marketing site via a cookie-scoped Supabase client.
+name: Web Supabase auth storage
+description: The earlier shared-cookie note no longer matches the active mobile web client.
 ---
 
-On web (Platform.OS === "web"), `artifacts/mobile/lib/supabase.ts` uses
-`createBrowserClient` from `@supabase/ssr` instead of `createClient` +
-AsyncStorage, with `cookieOptions.domain` set to `.afuchat.com` only when
-`window.location.hostname` is `afuchat.com` or ends with `.afuchat.com`
-(checked via `isProdHost()`). Native (iOS/Android) is unaffected — it still
-uses `createClient` with AsyncStorage.
+The older shared `.afuchat.com` cookie implementation note is stale. The current
+mobile web client uses `createClient` with a `localStorage`-backed storage
+adapter; whether cross-subdomain session sharing is still an intended product
+requirement has not been verified.
 
-**Why:** the marketing site (`artifacts/afuchat-website`) already writes its
-Supabase session to a `.afuchat.com`-scoped cookie so a logged-in user sees
-"Open App" instead of Login/Sign Up. Without matching cookie options on this
-app's web build, sessions would live in separate `localStorage` per
-subdomain and never be visible to each other.
+**Why:** The active client source and the previous memory entry conflict, so
+future debugging must not assume cookie sharing is implemented.
 
-**How to apply:** any future change to Supabase auth config in
-`lib/supabase.ts` must keep the web-only cookie path in sync with
-`artifacts/afuchat-website/src/lib/supabase.ts` (same `sameSite`, `secure`,
-and domain-detection logic) or shared login breaks silently — no error, just
-two disconnected sessions. Also keep `@supabase/supabase-js` at a version
-satisfying `@supabase/ssr`'s peer dependency range (was bumped to `^2.108.0`
-for `@supabase/ssr@0.12.0`) to avoid unsupported version drift.
+**How to apply:** Check the current client configuration before investigating
+web session sharing, and confirm the desired cross-subdomain behavior before
+restoring or removing it.

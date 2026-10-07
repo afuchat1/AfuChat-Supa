@@ -169,7 +169,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const [{ data: profileData }, { data: subData }, { data: goodsData }] = await Promise.all([
+      const [
+        { data: profileData, error: profileError },
+        { data: subData, error: subscriptionError },
+        { data: goodsData, error: goodsError },
+      ] = await Promise.all([
         supabase
           .from("profiles")
           .select(
@@ -179,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single(),
         supabase
           .from("user_subscriptions")
-          .select("id, plan_id, started_at, expires_at, is_active, acoin_paid, subscription_plans(name, tier, features)")
+          .select("id, plan_id, started_at, expires_at, is_active, acoin_paid")
           .eq("user_id", userId)
           .eq("is_active", true)
           .gte("expires_at", new Date().toISOString())
@@ -193,6 +197,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq("equipped", true),
       ]);
 
+      if (!isCurrent()) return null;
+
+      if (profileError) {
+        console.warn("[AuthContext] Profile fetch failed", {
+          code: profileError.code,
+          message: profileError.message,
+        });
+        const cached = await getCachedProfile();
+        const ownedCached =
+          cached?.id === userId ? cached : await getLocalProfile(userId);
+        if (!isCurrent()) return null;
+        if (ownedCached?.id === userId) setProfile(ownedCached as Profile);
+        return ownedCached?.id === userId ? (ownedCached as Profile) : null;
+      }
+
+      if (subscriptionError) {
+        console.warn("[AuthContext] Subscription fetch failed", {
+          code: subscriptionError.code,
+          message: subscriptionError.message,
+        });
+      }
+      if (goodsError) {
+        console.warn("[AuthContext] Equipped goods fetch failed", {
+          code: goodsError.code,
+          message: goodsError.message,
+        });
+      }
+
+      let subscriptionPlanData: any = null;
+      if (subData?.plan_id) {
+        const { data, error } = await supabase
+          .from("subscription_plans")
+          .select("name, tier, features")
+          .eq("id", subData.plan_id)
+          .maybeSingle();
+        subscriptionPlanData = data;
+        if (error) {
+          console.warn("[AuthContext] Subscription plan fetch failed", {
+            code: error.code,
+            message: error.message,
+          });
+        }
+      }
       if (!isCurrent()) return null;
 
       if (profileData) {
@@ -210,7 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (subData) {
-        const plan = (subData as any).subscription_plans;
+        const plan = subscriptionPlanData;
         setSubscription({
           id: subData.id,
           plan_id: subData.plan_id,
@@ -1025,7 +1072,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
       )
-      .subscribe();
+      .subscribe((status, error) => {
+        if (status === "SUBSCRIBED") {
+          console.info("[AuthContext] Profile realtime subscribed");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[AuthContext] Profile realtime unavailable", {
+            status,
+            message: error?.message,
+          });
+        }
+      });
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 

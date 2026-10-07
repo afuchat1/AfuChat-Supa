@@ -51,7 +51,7 @@
 - [Navigation responsiveness](navigation-responsiveness.md) — navigation throttling exists in both the router patch and navUtils/SafePressable; tune both layers together to avoid hidden tap delays.
 - [AfuChat OAuth Provider](oauth-provider.md) — OAuth 2.0 + OIDC server in Express. Routes at /api/oauth/*. DB migration 20260622_oauth_provider.sql. Needs SUPABASE_ANON_KEY + OAUTH_SESSION_SECRET in Replit secrets. Dev portal at /api/oauth/developer.
 - [app_settings secrets architecture](app-settings-secrets.md) — All API server secrets in Supabase app_settings (bootstrapped at startup); only SUPABASE_SERVICE_ROLE_KEY + SUPABASE_ACCESS_TOKEN stay in Replit. data-export fn is named export-user-data on Supabase.
-- [Shared Supabase auth cookie (web)](shared-auth-cookie-web.md) — mobile app's web build uses createBrowserClient + .afuchat.com cookie to share login with the marketing site; native unaffected.
+- [Web Supabase auth storage](shared-auth-cookie-web.md) — the prior shared-cookie note conflicts with the active localStorage client; verify current behavior before diagnosing cross-subdomain login.
 - [Supabase realtime channel ownership](supabase-realtime-channel-ownership.md) — configure every handler before subscribe, and give each logical chat channel one lifecycle owner to avoid post-subscribe callback crashes.
 - [Story upload media lifecycle](story-upload-expo-go.md) — detach Android picker/camera media from Expo Go temporary host-cache paths before background publishing.
 - [Expo Go Reanimated updater mismatch](reanimated-expo-go-updater.md) — use the Worklets Babel plugin and plain animation fallbacks when Expo Go's native Reanimated runtime differs from bundled JS.
