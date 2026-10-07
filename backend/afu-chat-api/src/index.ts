@@ -7,6 +7,7 @@ import {
 } from "./shared.ts";
 
 const PREFIX = "/v1/chat";
+const CURRENT_PROFILE_SCHEMA = "accounts";
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
 const ALLOWED_HEADERS = "Authorization, Content-Type, apikey, X-Client-Info";
 const EXPOSED_HEADERS = "Content-Range, X-AfuChat-Request-Id, X-AfuChat-Version";
@@ -131,7 +132,9 @@ async function handleCurrentUser(request: Request, env: Env): Promise<Response> 
   const verification = await verifySharedSession(request, env, requestId);
   if (!verification.session) return verification.response;
 
-  const schema = env.AFUCHAT_DATABASE_SCHEMA?.trim() || "public";
+  // AfuAuth owns the shared account profile; this read must not target the
+  // AfuChat compatibility view, which can be absent for valid shared users.
+  const schema = CURRENT_PROFILE_SCHEMA;
   const supabase = supabaseConfig(env);
   if (!supabase || !/^[a-z][a-z0-9_]*$/i.test(schema)) {
     return privateJsonResponse(

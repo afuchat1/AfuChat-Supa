@@ -253,7 +253,7 @@ test("current profile uses the verified AfuAuth identity and returns the mobile 
   assert.match(query.get("select"), /platinum_until/);
   assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
-  assert.equal(profileRequest.headers.get("Accept-Profile"), "public");
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "accounts");
   assert.match(response.headers.get("Cache-Control"), /private, no-store/);
 });
 
