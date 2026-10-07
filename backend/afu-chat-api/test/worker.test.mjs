@@ -2231,3 +2231,264 @@ test("reply likes verify that the target reply belongs to the requested post", a
   assert.equal(deletionQuery.get("reply_id"), `eq.${replyId}`);
   assert.equal(deletionQuery.get("user_id"), `eq.${userId}`);
 });
+
+test("follow summary counts relationships and derives viewer state from AfuAuth", async () => {
+  const token = "follow-summary-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const url = new URL(request.url);
+    const isCount = request.headers.has("Range");
+    if (isCount && url.searchParams.get("following_id") === `eq.${profileId}`) {
+      return Response.json([], { headers: { "Content-Range": "*/17" } });
+    }
+    if (isCount && url.searchParams.get("follower_id") === `eq.${profileId}`) {
+      return Response.json([], { headers: { "Content-Range": "*/9" } });
+    }
+    if (
+      url.searchParams.get("follower_id") === `eq.${profileId}` &&
+      url.searchParams.get("following_id") === `eq.${userId}`
+    ) {
+      return Response.json([{ id: "follow-back" }]);
+    }
+    if (
+      url.searchParams.get("follower_id") === `eq.${userId}` &&
+      url.searchParams.get("following_id") === `eq.${profileId}`
+    ) {
+      return Response.json([]);
+    }
+    return Response.json({ error: "unexpected query" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/follows/summary?profile_id=${profileId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    followers_count: 17,
+    following_count: 9,
+    follows_you: true,
+    is_following: false,
+  });
+  assert.equal(requests.length, 4);
+  assert.ok(requests.every((request) => request.headers.get("Authorization") === `Bearer ${token}`));
+  assert.ok(requests.slice(0, 2).every((request) =>
+    request.headers.get("Prefer")?.includes("count=exact")
+  ));
+});
+
+test("follow mutations derive the follower and reject stale account queue actions", async () => {
+  const token = "follow-mutation-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const targetId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    return Response.json([{ follower_id: userId, following_id: targetId }]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/follows", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        follower_id: "123e4567-e89b-42d3-a456-426614174000",
+        target_user_id: targetId,
+        expected_user_id: userId,
+      }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    is_following: true,
+    target_user_id: targetId,
+  });
+  const insert = requests[0];
+  assert.deepEqual(await insert.json(), {
+    follower_id: userId,
+    following_id: targetId,
+  });
+  assert.equal(new URL(insert.url).searchParams.get("on_conflict"), "follower_id,following_id");
+  assert.equal(
+    insert.headers.get("Prefer"),
+    "resolution=merge-duplicates,return=representation",
+  );
+
+  const stale = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/follows", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ target_user_id: targetId, expected_user_id: "another-account" }),
+    }),
+    env,
+  );
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).code, "ACCOUNT_MISMATCH");
+  assert.equal(requests.length, 1);
+});
+
+test("follow lists honor account-profile privacy before reading relationships", async () => {
+  const token = "hidden-follow-list-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    return Response.json([{
+      id: profileId,
+      hide_followers_list: true,
+      hide_following_list: false,
+    }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/follows/list?profile_id=${profileId}&direction=followers`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { items: [], hidden: true, next_offset: null });
+  assert.equal(requests.length, 1);
+});
+
+test("follow lists hydrate relationship rows from the shared accounts profile source", async () => {
+  const token = "follow-list-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const followerId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/profiles") && request.headers.get("Accept-Profile") === "accounts") {
+      if (url.searchParams.get("select")?.includes("hide_followers_list")) {
+        return Response.json([{
+          id: profileId,
+          hide_followers_list: false,
+          hide_following_list: false,
+        }]);
+      }
+      assert.equal(url.searchParams.get("id"), `in.(${followerId})`);
+      return Response.json([{
+        id: followerId,
+        handle: "follower",
+        display_name: "Follower",
+        avatar_url: null,
+        bio: null,
+        is_verified: false,
+        is_organization_verified: false,
+        is_business_mode: false,
+      }]);
+    }
+    if (url.pathname.endsWith("/follows")) {
+      assert.equal(url.searchParams.get("following_id"), `eq.${profileId}`);
+      return Response.json([{
+        follower_id: followerId,
+        following_id: profileId,
+        created_at: "2026-10-07T12:00:00Z",
+      }]);
+    }
+    return Response.json({ error: "unexpected query" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/follows/list?profile_id=${profileId}&direction=followers&limit=20&offset=0`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.hidden, false);
+  assert.equal(payload.next_offset, null);
+  assert.deepEqual(payload.items, [{
+    follower_id: followerId,
+    following_id: profileId,
+    created_at: "2026-10-07T12:00:00Z",
+    profile: {
+      id: followerId,
+      handle: "follower",
+      display_name: "Follower",
+      avatar_url: null,
+      bio: null,
+      is_verified: false,
+      is_organization_verified: false,
+      is_business_mode: false,
+    },
+  }]);
+  assert.equal(requests.length, 3);
+  assert.ok(requests.every((request) => request.headers.get("Authorization") === `Bearer ${token}`));
+});
+
+test("follow status batches return both relationship directions for authenticated viewer", async () => {
+  const token = "follow-status-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const followingId = "123e4567-e89b-42d3-a456-426614174123";
+  const followsYouId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    if (url.searchParams.get("follower_id") === `eq.${userId}`) {
+      return Response.json([{ following_id: followingId }]);
+    }
+    if (url.searchParams.get("following_id") === `eq.${userId}`) {
+      return Response.json([{ follower_id: followsYouId }]);
+    }
+    return Response.json({ error: "unexpected query" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/follows/status?user_ids=${followingId},${followsYouId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    items: [
+      { user_id: followingId, is_following: true, follows_you: false },
+      { user_id: followsYouId, is_following: false, follows_you: true },
+    ],
+  });
+});

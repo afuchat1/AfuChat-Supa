@@ -1194,3 +1194,378 @@ export function setAfuChatReplyLike(
     liked ? "Reply could not be liked" : "Reply like could not be removed",
   );
 }
+
+export type AfuChatFollowProfile = {
+  id: string;
+  display_name?: string | null;
+  handle?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  is_verified?: boolean | null;
+  is_organization_verified?: boolean | null;
+  is_business_mode?: boolean | null;
+};
+
+export type AfuChatFollowRecord = {
+  follower_id: string;
+  following_id: string;
+  created_at: string;
+  profile: AfuChatFollowProfile;
+};
+
+export type AfuChatFollowDirection = "followers" | "following";
+
+export type AfuChatFollowSummary = {
+  followers_count: number;
+  following_count: number;
+  follows_you: boolean;
+  is_following: boolean;
+};
+
+type FollowEndpointError = { message?: unknown; code?: unknown; request_id?: unknown };
+
+function isFollowProfile(value: unknown): value is AfuChatFollowProfile {
+  return !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).id === "string";
+}
+
+async function followEndpointError(
+  response: Response,
+  payload: FollowEndpointError | null,
+  fallback: string,
+): Promise<AfuChatApiError> {
+  return {
+    message: typeof payload?.message === "string"
+      ? payload.message
+      : typeof payload?.error === "string"
+      ? payload.error
+      : `${fallback} (HTTP ${response.status})`,
+    code: typeof payload?.code === "string" ? payload.code : String(response.status),
+    requestId: typeof payload?.request_id === "string"
+      ? payload.request_id
+      : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+  };
+}
+
+export async function getAfuChatFollowRecords(
+  profileId: string,
+  direction: AfuChatFollowDirection,
+  limit = 30,
+  offset = 0,
+): Promise<{
+  items: AfuChatFollowRecord[] | null;
+  hidden: boolean;
+  nextOffset: number | null;
+  error: AfuChatApiError | null;
+}> {
+  try {
+    const params = new URLSearchParams({
+      profile_id: profileId,
+      direction,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    const { response, data } = await afuChatApiJson<{
+      items?: unknown;
+      hidden?: unknown;
+      next_offset?: unknown;
+      error?: unknown;
+      code?: unknown;
+      request_id?: unknown;
+    }>(`/follows/list?${params.toString()}`);
+    if (!response.ok) {
+      return {
+        items: null,
+        hidden: false,
+        nextOffset: null,
+        error: await followEndpointError(response, data, "Follow list could not be loaded"),
+      };
+    }
+    if (
+      !Array.isArray(data?.items) ||
+      typeof data.hidden !== "boolean" ||
+      !data.items.every((item) =>
+        !!item &&
+        typeof item === "object" &&
+        typeof (item as Record<string, unknown>).follower_id === "string" &&
+        typeof (item as Record<string, unknown>).following_id === "string" &&
+        typeof (item as Record<string, unknown>).created_at === "string" &&
+        isFollowProfile((item as Record<string, unknown>).profile)
+      ) ||
+      (data.next_offset !== null && !Number.isSafeInteger(data.next_offset))
+    ) {
+      return {
+        items: null,
+        hidden: false,
+        nextOffset: null,
+        error: {
+          message: "Follow service returned an invalid list response.",
+          code: "INVALID_RESPONSE",
+        },
+      };
+    }
+    return {
+      items: data.items as AfuChatFollowRecord[],
+      hidden: data.hidden,
+      nextOffset: typeof data.next_offset === "number" ? data.next_offset : null,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      items: null,
+      hidden: false,
+      nextOffset: null,
+      error: {
+        message: error instanceof Error ? error.message : "Follow service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatFollowIds(
+  profileId: string,
+  direction: AfuChatFollowDirection,
+  maxItems = 1000,
+): Promise<{ ids: string[] | null; hidden: boolean; error: AfuChatApiError | null }> {
+  if (!Number.isSafeInteger(maxItems) || maxItems < 1 || maxItems > 5000) {
+    return {
+      ids: null,
+      hidden: false,
+      error: { message: "The follow-list limit is invalid.", code: "INVALID_INPUT" },
+    };
+  }
+  const ids: string[] = [];
+  let offset = 0;
+  let hidden = false;
+  try {
+    while (ids.length < maxItems) {
+      const limit = Math.min(100, maxItems - ids.length);
+      const params = new URLSearchParams({
+        profile_id: profileId,
+        direction,
+        limit: String(limit),
+        offset: String(offset),
+      });
+      const { response, data } = await afuChatApiJson<{
+        items?: unknown;
+        hidden?: unknown;
+        next_offset?: unknown;
+        error?: unknown;
+        code?: unknown;
+        request_id?: unknown;
+      }>(`/follows/ids?${params.toString()}`);
+      if (!response.ok) {
+        return {
+          ids: null,
+          hidden: false,
+          error: await followEndpointError(response, data, "Follow IDs could not be loaded"),
+        };
+      }
+      if (
+        !Array.isArray(data?.items) ||
+        !data.items.every((id) => typeof id === "string") ||
+        typeof data.hidden !== "boolean" ||
+        (data.next_offset !== null && !Number.isSafeInteger(data.next_offset))
+      ) {
+        return {
+          ids: null,
+          hidden: false,
+          error: {
+            message: "Follow service returned an invalid ID response.",
+            code: "INVALID_RESPONSE",
+          },
+        };
+      }
+      hidden = data.hidden;
+      ids.push(...data.items as string[]);
+      if (hidden || data.next_offset === null || data.items.length === 0) break;
+      offset = Number(data.next_offset);
+    }
+    return { ids, hidden, error: null };
+  } catch (error) {
+    return {
+      ids: null,
+      hidden: false,
+      error: {
+        message: error instanceof Error ? error.message : "Follow service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatFollowSummary(
+  profileId: string,
+): Promise<{ data: AfuChatFollowSummary | null; error: AfuChatApiError | null }> {
+  try {
+    const params = new URLSearchParams({ profile_id: profileId });
+    const { response, data } = await afuChatApiJson<
+      AfuChatFollowSummary & { error?: unknown; code?: unknown; request_id?: unknown }
+    >(`/follows/summary?${params.toString()}`);
+    if (!response.ok) {
+      return {
+        data: null,
+        error: await followEndpointError(response, data, "Follow summary could not be loaded"),
+      };
+    }
+    if (
+      !Number.isSafeInteger(data?.followers_count) ||
+      Number(data?.followers_count) < 0 ||
+      !Number.isSafeInteger(data?.following_count) ||
+      Number(data?.following_count) < 0 ||
+      typeof data?.follows_you !== "boolean" ||
+      typeof data?.is_following !== "boolean"
+    ) {
+      return {
+        data: null,
+        error: {
+          message: "Follow service returned an invalid summary response.",
+          code: "INVALID_RESPONSE",
+        },
+      };
+    }
+    return { data, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Follow service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatFollowStatuses(userIds: string[]): Promise<{
+  data: Map<string, { isFollowing: boolean; followsYou: boolean }> | null;
+  error: AfuChatApiError | null;
+}> {
+  const ids = [...new Set(userIds)];
+  if (ids.length > 500) {
+    const combined = new Map<string, { isFollowing: boolean; followsYou: boolean }>();
+    for (let index = 0; index < ids.length; index += 100) {
+      const result = await getAfuChatFollowStatuses(ids.slice(index, index + 100));
+      if (result.error || !result.data) return result;
+      for (const [id, status] of result.data) combined.set(id, status);
+    }
+    return { data: combined, error: null };
+  }
+  const combined = new Map<string, { isFollowing: boolean; followsYou: boolean }>();
+  for (let index = 0; index < ids.length; index += 100) {
+    const batch = ids.slice(index, index + 100);
+    if (!batch.length) continue;
+    try {
+      const params = new URLSearchParams({ user_ids: batch.join(",") });
+      const { response, data } = await afuChatApiJson<{
+        items?: unknown;
+        error?: unknown;
+        code?: unknown;
+        request_id?: unknown;
+      }>(`/follows/status?${params.toString()}`);
+      if (!response.ok) {
+        return {
+          data: null,
+          error: await followEndpointError(response, data, "Follow status could not be loaded"),
+        };
+      }
+      if (
+        !Array.isArray(data?.items) ||
+        !data.items.every((item) =>
+          !!item &&
+          typeof item === "object" &&
+          typeof (item as Record<string, unknown>).user_id === "string" &&
+          typeof (item as Record<string, unknown>).is_following === "boolean" &&
+          typeof (item as Record<string, unknown>).follows_you === "boolean"
+        )
+      ) {
+        return {
+          data: null,
+          error: {
+            message: "Follow service returned an invalid status response.",
+            code: "INVALID_RESPONSE",
+          },
+        };
+      }
+      for (const item of data.items as Array<{
+        user_id: string;
+        is_following: boolean;
+        follows_you: boolean;
+      }>) {
+        combined.set(item.user_id, {
+          isFollowing: item.is_following,
+          followsYou: item.follows_you,
+        });
+      }
+    } catch (error) {
+      return {
+        data: null,
+        error: {
+          message: error instanceof Error ? error.message : "Follow service is unavailable.",
+          code: "NETWORK_ERROR",
+        },
+      };
+    }
+  }
+  return { data: combined, error: null };
+}
+
+export async function setAfuChatFollow(
+  targetUserId: string,
+  following: boolean,
+  expectedUserId?: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  try {
+    const { response, data } = following
+      ? await afuChatApiJson<{
+          is_following?: unknown;
+          target_user_id?: unknown;
+          error?: unknown;
+          code?: unknown;
+          request_id?: unknown;
+        }>("/follows", {
+          target_user_id: targetUserId,
+          ...(expectedUserId ? { expected_user_id: expectedUserId } : {}),
+        })
+      : await (async () => {
+          const params = new URLSearchParams({ target_user_id: targetUserId });
+          if (expectedUserId) params.set("expected_user_id", expectedUserId);
+          const response = await afuChatApiFetch(`/follows?${params.toString()}`, {
+            method: "DELETE",
+          });
+          return {
+            response,
+            data: await response.json().catch(() => null) as {
+              is_following?: unknown;
+              target_user_id?: unknown;
+              error?: unknown;
+              code?: unknown;
+              request_id?: unknown;
+            } | null,
+          };
+        })();
+    if (!response.ok) {
+      return {
+        error: await followEndpointError(response, data, "Follow status could not be updated"),
+      };
+    }
+    if (data?.is_following !== following || data.target_user_id !== targetUserId) {
+      return {
+        error: {
+          message: "Follow service returned an invalid mutation response.",
+          code: "INVALID_RESPONSE",
+        },
+      };
+    }
+    return { error: null };
+  } catch (error) {
+    return {
+      error: {
+        message: error instanceof Error ? error.message : "Follow service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}

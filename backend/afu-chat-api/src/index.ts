@@ -1,5 +1,6 @@
 import { handleAccountExport } from "./account-export.ts";
 import { handleBookmarks } from "./bookmarks.ts";
+import { handleFollows } from "./follows.ts";
 import { handleMessages } from "./messages.ts";
 import { handleMessageCount, handleMessageQueries } from "./message-queries.ts";
 import { handleMessageReactions } from "./message-reactions.ts";
@@ -783,6 +784,22 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   if (incoming.pathname === `${PREFIX}/bookmarks`) {
     return handleBookmarks(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/follows`) {
+    return handleFollows(request, env, "mutate");
+  }
+  if (incoming.pathname === `${PREFIX}/follows/ids`) {
+    return handleFollows(request, env, "ids");
+  }
+  if (incoming.pathname === `${PREFIX}/follows/summary`) {
+    return handleFollows(request, env, "summary");
+  }
+  if (incoming.pathname === `${PREFIX}/follows/status`) {
+    return handleFollows(request, env, "status");
+  }
+  if (incoming.pathname === `${PREFIX}/follows/list`) {
+    return handleFollows(request, env, "list");
   }
 
   if (incoming.pathname === `${PREFIX}/posts/mine`) {
