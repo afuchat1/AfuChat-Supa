@@ -19,12 +19,12 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
+import { createAfuChatPost } from "@/lib/afuchatApi";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -121,17 +121,15 @@ export default function CreateArticleScreen() {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.from("posts").insert({
-        author_id: user.id,
+      const { error } = await createAfuChatPost({
         content: body.trim(),
         article_title: title.trim(),
         article_body: body.trim(),
         article_cover_url: coverUrl || null,
         post_type: "article",
         visibility: audience,
-        view_count: 0,
       });
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_created"); } catch (_) {}
       if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any);
     } catch (err: any) {

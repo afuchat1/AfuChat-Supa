@@ -43,7 +43,6 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
@@ -51,6 +50,7 @@ import * as Haptics from "@/lib/haptics";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { registerVideoAsset } from "@/lib/videoApi";
+import { createAfuChatPost } from "@/lib/afuchatApi";
 import {
   compressVideoBeforeUpload,
   getCameraRecordingQuality,
@@ -1779,23 +1779,21 @@ export default function CreateVideoScreen() {
           trimEnd: _te < _dur + (_ts || 0) ? _te : undefined,
         });
 
-        const { data: post, error } = await supabase.from("posts").insert({
-          author_id: user.id,
+        const { data: post, error } = await createAfuChatPost({
           content: _cap,
           video_url: publicUrl,
           image_url: thumbUrl,
           post_type: "video",
           visibility: _aud,
-          view_count: 0,
           ...(_sound ? { audio_name: _sound } : {}),
           ...(_filter ? { filter: _filter } : {}),
           ...(_frame ? { avatar_overlay: _frame } : {}),
           overlay_metadata: overlayMeta,
-        }).select("id").single();
+        });
 
-        if (error) throw error;
+        if (error || !post) throw new Error(error?.message || "Could not publish video.");
 
-        const newPostId = (post as any)?.id ?? null;
+        const newPostId = post.id;
         registerVideoAsset({
           source_path: filePath, post_id: newPostId,
           duration: _dur > 0 ? _dur : null,

@@ -36,10 +36,14 @@ import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
 import {
-  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-  fetchAccountProfileMap,
-} from "@/lib/sharedProfiles";
-import { getAfuChatBookmarkStatus, setAfuChatBookmark } from "@/lib/afuchatApi";
+  createAfuChatPostReply,
+  getAfuChatBookmarkStatus,
+  getAfuChatPost,
+  getAfuChatPostReplies,
+  setAfuChatPostLike,
+  setAfuChatReplyLike,
+  setAfuChatBookmark,
+} from "@/lib/afuchatApi";
 import { audioFocus } from "@/lib/audioFocus";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -378,31 +382,13 @@ export default function PostDetailScreen() {
               }
             : null;
         } else {
-          const { data: postRow } = await supabase
-            .from("posts")
-            .select("id, author_id, content, image_url, created_at, view_count, like_count, post_type")
-            .eq("id", id)
-            .maybeSingle();
-          if (postRow) {
-            const [{ profiles }, { data: imageRows }] = await Promise.all([
-              fetchAccountProfileMap(
-                [postRow.author_id],
-                ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-              ),
-              supabase
-                .from("post_images")
-                .select("post_id, image_url, display_order")
-                .eq("post_id", postRow.id)
-                .order("display_order", { ascending: true }),
-            ]);
-            data = {
-              ...postRow,
-              profiles: profiles.get(postRow.author_id) || null,
-              post_images: imageRows || [],
-            };
-          } else {
-            data = null;
+          const postResult = await getAfuChatPost(id);
+          if (postResult.error) {
+            if (!cancelled) showAlert("Post unavailable", postResult.error.message);
+            setLoading(false);
+            return;
           }
+          data = postResult.data;
         }
 
         if (!data || cancelled) { setLoading(false); return; }
@@ -435,12 +421,15 @@ export default function PostDetailScreen() {
         }
 
         if (user && !cancelled) {
-          const [likeRes, bmRes] = await Promise.all([
-            supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
+          const [organizationLike, bmRes] = await Promise.all([
+            org === "1"
+              ? supabase.from("post_acknowledgments")
+                  .select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle()
+              : Promise.resolve(null),
             getAfuChatBookmarkStatus(id),
           ]);
           if (!cancelled) {
-            setLiked(!!likeRes.data);
+            setLiked(org === "1" ? !!organizationLike?.data : data.liked === true);
             if (bmRes.error) showAlert("Could not load saved status", bmRes.error.message);
             else setBookmarked(!!bmRes.data);
           }
@@ -457,54 +446,40 @@ export default function PostDetailScreen() {
   // ── Fetch comments ───────────────────────────────────────────────────────────
   const loadReplies = useCallback(() => {
     if (!id) return;
-    Promise.resolve(supabase
-      .from("post_replies")
-      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url")
-      .eq("post_id", id)
-      .order("created_at", { ascending: true })
-      .limit(100))
-      .then(async ({ data, error }) => {
-        if (error) console.error("[PostDetail] loadReplies:", error.message);
-        if (data) {
-          const { profiles } = await fetchAccountProfileMap(
-            data.map((reply: any) => reply.author_id),
-            ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-          );
-          const replyIds = data.map((r: any) => r.id);
-          const [likesRes, myLikesRes] = await Promise.all([
-            replyIds.length > 0
-              ? supabase.from("post_reply_likes").select("reply_id").in("reply_id", replyIds)
-              : { data: [] as any[] },
-            replyIds.length > 0 && user
-              ? supabase.from("post_reply_likes").select("reply_id").in("reply_id", replyIds).eq("user_id", user.id)
-              : { data: [] as any[] },
-          ]);
-          const likeCountMap: Record<string, number> = {};
-          for (const l of likesRes.data || []) {
-            likeCountMap[l.reply_id] = (likeCountMap[l.reply_id] || 0) + 1;
-          }
-          setLikedIds(new Set<string>((myLikesRes.data || []).map((l: any) => l.reply_id as string)));
-          setReplies(data.map((r: any) => ({
-            id: r.id,
-            author_id: r.author_id,
-            content: r.content || "",
-            created_at: r.created_at,
-            parent_reply_id: r.parent_reply_id || null,
-            like_count: likeCountMap[r.id] || 0,
-            voice_url: r.voice_url || null,
-            voice_duration: r.voice_duration ?? null,
-            image_url: r.image_url || null,
-            profile: {
-              display_name: profiles.get(r.author_id)?.display_name || "User",
-              handle: profiles.get(r.author_id)?.handle || "user",
-              avatar_url: profiles.get(r.author_id)?.avatar_url ?? null,
-            },
-          })));
-        }
+    void (async () => {
+      const { data, error } = await getAfuChatPostReplies(id);
+      if (error || !data) {
+        console.error("[PostDetail] loadReplies:", error?.message || "Invalid reply response");
         setCommentsLoading(false);
-      })
-      .catch(() => { setCommentsLoading(false); });
-  }, [id, user?.id]);
+        showAlert("Replies unavailable", error?.message || "Replies could not be loaded.");
+        return;
+      }
+      setLikedIds(new Set(
+        data.filter((reply) => reply.liked === true).map((reply) => reply.id),
+      ));
+      setReplies(data.map((row: any) => ({
+        id: row.id,
+        author_id: row.author_id,
+        content: row.content || "",
+        created_at: row.created_at,
+        parent_reply_id: row.parent_reply_id || null,
+        like_count: typeof row.like_count === "number" ? row.like_count : 0,
+        voice_url: row.voice_url || null,
+        voice_duration: row.voice_duration ?? null,
+        image_url: row.image_url || null,
+        profile: {
+          display_name: row.profile?.display_name || "User",
+          handle: row.profile?.handle || "user",
+          avatar_url: row.profile?.avatar_url ?? null,
+        },
+      })));
+      setCommentsLoading(false);
+    })().catch((error) => {
+      console.error("[PostDetail] loadReplies:", error);
+      setCommentsLoading(false);
+      showAlert("Replies unavailable", "Replies could not be loaded. Please try again.");
+    });
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -535,28 +510,34 @@ export default function PostDetailScreen() {
     if (liked) {
       setLiked(false); setLikeCount((n) => Math.max(0, n - 1));
       try {
-        const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
         if (org === "1") {
+          const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
+          if (error) throw error;
           const { error: orgError } = await supabase
             .from("organization_page_posts")
             .update({ likes: Math.max(0, likeCount - 1) })
             .eq("id", post.id);
           if (orgError) throw orgError;
+        } else {
+          const { error } = await setAfuChatPostLike(post.id, false);
+          if (error) throw new Error(error.message);
         }
-        if (error) throw error;
       } catch { setLiked(true); setLikeCount((n) => n + 1); }
     } else {
       setLiked(true); setLikeCount((n) => n + 1);
       try {
-        const { error } = await supabase.from("post_acknowledgments").upsert({ post_id: post.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
         if (org === "1") {
+          const { error } = await supabase.from("post_acknowledgments").upsert({ post_id: post.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+          if (error) throw error;
           const { error: orgError } = await supabase
             .from("organization_page_posts")
             .update({ likes: likeCount + 1 })
             .eq("id", post.id);
           if (orgError) throw orgError;
+        } else {
+          const { error } = await setAfuChatPostLike(post.id, true);
+          if (error) throw new Error(error.message);
         }
-        if (error) throw error;
       } catch { setLiked(false); setLikeCount((n) => Math.max(0, n - 1)); }
     }
   }, [user, post, liked, heartScale, org]);
@@ -625,16 +606,29 @@ export default function PostDetailScreen() {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
-  function handleReplyLike(id: string, wasLiked: boolean) {
-    if (!user) return;
+  async function handleReplyLike(id: string, wasLiked: boolean) {
+    if (!user || !post) return;
     if (wasLiked) {
       setLikedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
       setReplies((prev) => prev.map((r) => r.id === id ? { ...r, like_count: Math.max(0, r.like_count - 1) } : r));
-      (supabase.from("post_reply_likes").delete().eq("reply_id", id).eq("user_id", user.id) as unknown as Promise<any>).then(() => {}).catch(() => {});
     } else {
       setLikedIds((prev) => new Set([...prev, id]));
       setReplies((prev) => prev.map((r) => r.id === id ? { ...r, like_count: r.like_count + 1 } : r));
-      (supabase.from("post_reply_likes").insert({ reply_id: id, user_id: user.id }) as unknown as Promise<any>).then(() => {}).catch(() => {});
+    }
+    const { error } = await setAfuChatReplyLike(post.id, id, !wasLiked);
+    if (error) {
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      setReplies((prev) => prev.map((reply) =>
+        reply.id === id
+          ? { ...reply, like_count: Math.max(0, reply.like_count + (wasLiked ? 1 : -1)) }
+          : reply
+      ));
+      showAlert("Like unavailable", error.message);
     }
   }
 
@@ -770,32 +764,31 @@ export default function PostDetailScreen() {
       finalImageUrl = publicUrl;
     }
 
-    const payload: any = { post_id: post.id, author_id: user.id, content: text.trim() };
-    if (replyingTo) payload.parent_reply_id = replyingTo.id;
-    if (finalVoiceUrl) { payload.voice_url = finalVoiceUrl; payload.voice_duration = recordedDuration; }
-    if (finalImageUrl) payload.image_url = finalImageUrl;
-
-    const { data, error } = await supabase
-      .from("post_replies")
-      .insert(payload)
-      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url")
-      .single();
+    const { data, error } = await createAfuChatPostReply(post.id, {
+      content: text.trim(),
+      ...(replyingTo ? { parent_reply_id: replyingTo.id } : {}),
+      ...(finalVoiceUrl
+        ? { voice_url: finalVoiceUrl, voice_duration: recordedDuration }
+        : {}),
+      ...(finalImageUrl ? { image_url: finalImageUrl } : {}),
+    });
 
     if (!error && data) {
+      const row = data as any;
       const newReply: Reply = {
-        id: data.id, author_id: data.author_id, content: data.content || "",
-        created_at: data.created_at, parent_reply_id: data.parent_reply_id || null,
-        like_count: 0, voice_url: data.voice_url || null, voice_duration: data.voice_duration ?? null,
-        image_url: data.image_url || null,
+        id: row.id, author_id: row.author_id, content: row.content || "",
+        created_at: row.created_at, parent_reply_id: row.parent_reply_id || null,
+        like_count: 0, voice_url: row.voice_url || null, voice_duration: row.voice_duration ?? null,
+        image_url: row.image_url || null,
         profile: { display_name: profile?.display_name || "You", handle: profile?.handle || "you", avatar_url: profile?.avatar_url || null },
       };
       setReplies((prev) => [...prev, newReply]);
-      setNewCommentIds((prev) => new Set([...prev, data.id]));
+      setNewCommentIds((prev) => new Set([...prev, row.id]));
       const wasThreaded = !!replyingTo;
       setText(""); setReplyingTo(null); discardRecording(); setAttachedImage(null); setShowEmojiPanel(false);
       if (!wasThreaded) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
     } else if (error) {
-      showAlert("Comment failed", "Your comment could not be posted. Please try again.");
+      showAlert("Comment failed", error.message);
     }
     } catch {
       showAlert("Comment failed", "Your comment could not be posted. Please try again.");

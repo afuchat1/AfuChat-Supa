@@ -1,4 +1,4 @@
-- [pnpm install missing on Replit](pnpm-install-missing.md) — node_modules not persisted between sessions; run `CI=true pnpm install` from workspace root when app fails with PluginError/missing module.
+- [pnpm install missing on Replit](pnpm-install-missing.md) — restore missing modules from the lockfile, then verify that the install did not unexpectedly rewrite `.replit` port mappings.
 - [Expo dependency recovery](expo-dependency-recovery.md) — rebuild pnpm modules before adding dependencies when workspace hoist metadata is mismatched.
 - [WebRTC New Arch TurboModule injection](webrtc-new-arch-turbomodule.md) — react-native-webrtc v124 throws at module-eval when NativeModules.WebRTCModule is null (New Arch). Fix: inject from TurboModuleRegistry into NativeModules BEFORE require("react-native-webrtc").
 - [Supabase DB connection on Replit](supabase-db-replit.md) — Direct pg + Supavisor both fail from Replit IPv4; use Supabase JS admin client (HTTPS) for all DB ops. claim_video_job via .rpc(), auth.users via supabase.auth.admin.getUserById().

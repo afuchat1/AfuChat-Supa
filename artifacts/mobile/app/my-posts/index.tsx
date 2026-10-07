@@ -13,7 +13,7 @@ import { PostSkeleton } from "@/components/ui/Skeleton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { supabase } from "@/lib/supabase";
+import { deleteAfuChatPost, getAfuChatMyPosts } from "@/lib/afuchatApi";
 import { sharePost, shareVideo } from "@/lib/share";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
@@ -120,51 +120,24 @@ export default function MyPostsScreen() {
 
   const load = useCallback(async () => {
     if (!user) { setLoading(false); return; }
-    const { data, error } = await supabase
-      .from("posts")
-      .select("id, content, image_url, post_type, created_at, view_count, visibility")
-      .eq("author_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (!error && data) {
-      const postIds = data.map((p: any) => p.id);
-      const { data: imageRows } = postIds.length > 0
-        ? await supabase
-            .from("post_images")
-            .select("post_id, image_url, display_order")
-            .in("post_id", postIds)
-            .order("display_order", { ascending: true })
-        : { data: [] };
-      const imagesByPost = new Map<string, { image_url: string; display_order: number }[]>();
-      for (const image of imageRows || []) {
-        const group = imagesByPost.get(image.post_id) || [];
-        group.push(image);
-        imagesByPost.set(image.post_id, group);
-      }
-      const [{ data: likes }, { data: replies }] = await Promise.all([
-        postIds.length > 0 ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds) : { data: [] },
-        postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds) : { data: [] },
-      ]);
-
-      const likeMap: Record<string, number> = {};
-      for (const l of (likes || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
-      const replyMap: Record<string, number> = {};
-      for (const r of (replies || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
-
-      setPosts(data.map((p: any) => ({
+    const { data, error } = await getAfuChatMyPosts();
+    if (error || !data) {
+      setLoading(false);
+      showAlert("Could not load posts", error?.message || "Your posts are unavailable right now.");
+      return;
+    }
+    setPosts(data.map((p: any) => ({
         id: p.id,
         content: p.content || "",
         image_url: p.image_url,
-        images: (imagesByPost.get(p.id) || []).map((i) => i.image_url),
+        images: Array.isArray(p.images) ? p.images : [],
         created_at: p.created_at,
         view_count: p.view_count || 0,
         visibility: p.visibility || "public",
         post_type: p.post_type || "post",
-        likeCount: likeMap[p.id] || 0,
-        replyCount: replyMap[p.id] || 0,
+        likeCount: p.likeCount || 0,
+        replyCount: p.replyCount || 0,
       })));
-    }
     setLoading(false);
   }, [user]);
 
@@ -175,7 +148,11 @@ export default function MyPostsScreen() {
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive", onPress: async () => {
-          await supabase.from("posts").delete().eq("id", postId);
+          const { error } = await deleteAfuChatPost(postId);
+          if (error) {
+            showAlert("Could not delete post", error.message);
+            return;
+          }
           setPosts((prev) => prev.filter((p) => p.id !== postId));
         },
       },

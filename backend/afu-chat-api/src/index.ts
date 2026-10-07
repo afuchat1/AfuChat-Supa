@@ -13,6 +13,14 @@ import {
 import { handleMessageEdit, handleMessageEditHistory } from "./message-edit.ts";
 import { handlePayments } from "./payments.ts";
 import {
+  handleCreatePost,
+  handleDeletePost,
+  handleGetMyPosts,
+  handleGetPost,
+  handlePostSubroute,
+  isPostUuid,
+} from "./posts.ts";
+import {
   supabaseConfig,
   verifySharedSession,
   type Env,
@@ -775,6 +783,63 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   if (incoming.pathname === `${PREFIX}/bookmarks`) {
     return handleBookmarks(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/posts/mine`) {
+    return handleGetMyPosts(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/posts`) {
+    return handleCreatePost(request, env);
+  }
+
+  if (incoming.pathname.startsWith(`${PREFIX}/posts/`)) {
+    const parts = incoming.pathname.slice(`${PREFIX}/posts/`.length).split("/");
+    const postId = parts[0];
+    if (!isPostUuid(postId)) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "The post ID is invalid.", request_id: requestId },
+        400,
+      );
+    }
+    if (parts.length === 2 && parts[1] === "like") {
+      return handlePostSubroute(request, env, postId, "like");
+    }
+    if (parts.length === 2 && parts[1] === "replies") {
+      return handlePostSubroute(request, env, postId, "replies");
+    }
+    if (parts.length === 4 && parts[1] === "replies" && parts[3] === "like") {
+      if (!isPostUuid(parts[2])) {
+        return privateJsonResponse(
+          request,
+          requestId,
+          { error: "The reply ID is invalid.", request_id: requestId },
+          400,
+        );
+      }
+      return handlePostSubroute(request, env, postId, "reply-like", parts[2]);
+    }
+    if (parts.length !== 1) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "The requested post route was not found.", request_id: requestId },
+        404,
+      );
+    }
+    if (request.method === "GET") return handleGetPost(request, env, postId);
+    if (request.method === "DELETE") return handleDeletePost(request, env, postId);
+    const response = privateJsonResponse(
+      request,
+      requestId,
+      { error: "Method not allowed.", request_id: requestId },
+      405,
+    );
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, DELETE, OPTIONS");
+    return new Response(response.body, { status: response.status, headers });
   }
 
   if (incoming.pathname === `${PREFIX}/messages`) {

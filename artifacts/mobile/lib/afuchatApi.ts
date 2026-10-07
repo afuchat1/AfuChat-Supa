@@ -957,3 +957,240 @@ export async function setAfuChatBookmark(
     };
   }
 }
+
+export type AfuChatPostCreateInput = {
+  content: string;
+  image_url?: string | null;
+  video_url?: string | null;
+  visibility?: string | null;
+  language_code?: string | null;
+  post_type?: string | null;
+  article_title?: string | null;
+  article_body?: string | null;
+  article_cover_url?: string | null;
+  audio_name?: string | null;
+  filter?: string | null;
+  avatar_overlay?: string | null;
+  overlay_metadata?: string | null;
+  duet_of_post_id?: string | null;
+  images?: string[];
+};
+
+export type AfuChatPostRecord = Record<string, unknown> & { id: string };
+
+function postApiError(
+  response: Response,
+  payload: unknown,
+  fallback: string,
+): AfuChatApiError {
+  const record = payload && typeof payload === "object"
+    ? payload as Record<string, unknown>
+    : null;
+  return {
+    message: typeof record?.error === "string"
+      ? record.error
+      : `${fallback} (HTTP ${response.status})`,
+    code: String(response.status),
+    requestId: typeof record?.request_id === "string"
+      ? record.request_id
+      : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+  };
+}
+
+async function postEndpointRequest<T>(
+  path: string,
+  init: RequestInit,
+  fallback: string,
+): Promise<{ data: T | null; error: AfuChatApiError | null }> {
+  try {
+    const response = await afuChatApiFetch(path, init);
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { data: null, error: postApiError(response, payload, fallback) };
+    }
+    return { data: payload as T, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "AfuChat service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export async function getAfuChatPost(postId: string): Promise<{
+  data: AfuChatPostRecord | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<{ post?: unknown }>(
+    `/posts/${encodeURIComponent(postId)}`,
+    { method: "GET" },
+    "Post could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data?.post || typeof result.data.post !== "object" ||
+      typeof (result.data.post as Record<string, unknown>).id !== "string") {
+    return {
+      data: null,
+      error: { message: "Post service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.post as AfuChatPostRecord, error: null };
+}
+
+export async function getAfuChatMyPosts(): Promise<{
+  data: Record<string, unknown>[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    "/posts/mine",
+    { method: "GET" },
+    "Your posts could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!Array.isArray(result.data?.items) ||
+      !result.data.items.every((item) =>
+        !!item && typeof item === "object" &&
+        typeof (item as Record<string, unknown>).id === "string"
+      )) {
+    return {
+      data: null,
+      error: { message: "Post service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as Record<string, unknown>[], error: null };
+}
+
+export async function createAfuChatPost(input: AfuChatPostCreateInput): Promise<{
+  data: AfuChatPostRecord | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<{ post?: unknown }>(
+    "/posts",
+    { method: "POST", body: JSON.stringify(input) },
+    "Post could not be created",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data?.post || typeof result.data.post !== "object" ||
+      typeof (result.data.post as Record<string, unknown>).id !== "string") {
+    return {
+      data: null,
+      error: { message: "Post service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.post as AfuChatPostRecord, error: null };
+}
+
+export async function deleteAfuChatPost(postId: string): Promise<{
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<{ ok?: unknown }>(
+    `/posts/${encodeURIComponent(postId)}`,
+    { method: "DELETE" },
+    "Post could not be deleted",
+  );
+  if (result.error) return { error: result.error };
+  if (result.data?.ok !== true) {
+    return {
+      error: { message: "Post service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { error: null };
+}
+
+export type AfuChatPostReplyCreateInput = {
+  content: string;
+  parent_reply_id?: string | null;
+  voice_url?: string | null;
+  voice_duration?: number | null;
+  image_url?: string | null;
+};
+
+export type AfuChatPostReplyRecord = Record<string, unknown> & { id: string };
+
+export async function getAfuChatPostReplies(postId: string): Promise<{
+  data: AfuChatPostReplyRecord[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    `/posts/${encodeURIComponent(postId)}/replies`,
+    { method: "GET" },
+    "Replies could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!Array.isArray(result.data?.items) ||
+      !result.data.items.every((item) =>
+        !!item && typeof item === "object" &&
+        typeof (item as Record<string, unknown>).id === "string"
+      )) {
+    return {
+      data: null,
+      error: { message: "Replies service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as AfuChatPostReplyRecord[], error: null };
+}
+
+export async function createAfuChatPostReply(
+  postId: string,
+  input: AfuChatPostReplyCreateInput,
+): Promise<{ data: AfuChatPostReplyRecord | null; error: AfuChatApiError | null }> {
+  const result = await postEndpointRequest<{ reply?: unknown }>(
+    `/posts/${encodeURIComponent(postId)}/replies`,
+    { method: "POST", body: JSON.stringify(input) },
+    "Reply could not be posted",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!result.data?.reply || typeof result.data.reply !== "object" ||
+      typeof (result.data.reply as Record<string, unknown>).id !== "string") {
+    return {
+      data: null,
+      error: { message: "Replies service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.reply as AfuChatPostReplyRecord, error: null };
+}
+
+async function setPostLike(
+  path: string,
+  liked: boolean,
+  fallback: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  const result = await postEndpointRequest<{ liked?: unknown }>(
+    path,
+    { method: liked ? "POST" : "DELETE" },
+    fallback,
+  );
+  if (result.error) return { error: result.error };
+  if (result.data?.liked !== liked) {
+    return {
+      error: { message: "Like service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { error: null };
+}
+
+export function setAfuChatPostLike(
+  postId: string,
+  liked: boolean,
+): Promise<{ error: AfuChatApiError | null }> {
+  return setPostLike(
+    `/posts/${encodeURIComponent(postId)}/like`,
+    liked,
+    liked ? "Post could not be liked" : "Post like could not be removed",
+  );
+}
+
+export function setAfuChatReplyLike(
+  postId: string,
+  replyId: string,
+  liked: boolean,
+): Promise<{ error: AfuChatApiError | null }> {
+  return setPostLike(
+    `/posts/${encodeURIComponent(postId)}/replies/${encodeURIComponent(replyId)}/like`,
+    liked,
+    liked ? "Reply could not be liked" : "Reply like could not be removed",
+  );
+}

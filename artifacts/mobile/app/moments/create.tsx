@@ -24,6 +24,7 @@ import Svg, { Circle } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
+import { createAfuChatPost } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
@@ -227,11 +228,14 @@ export default function CreatePostScreen() {
         updatePostProgress(0.75);
         let body = _content;
         if (_locationTag) body += `\n📍 ${_locationTag}`;
-        const payload: any = { author_id: _userId, content: body, image_url: urls[0] ?? null, visibility: _audience };
-        if (_langCode) payload.language_code = _langCode;
-        const { data: post, error: pe } = await supabase.from("posts").insert(payload).select().single();
-        if (pe || !post) throw new Error("Could not create post.");
-        if (urls.length > 0) await supabase.from("post_images").insert(urls.map((u, i) => ({ post_id: post.id, image_url: u, display_order: i })));
+        const { data: post, error: pe } = await createAfuChatPost({
+          content: body,
+          image_url: urls[0] ?? null,
+          visibility: _audience,
+          language_code: _langCode || null,
+          images: urls,
+        });
+        if (pe || !post) throw new Error(pe?.message || "Could not create post.");
         try { const { rewardXp } = await import("../../lib/rewardXp"); await rewardXp("post_created"); } catch {}
         finishPostUpload();
       } catch (err: any) { failPostUpload(err?.message || "Failed to create post."); }

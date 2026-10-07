@@ -19,3 +19,11 @@ from `/home/runner/workspace` (the workspace root, not artifacts/mobile).
 If a frozen reinstall reports that the Expo version in the mobile manifest differs from the lockfile, use `CI=true pnpm install --no-frozen-lockfile` from the workspace root to reconcile it before restarting the workflow.
 
 A stale or incomplete install can also resolve TypeScript 5.9 even though the lockfile pins 6.0.3, causing the `ignoreDeprecations: "6.0"` check to fail and leaving declared Expo packages missing. After a frozen reinstall, verify the compiler version before changing the TypeScript config.
+
+## Replit port mappings
+
+After a frozen install restored missing workspace packages, `.replit` port mappings changed even though no port configuration was requested. Compare the config with the pre-install state; restore unexpected changes through `verifyAndReplaceDotReplit`, not a direct file edit.
+
+**Why:** An incidental port remap can break existing app and Expo Go access paths while making an unrelated package recovery appear successful.
+
+**How to apply:** After any workspace install that triggers workflow restarts, inspect the `.replit` diff and verify the configured local/external port mappings are unchanged.

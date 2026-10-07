@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
-import { supabase } from "@/lib/supabase";
+import { createAfuChatPost, getAfuChatPost } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
@@ -76,30 +76,33 @@ export default function CreateDuetScreen() {
 
   useEffect(() => {
     if (!postId) return;
-    supabase
-      .from("posts")
-      .select("id, content, video_url, image_url, author_id, profiles!posts_author_id_fkey(display_name, handle, avatar_url)")
-      .eq("id", postId)
-      .single()
-      .then(({ data }) => {
-        if (data) {
-          const p = data as any;
-          setOriginal({
-            id: p.id,
-            content: p.content || "",
-            video_url: p.video_url,
-            image_url: p.image_url || null,
-            author_id: p.author_id,
-            profile: {
-              display_name: p.profiles?.display_name || "User",
-              handle: p.profiles?.handle || "user",
-              avatar_url: p.profiles?.avatar_url || null,
-            },
-          });
-          setCaption(`Duet with @${p.profiles?.handle || "user"}`);
-        }
+    void (async () => {
+      const { data, error } = await getAfuChatPost(postId);
+      if (error || !data) {
+        showAlert("Original post unavailable", error?.message || "The original post could not be loaded.");
         setLoadingOriginal(false);
+        return;
+      }
+      const p = data as any;
+      const author = p.profiles ?? {};
+      setOriginal({
+        id: p.id,
+        content: p.content || "",
+        video_url: p.video_url,
+        image_url: p.image_url || null,
+        author_id: p.author_id,
+        profile: {
+          display_name: author.display_name || "User",
+          handle: author.handle || "user",
+          avatar_url: author.avatar_url || null,
+        },
       });
+      setCaption(`Duet with @${author.handle || "user"}`);
+      setLoadingOriginal(false);
+    })().catch(() => {
+      showAlert("Original post unavailable", "The original post could not be loaded.");
+      setLoadingOriginal(false);
+    });
   }, [postId]);
 
   useEffect(() => {
@@ -189,23 +192,17 @@ export default function CreateDuetScreen() {
       } catch {}
 
       setUploadProgress("Publishing duet…");
-      const { data: insertedPost, error } = await supabase
-        .from("posts")
-        .insert({
-          author_id: user.id,
-          content: caption.trim(),
-          video_url: publicUrl,
-          image_url: thumbnailPublicUrl,
-          post_type: "duet",
-          duet_of_post_id: original.id,
-          visibility: "public",
-          view_count: 0,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
+      const { data: insertedPost, error } = await createAfuChatPost({
+        content: caption.trim(),
+        video_url: publicUrl,
+        image_url: thumbnailPublicUrl,
+        post_type: "duet",
+        duet_of_post_id: original.id,
+        visibility: "public",
+      });
+      if (error || !insertedPost) throw new Error(error?.message || "Could not publish duet.");
 
-      const newPostId = (insertedPost as { id?: string } | null)?.id ?? null;
+      const newPostId = insertedPost.id;
       registerVideoAsset({
         source_path: filePath,
         post_id: newPostId,

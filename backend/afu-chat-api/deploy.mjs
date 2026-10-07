@@ -303,6 +303,32 @@ async function assertProductionPostflight() {
     throw new Error(`Invalid-session request returned HTTP ${invalidSession.status}.`);
   }
 
+  const unauthenticatedPosts = await fetch("https://api.afuchat.com/v1/chat/posts/mine");
+  if (unauthenticatedPosts.status !== 401) {
+    throw new Error(`Unauthenticated posts request returned HTTP ${unauthenticatedPosts.status}.`);
+  }
+  const unauthenticatedPostCreate = await fetch("https://api.afuchat.com/v1/chat/posts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (unauthenticatedPostCreate.status !== 401) {
+    throw new Error(`Unauthenticated post creation returned HTTP ${unauthenticatedPostCreate.status}.`);
+  }
+  const unauthenticatedReplies = await fetch(
+    "https://api.afuchat.com/v1/chat/posts/123e4567-e89b-42d3-a456-426614174123/replies",
+  );
+  if (unauthenticatedReplies.status !== 401) {
+    throw new Error(`Unauthenticated replies request returned HTTP ${unauthenticatedReplies.status}.`);
+  }
+  const unauthenticatedPostLike = await fetch(
+    "https://api.afuchat.com/v1/chat/posts/123e4567-e89b-42d3-a456-426614174123/like",
+    { method: "POST" },
+  );
+  if (unauthenticatedPostLike.status !== 401) {
+    throw new Error(`Unauthenticated post-like request returned HTTP ${unauthenticatedPostLike.status}.`);
+  }
+
   const unauthenticatedProfile = await fetch("https://api.afuchat.com/v1/chat/me");
   if (unauthenticatedProfile.status !== 401) {
     throw new Error(`Unauthenticated profile request returned HTTP ${unauthenticatedProfile.status}.`);
@@ -548,6 +574,12 @@ if (!APPLY) {
       "GET|POST /v1/chat/status",
       "GET /v1/chat/conversations",
       "GET /v1/chat/me",
+      "POST /v1/chat/posts",
+      "GET /v1/chat/posts/mine",
+      "GET|DELETE /v1/chat/posts/{postId}",
+      "POST|DELETE /v1/chat/posts/{postId}/like",
+      "GET|POST /v1/chat/posts/{postId}/replies",
+      "POST|DELETE /v1/chat/posts/{postId}/replies/{replyId}/like",
       "POST /v1/chat/support/ai-reply",
       "POST /v1/chat/push/register",
       "POST /v1/chat/push/send",

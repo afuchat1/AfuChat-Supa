@@ -1823,3 +1823,411 @@ test("clear chat history is scoped to the verified member and only their message
   assert.deepEqual(await requests[1].json(), { is_archived: true });
   assert.equal(requests[1].headers.get("Authorization"), `Bearer ${token}`);
 });
+
+test("post creation derives the author from AfuAuth and saves uploaded image rows", async () => {
+  const token = "create-post-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (new URL(request.url).pathname.endsWith("/posts")) {
+      return Response.json([{
+        id: postId,
+        author_id: userId,
+        content: "A post",
+        image_url: "https://cdn.afuchat.com/chat/containers/user/photo.jpg",
+      }], { status: 201 });
+    }
+    if (new URL(request.url).pathname.endsWith("/post_images")) {
+      return Response.json([], { status: 201 });
+    }
+    return Response.json({ error: "unexpected request" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        author_id: "123e4567-e89b-42d3-a456-426614174000",
+        content: "A post",
+        image_url: "https://cdn.afuchat.com/chat/containers/user/photo.jpg",
+        images: [
+          "https://cdn.afuchat.com/chat/containers/user/photo.jpg",
+          "https://cdn.afuchat.com/chat/containers/user/photo-2.jpg",
+        ],
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 201);
+  assert.deepEqual((await response.json()).post, {
+    id: postId,
+    author_id: userId,
+    content: "A post",
+    image_url: "https://cdn.afuchat.com/chat/containers/user/photo.jpg",
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(requests[0].headers.get("Content-Profile"), "public");
+  const insertBody = await requests[0].json();
+  assert.equal(insertBody.author_id, userId);
+  assert.notEqual(insertBody.author_id, "123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(insertBody.view_count, 0);
+  assert.deepEqual(await requests[1].json(), [
+    { post_id: postId, image_url: "https://cdn.afuchat.com/chat/containers/user/photo.jpg", display_order: 0 },
+    { post_id: postId, image_url: "https://cdn.afuchat.com/chat/containers/user/photo-2.jpg", display_order: 1 },
+  ]);
+});
+
+test("post detail preserves post, image, and shared account profile response shape", async () => {
+  const token = "get-post-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const authorId = "123e4567-e89b-42d3-a456-426614174098";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/posts")) {
+      return Response.json([{
+        id: postId,
+        author_id: authorId,
+        content: "Post body",
+        like_count: 3,
+        post_type: "text",
+      }]);
+    }
+    if (url.pathname.endsWith("/post_images")) {
+      return Response.json([{ post_id: postId, image_url: "https://example.test/a.jpg", display_order: 0 }]);
+    }
+    if (url.pathname.endsWith("/profiles")) {
+      return Response.json([{
+        id: authorId,
+        display_name: "Post author",
+        handle: "author",
+        avatar_url: null,
+        is_verified: false,
+        is_organization_verified: false,
+      }]);
+    }
+    if (url.pathname.endsWith("/post_acknowledgments")) return Response.json([]);
+    return Response.json({ error: "unexpected request" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.post.id, postId);
+  assert.equal(payload.post.profiles.id, authorId);
+  assert.equal(payload.post.post_images[0].image_url, "https://example.test/a.jpg");
+  assert.equal(requests[2].headers.get("Accept-Profile"), "accounts");
+  assert.equal(requests[2].headers.get("Authorization"), `Bearer ${token}`);
+});
+
+test("my posts list is scoped to the authenticated author and returns aggregated details", async () => {
+  const token = "my-posts-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const path = new URL(request.url).pathname;
+    if (path.endsWith("/posts")) {
+      return Response.json([{
+        id: postId,
+        content: "Mine",
+        image_url: null,
+        post_type: "post",
+        visibility: "public",
+      }]);
+    }
+    if (path.endsWith("/post_images")) {
+      return Response.json([{ post_id: postId, image_url: "https://example.test/a.jpg", display_order: 0 }]);
+    }
+    if (path.endsWith("/post_acknowledgments")) {
+      return Response.json([{ post_id: postId }, { post_id: postId }]);
+    }
+    if (path.endsWith("/post_replies")) {
+      return Response.json([{ post_id: postId }]);
+    }
+    return Response.json({ error: "unexpected request" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts/mine", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.items[0].likeCount, 2);
+  assert.equal(payload.items[0].replyCount, 1);
+  assert.deepEqual(payload.items[0].images, ["https://example.test/a.jpg"]);
+  const query = new URL(requests[0].url).searchParams;
+  assert.equal(query.get("author_id"), `eq.${userId}`);
+  assert.equal(query.get("limit"), "50");
+  assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
+});
+
+test("post deletion requires the verified author and returns representation", async () => {
+  const token = "delete-post-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let deleteRequest;
+  globalThis.fetch = async (input, init) => {
+    deleteRequest = new Request(input, init);
+    return Response.json([{ id: postId }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, id: postId });
+  const query = new URL(deleteRequest.url).searchParams;
+  assert.equal(query.get("author_id"), `eq.${userId}`);
+  assert.equal(query.get("id"), `eq.${postId}`);
+  assert.equal(deleteRequest.headers.get("Prefer"), "return=representation");
+});
+
+test("post routes reject bad IDs, oversized writes, and missing sessions before PostgREST", async () => {
+  let postgrestCalls = 0;
+  globalThis.fetch = async () => {
+    postgrestCalls += 1;
+    return Response.json([]);
+  };
+
+  const invalidId = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts/not-a-uuid"),
+    makeEnv(),
+  );
+  assert.equal(invalidId.status, 400);
+
+  const oversized = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-session", "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "x".repeat(40_001) }),
+    }),
+    makeEnv(),
+  );
+  assert.equal(oversized.status, 400);
+
+  const unauthenticated = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts/mine"),
+    makeEnv(),
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(postgrestCalls, 0);
+});
+
+test("post replies return shared profiles, like counts, and the signed-in user's like state", async () => {
+  const token = "post-replies-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const authorId = "123e4567-e89b-42d3-a456-426614174098";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const replyId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    const path = new URL(request.url).pathname;
+    if (path.endsWith("/post_replies")) {
+      return Response.json([{
+        id: replyId,
+        author_id: authorId,
+        content: "Reply",
+        created_at: "2026-10-07T12:00:00Z",
+        parent_reply_id: null,
+        voice_url: null,
+        voice_duration: null,
+        image_url: null,
+      }]);
+    }
+    if (path.endsWith("/profiles")) {
+      return Response.json([{
+        id: authorId,
+        display_name: "Reply author",
+        handle: "reply-author",
+        avatar_url: "https://example.test/avatar.jpg",
+      }]);
+    }
+    if (path.endsWith("/post_reply_likes")) {
+      const userFilter = new URL(request.url).searchParams.get("user_id");
+      return Response.json(userFilter ? [{ reply_id: replyId }] : [
+        { reply_id: replyId },
+        { reply_id: replyId },
+      ]);
+    }
+    return Response.json({ error: "unexpected request" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}/replies`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.items[0].like_count, 2);
+  assert.equal(payload.items[0].liked, true);
+  assert.deepEqual(payload.items[0].profile, {
+    display_name: "Reply author",
+    handle: "reply-author",
+    avatar_url: "https://example.test/avatar.jpg",
+  });
+  assert.equal(requests[1].headers.get("Accept-Profile"), "accounts");
+  assert.equal(new URL(requests[2].url).searchParams.get("reply_id"), `in.(${replyId})`);
+  assert.equal(new URL(requests[3].url).searchParams.get("user_id"), `eq.${userId}`);
+});
+
+test("reply creation verifies parent thread and derives author identity", async () => {
+  const token = "create-post-reply-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const parentReplyId = "123e4567-e89b-42d3-a456-426614174124";
+  const replyId = "123e4567-e89b-42d3-a456-426614174125";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.method === "GET") return Response.json([{ id: parentReplyId }]);
+    return Response.json([{
+      id: replyId,
+      author_id: userId,
+      content: "Threaded reply",
+      parent_reply_id: parentReplyId,
+    }], { status: 201 });
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}/replies`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        author_id: "123e4567-e89b-42d3-a456-426614174000",
+        content: "Threaded reply",
+        parent_reply_id: parentReplyId,
+      }),
+    }),
+    env,
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(payload.reply.id, replyId);
+  assert.equal(new URL(requests[0].url).searchParams.get("post_id"), `eq.${postId}`);
+  const inserted = await requests[1].json();
+  assert.equal(inserted.post_id, postId);
+  assert.equal(inserted.author_id, userId);
+  assert.notEqual(inserted.author_id, "123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(inserted.parent_reply_id, parentReplyId);
+});
+
+test("post likes are idempotent and always use the verified account", async () => {
+  const token = "post-like-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  let insertRequest;
+  globalThis.fetch = async (input, init) => {
+    insertRequest = new Request(input, init);
+    return Response.json([{ post_id: postId, user_id: userId }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}/like`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { liked: true });
+  const query = new URL(insertRequest.url).searchParams;
+  assert.equal(query.get("on_conflict"), "post_id,user_id");
+  assert.equal(insertRequest.headers.get("Prefer"), "resolution=merge-duplicates,return=representation");
+  assert.deepEqual(await insertRequest.json(), { post_id: postId, user_id: userId });
+});
+
+test("reply likes verify that the target reply belongs to the requested post", async () => {
+  const token = "reply-like-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const postId = "123e4567-e89b-42d3-a456-426614174123";
+  const replyId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    requests.push(request);
+    if (request.method === "GET") return Response.json([{ id: replyId }]);
+    return Response.json([]);
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}/replies/${replyId}/like`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { liked: false });
+  const ownershipQuery = new URL(requests[0].url).searchParams;
+  assert.equal(ownershipQuery.get("id"), `eq.${replyId}`);
+  assert.equal(ownershipQuery.get("post_id"), `eq.${postId}`);
+  const deletionQuery = new URL(requests[1].url).searchParams;
+  assert.equal(deletionQuery.get("reply_id"), `eq.${replyId}`);
+  assert.equal(deletionQuery.get("user_id"), `eq.${userId}`);
+});

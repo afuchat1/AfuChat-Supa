@@ -41,6 +41,24 @@ tracked in [`AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](./AFUCHAT_BACKEND_MIGRATION_AU
 | `POST /v1/chat/bookmarks` | Saves a post. JSON body: `{ "post_id": "..." }`. An optional `expected_user_id` is accepted only as an offline-queue account check; the target user is always derived from the verified session. | Shared-session bearer. | Idempotent `200 { bookmarked: true }`; invalid input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
 | `DELETE /v1/chat/bookmarks?post_id={uuid}&expected_user_id={uuid}` | Removes a saved post. `expected_user_id` is optional and only prevents an offline action from crossing accounts. | Shared-session bearer; the delete filter always uses the verified user ID. | Idempotent `200 { bookmarked: false }`; invalid input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
 
+### Posts (initial migration slice)
+
+These named routes cover post creation, the signed-in user's post list,
+single-post details, owner deletion, acknowledgments, and replies. Feed ranking,
+post views, mention search, and unrelated post surfaces remain separate
+operations and are not covered by these routes yet.
+
+| Method and path | Purpose and inputs | Authentication | Response |
+|---|---|---|---|
+| `POST /v1/chat/posts` | Creates a post with a fixed field allowlist. JSON body supports post content/media/article/duet fields and an optional ordered `images` array. Media URLs must be HTTPS. `author_id` is ignored; the Worker derives it from the verified session. Image metadata rows are written as part of the operation; if that write fails, the new post row is rolled back. | Shared-session bearer; the same token is forwarded for database row-level security. | `201 { post }`; malformed or oversized input returns `400`, missing/invalid session returns `401`, and database failure returns a generic `502`. |
+| `GET /v1/chat/posts/mine` | Lists up to 50 posts for the verified account, including ordered image URLs and like/reply counts used by My Posts. | Shared-session bearer; author ID is always taken from the verified session. | `200 { items }`; missing/invalid session returns `401`, and database failures return a generic `502`. |
+| `GET /v1/chat/posts/{postId}` | Loads one post, ordered images, shared `accounts.profiles` author fields, and whether the current account liked it. Database row-level policies still determine whether the caller may see it. | Shared-session bearer; same bearer token is forwarded to each read. | `200 { post }`; invalid IDs return `400`, inaccessible/missing posts return `404`, and database failures return a generic `502`. |
+| `DELETE /v1/chat/posts/{postId}` | Deletes only a post whose `author_id` matches the verified account. | Shared-session bearer; ownership is enforced in the database filter as well as row-level policies. | `200 { ok: true, id }`; invalid IDs return `400`, missing/non-owned posts return `404`, and database failures return a generic `502`. |
+| `POST`, `DELETE /v1/chat/posts/{postId}/like` | Idempotently adds or removes the current account's post acknowledgment. | Shared-session bearer; user ID is always derived from the verified session. | `200 { liked: boolean }`; invalid IDs return `400`; database failures return a generic `502`. |
+| `GET /v1/chat/posts/{postId}/replies` | Lists up to 100 replies in chronological order with shared account profiles, like counts, and current-account like state. | Shared-session bearer; the same token is forwarded to all reads. | `200 { items }`; invalid IDs return `400`; database failures return a generic `502`. |
+| `POST /v1/chat/posts/{postId}/replies` | Creates a text, image, or voice reply. JSON body accepts `content`, optional `parent_reply_id`, HTTPS `image_url`/`voice_url`, and `voice_duration`. A parent reply must belong to the same post; `author_id` is derived by the Worker. | Shared-session bearer; row-level security applies. | `201 { reply }`; invalid data returns `400`, unknown parent returns `404`, and database failures return a generic `502`. |
+| `POST`, `DELETE /v1/chat/posts/{postId}/replies/{replyId}/like` | Adds or removes the current account's like on a reply; the reply is checked against the URL's post first. | Shared-session bearer; user ID is always derived from the verified session. | `200 { liked: boolean }`; invalid IDs return `400`, missing reply returns `404`, and database failures return a generic `502`. |
+
 ### Payments
 
 | Method and path | Purpose and inputs | Authentication | Response |

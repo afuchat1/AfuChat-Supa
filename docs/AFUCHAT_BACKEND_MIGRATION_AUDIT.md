@@ -21,16 +21,17 @@ schemas, buckets, CDN routes, or deployed Workers were changed.
 ## Current Worker coverage
 
 The `afuchat-api` source currently owns health/status, current-account profile
-read, conversation list, saved-post/bookmark operations, support AI reply,
-push registration/send, account export, Pesapal payments, and the existing
-storage handler. Video processing paths remain explicit `501` stubs. AfuAuth
-and AfuAI calls remain separate product APIs.
+read, conversation list, saved-post/bookmark operations, post create/detail/my
+posts/owner delete/likes/replies, support AI reply, push registration/send,
+account export, Pesapal payments, and the existing storage handler. Video
+processing paths remain explicit `501` stubs. AfuAuth and AfuAI calls remain
+separate product APIs.
 
-The new bookmark route is implemented in source and tested locally. It reads
-the existing `public.post_bookmarks`, `public.posts`, and `public.profiles`
-relations; it scopes all reads and writes to the verified account, replaces
-the app's references to missing `bookmarks` and `saved_posts` relations, and
-serves detail/feed status checks in batches. It has not been deployed.
+The bookmark and post routes are implemented in source and tested locally, but
+have not been deployed. The post route slice uses fixed projections, derives
+author identity from AfuAuth, forwards the same user token to PostgREST, and
+uses the `accounts.profiles` schema for author details. Post feeds, view
+tracking, mention search, and other product data remain unmigrated.
 
 ## Mobile source inventory
 
