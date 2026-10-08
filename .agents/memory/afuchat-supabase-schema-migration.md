@@ -23,4 +23,4 @@ The live AfuChat API had split paths: several `public` RPCs used `chat.*`, while
 
 **Why:** The user clarified that `afuchat` is the source of truth and directly instructed deletion of the legacy schema; do not invent an additional requirement to preserve its rows.
 
-**How to apply:** Do not copy or re-key legacy rows. Redirect explicit function references to AfuChat, retarget and validate the 30 external FKs whose parents exist there, preserve external notification rows while dropping their invalid FK, and drop `chat` only after the Worker deployment and dependency checks. Do not expand PostgREST schema exposure; existing public compatibility views already point to AfuChat.
+**How to apply:** Do not copy or re-key legacy rows. Redirect explicit routine references to AfuChat, retarget and validate the 30 external FKs whose parents exist there, preserve external notification rows while explicitly removing their invalid FK, and use `DROP SCHEMA ... RESTRICT` after Worker deployment so overlooked external dependencies abort rather than cascade. Do not expand PostgREST schema exposure; existing public compatibility views already point to AfuChat.

@@ -195,13 +195,15 @@ that schema. Do not copy or re-key legacy rows. Thirty of the 31 external FKs
 can be retargeted to matching AfuChat parent tables and validated. The one
 `platform.notification_events.message_id` FK cannot be validated because two
 external notification rows point to messages absent from AfuChat; preserve
-those rows and let the schema drop remove only that FK constraint.
+those rows and explicitly remove only that FK before the schema drop.
 
 No live schema, rows, function, grant, Worker, or API setting has been changed
-yet. The cutover migration must rewrite the 26 explicit function references,
+yet. The cutover migration must rewrite the 26 explicit routine references,
 rebind the valid external FKs, verify there are no remaining external views,
-policies, or function dependencies on `chat`, and only then drop the schema.
-Deploy the updated Worker before applying that production migration.
+policies, or routine dependencies on `chat`, explicitly remove the known invalid
+notification FK, and use `DROP SCHEMA ... RESTRICT` so any overlooked external
+dependency aborts instead of cascading. Deploy the updated Worker before
+applying that production migration.
 
 ## Remaining work
 

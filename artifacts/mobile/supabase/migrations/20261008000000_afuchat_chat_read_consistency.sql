@@ -23,7 +23,7 @@ BEGIN
     FROM pg_catalog.pg_proc p
     JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname <> 'chat'
-      AND p.prokind = 'f'
+      AND p.prokind IN ('f', 'p')
       AND p.prosrc ~ '(^|[^A-Za-z0-9_])chat\.'
     ORDER BY p.oid
   LOOP
@@ -47,7 +47,7 @@ BEGIN
     FROM pg_catalog.pg_proc p
     JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname <> 'chat'
-      AND p.prokind = 'f'
+      AND p.prokind IN ('f', 'p')
       AND p.prosrc ~ '(^|[^A-Za-z0-9_])chat\.'
   ) THEN
     RAISE EXCEPTION 'A non-legacy routine still explicitly references chat.*';
@@ -82,15 +82,21 @@ BEGIN
         'afuchat', v_fk.parent_table;
     END IF;
 
-    v_new_fk_definition := pg_catalog.replace(
+    v_new_fk_definition := pg_catalog.regexp_replace(
       v_fk.constraint_definition,
-      'REFERENCES chat.',
-      'REFERENCES afuchat.'
+      '[[:space:]]+NOT VALID[[:space:]]*$',
+      '',
+      'i'
     );
-    IF v_new_fk_definition = v_fk.constraint_definition THEN
+    IF pg_catalog.strpos(v_new_fk_definition, 'REFERENCES chat.') = 0 THEN
       RAISE EXCEPTION 'Could not rewrite foreign key %.% constraint %',
         v_fk.child_schema, v_fk.child_table, v_fk.constraint_name;
     END IF;
+    v_new_fk_definition := pg_catalog.replace(
+      v_new_fk_definition,
+      'REFERENCES chat.',
+      'REFERENCES afuchat.'
+    );
     v_temporary_name := 'afuchat_cutover_fk_' || v_fk.constraint_oid::text;
 
     EXECUTE pg_catalog.format(
@@ -122,7 +128,7 @@ BEGIN
            AND v_fk.child_table = 'notification_events'
            AND v_fk.parent_table = 'messages' THEN
           RAISE WARNING
-            'Retaining platform.notification_events rows with unresolved message IDs; the old FK will be removed with chat';
+            'Retaining platform.notification_events rows with unresolved message IDs; their legacy FK will be explicitly removed';
         ELSE
           RAISE;
         END IF;
@@ -146,8 +152,8 @@ BEGIN
   END LOOP;
 
   -- The two known platform notification rows have no AfuChat message parent.
-  -- Preserve those external rows and remove only their now-invalid FK through
-  -- DROP SCHEMA CASCADE. Any other unretargeted external FK aborts the cutover.
+  -- Preserve those external rows and remove only their now-invalid FK below.
+  -- Any other unretargeted external FK aborts the cutover.
   IF EXISTS (
     SELECT 1
     FROM pg_catalog.pg_constraint con
@@ -168,7 +174,8 @@ BEGIN
     RAISE EXCEPTION 'Unexpected external foreign keys still reference chat.*';
   END IF;
 
-  -- Do not let CASCADE remove external views, RLS policies, or SQL routines.
+  -- Check common source and catalog dependencies explicitly; RESTRICT on the
+  -- final drop also blocks any external dependency not covered by these checks.
   IF EXISTS (
     SELECT 1
     FROM pg_catalog.pg_depend d
@@ -213,7 +220,28 @@ BEGIN
     RAISE EXCEPTION 'An external RLS policy still explicitly references chat.*';
   END IF;
 
-  EXECUTE 'DROP SCHEMA IF EXISTS chat CASCADE';
+  -- Remove the one explicitly approved, invalid external FK. Use RESTRICT for
+  -- the schema drop so an overlooked external dependency aborts and rolls back
+  -- instead of silently cascading into another schema.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_constraint con
+    JOIN pg_catalog.pg_class child ON child.oid = con.conrelid
+    JOIN pg_catalog.pg_namespace child_ns ON child_ns.oid = child.relnamespace
+    JOIN pg_catalog.pg_class parent ON parent.oid = con.confrelid
+    JOIN pg_catalog.pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace
+    WHERE con.contype = 'f'
+      AND child_ns.nspname = 'platform'
+      AND child.relname = 'notification_events'
+      AND con.conname = 'notification_events_message_id_fkey'
+      AND parent_ns.nspname = 'chat'
+      AND parent.relname = 'messages'
+  ) THEN
+    EXECUTE
+      'ALTER TABLE platform.notification_events DROP CONSTRAINT notification_events_message_id_fkey';
+  END IF;
+
+  EXECUTE 'DROP SCHEMA IF EXISTS chat RESTRICT';
 
   IF pg_catalog.to_regnamespace('chat') IS NOT NULL THEN
     RAISE EXCEPTION 'Legacy chat schema still exists after cutover';
