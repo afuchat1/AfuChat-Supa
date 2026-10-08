@@ -140,6 +140,98 @@ export async function getAfuChatCurrentProfile<T extends { id: string }>(
   }
 }
 
+export type AfuChatContactProfile = {
+  id: string;
+  display_name: string;
+  handle: string;
+  avatar_url: string | null;
+  banner_url: string | null;
+  bio: string | null;
+  is_verified: boolean;
+  is_organization_verified: boolean;
+  is_business_mode: boolean;
+  is_private: boolean;
+  country: string | null;
+  website_url: string | null;
+  xp: number;
+  current_grade: string | null;
+  acoin: number;
+  last_seen: string | null;
+  show_online_status: boolean;
+  created_at: string | null;
+};
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function isAfuChatContactProfile(value: unknown): value is AfuChatContactProfile {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "string" &&
+    typeof row.display_name === "string" &&
+    typeof row.handle === "string" &&
+    isNullableString(row.avatar_url) &&
+    isNullableString(row.banner_url) &&
+    isNullableString(row.bio) &&
+    typeof row.is_verified === "boolean" &&
+    typeof row.is_organization_verified === "boolean" &&
+    typeof row.is_business_mode === "boolean" &&
+    typeof row.is_private === "boolean" &&
+    isNullableString(row.country) &&
+    isNullableString(row.website_url) &&
+    typeof row.xp === "number" && Number.isFinite(row.xp) &&
+    isNullableString(row.current_grade) &&
+    typeof row.acoin === "number" && Number.isFinite(row.acoin) &&
+    isNullableString(row.last_seen) &&
+    typeof row.show_online_status === "boolean" &&
+    isNullableString(row.created_at);
+}
+
+export async function getAfuChatContactProfile(
+  profileId: string,
+): Promise<{ data: AfuChatContactProfile | null; error: AfuChatApiError | null }> {
+  try {
+    const { response, data: payload } = await afuChatApiJson<{
+      profile?: unknown;
+      error?: unknown;
+      request_id?: unknown;
+    }>(`/profiles/${encodeURIComponent(profileId)}`);
+    if (!response.ok) {
+      return {
+        data: null,
+        error: {
+          message: typeof payload?.error === "string"
+            ? payload.error
+            : `Profile request failed (HTTP ${response.status})`,
+          code: String(response.status),
+          requestId: typeof payload?.request_id === "string"
+            ? payload.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    if (!isAfuChatContactProfile(payload?.profile) || payload.profile.id !== profileId) {
+      return {
+        data: null,
+        error: {
+          message: "Profile service returned an invalid profile response.",
+          code: "INVALID_RESPONSE",
+        },
+      };
+    }
+    return { data: payload.profile, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Profile service is unavailable.",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
 export async function afuChatApiJson<T>(
   path: string,
   body?: unknown,

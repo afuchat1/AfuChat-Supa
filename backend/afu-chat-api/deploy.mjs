@@ -332,6 +332,7 @@ async function assertProductionPostflight() {
   }
 
   const socialRouteProbes = [
+    { method: "GET", path: "/v1/chat/profiles/123e4567-e89b-42d3-a456-426614174123" },
     { method: "GET", path: "/v1/chat/follows/ids?profile_id=123e4567-e89b-42d3-a456-426614174123&direction=following" },
     { method: "GET", path: "/v1/chat/follows/list?profile_id=123e4567-e89b-42d3-a456-426614174123&direction=following" },
     { method: "GET", path: "/v1/chat/follows/summary?profile_id=123e4567-e89b-42d3-a456-426614174123" },
@@ -606,6 +607,7 @@ if (!APPLY) {
       "GET|POST /v1/chat/status",
       "GET /v1/chat/conversations",
       "GET /v1/chat/me",
+      "GET /v1/chat/profiles/{profileId}",
       "POST /v1/chat/posts",
       "GET /v1/chat/posts/mine",
       "GET|DELETE /v1/chat/posts/{postId}",

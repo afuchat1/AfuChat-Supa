@@ -22,6 +22,7 @@ import {
 } from "./message-actions.ts";
 import { handleMessageEdit, handleMessageEditHistory } from "./message-edit.ts";
 import { handlePayments } from "./payments.ts";
+import { handleGetContactProfile } from "./profiles.ts";
 import {
   handleCreatePost,
   handleDeletePost,
@@ -793,6 +794,11 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   if (incoming.pathname === `${PREFIX}/me`) {
     return handleCurrentUser(request, env);
+  }
+
+  const contactProfileMatch = incoming.pathname.match(/^\/v1\/chat\/profiles\/([^/]+)$/);
+  if (contactProfileMatch) {
+    return handleGetContactProfile(request, env, contactProfileMatch[1]);
   }
 
   if (incoming.pathname === `${PREFIX}/bookmarks`) {

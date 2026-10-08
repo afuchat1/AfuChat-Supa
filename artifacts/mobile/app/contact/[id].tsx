@@ -19,11 +19,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import {
+  getAfuChatContactProfile,
   getAfuChatFollowRecords,
   getAfuChatFollowStatuses,
   getAfuChatFollowSummary,
   getAfuChatProfilePosts,
   setAfuChatFollow,
+  type AfuChatContactProfile,
 } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -44,26 +46,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FullProfile = {
-  id: string;
-  display_name: string;
-  handle: string;
-  avatar_url: string | null;
-  banner_url: string | null;
-  bio: string | null;
-  is_verified: boolean;
-  is_organization_verified: boolean;
-  is_business_mode: boolean;
-  is_private: boolean;
-  country: string | null;
-  website_url: string | null;
-  xp: number;
-  current_grade: string | null;
-  acoin: number;
-  last_seen: string | null;
-  show_online_status: boolean;
-  created_at: string | null;
-};
+type FullProfile = AfuChatContactProfile;
 
 type Counts = { followers: number; following: number; posts: number };
 type GridPost = { id: string; image_url: string | null; article_cover_url: string | null; video_url: string | null; post_type: string | null; content?: string | null; article_title?: string | null };
@@ -147,8 +130,10 @@ export default function ContactScreen() {
   const cached = id ? getProfileCache(id) : null;
   const [profile,       setProfile]       = useState<FullProfile | null>(cached as FullProfile | null);
   const [counts,        setCounts]        = useState<Counts>({ followers: 0, following: 0, posts: 0 });
-  const [loading,       setLoading]       = useState(!cached);
+  const [loading,       setLoading]       = useState(true);
   const [notFound,      setNotFound]      = useState(false);
+  const [loadError,     setLoadError]     = useState<string | null>(null);
+  const [loadAttempt,   setLoadAttempt]   = useState(0);
   const [isFollowing,   setIsFollowing]   = useState(false);
   const [theyFollowMe,  setTheyFollowMe]  = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
@@ -170,30 +155,66 @@ export default function ContactScreen() {
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) { setNotFound(true); setLoading(false); return; }
+    setLoading(true);
+    setNotFound(false);
+    setLoadError(null);
     setGridLoading(true);
     (async () => {
-      const [pRes, followResult, postResult] = await Promise.all([
-        supabase.from("profiles")
-          .select("id,display_name,handle,avatar_url,banner_url,bio,is_verified,is_organization_verified,is_business_mode,is_private,country,website_url,xp,current_grade,acoin,last_seen,show_online_status,created_at")
-          .eq("id", id).maybeSingle(),
+      const [profileResult, followResult] = await Promise.all([
+        getAfuChatContactProfile(id),
         user ? getAfuChatFollowSummary(id) : Promise.resolve({ data: null, error: null }),
-        user ? getAfuChatProfilePosts(id, 90) : Promise.resolve({ data: null, totalCount: null, error: null }),
       ]);
-      if (!pRes.data) { setNotFound(true); setLoading(false); setGridLoading(false); return; }
-      const p = pRes.data as FullProfile;
+      if (!profileResult.data) {
+        setProfile(null);
+        setNotFound(profileResult.error?.code === "404");
+        setLoadError(profileResult.error?.code === "404"
+          ? null
+          : profileResult.error?.message ?? "This profile could not be loaded.");
+        setLoading(false);
+        setGridLoading(false);
+        return;
+      }
+      if (user && (followResult.error || !followResult.data)) {
+        setProfile(null);
+        setLoadError(followResult.error?.message ?? "Follow status could not be loaded.");
+        setLoading(false);
+        setGridLoading(false);
+        return;
+      }
+
+      const p = profileResult.data;
+      const following = followResult.data?.is_following ?? false;
       setProfile(p); setProfileCache(p.id, p as any);
       setCounts({
         followers: followResult.data?.followers_count ?? 0,
         following: followResult.data?.following_count ?? 0,
-        posts: postResult.totalCount ?? 0,
+        posts: 0,
       });
-      setIsFollowing(followResult.data?.is_following ?? false);
+      setIsFollowing(following);
       setTheyFollowMe(followResult.data?.follows_you ?? false);
+
+      if (p.is_private && !isSelf && !following) {
+        setAllGridPosts([]);
+        setGridLoading(false);
+        setLoading(false);
+        return;
+      }
+
+      const postResult = user
+        ? await getAfuChatProfilePosts(id, 90)
+        : { data: null, totalCount: null, error: null };
+      setCounts((current) => ({ ...current, posts: postResult.totalCount ?? 0 }));
       setAllGridPosts((postResult.data ?? []) as unknown as GridPost[]);
       setGridLoading(false);
       setLoading(false);
-    })().catch(() => { setLoading(false); setGridLoading(false); });
-  }, [id, user?.id]);
+    })().catch(() => {
+      setProfile(null);
+      setNotFound(false);
+      setLoadError("This profile could not be loaded right now.");
+      setLoading(false);
+      setGridLoading(false);
+    });
+  }, [id, user?.id, loadAttempt]);
 
   // ── Load aliases + mutuals ────────────────────────────────────────────────
   useEffect(() => {
@@ -358,8 +379,31 @@ export default function ContactScreen() {
   }, [profile, id]);
 
   // ── Guard states ──────────────────────────────────────────────────────────
-  if (loading && !profile) return (
+  if (loading) return (
     <View style={{ flex: 1, backgroundColor: colors.background }}><ContactProfileSkeleton /></View>
+  );
+  if (loadError && !profile) return (
+    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top, justifyContent: "center", alignItems: "center", paddingHorizontal: 28 }}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
+        style={{ position: "absolute", top: insets.top + 8, left: 16, width: 40, height: 40, justifyContent: "center" }}
+      >
+        <Ionicons name="arrow-back" size={24} color={accent} />
+      </TouchableOpacity>
+      <Ionicons name="cloud-offline-outline" size={34} color={colors.textMuted} />
+      <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600", marginTop: 12, textAlign: "center" }}>
+        {loadError}
+      </Text>
+      <TouchableOpacity
+        accessibilityRole="button"
+        onPress={() => setLoadAttempt((attempt) => attempt + 1)}
+        style={{ marginTop: 18, backgroundColor: accent, paddingHorizontal: 20, paddingVertical: 11, borderRadius: 22 }}
+      >
+        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>Try again</Text>
+      </TouchableOpacity>
+    </View>
   );
   if (notFound || !profile) return (
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>

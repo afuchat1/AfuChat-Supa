@@ -34,6 +34,47 @@ function makeEnv(authStatus = 200) {
   };
 }
 
+function makeContactProfile(id, overrides = {}) {
+  return {
+    id,
+    handle: "other-user",
+    display_name: "Other User",
+    avatar_url: "https://cdn.afuchat.com/avatar.jpg",
+    banner_url: "https://cdn.afuchat.com/banner.jpg",
+    bio: "A public profile",
+    is_verified: true,
+    is_organization_verified: false,
+    is_business_mode: false,
+    is_private: false,
+    country: "Uganda",
+    website_url: "https://example.com",
+    xp: 150,
+    current_grade: "Active",
+    acoin: 20,
+    last_seen: "2026-10-08T07:00:00.000Z",
+    show_online_status: false,
+    created_at: "2025-02-01T00:00:00.000Z",
+    phone_number: "+256700000000",
+    is_admin: true,
+    date_of_birth: "1990-01-01",
+    ...overrides,
+  };
+}
+
+function mockContactProfileReads(profile, { blocked = [], follows = [] } = {}) {
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    requests.push(request);
+    if (url.pathname === "/rest/v1/profiles") return Response.json([profile]);
+    if (url.pathname === "/rest/v1/blocked_users") return Response.json(blocked);
+    if (url.pathname === "/rest/v1/follows") return Response.json(follows);
+    return Response.json([]);
+  };
+  return requests;
+}
+
 test("chat health endpoint is public", async () => {
   const response = await worker.fetch(
     new Request("https://api.afuchat.com/v1/chat/healthz"),
@@ -361,6 +402,181 @@ test("current profile sanitizes shared-database failures", async () => {
   } finally {
     console.error = previousConsoleError;
   }
+});
+
+test("other-user profile uses verified identity and returns only contact-page fields", async () => {
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const token = "contact-profile-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "123e4567-e89b-42d3-a456-426614174124" }, accessToken: token });
+  const requests = mockContactProfileReads(makeContactProfile(profileId));
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}?id=attacker-id`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+  const profileRequest = requests.find((request) => new URL(request.url).pathname.endsWith("/profiles"));
+  const blockRequest = requests.find((request) => new URL(request.url).pathname.endsWith("/blocked_users"));
+  const query = new URL(profileRequest.url).searchParams;
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.profile.id, profileId);
+  assert.equal(payload.profile.handle, "other-user");
+  assert.equal(payload.profile.country, "Uganda");
+  assert.equal(payload.profile.website_url, "https://example.com");
+  assert.equal(payload.profile.last_seen, null);
+  assert.equal(payload.profile.show_online_status, false);
+  assert.deepEqual(
+    Object.keys(payload.profile).sort(),
+    [
+      "id", "display_name", "handle", "avatar_url", "banner_url", "bio",
+      "is_verified", "is_organization_verified", "is_business_mode", "is_private",
+      "country", "website_url", "xp", "current_grade", "acoin", "last_seen",
+      "show_online_status", "created_at",
+    ].sort(),
+  );
+  assert.equal(query.get("id"), `eq.${profileId}`);
+  assert.equal(query.get("limit"), "2");
+  assert.doesNotMatch(query.get("select"), /phone_number|is_admin|date_of_birth/);
+  assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "accounts");
+  assert.equal(blockRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.match(response.headers.get("Cache-Control"), /private, no-store/);
+});
+
+test("private contact profiles return a minimal preview unless the viewer follows them", async () => {
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174124";
+  const token = "private-contact-profile-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+
+  const privateProfile = makeContactProfile(profileId, {
+    is_private: true,
+    show_online_status: true,
+  });
+  mockContactProfileReads(privateProfile);
+  const previewResponse = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const preview = (await previewResponse.json()).profile;
+  assert.equal(previewResponse.status, 200);
+  assert.equal(preview.is_private, true);
+  assert.equal(preview.display_name, "Other User");
+  assert.equal(preview.avatar_url, "https://cdn.afuchat.com/avatar.jpg");
+  assert.equal(preview.banner_url, null);
+  assert.equal(preview.bio, null);
+  assert.equal(preview.country, null);
+  assert.equal(preview.website_url, null);
+  assert.equal(preview.xp, 0);
+  assert.equal(preview.acoin, 0);
+  assert.equal(preview.last_seen, null);
+  assert.equal(preview.created_at, null);
+
+  const requests = mockContactProfileReads(privateProfile, { follows: [{ id: "follow-row" }] });
+  const followedResponse = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const followed = (await followedResponse.json()).profile;
+  assert.equal(followedResponse.status, 200);
+  assert.equal(followed.bio, "A public profile");
+  assert.equal(followed.country, "Uganda");
+  assert.equal(followed.last_seen, "2026-10-08T07:00:00.000Z");
+  assert.equal(followed.show_online_status, true);
+  const followRequest = requests.find((request) => new URL(request.url).pathname.endsWith("/follows"));
+  const followQuery = new URL(followRequest.url).searchParams;
+  assert.equal(followQuery.get("follower_id"), `eq.${viewerId}`);
+  assert.equal(followQuery.get("following_id"), `eq.${profileId}`);
+});
+
+test("contact profile is hidden when either account has blocked the other", async () => {
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174124";
+  const token = "blocked-contact-profile-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+  mockContactProfileReads(makeContactProfile(profileId), {
+    blocked: [{ blocker_id: profileId, blocked_id: viewerId }],
+  });
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+  assert.equal(response.status, 404);
+  assert.equal(payload.error, "Profile was not found.");
+  assert.equal("profile" in payload, false);
+});
+
+test("contact profile distinguishes authorization and upstream failures", async () => {
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const unauthenticated = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}`),
+    makeEnv(),
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const env = makeEnv();
+  const token = "contact-profile-error-session";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "123e4567-e89b-42d3-a456-426614174124" }, accessToken: token });
+  globalThis.fetch = async () =>
+    Response.json(
+      { code: "PGRST999", message: "internal database details" },
+      { status: 500 },
+    );
+  const previousConsoleError = console.error;
+  console.error = () => {};
+  try {
+    const response = await worker.fetch(
+      new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(payload.error, "Profile could not be loaded.");
+    assert.doesNotMatch(JSON.stringify(payload), /PGRST|database|internal|Supabase/i);
+  } finally {
+    console.error = previousConsoleError;
+  }
+});
+
+test("contact profile returns not-found only when the shared profile row is absent", async () => {
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const token = "missing-contact-profile-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "123e4567-e89b-42d3-a456-426614174124" }, accessToken: token });
+  globalThis.fetch = async () => Response.json([]);
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/profiles/${profileId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  const payload = await response.json();
+  assert.equal(response.status, 404);
+  assert.equal(payload.error, "Profile was not found.");
+  assert.equal(typeof payload.request_id, "string");
 });
 
 test("bookmark batch lookup scopes results to the verified account", async () => {
