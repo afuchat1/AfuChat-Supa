@@ -249,7 +249,11 @@ async function waitForChatHealth() {
         );
         lastStatus = activePeople.status;
         if (activePeople.status === 401) {
-          return;
+          const dataGateway = await fetch(
+            "https://api.afuchat.com/v1/chat/data/profiles",
+          );
+          lastStatus = dataGateway.status;
+          if (dataGateway.status === 401) return;
         }
       } else {
         lastStatus = appStatus.status;
@@ -281,7 +285,8 @@ async function assertProductionPostflight() {
     headers: {
       Origin: "https://afuchat.com",
       "Access-Control-Request-Method": "GET",
-      "Access-Control-Request-Headers": "authorization,content-type",
+      "Access-Control-Request-Headers":
+        "authorization,content-type,apikey,accept-profile,content-profile,prefer",
     },
   });
   if (
@@ -290,6 +295,31 @@ async function assertProductionPostflight() {
   ) {
     throw new Error(
       `Chat CORS preflight failed (HTTP ${options.status}, allowed origin ${options.headers.get("Access-Control-Allow-Origin") ?? "missing"}).`,
+    );
+  }
+  const allowedHeaders = (options.headers.get("Access-Control-Allow-Headers") ?? "").toLowerCase();
+  for (const requiredHeader of ["apikey", "accept-profile", "content-profile", "prefer"]) {
+    if (!allowedHeaders.includes(requiredHeader)) {
+      throw new Error(`Chat CORS preflight is missing ${requiredHeader}.`);
+    }
+  }
+
+  const unauthenticatedDataGateway = await fetch(
+    "https://api.afuchat.com/v1/chat/data/profiles",
+  );
+  if (unauthenticatedDataGateway.status !== 401) {
+    throw new Error(
+      `Unauthenticated data-gateway request returned HTTP ${unauthenticatedDataGateway.status}.`,
+    );
+  }
+
+  const unknownDataResource = await fetch(
+    "https://api.afuchat.com/v1/chat/data/not_a_mobile_resource",
+    { headers: { apikey: SUPABASE_ANON_KEY } },
+  );
+  if (unknownDataResource.status !== 404) {
+    throw new Error(
+      `Unknown data resource returned HTTP ${unknownDataResource.status}, not 404.`,
     );
   }
 
@@ -621,6 +651,8 @@ if (!APPLY) {
     ),
     endpoints: [
       "GET /v1/chat/healthz",
+      "GET|HEAD|POST|PATCH|DELETE /v1/chat/data/{registered relation}",
+      "GET|POST /v1/chat/data/rpc/{registered function}",
       "GET|POST /v1/chat/status",
       "GET|POST /v1/chat/conversations",
       "GET /v1/chat/me",

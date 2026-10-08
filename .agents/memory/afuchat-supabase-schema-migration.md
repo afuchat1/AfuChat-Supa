@@ -24,3 +24,9 @@ The live AfuChat API had split paths: several `public` RPCs used `chat.*`, while
 **Why:** The user clarified that `afuchat` is the source of truth and directly instructed deletion of the legacy schema; do not invent an additional requirement to preserve its rows.
 
 **How to apply:** Do not copy or re-key legacy rows. Redirect explicit routine references to AfuChat, retarget and validate the 30 external FKs whose parents exist there, preserve external notification rows while explicitly removing their invalid FK, and use `DROP SCHEMA ... RESTRICT` after Worker deployment so overlooked external dependencies abort rather than cascade. Do not expand PostgREST schema exposure; existing public compatibility views already point to AfuChat.
+
+For mobile data access, route every PostgREST relation and RPC call through the AfuChat Worker API. Keep each shared or cross-product dataset under its existing owner (for example, account profiles and shop orders); do not move, duplicate, or broadly expose those records as part of AfuChat routing.
+
+**Why:** The user explicitly requires one AfuChat API for mobile database calls while keeping shared data with other products intact.
+
+**How to apply:** Use the existing public AfuChat compatibility surface for AfuChat-owned data and narrowly allow explicit owner schemas for shared data. Keep RLS and the caller's session in force; make no schema or data migration unless separately authorized.

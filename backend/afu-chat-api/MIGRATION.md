@@ -44,25 +44,33 @@ Worker integration.
 
 The current audit and exact source inventories are recorded in
 [`docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](../../docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
-The read-only Management API catalog query now succeeds from this workspace;
-direct PostgreSQL connections still fail from Replit. The mobile baseline
-was refreshed after the follow/feed work: current source has 585 literal
-`.from("relation")` call sites over 84 relation names in 110 files, and 91
-direct RPC call sites over 36 function names. The latest catalog cross-check
-remains dated 2026-10-07 and covered the prior 89-name relation set; the three
-current names `app_banners`, `app_settings`, and `collections` have not been
-checked against that catalog.
+The read-only Management API catalog query succeeds from this workspace;
+direct PostgreSQL connections still fail from Replit. The 2026-10-08 mobile
+source scan (excluding generated output and dependencies) found 547 literal
+`.from("relation")` call sites over 81 relation names and 82 literal RPC call
+sites over 35 function names. `backend/afu-chat-api/src/data-gateway.ts`
+contains the matching static allowlists. Auth and Realtime remain direct;
+every PostgREST table/RPC request from the shared mobile Supabase client now
+routes through `/v1/chat/data/*`.
 
-Named `/v1/chat/*` routes now cover saved posts, post create/detail/likes/replies,
-follow lists/status/mutations, discover feeds, and batched post-view recording.
-The mobile follow surfaces use these routes rather than direct
-`.from("follows")` queries. Chat, Auth, Realtime, and SQLite offline behavior
-remain separate boundaries; this is not a blanket PostgREST migration.
+Named `/v1/chat/*` routes remain the preferred interface for product operations
+with business logic, including conversations, messages, saved posts, follows,
+feeds, account data, payments, and storage. The data gateway is a constrained
+compatibility path for the remaining direct call chains; it accepts only the
+source-inventoried relations/functions, verifies user bearers through AfuAuth,
+and forwards the same bearer to Supabase so RLS remains in force. It does not
+use a service-role key, expose arbitrary schemas, or copy product rows.
 
-The current source still references four absent relation names
-(`blocks`, `business_verification_requests`, `life_earth_leaderboard`, and
-`org_page_jobs`); `orders` exists in `shop`, not `public`. These need explicit
-domain mappings, not new tables or a general-purpose database proxy.
+The live catalog confirms `orders` exists only in `shop`, so that call is
+explicitly routed there; shared profile reads that request `accounts` remain in
+that schema. AfuChat relations use the existing `public` compatibility views
+backed by `afuchat` because PostgREST does not expose the `afuchat` schema.
+Five source names do not exist in the live catalog:
+`app_banners`, `blocks`, `business_verification_requests`,
+`life_earth_leaderboard`, and `org_page_jobs`. Their requests now pass through
+the gateway but still receive the database's missing-relation error. Do not
+create tables or substitute another product's relation without verifying the
+intended data model.
 
 - The `afuchat` schema exists and has 201 base tables; all 201 currently have
   row-level security enabled. The schema also contains relations named for

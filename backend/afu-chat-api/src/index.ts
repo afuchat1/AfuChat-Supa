@@ -23,6 +23,7 @@ import {
 } from "./message-actions.ts";
 import { handleMessageEdit, handleMessageEditHistory } from "./message-edit.ts";
 import { handlePayments } from "./payments.ts";
+import { handleDataGateway } from "./data-gateway.ts";
 import { handleGetContactProfile } from "./profiles.ts";
 import {
   handleCreatePost,
@@ -45,8 +46,10 @@ import {
 const PREFIX = "/v1/chat";
 const CURRENT_PROFILE_SCHEMA = "accounts";
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
-const ALLOWED_HEADERS = "Authorization, Content-Type, apikey, X-Client-Info";
-const EXPOSED_HEADERS = "Content-Range, X-AfuChat-Request-Id, X-AfuChat-Version";
+const ALLOWED_HEADERS =
+  "Accept-Profile, Authorization, Content-Profile, Content-Type, If-Match, If-Modified-Since, If-None-Match, apikey, Prefer, Range, Range-Unit, X-Client-Info";
+const EXPOSED_HEADERS =
+  "Content-Location, Content-Range, Preference-Applied, X-AfuChat-Request-Id, X-AfuChat-Version";
 
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;
@@ -860,6 +863,10 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
 
   if (incoming.pathname === `${PREFIX}/me`) {
     return handleCurrentUser(request, env);
+  }
+
+  if (incoming.pathname.startsWith(`${PREFIX}/data/`)) {
+    return handleDataGateway(request, env);
   }
 
   const contactProfileMatch = incoming.pathname.match(/^\/v1\/chat\/profiles\/([^/]+)$/);

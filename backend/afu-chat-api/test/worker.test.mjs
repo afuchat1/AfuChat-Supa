@@ -85,6 +85,224 @@ test("chat health endpoint is public", async () => {
   assert.deepEqual(payload, { product: "afuchat", status: "ok", version: "v1" });
 });
 
+test("mobile PostgREST reads use the fixed AfuChat data gateway and keep user RLS", async () => {
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push(request);
+    return new Response('[{"id":"message-1"}]', {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Range": "0-0/1",
+        "Preference-Applied": "count=exact",
+      },
+    });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://api.afuchat.com/v1/chat/data/messages?select=id&limit=1",
+      {
+        headers: {
+          Authorization: "Bearer user-session",
+          apikey: "test-anon-key",
+          Prefer: "count=exact",
+          Origin: "https://afuchat.com",
+        },
+      },
+    ),
+    makeEnv(),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), [{ id: "message-1" }]);
+  assert.equal(response.headers.get("Content-Range"), "0-0/1");
+  assert.equal(response.headers.get("Preference-Applied"), "count=exact");
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://afuchat.com");
+  assert.equal(requests.length, 1);
+  assert.equal(
+    new URL(requests[0].url).href,
+    "https://supabase.example.test/rest/v1/messages?select=id&limit=1",
+  );
+  assert.equal(requests[0].headers.get("Accept-Profile"), "public");
+  assert.equal(requests[0].headers.get("Content-Profile"), "public");
+  assert.equal(requests[0].headers.get("Authorization"), "Bearer user-session");
+  assert.equal(requests[0].headers.get("apikey"), "test-anon-key");
+});
+
+test("data gateway keeps explicit shared-account and shop schema ownership", async () => {
+  const requests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push(request);
+    return Response.json([]);
+  };
+
+  const accountResponse = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/profiles?select=id", {
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+        "Accept-Profile": "accounts",
+      },
+    }),
+    makeEnv(),
+  );
+  const shopResponse = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/orders?select=id", {
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+      },
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(accountResponse.status, 200);
+  assert.equal(shopResponse.status, 200);
+  assert.equal(requests[0].headers.get("Accept-Profile"), "accounts");
+  assert.equal(requests[0].headers.get("Content-Profile"), "accounts");
+  assert.equal(requests[1].headers.get("Accept-Profile"), "shop");
+  assert.equal(requests[1].headers.get("Content-Profile"), "shop");
+  assert.equal(new URL(requests[1].url).pathname, "/rest/v1/orders");
+});
+
+test("data gateway forwards only registered RPCs with the original request body", async () => {
+  let forwarded;
+  globalThis.fetch = async (input, init) => {
+    forwarded = input instanceof Request ? input : new Request(input, init);
+    return Response.json({ success: true });
+  };
+
+  const body = JSON.stringify({ p_user_id: "user-123", p_amount: 5 });
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/rpc/credit_acoin", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+        "Content-Type": "application/json",
+      },
+      body,
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true });
+  assert.equal(new URL(forwarded.url).pathname, "/rest/v1/rpc/credit_acoin");
+  assert.equal(forwarded.headers.get("Accept-Profile"), "public");
+  assert.equal(await forwarded.text(), body);
+});
+
+test("anonymous gateway reads keep the public anon role without bypassing the allowlist", async () => {
+  let forwarded;
+  let authChecks = 0;
+  globalThis.fetch = async (input, init) => {
+    forwarded = input instanceof Request ? input : new Request(input, init);
+    return Response.json([]);
+  };
+  const env = makeEnv();
+  const verify = env.AFUAUTH_API.fetch;
+  env.AFUAUTH_API.fetch = async (...args) => {
+    authChecks += 1;
+    return verify(...args);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/app_settings?select=key", {
+      headers: {
+        Authorization: "Bearer test-anon-key",
+        apikey: "test-anon-key",
+      },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(authChecks, 0);
+  assert.equal(forwarded.headers.get("Authorization"), "Bearer test-anon-key");
+});
+
+test("data gateway rejects arbitrary relations and legacy schemas before database access", async () => {
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+
+  const unknownRelation = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/private_records", {
+      headers: { Authorization: "Bearer user-session", apikey: "test-anon-key" },
+    }),
+    makeEnv(),
+  );
+  const legacySchema = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/chats", {
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+        "Accept-Profile": "chat",
+      },
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(unknownRelation.status, 404);
+  assert.equal(legacySchema.status, 404);
+  assert.equal(databaseCalls, 0);
+});
+
+test("data gateway requires the configured anon key and a shared session for user tokens", async () => {
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+
+  const wrongKey = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/chats", {
+      headers: { Authorization: "Bearer user-session", apikey: "wrong-key" },
+    }),
+    makeEnv(),
+  );
+  const invalidSession = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/chats", {
+      headers: {
+        Authorization: "Bearer invalid-deployment-probe",
+        apikey: "test-anon-key",
+      },
+    }),
+    makeEnv(401),
+  );
+
+  assert.equal(wrongKey.status, 401);
+  assert.equal(invalidSession.status, 401);
+  assert.equal(databaseCalls, 0);
+});
+
+test("data gateway preflight allows the schema and PostgREST headers used by the app", async () => {
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/profiles", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://afuchat.com",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers":
+          "authorization,apikey,content-type,accept-profile,content-profile,prefer",
+      },
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(response.status, 204);
+  const allowedHeaders = response.headers.get("Access-Control-Allow-Headers") ?? "";
+  for (const header of ["Accept-Profile", "Content-Profile", "Prefer", "Authorization", "apikey"]) {
+    assert.match(allowedHeaders.toLowerCase(), new RegExp(header.toLowerCase()));
+  }
+});
+
 test("canonical chat storage routes map to the existing media handler", () => {
   const cases = [
     ["/v1/chat/storage/usage", "/chat/v1/storage/usage"],

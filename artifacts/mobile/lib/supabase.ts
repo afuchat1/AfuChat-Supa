@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
+import { AFUCHAT_API_URL, SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
 
 export const supabaseUrl = SUPABASE_URL;
 export const supabaseAnonKey = SUPABASE_ANON_KEY;
@@ -90,6 +90,36 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
   }
 };
 
+const fetchThroughAfuChatApi: typeof fetch = async (input, init) => {
+  const sourceUrl =
+    input instanceof Request
+      ? input.url
+      : input instanceof URL
+        ? input.toString()
+        : typeof input === "string"
+          ? input
+          : null;
+  if (!sourceUrl) return fetchWithTimeout(input, init);
+
+  const requestUrl = new URL(sourceUrl, SUPABASE_URL);
+  const supabaseOrigin = new URL(SUPABASE_URL).origin;
+  if (
+    requestUrl.origin !== supabaseOrigin ||
+    !requestUrl.pathname.startsWith("/rest/v1/")
+  ) {
+    return fetchWithTimeout(input, init);
+  }
+
+  const restPath = requestUrl.pathname.slice("/rest/v1".length);
+  const gatewayUrl = new URL(
+    `/v1/chat/data${restPath}${requestUrl.search}`,
+    AFUCHAT_API_URL,
+  );
+  const sourceRequest = new Request(input, init);
+  const routedRequest = new Request(gatewayUrl, sourceRequest);
+  return fetchWithTimeout(routedRequest, { signal: sourceRequest.signal });
+};
+
 // AsyncStorage is the correct durable store for native builds. On web, use the
 // browser's localStorage directly so Supabase can persist the PKCE verifier and
 // restore the session after the OAuth provider redirects back to the site.
@@ -104,8 +134,8 @@ const webStorage = {
   },
 };
 
-// Supabase SDK traffic uses the single shared project directly. Product APIs
-// are called separately through their explicit /v1/{product} Worker routes.
+// Supabase Auth and Realtime stay on the shared project. All PostgREST table
+// and RPC traffic goes through the AfuChat Worker’s explicit resource allowlist.
 const supabaseClientUrl = SUPABASE_URL;
 
 export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
@@ -117,7 +147,7 @@ export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
     flowType: "pkce",
   },
   global: {
-    fetch: fetchWithTimeout,
+    fetch: fetchThroughAfuChatApi,
   },
   realtime: {
     heartbeatIntervalMs: 15_000,

@@ -60,8 +60,12 @@ signed-in account was used for this batch.
 The current source scan covered JavaScript and TypeScript files under
 `artifacts/mobile`. It found:
 
-- 550 literal `.from("relation")` call sites over 81 relation names in 106 files.
-- 87 direct RPC call sites over 35 function names in 35 files.
+- 547 literal `.from("relation")` call sites over 81 relation names in 106 files.
+- 82 RPC call sites over 35 function names in 31 files.
+- All mobile PostgREST relation and RPC calls now pass through the fixed
+  `/v1/chat/data/*` Worker gateway. The gateway preserves the signed-in user's
+  Supabase token and RLS, and accepts only the relations/functions found in
+  this inventory.
 - No remaining direct `.from("bookmarks")`, `.from("saved_posts")`, or
   `.from("post_bookmarks")` calls in the mobile source.
 - No remaining direct `.from("follows")` calls in mobile `app`, `components`,

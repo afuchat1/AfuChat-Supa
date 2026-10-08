@@ -35,8 +35,10 @@ export type SessionVerification =
   | { session?: never; response: Response };
 
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
-const ALLOWED_HEADERS = "Authorization, Content-Type, apikey, X-Client-Info";
-const EXPOSED_HEADERS = "Content-Range, X-AfuChat-Request-Id, X-AfuChat-Version";
+const ALLOWED_HEADERS =
+  "Accept-Profile, Authorization, Content-Profile, Content-Type, If-Match, If-Modified-Since, If-None-Match, apikey, Prefer, Range, Range-Unit, X-Client-Info";
+const EXPOSED_HEADERS =
+  "Content-Location, Content-Range, Preference-Applied, X-AfuChat-Request-Id, X-AfuChat-Version";
 
 function allowedOrigin(origin: string | null): string | null {
   if (!origin) return null;

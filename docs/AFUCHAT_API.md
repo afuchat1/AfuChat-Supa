@@ -9,11 +9,28 @@
 - All AfuChat-owned product API operations, including storage, use `/v1/chat`.
 - AfuAuth owns `/v1/auth/*`; AfuAI owns `/v1/ai/*`. Those routes are not AfuChat endpoints and are not moved by this contract.
 
-The mobile app keeps shared Supabase Auth and Realtime. Product data operations
-are being moved to named AfuChat Worker routes, rather than a general database
-proxy. Until each operation is migrated, its existing PostgREST call remains a
-temporary direct-Supabase path. The current inventory and migration status are
-tracked in [`AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](./AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
+Supabase Auth and Realtime remain on the shared Supabase project. All mobile
+PostgREST table and RPC calls now enter through the AfuChat Worker. The data
+gateway accepts only the exact relation and function names in
+`backend/afu-chat-api/src/data-gateway.ts`; it does not accept caller-selected
+schemas or arbitrary database resources. It forwards the user's bearer token
+so the existing grants and row-level security remain authoritative, and never
+uses a service-role key.
+
+This is one API boundary, not one physical schema. AfuChat-owned records use
+the existing `public` compatibility views over canonical `afuchat` tables
+because PostgREST does not expose `afuchat`. Shared account profiles and the
+shop-only `orders` relation retain their existing owners (`accounts` and
+`shop`). No rows or schemas are moved by this gateway. The current inventory
+and migration status are tracked in
+[`AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](./AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
+
+## Mobile data gateway
+
+| Method and path | Purpose and inputs | Authentication | Response |
+|---|---|---|---|
+| `GET`, `HEAD`, `POST`, `PATCH`, `DELETE /v1/chat/data/{registeredRelation}` | Compatibility path for the mobile app's statically inventoried PostgREST relations. Query string, filters, ranges, and supported PostgREST headers are preserved. Unknown relation names and schemas are rejected before Supabase is called. | The configured public API key is required. User bearers are verified through AfuAuth and forwarded unchanged for database row-level security. Anonymous requests use only the public anon role and remain subject to existing grants and policies. | Preserves the PostgREST status, body, and response metadata while adding AfuChat request headers. |
+| `GET`, `POST /v1/chat/data/rpc/{registeredFunction}` | Compatibility path for the mobile app's statically inventoried public RPC functions. | Same bearer and row-level security behavior as table requests. | Preserves the PostgREST response; unknown functions are rejected before Supabase is called. |
 
 ## AfuChat endpoints
 
@@ -163,18 +180,18 @@ The `afu-cdn` Worker owns `cdn.afuchat.com/*` and dispatches
 object URLs use `LEGACY_MEDIA`, which points to that same bucket. The separate
 URL paths remain intact; no objects were moved or copied.
 
-There is no general-purpose PostgREST forwarding route. Bookmark, follow, feed,
-and post endpoints use fixed, product-owned operations; they do not expose
-caller-selected tables, columns, or filters. Other product data operations
-remain in the migration inventory until their own route and client flow are
-migrated.
+The data gateway is deliberately limited to the current mobile call inventory:
+no arbitrary schema, relation, or function can be selected. Existing
+bookmark, follow, feed, post, message, payment, and storage APIs continue to use
+their named AfuChat operations. This allowlist keeps shared product data in its
+owner schema instead of copying it into `afuchat`.
 
 ## Deployment verification
 
 `backend/afu-chat-api/deploy.mjs` composes the chat API with the existing
-storage API handler and checks chat health, status, CORS, authentication
-rejection, the canonical storage route, AfuAuth service binding, and the
-shared AfuChat/legacy media binding. CDN routing and delivery are managed separately by
+storage API handler and checks chat health, status, data-gateway CORS and
+resource rejection, authentication rejection, the canonical storage route,
+AfuAuth service binding, and the shared AfuChat/legacy media binding. CDN routing and delivery are managed separately by
 `backend/afu-cdn/` and `backend/route-management/reconcile.mjs`.
 
 The updated Worker was deployed on 2026-10-06. Its postflight checks passed for
