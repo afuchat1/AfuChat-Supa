@@ -11,6 +11,7 @@ export interface AfuChatApiError {
 const LIVE_DATA_ENDPOINTS = new Set([
   "/me",
   "/conversations",
+  "/members",
   "/messages",
   "/follows/list",
   "/follows/ids",
@@ -28,6 +29,7 @@ function getLiveDataItemCount(payload: unknown): number | null {
   const record = payload as Record<string, unknown>;
   if (Array.isArray(record.items)) return record.items.length;
   if (Array.isArray(record.messages)) return record.messages.length;
+  if (Array.isArray(record.members)) return record.members.length;
   return null;
 }
 
@@ -205,6 +207,78 @@ export async function getAfuChatConversations(
       data: null,
       error: {
         message: error instanceof Error ? error.message : "Chat service is unavailable",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
+export type AfuChatMember = {
+  id: string;
+  chat_id: string;
+  user_id: string;
+  is_admin: boolean;
+  joined_at: string | null;
+};
+
+function isAfuChatMember(value: unknown): value is AfuChatMember {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "string" &&
+    typeof row.chat_id === "string" &&
+    typeof row.user_id === "string" &&
+    typeof row.is_admin === "boolean" &&
+    (row.joined_at === null || typeof row.joined_at === "string");
+}
+
+export async function getAfuChatChatMembers(input:
+  | { chatId: string }
+  | { chatIds: string[] }
+  | { mine: true }
+): Promise<{ data: AfuChatMember[] | null; error: AfuChatApiError | null }> {
+  const query = new URLSearchParams();
+  if ("chatId" in input) query.set("chat_id", input.chatId);
+  else if ("chatIds" in input) query.set("chat_ids", input.chatIds.join(","));
+  else query.set("mine", "true");
+  const path = `/members?${query.toString()}`;
+
+  try {
+    const response = await afuChatApiFetch(path, { method: "GET" });
+    const payload: unknown = await response.json().catch(() => null);
+    logLiveDataResponse(path, response, payload);
+    const record = payload && typeof payload === "object"
+      ? payload as Record<string, unknown>
+      : null;
+    if (!response.ok) {
+      return {
+        data: null,
+        error: {
+          message: typeof record?.error === "string"
+            ? record.error
+            : `Chat request failed (HTTP ${response.status})`,
+          code: typeof record?.code === "string" ? record.code : String(response.status),
+          requestId: typeof record?.request_id === "string"
+            ? record.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    if (!Array.isArray(record?.members) || !record.members.every(isAfuChatMember)) {
+      return {
+        data: null,
+        error: {
+          message: "Chat service returned an invalid membership response.",
+          code: "INVALID_RESPONSE",
+          requestId: response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    return { data: record.members, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable.",
         code: "NETWORK_ERROR",
       },
     };

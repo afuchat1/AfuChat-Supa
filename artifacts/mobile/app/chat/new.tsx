@@ -33,7 +33,7 @@ import { Separator } from "@/components/ui/Separator";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { isOnline } from "@/lib/offlineStore";
-import { getAfuChatFollowRecords } from "@/lib/afuchatApi";
+import { getAfuChatChatMembers, getAfuChatFollowRecords } from "@/lib/afuchatApi";
 import {
   getLocalContacts,
   saveLocalContacts,
@@ -178,14 +178,11 @@ export default function NewChatScreen() {
     if (!user) return;
     try {
       const [
-        { data: memberRows, error: membersError },
+        memberResult,
         { data: subRows, error: subscriptionsError },
         { data: ownedRows, error: ownedError },
       ] = await Promise.all([
-        supabase
-          .from("chat_members")
-          .select("chat_id")
-          .eq("user_id", user.id),
+        getAfuChatChatMembers({ mine: true }),
         supabase
           .from("channel_subscriptions")
           .select("channel_id")
@@ -193,11 +190,13 @@ export default function NewChatScreen() {
         supabase.rpc("get_my_channels"),
       ]);
 
-      if (membersError) throw membersError;
+      if (memberResult.error || !memberResult.data) {
+        throw memberResult.error ?? new Error("Group memberships could not be loaded.");
+      }
       if (subscriptionsError) throw subscriptionsError;
       if (ownedError) throw ownedError;
 
-      const memberChatIds = [...new Set((memberRows || []).map((row: any) => row.chat_id).filter(Boolean))];
+      const memberChatIds = [...new Set(memberResult.data.map((row) => row.chat_id).filter(Boolean))];
       const subscriptionChannelIds = [...new Set((subRows || []).map((row: any) => row.channel_id).filter(Boolean))];
 
       const [

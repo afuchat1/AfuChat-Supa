@@ -32,28 +32,36 @@ function makeUrl(
   return url;
 }
 
-function restHeaders(session: VerifiedSession, anonKey: string): Headers {
+function restHeaders(
+  session: VerifiedSession,
+  anonKey: string,
+  schema: "public" | "chat",
+): Headers {
   return new Headers({
     apikey: anonKey,
     Authorization: `Bearer ${session.token}`,
     Accept: "application/json",
-    "Accept-Profile": "public",
-    "Content-Profile": "public",
+    "Accept-Profile": schema,
+    "Content-Profile": schema,
   });
 }
 
-async function readMessageRows(
-  request: Request,
+type MessageReadResult =
+  | { ok: true; data: Record<string, unknown>[] }
+  | { ok: false; status: number; code?: string };
+
+async function readMessageSchemaRows(
   requestId: string,
   base: string,
   anonKey: string,
   session: VerifiedSession,
   filters: Record<string, string>,
-): Promise<Response> {
+  schema: "public" | "chat",
+): Promise<MessageReadResult> {
   try {
     const response = await fetch(makeUrl(base, "messages", filters), {
       method: "GET",
-      headers: restHeaders(session, anonKey),
+      headers: restHeaders(session, anonKey, schema),
       redirect: "manual",
     });
     const payload: unknown = await response.json().catch(() => null);
@@ -67,16 +75,128 @@ async function readMessageRows(
         status: response.status,
         code,
       });
-      return errorResponse(request, requestId, "Messages could not be loaded.", 502);
+      return { ok: false, status: response.status, code };
     }
     if (!Array.isArray(payload)) {
-      return errorResponse(request, requestId, "Messages could not be loaded.", 502);
+      return { ok: false, status: 502 };
     }
-    return privateJsonResponse(request, requestId, { messages: payload }, 200);
+    return { ok: true, data: payload as Record<string, unknown>[] };
   } catch {
     console.error("[afuchat-api] message query failed", { requestId });
-    return errorResponse(request, requestId, "Messages could not be loaded.", 502);
+    return { ok: false, status: 502 };
   }
+}
+
+function mergePreferredMessages(
+  preferred: Record<string, unknown>[],
+  legacy: Record<string, unknown>[],
+): Record<string, unknown>[] | null {
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const row of preferred) {
+    if (!row || typeof row.id !== "string" || !UUID_PATTERN.test(row.id)) return null;
+    byId.set(row.id, row);
+  }
+  for (const row of legacy) {
+    if (!row || typeof row.id !== "string" || !UUID_PATTERN.test(row.id)) return null;
+    if (!byId.has(row.id)) byId.set(row.id, row);
+  }
+  return [...byId.values()].sort((a, b) => {
+    const sentAtA = typeof a.sent_at === "string" ? Date.parse(a.sent_at) : 0;
+    const sentAtB = typeof b.sent_at === "string" ? Date.parse(b.sent_at) : 0;
+    if (sentAtA !== sentAtB) return sentAtB - sentAtA;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
+async function readMergedMessages(
+  requestId: string,
+  base: string,
+  anonKey: string,
+  session: VerifiedSession,
+  filters: Record<string, string>,
+  limit: number,
+  sender: "me" | "others" | null,
+): Promise<MessageReadResult> {
+  const chunkSize = Math.min(1_000, limit);
+  const byId = new Map<string, Record<string, unknown>>();
+  for (let offset = 0; offset < 20_000; offset += chunkSize) {
+    const pageFilters = {
+      ...filters,
+      order: "sent_at.desc,id.desc",
+      limit: String(chunkSize),
+      offset: String(offset),
+    };
+    const legacyFilters = { ...pageFilters, encrypted_content: "not.is.null" };
+    const [preferred, legacy] = await Promise.all([
+      readMessageSchemaRows(requestId, base, anonKey, session, pageFilters, "public"),
+      readMessageSchemaRows(requestId, base, anonKey, session, legacyFilters, "chat"),
+    ]);
+    if (!preferred.ok) return preferred;
+    if (!legacy.ok) return legacy;
+
+    const preferredRows = [...preferred.data];
+    const preferredIds = new Set(preferredRows.map((row) => row.id));
+    const legacyIdsMissingFromPage = legacy.data
+      .map((row) => row.id)
+      .filter((id): id is string =>
+        typeof id === "string" && !preferredIds.has(id));
+    if (legacyIdsMissingFromPage.length) {
+      const lookupFilters: Record<string, string> = {
+        select: filters.select,
+        id: `in.(${legacyIdsMissingFromPage.join(",")})`,
+      };
+      if (filters.chat_id) lookupFilters.chat_id = filters.chat_id;
+      const preferredLookup = await readMessageSchemaRows(
+        requestId,
+        base,
+        anonKey,
+        session,
+        lookupFilters,
+        "public",
+      );
+      if (!preferredLookup.ok) return preferredLookup;
+      preferredRows.push(...preferredLookup.data);
+    }
+
+    const mergedPage = mergePreferredMessages(preferredRows, legacy.data);
+    if (!mergedPage) return { ok: false, status: 502, code: "MESSAGE_ROWS_INVALID" };
+    for (const row of mergedPage) {
+      const id = row.id as string;
+      if (!byId.has(id) || preferredRows.some((preferredRow) => preferredRow.id === id)) {
+        byId.set(id, row);
+      }
+    }
+
+    const rows = [...byId.values()].sort((a, b) => {
+      const sentAtA = typeof a.sent_at === "string" ? Date.parse(a.sent_at) : 0;
+      const sentAtB = typeof b.sent_at === "string" ? Date.parse(b.sent_at) : 0;
+      if (sentAtA !== sentAtB) return sentAtB - sentAtA;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    const timeFiltered = rows.filter((row) => {
+      if (!filters.sent_at) return true;
+      const [operator, rawCursor] = filters.sent_at.split(".", 2);
+      const sentAt = typeof row.sent_at === "string" ? Date.parse(row.sent_at) : NaN;
+      const cursor = Date.parse(rawCursor ?? "");
+      if (!Number.isFinite(sentAt) || !Number.isFinite(cursor)) return false;
+      return operator === "lt" ? sentAt < cursor : sentAt > cursor;
+    });
+    const matching = sender
+      ? timeFiltered.filter((row) => sender === "me"
+        ? row.sender_id === session.user.id
+        : row.sender_id !== session.user.id)
+      : timeFiltered;
+
+    if (
+      filters.id ||
+      !sender ||
+      matching.length >= limit ||
+      (preferred.data.length < chunkSize && legacy.data.length < chunkSize)
+    ) {
+      return { ok: true, data: matching.slice(0, limit) };
+    }
+  }
+  return { ok: false, status: 502, code: "MESSAGE_SCAN_LIMIT" };
 }
 
 function validCursor(value: string | null): value is string {
@@ -140,23 +260,23 @@ export async function handleMessageQueries(
   const filters: Record<string, string> = {
     select: MESSAGE_FIELDS,
     chat_id: `eq.${chatId}`,
-    order: "sent_at.desc",
-    limit: String(messageId ? 1 : limit),
   };
   if (messageId) filters.id = `eq.${messageId}`;
   if (before) filters.sent_at = `lt.${before}`;
   if (after) filters.sent_at = `gt.${after}`;
-  if (sender === "me") filters.sender_id = `eq.${session.user.id}`;
-  if (sender === "others") filters.sender_id = `neq.${session.user.id}`;
-
-  return readMessageRows(
-    request,
+  const result = await readMergedMessages(
     requestId,
     supabase.url,
     supabase.anonKey,
     session,
     filters,
+    messageId ? 1 : limit,
+    sender,
   );
+  if (!result.ok) {
+    return errorResponse(request, requestId, "Messages could not be loaded.", 502);
+  }
+  return privateJsonResponse(request, requestId, { messages: result.data }, 200);
 }
 
 export async function handleMessageCount(
@@ -207,36 +327,21 @@ export async function handleMessageCount(
     return errorResponse(request, requestId, "Invalid message count query.", 400);
   }
 
-  const filters: Record<string, string> = { select: "id" };
+  const filters: Record<string, string> = {
+    select: "id,chat_id,sender_id,encrypted_content,sent_at",
+  };
   if (chatId) filters.chat_id = `eq.${chatId}`;
-  filters.sender_id = sender === "me"
-    ? `eq.${session.user.id}`
-    : `neq.${session.user.id}`;
-  const headers = restHeaders(session, supabase.anonKey);
-  headers.set("Prefer", "count=exact");
-  headers.set("Range-Unit", "items");
-  headers.set("Range", "0-0");
-  try {
-    const response = await fetch(makeUrl(supabase.url, "messages", filters), {
-      method: "HEAD",
-      headers,
-      redirect: "manual",
-    });
-    if (!response.ok) {
-      console.error("[afuchat-api] message count query failed", {
-        requestId,
-        status: response.status,
-      });
-      return errorResponse(request, requestId, "Message count could not be loaded.", 502);
-    }
-    const contentRange = response.headers.get("Content-Range") ?? "";
-    const match = contentRange.match(/\/(\d+)$/);
-    if (!match) {
-      return errorResponse(request, requestId, "Message count could not be loaded.", 502);
-    }
-    return privateJsonResponse(request, requestId, { count: Number(match[1]) }, 200);
-  } catch {
-    console.error("[afuchat-api] message count query failed", { requestId });
+  const result = await readMergedMessages(
+    requestId,
+    supabase.url,
+    supabase.anonKey,
+    session,
+    filters,
+    100_000,
+    sender,
+  );
+  if (!result.ok) {
     return errorResponse(request, requestId, "Message count could not be loaded.", 502);
   }
+  return privateJsonResponse(request, requestId, { count: result.data.length }, 200);
 }

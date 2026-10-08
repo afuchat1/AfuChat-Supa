@@ -26,6 +26,7 @@ import { queryCacheReadSync, queryCacheFetch, queryCacheWrite, queryCacheInvalid
 import { useThrottledFocusEffect } from "@/lib/hooks/useThrottledFocusEffect";
 import { prefetchAvatars } from "@/lib/storage/imagePrefetcher";
 import Colors from "@/constants/colors";
+import { getAfuChatChatMembers } from "@/lib/afuchatApi";
 
 const BRAND = Colors.brand;
 const PURPLE = "#8B5CF6";
@@ -94,33 +95,39 @@ export default function CommunitiesScreen() {
     }
 
     const fetchGroups = async (): Promise<Group[]> => {
-      const [
-        { data: groupsData },
-        { data: myMemberships },
-      ] = await Promise.all([
-        supabase
-          .from("chats")
-          .select("id, name, handle, description, avatar_url, is_group, is_channel, is_private, chat_members(count)")
-          .eq("is_group", true)
-          .eq("is_private", false)
-          .order("updated_at", { ascending: false })
-          .limit(50),
-        supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
-      ]);
-      const memberSet = new Set(((myMemberships || []) as any[]).map((m) => m.chat_id));
+      const { data: groupsData, error: groupsError } = await supabase
+        .from("chats")
+        .select("id, name, handle, description, avatar_url, is_group, is_channel, is_private")
+        .eq("is_group", true)
+        .eq("is_private", false)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+      if (groupsError) throw groupsError;
+
+      const groupIds = (groupsData ?? []).map((group) => group.id);
+      const membershipRows = groupIds.length
+        ? await getAfuChatChatMembers({ chatIds: groupIds })
+        : { data: [], error: null };
+      if (membershipRows.error || !membershipRows.data) {
+        throw membershipRows.error ?? new Error("Group memberships could not be loaded.");
+      }
+      const memberSet = new Set(
+        membershipRows.data
+          .filter((member) => member.user_id === user.id)
+          .map((member) => member.chat_id),
+      );
+      const memberCounts = new Map<string, number>();
+      for (const member of membershipRows.data) {
+        memberCounts.set(member.chat_id, (memberCounts.get(member.chat_id) ?? 0) + 1);
+      }
       return (groupsData || []).map((c: any) => {
-        const countArr = c.chat_members;
-        const member_count =
-          Array.isArray(countArr) && countArr[0]?.count != null
-            ? Number(countArr[0].count)
-            : 0;
         return {
           id: c.id,
           name: c.name || "Unnamed",
           handle: c.handle || null,
           description: c.description || null,
           avatar_url: c.avatar_url || null,
-          member_count,
+          member_count: memberCounts.get(c.id) ?? 0,
           am_member: memberSet.has(c.id),
         };
       });

@@ -30,7 +30,8 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import UserName from "@/components/ui/UserName";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-import { getAfuChatFollowRecords } from "@/lib/afuchatApi";
+import { getAfuChatChatMembers, getAfuChatFollowRecords } from "@/lib/afuchatApi";
+import { fetchAccountProfileMap } from "@/lib/sharedProfiles";
 import { showAlert } from "@/lib/alert";
 import { isOnline } from "@/lib/offlineStore";
 import * as Haptics from "@/lib/haptics";
@@ -176,50 +177,61 @@ export default function GroupManageScreen() {
 
   const loadGroup = useCallback(async () => {
     if (!id || !user) return;
-    const [{ data: chatData, error: chatError }, { data: membersData }] = await Promise.all([
-      supabase
-        .from("chats")
-        .select("id, name, description, avatar_url, is_group, is_channel")
-        .eq("id", id)
-        .maybeSingle(),
-      supabase
-        .from("chat_members")
-        .select(
-          "user_id, is_admin, profiles!chat_members_user_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)"
-        )
-        .eq("chat_id", id),
-    ]);
+    try {
+      const [{ data: chatData, error: chatError }, memberResult] = await Promise.all([
+        supabase
+          .from("chats")
+          .select("id, name, description, avatar_url, is_group, is_channel")
+          .eq("id", id)
+          .maybeSingle(),
+        getAfuChatChatMembers({ chatId: id }),
+      ]);
+      if (chatError) throw chatError;
+      if (memberResult.error || !memberResult.data) {
+        throw new Error(memberResult.error?.message ?? "Group members could not be loaded.");
+      }
+      if (chatData) setGroup(chatData as GroupDetail);
 
-    if (chatError) {
-      console.warn("[GroupInfo] load error:", chatError.message);
-    }
-
-    if (chatData) {
-      setGroup(chatData as GroupDetail);
-    }
-
-    if (membersData) {
-      const mapped: Member[] = (membersData as any[]).map((m) => {
-        const raw = m.profiles;
-        const profile: MemberProfile = Array.isArray(raw)
-          ? raw[0]
-          : raw || {
-              id: m.user_id,
+      const { profiles, error: profilesError } = await fetchAccountProfileMap<MemberProfile>(
+        memberResult.data.map((member) => member.user_id),
+        "id,display_name,handle,avatar_url,is_verified,is_organization_verified",
+      );
+      if (profilesError) throw profilesError;
+      const mapped: Member[] = memberResult.data.map((member) => {
+        const raw = profiles.get(member.user_id);
+        const profile: MemberProfile = raw
+          ? {
+              id: raw.id,
+              display_name: raw.display_name || "Unknown",
+              handle: raw.handle || "",
+              avatar_url: raw.avatar_url ?? null,
+              is_verified: raw.is_verified === true,
+              is_organization_verified: raw.is_organization_verified === true,
+            }
+          : {
+              id: member.user_id,
               display_name: "Unknown",
               handle: "",
               avatar_url: null,
               is_verified: false,
               is_organization_verified: false,
             };
-        return { user_id: m.user_id, is_admin: m.is_admin ?? false, profile };
+        return { user_id: member.user_id, is_admin: member.is_admin, profile };
       });
       setMembers(mapped);
-      const me = mapped.find((m) => m.user_id === user.id);
+      const me = mapped.find((member) => member.user_id === user.id);
       const amAdmin = me?.is_admin ?? false;
       setIAmAdmin(amAdmin);
       setIsCreator(amAdmin);
+    } catch (error) {
+      console.warn("[GroupInfo] load error:", error);
+      showAlert(
+        "Could not load group",
+        error instanceof Error ? error.message : "Group details are temporarily unavailable.",
+      );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [id, user]);
 
   useEffect(() => {

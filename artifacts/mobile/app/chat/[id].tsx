@@ -75,6 +75,7 @@ import {
   getAfuChatMessageStatuses,
   getAfuChatFollowStatuses,
   getAfuChatFollowSummary,
+  getAfuChatChatMembers,
   getAfuChatMyPosts,
   postAfuChatMessage,
   reportAfuChatMessage,
@@ -4868,8 +4869,12 @@ function ChatScreen() {
   async function handleOpenAddMembers() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId) return;
-    const { data } = await supabase.from("chat_members").select("user_id").eq("chat_id", chatId);
-    setExistingMemberIds(new Set((data || []).map((m: any) => m.user_id)));
+    const { data, error } = await getAfuChatChatMembers({ chatId });
+    if (error || !data) {
+      showAlert("Members unavailable", error?.message ?? "Group members could not be loaded.");
+      return;
+    }
+    setExistingMemberIds(new Set(data.map((member) => member.user_id)));
     setAddMemberSearch("");
     setAddMemberResults([]);
     setAddMemberSelected(new Set());
@@ -5574,10 +5579,7 @@ STRICT RULES:
     // Chat metadata can still be loading when the first message is sent.
     // Resolve members from Supabase rather than silently dropping delivery.
     if (recipientIds.length === 0) {
-      const { data: members, error } = await supabase
-        .from("chat_members")
-        .select("user_id")
-        .eq("chat_id", params.chatId);
+      const { data: members, error } = await getAfuChatChatMembers({ chatId: params.chatId });
       if (error) {
         console.warn("[push] recipient lookup failed:", error.message);
         return;

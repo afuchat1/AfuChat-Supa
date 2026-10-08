@@ -12,6 +12,7 @@ import { handleOrganizationPostsFeed } from "./organization-feed.ts";
 import { handleVideoFeed } from "./video-feed.ts";
 import { handleMessages } from "./messages.ts";
 import { handleMessageCount, handleMessageQueries } from "./message-queries.ts";
+import { handleChatMembers } from "./chat-members.ts";
 import { handleMessageReactions } from "./message-reactions.ts";
 import { handleMessageStatus } from "./message-status.ts";
 import {
@@ -1034,6 +1035,13 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     return handleChatConversations(request, env);
   }
 
+  if (
+    incoming.pathname === `${PREFIX}/members` &&
+    request.method !== "OPTIONS"
+  ) {
+    return handleChatMembers(request, env);
+  }
+
   if (incoming.pathname === PREFIX || incoming.pathname.startsWith(`${PREFIX}/`)) {
     return jsonResponse(
       request,
@@ -1054,6 +1062,9 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === `${PREFIX}/conversations`) {
     return handleChatConversations(request, env);
+  }
+  if (url.pathname === `${PREFIX}/members`) {
+    return handleChatMembers(request, env);
   }
   return handleApiRequest(request, env);
 }
