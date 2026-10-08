@@ -1111,6 +1111,140 @@ export async function getAfuChatProfilePosts(
   };
 }
 
+export async function searchAfuChatPosts(input: {
+  kind: "posts" | "videos";
+  query?: string;
+  sort?: "recent" | "popular";
+  since?: string | null;
+  limit?: number;
+}): Promise<{
+  data: AfuChatPostRecord[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams({
+    kind: input.kind,
+    sort: input.sort ?? "popular",
+    limit: String(input.limit ?? 30),
+  });
+  if (input.query?.trim()) params.set("query", input.query.trim());
+  if (input.since) params.set("since", input.since);
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    `/posts/search?${params.toString()}`,
+    { method: "GET" },
+    "Posts could not be searched",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!Array.isArray(result.data?.items) ||
+      !result.data.items.every((item) =>
+        !!item && typeof item === "object" &&
+        typeof (item as Record<string, unknown>).id === "string"
+      )) {
+    return {
+      data: null,
+      error: { message: "Post search returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as AfuChatPostRecord[], error: null };
+}
+
+export async function getAfuChatVideoFeed(input: {
+  tab: "for_you" | "following";
+  limit: number;
+  olderThan?: string | null;
+  expectedUserId?: string;
+}): Promise<{
+  data: Record<string, unknown>[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams({
+    tab: input.tab,
+    limit: String(input.limit),
+  });
+  if (input.olderThan) params.set("older_than", input.olderThan);
+  if (input.expectedUserId) params.set("expected_user_id", input.expectedUserId);
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    `/feed/videos?${params.toString()}`,
+    { method: "GET" },
+    "Video feed could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (
+    !Array.isArray(result.data?.items) ||
+    !result.data.items.every((item) =>
+      !!item &&
+      typeof item === "object" &&
+      typeof (item as Record<string, unknown>).id === "string" &&
+      typeof (item as Record<string, unknown>).author_id === "string" &&
+      typeof (item as Record<string, unknown>).created_at === "string"
+    )
+  ) {
+    return {
+      data: null,
+      error: { message: "Video feed returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as Record<string, unknown>[], error: null };
+}
+
+export async function getAfuChatPostMetrics(postId: string): Promise<{
+  data: { like_count: number; reply_count: number; view_count: number } | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<Record<string, unknown>>(
+    `/posts/${encodeURIComponent(postId)}/metrics`,
+    { method: "GET" },
+    "Post activity could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  const metrics = result.data;
+  if (
+    !metrics ||
+    !Number.isSafeInteger(metrics.like_count) ||
+    !Number.isSafeInteger(metrics.reply_count) ||
+    !Number.isSafeInteger(metrics.view_count) ||
+    Number(metrics.like_count) < 0 ||
+    Number(metrics.reply_count) < 0 ||
+    Number(metrics.view_count) < 0
+  ) {
+    return {
+      data: null,
+      error: { message: "Post activity returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return {
+    data: {
+      like_count: Number(metrics.like_count),
+      reply_count: Number(metrics.reply_count),
+      view_count: Number(metrics.view_count),
+    },
+    error: null,
+  };
+}
+
+export async function getAfuChatTrendingHashtags(): Promise<{
+  data: { tag: string; count: number }[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    "/posts/trending/hashtags",
+    { method: "GET" },
+    "Trending hashtags could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (!Array.isArray(result.data?.items) ||
+      !result.data.items.every((item) =>
+        !!item && typeof item === "object" &&
+        typeof (item as Record<string, unknown>).tag === "string" &&
+        Number.isSafeInteger((item as Record<string, unknown>).count)
+      )) {
+    return {
+      data: null,
+      error: { message: "Trending hashtag service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as { tag: string; count: number }[], error: null };
+}
+
 export async function createAfuChatPost(input: AfuChatPostCreateInput): Promise<{
   data: AfuChatPostRecord | null;
   error: AfuChatApiError | null;
@@ -1241,11 +1375,13 @@ export function setAfuChatReplyLike(
   postId: string,
   replyId: string,
   liked: boolean,
+  expectedUserId?: string,
 ): Promise<{ error: AfuChatApiError | null }> {
   return setPostLike(
     `/posts/${encodeURIComponent(postId)}/replies/${encodeURIComponent(replyId)}/like`,
     liked,
     liked ? "Reply could not be liked" : "Reply like could not be removed",
+    expectedUserId,
   );
 }
 

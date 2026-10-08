@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
-import { getAfuChatMessageCount } from "@/lib/afuchatApi";
+import { getAfuChatMessageCount, getAfuChatMyPosts } from "@/lib/afuchatApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,20 +85,21 @@ async function fetchStats(userId: string): Promise<Stats> {
     try { return await p; } catch { return fallback; }
   };
 
-  const [posts, stories, messageCount] = await Promise.all([
-    safe(
-      supabase.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId)
-        .then(r => r.count ?? 0), 0),
+  const [postsResult, stories, messageCount] = await Promise.all([
+    getAfuChatMyPosts(),
     safe(
       supabase.from("stories").select("id", { count: "exact", head: true }).eq("user_id", userId)
         .then(r => r.count ?? 0), 0),
     getAfuChatMessageCount({ sender: "me", expectedUserId: userId }),
   ]);
 
+  if (postsResult.error || postsResult.totalCount === null) {
+    throw new Error(postsResult.error?.message ?? "Post achievement progress is unavailable.");
+  }
   if (messageCount.error || messageCount.data === null) {
     throw new Error(messageCount.error?.message ?? "Message count is unavailable.");
   }
-  return { posts, stories, messages: messageCount.data };
+  return { posts: postsResult.totalCount, stories, messages: messageCount.data };
 }
 
 // ─── Achievement definitions ──────────────────────────────────────────────────

@@ -54,15 +54,15 @@ import * as FileSystem from "expo-file-system/legacy";
 import { supabase } from "@/lib/supabase";
 import {
   getAfuChatBookmarkedPostIds,
-  getAfuChatFollowIds,
   getAfuChatFollowStatuses,
+  getAfuChatPost,
+  getAfuChatPostMetrics,
+  getAfuChatVideoFeed,
+  recordAfuChatPostViews,
   setAfuChatBookmark,
   setAfuChatFollow,
+  setAfuChatPostLike,
 } from "@/lib/afuchatApi";
-import {
-  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-  fetchAccountProfileMap,
-} from "@/lib/sharedProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { SmartSheet } from "@/components/ui/SmartSheet";
@@ -1217,7 +1217,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     }
 
     const currentUser = userRef.current;
-    let followingIds: string[] = [];
 
     // ── Offline fast-path ─────────────────────────────────────────────────────
     // If we have no network, skip all Supabase calls and serve cached videos.
@@ -1237,17 +1236,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     }
 
     try {
-    if (tab === "following" && currentUser) {
-      const followResult = await getAfuChatFollowIds(currentUser.id, "following", 5000);
-      if (followResult.error || !followResult.ids) {
-        throw new Error(followResult.error?.message ?? "Following list could not be loaded.");
-      }
-      followingIds = followResult.ids;
-      if (followingIds.length === 0) {
-        setVideos([]); setLoading(false); loadingMoreRef.current = false; setLoadingMore(false); return;
-      }
-    }
-
     // ── Query building ─────────────────────────────────────────────────────────
     // "For You": range-based pagination across ALL videos (no time cap).
     //   - Initial load picks a fresh random start so every session begins at a
@@ -1267,52 +1255,22 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       sessionSeenRef.current = new Set<string>();
     }
 
-    let query = supabase
-      .from("posts")
-      .select("id, author_id, content, video_url, image_url, created_at, audio_name")
-      .not("video_url", "is", null)
-      .or("post_type.eq.video,post_type.is.null")
-      .order("created_at", { ascending: false });
-
-    if (tab === "for_you") {
-      // Limit-based: always fetch the freshest FOR_YOU_POOL videos (no random
-      // range offset — that breaks on small catalogues where the offset exceeds
-      // row count and returns nothing). Variety comes from weighted sampling +
-      // score jitter, not from a database offset.
-      query = (query as any).limit(FOR_YOU_POOL).or("visibility.eq.public,visibility.is.null");
-      if (isLoadMore && cursor) {
-        // Load-more: advance cursor through older videos
-        query = (query as any).lt("created_at", cursor);
-      }
-    } else if (tab === "following" && followingIds.length > 0) {
-      query = (query as any).limit(VIDEO_PAGE_SIZE).in("author_id", followingIds).or("visibility.eq.public,visibility.eq.followers,visibility.is.null");
-      if (cursor) query = (query as any).lt("created_at", cursor);
-    } else {
-      query = (query as any).limit(VIDEO_PAGE_SIZE).or("visibility.eq.public,visibility.is.null");
-      if (cursor) query = (query as any).lt("created_at", cursor);
+    const { data, error: qErr } = await getAfuChatVideoFeed({
+      tab,
+      limit: tab === "for_you" ? FOR_YOU_POOL : VIDEO_PAGE_SIZE,
+      olderThan: isLoadMore ? cursor : null,
+      expectedUserId: currentUser?.id,
+    });
+    if (qErr || !data) {
+      throw new Error(qErr?.message ?? "The video feed could not be loaded.");
     }
 
-    const { data, error: qErr } = await query;
-    if (qErr) console.warn("[VideoFeed] query error:", qErr.message);
-
     if (data && data.length > 0) {
-      const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))] as string[];
-      const { profiles: profilesById } = await fetchAccountProfileMap(
-        authorIds,
-        ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-      );
 
-      const [
-        { data: likesData }, { data: repliesData }, { data: viewsData },
-        { data: myLikes }, myBookmarksResult, myFollowResult,
-      ] = await Promise.all([
-        supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
-        supabase.from("post_replies").select("post_id").in("post_id", postIds),
-        supabase.from("post_views").select("post_id").in("post_id", postIds),
-        currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
+      const [myBookmarksResult, myFollowResult] = await Promise.all([
         currentUser
-          ? getAfuChatBookmarkedPostIds(postIds)
+          ? getAfuChatBookmarkedPostIds(data.map((post: any) => post.id))
           : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
         currentUser
           ? getAfuChatFollowStatuses(authorIds)
@@ -1332,13 +1290,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           .map(([authorId]) => authorId),
       ));
 
-      const likeMap: Record<string, number> = {};
-      for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
-      const replyMap: Record<string, number> = {};
-      for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
-      const viewMap: Record<string, number> = {};
-      for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
-      const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
       const followedSet = new Set<string>();
       myFollowResult.data?.forEach((status, authorId) => {
@@ -1348,16 +1299,13 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const allMapped: VideoPost[] = data.map((p: any) => ({
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
-        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
-        profile: {
-          display_name: profilesById.get(p.author_id)?.display_name || "User",
-          handle: profilesById.get(p.author_id)?.handle || "user",
-          avatar_url: profilesById.get(p.author_id)?.avatar_url || null,
-          is_verified: !!profilesById.get(p.author_id)?.is_verified,
-          is_organization_verified: !!profilesById.get(p.author_id)?.is_organization_verified,
+        view_count: p.view_count || 0, audio_name: p.audio_name || null,
+        profile: p.profile || {
+          display_name: "User", handle: "user", avatar_url: null,
+          is_verified: false, is_organization_verified: false,
         },
-        liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
-        likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
+        liked: p.liked === true, bookmarked: myBookmarkSet.has(p.id),
+        likeCount: p.likeCount || 0, replyCount: p.replyCount || 0,
       }));
 
       // Deduplicate against videos already shown this session (matters on wrap-around)
@@ -1440,7 +1388,8 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       }
 
       let newVideos = diversified;
-      cursorRef.current = data[data.length - 1].created_at;
+      const lastCreatedAt = data[data.length - 1]?.created_at;
+      cursorRef.current = typeof lastCreatedAt === "string" ? lastCreatedAt : null;
       // "For You" is truly infinite — never stop. "Following" uses natural cursor end.
       setHasMore(tab === "for_you" ? true : data.length === VIDEO_PAGE_SIZE);
 
@@ -1457,26 +1406,28 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             const [target] = newVideos.splice(existingIdx, 1);
             newVideos = [target, ...newVideos];
           } else if (existingIdx === -1) {
-            const { data: tRow } = await supabase
-              .from("posts")
-              .select("id, author_id, content, video_url, image_url, created_at, audio_name")
-              .eq("id", id).not("video_url", "is", null).maybeSingle();
-            if (tRow) {
-              const { profiles: targetProfiles } = await fetchAccountProfileMap(
-                [tRow.author_id],
-                ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-              );
-              const targetProfile = targetProfiles.get(tRow.author_id);
+            const { data: tRow, error: targetError } = await getAfuChatPost(id);
+            if (targetError) {
+              console.warn("[VideoFeed] requested video unavailable:", targetError.message);
+            }
+            if (tRow && typeof tRow.author_id === "string" &&
+                typeof tRow.video_url === "string" && typeof tRow.created_at === "string") {
+              const targetProfile = (tRow.profiles as any) || {};
               newVideos = [{
-                id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
-                video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
-                view_count: 0, audio_name: tRow.audio_name || null,
+                id: tRow.id,
+                author_id: tRow.author_id,
+                content: typeof tRow.content === "string" ? tRow.content : "",
+                video_url: tRow.video_url,
+                image_url: typeof tRow.image_url === "string" ? tRow.image_url : null,
+                created_at: tRow.created_at,
+                view_count: 0,
+                audio_name: typeof tRow.audio_name === "string" ? tRow.audio_name : null,
                 profile: {
-                  display_name: targetProfile?.display_name || "User",
-                  handle: targetProfile?.handle || "user",
-                  avatar_url: targetProfile?.avatar_url || null,
-                  is_verified: !!targetProfile?.is_verified,
-                  is_organization_verified: !!targetProfile?.is_organization_verified,
+                  display_name: targetProfile.display_name || "User",
+                  handle: targetProfile.handle || "user",
+                  avatar_url: targetProfile.avatar_url || null,
+                  is_verified: !!targetProfile.is_verified,
+                  is_organization_verified: !!targetProfile.is_organization_verified,
                 },
                 liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
               }, ...newVideos];
@@ -1564,14 +1515,32 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId || !loadedVideoIdsRef.current.has(postId)) return;
-        supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", postId)
-          .then(({ count }) => { setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, likeCount: count || 0 } : v)); });
+        getAfuChatPostMetrics(postId)
+          .then(({ data, error }) => {
+            if (error || !data) {
+              console.warn("[VideoFeed] like count refresh failed:", error?.message);
+              return;
+            }
+            setVideos((prev) => prev.map((v) => v.id === postId
+              ? { ...v, likeCount: data.like_count }
+              : v));
+          })
+          .catch((error) => console.warn("[VideoFeed] like count refresh failed:", error));
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId || !loadedVideoIdsRef.current.has(postId)) return;
-        supabase.from("post_replies").select("id", { count: "exact", head: true }).eq("post_id", postId)
-          .then(({ count }) => { setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, replyCount: count || 0 } : v)); });
+        getAfuChatPostMetrics(postId)
+          .then(({ data, error }) => {
+            if (error || !data) {
+              console.warn("[VideoFeed] reply count refresh failed:", error?.message);
+              return;
+            }
+            setVideos((prev) => prev.map((v) => v.id === postId
+              ? { ...v, replyCount: data.reply_count, likeCount: data.like_count }
+              : v));
+          })
+          .catch((error) => console.warn("[VideoFeed] reply count refresh failed:", error));
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel).catch(() => {}); };
@@ -1634,22 +1603,16 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
     }
 
-    if (currentlyLiked) {
-      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", currentUser.id);
-      if (error) {
-        // Rollback on failure
-        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
-      }
-    } else {
-      const { error } = await supabase.from("post_acknowledgments").upsert(
-        { post_id: postId, user_id: currentUser.id },
-        { onConflict: "post_id,user_id", ignoreDuplicates: true }
-      );
-      if (error) {
-        // Rollback on failure
-        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: false, likeCount: Math.max(0, v.likeCount - 1) } : v));
-      } else {
-      }
+    const { error } = await setAfuChatPostLike(postId, !currentlyLiked, currentUser.id);
+    if (error) {
+      setVideos((prev) => prev.map((v) => v.id === postId
+        ? {
+            ...v,
+            liked: currentlyLiked,
+            likeCount: currentlyLiked ? v.likeCount + 1 : Math.max(0, v.likeCount - 1),
+          }
+        : v));
+      showAlert("Could not update like", error.message);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1701,8 +1664,16 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   const handleRecordView = useCallback(async (postId: string) => {
     if (!user || recordedViews.current.has(postId)) return;
     recordedViews.current.add(postId);
-    supabase.from("post_views").upsert({ post_id: postId, viewer_id: user.id }, { onConflict: "post_id,viewer_id" }).then(null, () => {});
     setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, view_count: v.view_count + 1 } : v));
+    const { error } = await recordAfuChatPostViews([postId], user.id);
+    if (error) {
+      recordedViews.current.delete(postId);
+      setVideos((prev) => prev.map((v) => v.id === postId
+        ? { ...v, view_count: Math.max(0, v.view_count - 1) }
+        : v));
+      console.warn("[VideoFeed] view could not be recorded:", error.message);
+      return;
+    }
     const video = videosRef.current.find((v) => v.id === postId);
     trackEvent("view_video", { post_id: postId, author_id: video?.author_id ?? "" });
   }, [user]);

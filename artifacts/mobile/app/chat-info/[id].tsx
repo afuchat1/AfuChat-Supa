@@ -27,6 +27,7 @@ import { showAlert } from "@/lib/alert";
 import { showToast } from "@/lib/toast";
 import { generateGroupInviteLink } from "@/lib/groupInvite";
 import QRCode from "@/components/ui/QRCode";
+import { getAfuChatProfilePosts } from "@/lib/afuchatApi";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -345,15 +346,16 @@ export default function ChatInfoScreen() {
           supabase.from("profiles")
             .select("bio, handle, last_seen, show_online_status, phone")
             .eq("id", op.id).maybeSingle(),
-          supabase.from("posts")
-            .select("id, image_url, video_url, post_type")
-            .eq("author_id", op.id)
-            .in("visibility", ["public", "followers"])
-            .order("created_at", { ascending: false })
-            .limit(30),
+          getAfuChatProfilePosts(op.id, 30),
         ]);
         if (pRes.data) setDmProfile(pRes.data as DMProfile);
-        if (postsRes.data) setGridPosts(postsRes.data as GridPost[]);
+        if (postsRes.error) {
+          console.warn("[chat-info] profile posts unavailable:", postsRes.error.message);
+        } else if (postsRes.data) {
+          setGridPosts(postsRes.data.filter((post) =>
+            post.visibility === "public" || post.visibility === "followers"
+          ) as GridPost[]);
+        }
       }
     }
 

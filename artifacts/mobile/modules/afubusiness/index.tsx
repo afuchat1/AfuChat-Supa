@@ -23,7 +23,11 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { ContactRowSkeleton, ListRowSkeleton, MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
-import { getAfuChatFollowRecords, getAfuChatFollowSummary } from "@/lib/afuchatApi";
+import {
+  getAfuChatFollowRecords,
+  getAfuChatFollowSummary,
+  getAfuChatProfilePosts,
+} from "@/lib/afuchatApi";
 
 type Screen =
   | "home"
@@ -169,12 +173,13 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
       }
       setFollowerCount(data.followers_count);
     });
-    supabase
-      .from("posts")
-      .select("id", { count: "exact", head: true })
-      .eq("author_id", user.id)
-      .in("visibility", ["public", "followers"])
-      .then(({ count }) => setPostCount(count ?? 0));
+    getAfuChatProfilePosts(user.id, 1).then(({ totalCount, error }) => {
+      if (error || totalCount === null) {
+        showAlert("Posts unavailable", error?.message ?? "Could not load your post count.");
+        return;
+      }
+      setPostCount(totalCount);
+    });
     supabase
       .from("shops")
       .select("id, name, description, logo_url, category, rating, total_sales, is_active")

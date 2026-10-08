@@ -26,6 +26,10 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
+import {
+  getAfuChatTrendingHashtags,
+  searchAfuChatPosts,
+} from "@/lib/afuchatApi";
 import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
 import { getEngagera } from "@/lib/engagera";
 import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
@@ -386,59 +390,35 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   }
 
   async function loadTrendingHashtags() {
-    try {
-      const { data } = await supabase.from("posts")
-        .select("content, view_count")
-        .ilike("content", "%#%")
-        .eq("visibility", "public")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (!data) return;
-      const RE = /#(\w{2,30})/g;
-      const scores: Record<string, number> = {};
-      for (const p of data) {
-        if (!p.content) continue;
-        RE.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = RE.exec(p.content))) {
-          const t = m[1].toLowerCase();
-          scores[t] = (scores[t] || 0) + 1 + Math.log1p(p.view_count || 0) * 0.15;
-        }
-      }
-      setTrendingHashtags(
-        Object.entries(scores)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 20)
-          .map(([tag, score]) => ({ tag, count: Math.max(1, Math.round(score)) }))
-      );
-    } catch {}
+    const { data, error } = await getAfuChatTrendingHashtags();
+    if (error || !data) {
+      if (error) console.warn("[search] trending hashtags unavailable:", error.message);
+      return;
+    }
+    setTrendingHashtags(data);
   }
 
   async function loadTrendingVideos() {
-    try {
-      const { data } = await supabase
-        .from("posts")
-        .select("id, content, video_url, image_url, author_id, view_count, created_at, audio_name")
-        .eq("post_type", "video")
-        .eq("visibility", "public")
-        .not("video_url", "is", null)
-        .order("view_count", { ascending: false })
-        .limit(8);
-      if (!data || data.length === 0) return;
-      const ids = [...new Set(data.map((v: any) => v.author_id))] as string[];
-      const { data: profiles } = await supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", ids);
-      const pm = new Map((profiles || []).map((p: any) => [p.id, p]));
-      setTrendingVideos(data.map((v: any) => {
-        const a = pm.get(v.author_id) || {} as any;
+    const { data, error } = await searchAfuChatPosts({
+      kind: "videos",
+      sort: "popular",
+      limit: 8,
+    });
+    if (error || !data || data.length === 0) {
+      if (error) console.warn("[search] trending videos unavailable:", error.message);
+      return;
+    }
+    setTrendingVideos(data.map((v: any) => {
+        const a = v.profiles || {};
         return {
           id: v.id, content: v.content || "", video_url: v.video_url,
           image_url: v.image_url || null, author_id: v.author_id,
           author_handle: a.handle || "", author_name: a.display_name || "",
           author_avatar: a.avatar_url || null, view_count: v.view_count || 0,
-          created_at: v.created_at, audio_name: v.audio_name || null, duration_seconds: null,
+          created_at: v.created_at, audio_name: v.audio_name || null,
+          duration_seconds: (v.video_assets as any[] | null)?.[0]?.duration_seconds ?? null,
         };
-      }));
-    } catch {}
+    }));
   }
 
   // ── Main search ─────────────────────────────────────────────────────────────
@@ -494,30 +474,23 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             : Promise.resolve({ data: [] }),
 
           wantsPosts
-            ? (() => {
-                let pq = supabase.from("posts")
-                  .select("id, content, image_url, author_id, view_count, created_at, post_type, article_title")
-                  .ilike("content", pat)
-                  .eq("visibility", "public")
-                  .neq("post_type", "video");
-                if (cutoff) pq = pq.gte("created_at", cutoff);
-                pq = sort === "popular" ? pq.order("view_count", { ascending: false }) : pq.order("created_at", { ascending: false });
-                return pq.limit(all ? 5 : 30);
-              })()
+            ? searchAfuChatPosts({
+                kind: "posts",
+                query: trimmed,
+                sort: sort === "popular" ? "popular" : "recent",
+                since: cutoff,
+                limit: all ? 5 : 30,
+              })
             : Promise.resolve({ data: [] }),
 
           wantsVideos
-            ? (() => {
-                let vq = supabase.from("posts")
-                  .select("id, content, video_url, image_url, author_id, view_count, created_at, audio_name, video_assets(duration_seconds)")
-                  .eq("post_type", "video")
-                  .eq("visibility", "public")
-                  .not("video_url", "is", null);
-                if (trimmed.length > 0) vq = vq.ilike("content", pat);
-                if (cutoff) vq = vq.gte("created_at", cutoff);
-                vq = sort === "recent" ? vq.order("created_at", { ascending: false }) : vq.order("view_count", { ascending: false });
-                return vq.limit(all ? 4 : 30);
-              })()
+            ? searchAfuChatPosts({
+                kind: "videos",
+                query: trimmed,
+                sort: sort === "recent" ? "recent" : "popular",
+                since: cutoff,
+                limit: all ? 4 : 30,
+              })
             : Promise.resolve({ data: [] }),
 
           wantsChannels
@@ -594,13 +567,10 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       if (id !== searchIdRef.current) return;
 
       const profiles2Map = new Map<string, any>();
-      const needsProfiles: string[] = [];
-      if (postsRes.data) needsProfiles.push(...(postsRes.data as any[]).map((p: any) => p.author_id));
-      if (videosRes.data) needsProfiles.push(...(videosRes.data as any[]).map((v: any) => v.author_id));
-      if (needsProfiles.length > 0) {
-        const uids = [...new Set(needsProfiles)];
-        const { data: ps } = await supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", uids);
-        if (ps) ps.forEach((p: any) => profiles2Map.set(p.id, p));
+      for (const item of [...(postsRes.data || []), ...(videosRes.data || [])] as any[]) {
+        if (typeof item.author_id === "string" && item.profiles) {
+          profiles2Map.set(item.author_id, item.profiles);
+        }
       }
 
       const people: (PersonResult | OrgPageResult)[] = [

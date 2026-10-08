@@ -2,6 +2,7 @@ import { handleAccountExport } from "./account-export.ts";
 import { handleBookmarks } from "./bookmarks.ts";
 import { handleFollows } from "./follows.ts";
 import { handleDiscoverFeed, handleRecordPostViews } from "./feed.ts";
+import { handleVideoFeed } from "./video-feed.ts";
 import { handleMessages } from "./messages.ts";
 import { handleMessageCount, handleMessageQueries } from "./message-queries.ts";
 import { handleMessageReactions } from "./message-reactions.ts";
@@ -20,7 +21,10 @@ import {
   handleGetMyPosts,
   handleGetProfilePosts,
   handleGetPost,
+  handleGetPostMetrics,
   handlePostSubroute,
+  handleSearchPosts,
+  handleTrendingHashtags,
   isPostUuid,
 } from "./posts.ts";
 import {
@@ -813,9 +817,19 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   if (incoming.pathname === `${PREFIX}/feed/views`) {
     return handleRecordPostViews(request, env);
   }
+  if (incoming.pathname === `${PREFIX}/feed/videos`) {
+    return handleVideoFeed(request, env);
+  }
 
   if (incoming.pathname === `${PREFIX}/posts/mine`) {
     return handleGetMyPosts(request, env);
+  }
+
+  if (incoming.pathname === `${PREFIX}/posts/search`) {
+    return handleSearchPosts(request, env);
+  }
+  if (incoming.pathname === `${PREFIX}/posts/trending/hashtags`) {
+    return handleTrendingHashtags(request, env);
   }
 
   const profilePostsMatch = incoming.pathname.match(/^\/v1\/chat\/posts\/profile\/([^/]+)$/);
@@ -840,6 +854,9 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     }
     if (parts.length === 2 && parts[1] === "like") {
       return handlePostSubroute(request, env, postId, "like");
+    }
+    if (parts.length === 2 && parts[1] === "metrics") {
+      return handleGetPostMetrics(request, env, postId);
     }
     if (parts.length === 2 && parts[1] === "replies") {
       return handlePostSubroute(request, env, postId, "replies");

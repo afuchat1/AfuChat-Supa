@@ -20,7 +20,12 @@ import * as Haptics from "@/lib/haptics";
 
 import { showAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabase";
-import { getAfuChatBookmarkStatus, setAfuChatBookmark } from "@/lib/afuchatApi";
+import {
+  getAfuChatBookmarkStatus,
+  getAfuChatPost,
+  setAfuChatBookmark,
+  setAfuChatPostLike,
+} from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -109,17 +114,20 @@ export default function ArticleDetailScreen() {
     if (!id) return;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from("posts")
-        .select(`
-          id, author_id, content, article_title, article_body, image_url, created_at, view_count, like_count,
-          profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
-          post_images(image_url, display_order)
-        `)
-        .eq("id", id)
-        .single();
+      const { data, error } = await getAfuChatPost(id);
 
-      if (!data) { setLoading(false); return; }
+      if (
+        error ||
+        !data ||
+        typeof data.author_id !== "string" ||
+        typeof data.created_at !== "string"
+      ) {
+        setLoading(false);
+        return;
+      }
+      const postLikeCount = typeof data.like_count === "number" && Number.isFinite(data.like_count)
+        ? data.like_count
+        : 0;
 
       const imgs: string[] = ((data.post_images as any[]) ?? [])
         .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
@@ -136,7 +144,7 @@ export default function ArticleDetailScreen() {
         images: imgs,
         created_at: data.created_at,
         view_count: (data as any).view_count ?? 0,
-        like_count: data.like_count ?? 0,
+        like_count: postLikeCount,
         is_verified: prof.is_verified ?? false,
         is_organization_verified: prof.is_organization_verified ?? false,
         profile: {
@@ -145,14 +153,11 @@ export default function ArticleDetailScreen() {
           avatar_url: prof.avatar_url ?? null,
         },
       });
-      setLikeCount(data.like_count ?? 0);
+      setLikeCount(postLikeCount);
+      setLiked(data.liked === true);
 
       if (user) {
-        const [likeRes, bmRes] = await Promise.all([
-          supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
-          getAfuChatBookmarkStatus(id),
-        ]);
-        setLiked(!!likeRes.data);
+        const bmRes = await getAfuChatBookmarkStatus(id);
         if (bmRes.error) showAlert("Could not load saved status", bmRes.error.message);
         else setBookmarked(!!bmRes.data);
       }
@@ -172,10 +177,20 @@ export default function ArticleDetailScreen() {
 
     if (liked) {
       setLiked(false); setLikeCount((n) => Math.max(0, n - 1));
-      await supabase.from("post_acknowledgments").delete().eq("post_id", article.id).eq("user_id", user.id);
+      const { error } = await setAfuChatPostLike(article.id, false, user.id);
+      if (error) {
+        setLiked(true);
+        setLikeCount((n) => n + 1);
+        showAlert("Could not remove like", error.message);
+      }
     } else {
       setLiked(true); setLikeCount((n) => n + 1);
-      await supabase.from("post_acknowledgments").upsert({ post_id: article.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+      const { error } = await setAfuChatPostLike(article.id, true, user.id);
+      if (error) {
+        setLiked(false);
+        setLikeCount((n) => Math.max(0, n - 1));
+        showAlert("Could not like post", error.message);
+      }
     }
   }, [user, article, liked, heartScale]);
 

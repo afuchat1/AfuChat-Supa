@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-import { supabase } from "@/lib/supabase";
+import { createAfuChatPostReply } from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -628,14 +628,12 @@ function PostChrome({
   }
 
   async function sendReply() {
-    if (!user || !replyText.trim() || sending) return;
+    if (!user || !meta.postId || !replyText.trim() || sending) return;
     setSending(true);
     try {
-      const { data, error } = await supabase.from("post_replies").insert({
-        post_id: meta.postId,
-        author_id: user.id,
+      const { data, error } = await createAfuChatPostReply(meta.postId, {
         content: replyText.trim(),
-      }).select("id").single();
+      });
       if (!error && data) {
         setReplyText("");
         Keyboard.dismiss();

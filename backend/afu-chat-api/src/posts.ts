@@ -15,6 +15,9 @@ const MY_POST_FIELDS =
   "id,content,image_url,post_type,created_at,view_count,visibility";
 const PROFILE_FIELDS =
   "id,display_name,handle,avatar_url,bio,is_verified,is_organization_verified";
+const SEARCH_PROFILE_FIELDS = "id,display_name,handle,avatar_url";
+const SEARCH_POST_FIELDS =
+  "id,content,image_url,video_url,author_id,view_count,created_at,post_type,article_title,audio_name,video_asset_id";
 const MAX_IMAGES = 10;
 const MAX_BODY_BYTES = 128 * 1024;
 
@@ -460,6 +463,178 @@ export async function handleGetProfilePosts(
   );
 }
 
+export async function handleSearchPosts(request: Request, env: Env): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (request.method !== "GET") {
+    const response = errorResponse(request, requestId, "Method not allowed.", 405);
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, OPTIONS");
+    return new Response(response.body, { status: response.status, headers });
+  }
+  const auth = await loadSession(request, env, requestId);
+  if (!auth.ok) return auth.response;
+
+  const params = new URL(request.url).searchParams;
+  const kind = params.get("kind");
+  const query = (params.get("query") ?? "").trim();
+  const sort = params.get("sort") ?? "popular";
+  const rawLimit = params.get("limit") ?? "30";
+  const limit = /^\d+$/.test(rawLimit) ? Number(rawLimit) : NaN;
+  const since = params.get("since");
+  const parsedSince = since ? Date.parse(since) : null;
+  if (
+    (kind !== "posts" && kind !== "videos") ||
+    query.length > 120 ||
+    (kind === "posts" && query.length === 0) ||
+    (sort !== "recent" && sort !== "popular") ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 30 ||
+    (since !== null && (!Number.isFinite(parsedSince) || since.length > 64))
+  ) {
+    return errorResponse(request, requestId, "The post search query is invalid.", 400);
+  }
+
+  const filters: Record<string, string> = {
+    select: SEARCH_POST_FIELDS,
+    visibility: "eq.public",
+    order: sort === "recent" ? "created_at.desc" : "view_count.desc",
+    limit: String(limit),
+  };
+  if (kind === "videos") {
+    filters.post_type = "eq.video";
+    filters.video_url = "not.is.null";
+  } else {
+    filters.post_type = "neq.video";
+  }
+  if (query) filters.content = `ilike.%${query}%`;
+  if (since) filters.created_at = `gte.${new Date(parsedSince as number).toISOString()}`;
+
+  const postsResult = await restRequest<Record<string, unknown>[]>(
+    makeUrl(auth.base, "posts", filters),
+    "GET",
+    auth.session,
+    auth.anonKey,
+  );
+  if (!postsResult.ok || !Array.isArray(postsResult.data)) {
+    logRestFailure("post search", requestId, postsResult);
+    return errorResponse(request, requestId, "Posts could not be searched.", 502);
+  }
+  const rows = postsResult.data;
+  const authorIds = [...new Set(rows
+    .map((post) => post.author_id)
+    .filter((id): id is string => typeof id === "string" && UUID_PATTERN.test(id)))];
+  const assetIds = [...new Set(rows
+    .map((post) => post.video_asset_id)
+    .filter((id): id is string => typeof id === "string" && UUID_PATTERN.test(id)))];
+  const [profilesResult, assetsResult] = await Promise.all([
+    authorIds.length
+      ? restRequest<Record<string, unknown>[]>(
+          makeUrl(auth.base, "profiles", {
+            select: SEARCH_PROFILE_FIELDS,
+            id: `in.(${authorIds.join(",")})`,
+          }),
+          "GET",
+          auth.session,
+          auth.anonKey,
+          undefined,
+          "accounts",
+        )
+      : Promise.resolve({ ok: true as const, data: [] as Record<string, unknown>[] }),
+    assetIds.length
+      ? restRequest<Record<string, unknown>[]>(
+          makeUrl(auth.base, "video_assets", {
+            select: "id,duration_seconds",
+            id: `in.(${assetIds.join(",")})`,
+          }),
+          "GET",
+          auth.session,
+          auth.anonKey,
+        )
+      : Promise.resolve({ ok: true as const, data: [] as Record<string, unknown>[] }),
+  ]);
+  if (!profilesResult.ok || !Array.isArray(profilesResult.data) ||
+      !assetsResult.ok || !Array.isArray(assetsResult.data)) {
+    logRestFailure("post search hydration", requestId,
+      !profilesResult.ok ? profilesResult
+        : !assetsResult.ok ? assetsResult
+        : { ok: false, response: new Response(null, { status: 502 }) });
+    return errorResponse(request, requestId, "Post search results could not be loaded.", 502);
+  }
+  const profiles = new Map(profilesResult.data
+    .filter((profile) => typeof profile.id === "string")
+    .map((profile) => [String(profile.id), profile]));
+  const assets = new Map(assetsResult.data
+    .filter((asset) => typeof asset.id === "string")
+    .map((asset) => [String(asset.id), asset]));
+  return privateJsonResponse(
+    request,
+    requestId,
+    {
+      items: rows.map((post) => {
+        const authorId = typeof post.author_id === "string" ? post.author_id : "";
+        const assetId = typeof post.video_asset_id === "string" ? post.video_asset_id : "";
+        const asset = assetId ? assets.get(assetId) : undefined;
+        return {
+          ...post,
+          profiles: profiles.get(authorId) ?? null,
+          video_assets: asset ? [{ duration_seconds: asset.duration_seconds ?? null }] : [],
+        };
+      }),
+    },
+    200,
+  );
+}
+
+export async function handleTrendingHashtags(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (request.method !== "GET") {
+    const response = errorResponse(request, requestId, "Method not allowed.", 405);
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, OPTIONS");
+    return new Response(response.body, { status: response.status, headers });
+  }
+  const auth = await loadSession(request, env, requestId);
+  if (!auth.ok) return auth.response;
+  const postsResult = await restRequest<Record<string, unknown>[]>(
+    makeUrl(auth.base, "posts", {
+      select: "content,view_count",
+      content: "ilike.%#%",
+      visibility: "eq.public",
+      order: "created_at.desc",
+      limit: "500",
+    }),
+    "GET",
+    auth.session,
+    auth.anonKey,
+  );
+  if (!postsResult.ok || !Array.isArray(postsResult.data)) {
+    logRestFailure("trending hashtag query", requestId, postsResult);
+    return errorResponse(request, requestId, "Trending hashtags could not be loaded.", 502);
+  }
+  const scores = new Map<string, number>();
+  const tagPattern = /#(\w{2,30})/g;
+  for (const post of postsResult.data) {
+    if (typeof post.content !== "string") continue;
+    tagPattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = tagPattern.exec(post.content))) {
+      const tag = match[1].toLowerCase();
+      scores.set(tag, (scores.get(tag) ?? 0) + 1 + Math.log1p(
+        typeof post.view_count === "number" ? Math.max(0, post.view_count) : 0,
+      ) * 0.15);
+    }
+  }
+  const items = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([tag, score]) => ({ tag, count: Math.max(1, Math.round(score)) }));
+  return privateJsonResponse(request, requestId, { items }, 200);
+}
+
 export async function handleGetPost(request: Request, env: Env, postId: string): Promise<Response> {
   const requestId = crypto.randomUUID();
   if (request.method !== "GET") {
@@ -557,6 +732,59 @@ export async function handleGetPost(request: Request, env: Env, postId: string):
         liked: likedResult.data.length > 0,
       },
     },
+    200,
+  );
+}
+
+export async function handleGetPostMetrics(
+  request: Request,
+  env: Env,
+  postId: string,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  if (request.method !== "GET") {
+    const response = errorResponse(request, requestId, "Method not allowed.", 405);
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, OPTIONS");
+    return new Response(response.body, { status: response.status, headers });
+  }
+  if (!UUID_PATTERN.test(postId)) {
+    return errorResponse(request, requestId, "The post ID is invalid.", 400);
+  }
+  const auth = await loadSession(request, env, requestId);
+  if (!auth.ok) return auth.response;
+
+  const readCount = async (relation: string): Promise<number | null> => {
+    const result = await restRequest<Record<string, unknown>[]>(
+      makeUrl(auth.base, relation, {
+        select: "id",
+        post_id: `eq.${postId}`,
+      }),
+      "GET",
+      auth.session,
+      auth.anonKey,
+      undefined,
+      "public",
+      "count=exact",
+    );
+    if (!result.ok || !Array.isArray(result.data)) {
+      logRestFailure("post metrics query", requestId, result);
+      return null;
+    }
+    return exactCount(result.response);
+  };
+  const [likeCount, replyCount, viewCount] = await Promise.all([
+    readCount("post_acknowledgments"),
+    readCount("post_replies"),
+    readCount("post_views"),
+  ]);
+  if (likeCount === null || replyCount === null || viewCount === null) {
+    return errorResponse(request, requestId, "Post activity could not be loaded.", 502);
+  }
+  return privateJsonResponse(
+    request,
+    requestId,
+    { like_count: likeCount, reply_count: replyCount, view_count: viewCount },
     200,
   );
 }

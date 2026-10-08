@@ -2726,3 +2726,215 @@ test("post view batches derive the viewer from AfuAuth and reject stale accounts
   assert.equal(stale.status, 409);
   assert.equal(postgrestCalls, 1);
 });
+
+test("post search only returns public results and hydrates account profiles and video duration", async () => {
+  const token = "post-search-session";
+  const authorId = "123e4567-e89b-42d3-a456-426614174002";
+  const assetId = "123e4567-e89b-42d3-a456-426614174003";
+  const postId = "123e4567-e89b-42d3-a456-426614174004";
+  const requests = [];
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "123e4567-e89b-42d3-a456-426614174001" }, accessToken: token });
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push(request);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/posts")) {
+      return Response.json([{
+        id: postId,
+        author_id: authorId,
+        content: "A public clip",
+        video_url: "https://cdn.afuchat.com/chat/clip.mp4",
+        video_asset_id: assetId,
+        view_count: 12,
+        created_at: "2026-10-08T10:00:00.000Z",
+      }]);
+    }
+    if (url.pathname.endsWith("/profiles")) {
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      return Response.json([{
+        id: authorId,
+        display_name: "Clip author",
+        handle: "clipauthor",
+        avatar_url: null,
+      }]);
+    }
+    if (url.pathname.endsWith("/video_assets")) {
+      return Response.json([{ id: assetId, duration_seconds: 18 }]);
+    }
+    throw new Error(`Unexpected Supabase path ${url.pathname}`);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://api.afuchat.com/v1/chat/posts/search?kind=videos&query=clip&sort=recent&since=2026-10-01T00%3A00%3A00.000Z&limit=8",
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.items[0].id, postId);
+  assert.equal(payload.items[0].profiles.handle, "clipauthor");
+  assert.deepEqual(payload.items[0].video_assets, [{ duration_seconds: 18 }]);
+  const postQuery = new URL(requests.find((request) =>
+    new URL(request.url).pathname.endsWith("/posts")
+  ).url).searchParams;
+  assert.equal(postQuery.get("visibility"), "eq.public");
+  assert.equal(postQuery.get("post_type"), "eq.video");
+  assert.equal(postQuery.get("video_url"), "not.is.null");
+  assert.equal(postQuery.get("content"), "ilike.%clip%");
+  assert.equal(postQuery.get("created_at"), "gte.2026-10-01T00:00:00.000Z");
+});
+
+test("trending hashtags preserve the app ranking and reject malformed search input", async () => {
+  const token = "trending-hashtag-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let postgrestCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    postgrestCalls += 1;
+    const request = input instanceof Request ? input : new Request(input, init);
+    assert.equal(new URL(request.url).searchParams.get("content"), "ilike.%#%");
+    return Response.json([
+      { content: "#Afu #afu", view_count: 4 },
+      { content: "#Build", view_count: 0 },
+    ]);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts/trending/hashtags", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    items: [
+      { tag: "afu", count: 2 },
+      { tag: "build", count: 1 },
+    ],
+  });
+
+  const invalid = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/posts/search?kind=unknown", {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  assert.equal(invalid.status, 400);
+  assert.equal(postgrestCalls, 1);
+});
+
+test("video following feed enforces visibility and hydrates counts from the shared account data", async () => {
+  const token = "video-following-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174011";
+  const authorId = "123e4567-e89b-42d3-a456-426614174012";
+  const postId = "123e4567-e89b-42d3-a456-426614174013";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    if (url.pathname.endsWith("/follows")) {
+      return Response.json([{ following_id: authorId }]);
+    }
+    if (url.pathname.endsWith("/posts")) {
+      assert.equal(url.searchParams.get("author_id"), `in.(${authorId})`);
+      assert.equal(url.searchParams.getAll("or").length, 2);
+      assert.match(url.searchParams.getAll("or")[1], /visibility\.eq\.followers/);
+      return Response.json([{
+        id: postId,
+        author_id: authorId,
+        content: "Following clip",
+        video_url: "https://cdn.afuchat.com/chat/following.mp4",
+        image_url: null,
+        created_at: "2026-10-08T10:00:00.000Z",
+        audio_name: null,
+        view_count: 77,
+      }]);
+    }
+    if (url.pathname.endsWith("/profiles")) {
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      return Response.json([{
+        id: authorId,
+        display_name: "Following creator",
+        handle: "creator",
+        avatar_url: null,
+        is_verified: true,
+        is_organization_verified: false,
+      }]);
+    }
+    if (url.pathname.endsWith("/post_acknowledgments")) {
+      return Response.json(url.searchParams.has("user_id")
+        ? [{ post_id: postId }]
+        : [{ post_id: postId }, { post_id: postId }]);
+    }
+    if (url.pathname.endsWith("/post_replies")) {
+      return Response.json([{ post_id: postId }, { post_id: postId }, { post_id: postId }]);
+    }
+    if (url.pathname.endsWith("/post_views")) {
+      return Response.json([{ post_id: postId }, { post_id: postId }, { post_id: postId }, { post_id: postId }]);
+    }
+    throw new Error(`Unexpected Supabase path ${url.pathname}`);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/feed/videos?tab=following&limit=20&expected_user_id=${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.items.length, 1);
+  assert.equal(payload.items[0].profile.handle, "creator");
+  assert.equal(payload.items[0].isFollowing, true);
+  assert.equal(payload.items[0].liked, true);
+  assert.equal(payload.items[0].likeCount, 2);
+  assert.equal(payload.items[0].replyCount, 3);
+  assert.equal(payload.items[0].view_count, 4);
+});
+
+test("post metrics return exact activity counts through the named route", async () => {
+  const token = "post-metrics-session";
+  const postId = "123e4567-e89b-42d3-a456-426614174014";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({
+      user: { id: "123e4567-e89b-42d3-a456-426614174015" },
+      accessToken: token,
+    });
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const url = new URL(request.url);
+    assert.equal(url.searchParams.get("post_id"), `eq.${postId}`);
+    assert.equal(new Headers(init?.headers).get("Prefer"), "count=exact");
+    const total = url.pathname.endsWith("/post_acknowledgments")
+      ? 9
+      : url.pathname.endsWith("/post_replies")
+        ? 5
+        : 23;
+    return Response.json([{ id: "row" }], {
+      headers: { "Content-Range": `0-0/${total}` },
+    });
+  };
+
+  const response = await worker.fetch(
+    new Request(`https://api.afuchat.com/v1/chat/posts/${postId}/metrics`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    like_count: 9,
+    reply_count: 5,
+    view_count: 23,
+  });
+});
