@@ -153,6 +153,46 @@ relations/API only after inspecting their existing use and data semantics.
 Do not expose `afuchat` through PostgREST, bulk-copy divergent schemas, or
 change shared schema grants as a shortcut.
 
+## Canonical-schema migration preflight (2026-10-08)
+
+A fresh, read-only Supabase Management API inspection confirmed the following
+production state:
+
+- `chat.chats` and `afuchat.chats` each contain 337 rows with identical ID
+  sets. No chat-parent rows need copying for this table.
+- `chat.chat_members` has 622 rows and `afuchat.chat_members` has 629. There
+  are 216 legacy membership pairs absent from AfuChat and 223 AfuChat-only
+  pairs. Every legacy-only pair has an `id` already used by a different
+  `afuchat.chat_members` row, so copying those rows while preserving IDs would
+  collide with canonical records.
+- `chat.messages` has 3,101 rows and `afuchat.messages` has 3,082. There are
+  21 legacy-only message IDs and two AfuChat-only IDs. Of the legacy-only
+  messages, 18 have plaintext but no encrypted content; the other three have
+  ciphertext but no `sent_at`, which prevents a safe field-compatible insert.
+  Among shared message IDs, 1,956 have different sender IDs. Do not overwrite
+  AfuChat rows or convert plaintext into ciphertext.
+- `chat.message_status` has 2,645 rows and `afuchat.message_status` has 3,084.
+  There are 1,772 legacy-only `(message_id,user_id)` pairs, and every such
+  pair's `id` is already used by a different canonical status row.
+- Two `platform.notification_events` rows reference messages that do not
+  exist in `afuchat.messages`.
+- Thirty-one foreign-key constraints outside the `chat` schema still target
+  `chat.*`, including constraints in `afuchat`, `accounts`, `match`,
+  `platform`, `rewards`, and `shop`. Thirty-two `public` functions mention
+  `chat.*`; these include AfuChat routines and shared-product routines that
+  need individual ownership and authorization review before editing.
+- The existing API message and membership routes still read both the public
+  AfuChat-backed relations and the legacy `chat` schema. Removing that fallback
+  now would hide the unresolved legacy-only rows.
+
+This means the attached no-replacement-IDs and no-overwrite rules currently
+prevent a complete row merge for memberships and read statuses. The three
+ciphertext message rows also cannot be copied without resolving missing
+timestamps, and the two notification references need an explicit disposition.
+No live schema, rows, function, grant, Worker, or API setting was changed during
+this preflight. Do not cut over reads/writes or drop `chat` until these conflicts
+and all 31 FK / 32 function dependencies are resolved and reverified.
+
 ## Remaining work
 
 Continue migrating client operations by product-owned domain, preserving
