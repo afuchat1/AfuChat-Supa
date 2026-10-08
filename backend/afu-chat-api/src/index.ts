@@ -2,6 +2,13 @@ import { handleAccountExport } from "./account-export.ts";
 import { handleBookmarks } from "./bookmarks.ts";
 import { handleFollows } from "./follows.ts";
 import { handleDiscoverFeed, handleRecordPostViews } from "./feed.ts";
+import {
+  handleDiscoverLocation,
+  handleDiscoverNearby,
+  handleDiscoverPeople,
+  handleDiscoverPresence,
+} from "./discover.ts";
+import { handleOrganizationPostsFeed } from "./organization-feed.ts";
 import { handleVideoFeed } from "./video-feed.ts";
 import { handleMessages } from "./messages.ts";
 import { handleMessageCount, handleMessageQueries } from "./message-queries.ts";
@@ -820,6 +827,21 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
   if (incoming.pathname === `${PREFIX}/feed/videos`) {
     return handleVideoFeed(request, env);
   }
+  if (incoming.pathname === `${PREFIX}/feed/organization-posts`) {
+    return handleOrganizationPostsFeed(request, env);
+  }
+  if (incoming.pathname === `${PREFIX}/discover/people`) {
+    return handleDiscoverPeople(request, env);
+  }
+  if (incoming.pathname === `${PREFIX}/discover/nearby`) {
+    return handleDiscoverNearby(request, env);
+  }
+  if (incoming.pathname === `${PREFIX}/discover/location`) {
+    return handleDiscoverLocation(request, env);
+  }
+  if (incoming.pathname === `${PREFIX}/discover/presence`) {
+    return handleDiscoverPresence(request, env);
+  }
 
   if (incoming.pathname === `${PREFIX}/posts/mine`) {
     return handleGetMyPosts(request, env);
@@ -853,7 +875,14 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
       );
     }
     if (parts.length === 2 && parts[1] === "like") {
-      return handlePostSubroute(request, env, postId, "like");
+      return handlePostSubroute(
+        request,
+        env,
+        postId,
+        "like",
+        undefined,
+        incoming.searchParams.get("organization_post") === "true",
+      );
     }
     if (parts.length === 2 && parts[1] === "metrics") {
       return handleGetPostMetrics(request, env, postId);

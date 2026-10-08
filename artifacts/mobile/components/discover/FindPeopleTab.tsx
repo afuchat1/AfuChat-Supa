@@ -18,7 +18,12 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
+import {
+  getAfuChatDiscoverPeople,
+  getAfuChatFollowIds,
+  setAfuChatDiscoverPresence,
+  setAfuChatFollow,
+} from "@/lib/afuchatApi";
 
 type Person = {
   id: string;
@@ -106,27 +111,18 @@ export default function FindPeopleTab() {
       // This is deliberately a live presence query, not a recommendation or
       // history query. last_seen is updated by the session heartbeat.
       const [
-        { data, error: profileError },
+        peopleResult,
         followingResult,
         followersResult,
       ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, display_name, handle, avatar_url, bio, follower_count, is_verified, is_organization_verified, last_seen")
-          .neq("id", user.id)
-          .eq("onboarding_completed", true)
-          .eq("is_banned", false)
-          .eq("account_deleted", false)
-          .not("handle", "is", null)
-          .not("display_name", "is", null)
-          .not("avatar_url", "is", null)
-          .not("bio", "is", null)
-          .order("last_seen", { ascending: false, nullsFirst: false })
-          .limit(100),
+        getAfuChatDiscoverPeople({ mode: "active", expectedUserId: user.id }),
         getAfuChatFollowIds(user.id, "following", 5000),
         getAfuChatFollowIds(user.id, "followers", 5000),
       ]);
-      if (profileError) throw profileError;
+      if (peopleResult.error || !peopleResult.data) {
+        throw peopleResult.error ?? new Error("Live users could not be loaded.");
+      }
+      const data = peopleResult.data;
       if (followingResult.error || !followingResult.ids) throw new Error("Following list could not be loaded.");
       if (followersResult.error || !followersResult.ids) throw new Error("Follower list could not be loaded.");
 
@@ -223,7 +219,9 @@ export default function FindPeopleTab() {
     if (!user) return;
     // Keep the current user eligible for the live feed while this tab is open.
     const heartbeat = () => {
-      supabase.rpc("update_last_seen").then(() => {}, () => {});
+      void setAfuChatDiscoverPresence(user.id).then(({ error }) => {
+        if (error) setError("Live presence could not be updated right now.");
+      });
     };
     heartbeat();
     const heartbeatTimer = setInterval(heartbeat, 60_000);

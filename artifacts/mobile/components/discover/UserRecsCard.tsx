@@ -6,7 +6,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/lib/supabase";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
@@ -14,7 +13,7 @@ import { safeRouter } from "@/lib/navUtils";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import * as Haptics from "@/lib/haptics";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
+import { getAfuChatDiscoverPeople, setAfuChatFollow } from "@/lib/afuchatApi";
 
 type SuggestUser = {
   id: string;
@@ -51,27 +50,12 @@ async function fetchRecommendations(userId: string | null): Promise<SuggestUser[
   if (cached?.promise) return cached.promise;
 
   const promise = (async () => {
-    const [followResult, { data }] = await Promise.all([
-      userId
-        ? getAfuChatFollowIds(userId, "following", 500)
-        : Promise.resolve({ ids: [] as string[], error: null }),
-      supabase
-        .from("profiles")
-        .select("id, display_name, handle, avatar_url, is_verified, is_organization_verified, follower_count, bio")
-        .not("avatar_url", "is", null)
-        .not("bio", "is", null)
-        .not("display_name", "is", null)
-        .order("follower_count", { ascending: false })
-        .limit(60),
-    ]);
-
-    if (followResult.error || !followResult.ids) {
-      throw new Error(followResult.error?.message ?? "Could not load followed users.");
-    }
-    const excluded = new Set(followResult.ids);
-    if (userId) excluded.add(userId);
-    const users = (data || [])
-      .filter((u: any) => !excluded.has(u.id))
+    const { data, error } = await getAfuChatDiscoverPeople({
+      mode: "suggested",
+      expectedUserId: userId ?? undefined,
+    });
+    if (error || !data) throw error ?? new Error("Suggested people could not be loaded.");
+    const users = data
       .map((u: any) => ({ ...u, followed: false })) as SuggestUser[];
 
     recommendationsCache.set(cacheKey, { users, fetchedAt: Date.now() });
@@ -102,14 +86,17 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
   const { user } = useAuth();
   const [users, setUsers] = useState<SuggestUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const pool = await fetchRecommendations(user?.id ?? null);
       setUsers(pickRecommendations(pool, seed));
     } catch (_) {
       setUsers([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -159,7 +146,21 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
     );
   }
 
-  if (users.length === 0) return null;
+  if (users.length === 0) {
+    if (!loadError) return null;
+    return (
+      <View style={[styles.container, { backgroundColor: colors.surface, padding: 14 }]}>
+        <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_500Medium" }}>
+          Suggested people could not be loaded.
+        </Text>
+        <TouchableOpacity onPress={() => load()} style={{ marginTop: 8, alignSelf: "flex-start" }}>
+          <Text style={{ color: colors.accent, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+            Try again
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

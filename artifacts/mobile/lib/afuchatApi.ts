@@ -1245,6 +1245,181 @@ export async function getAfuChatTrendingHashtags(): Promise<{
   return { data: result.data.items as { tag: string; count: number }[], error: null };
 }
 
+export type AfuChatDiscoverPerson = Record<string, unknown> & { id: string };
+
+export async function getAfuChatDiscoverPeople(input: {
+  mode: "suggested" | "active" | "directory" | "search" | "trending" | "mentions";
+  expectedUserId?: string;
+  query?: string;
+  interest?: string;
+  limit?: number;
+  verifiedOnly?: boolean;
+}): Promise<{
+  data: AfuChatDiscoverPerson[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams({ mode: input.mode });
+  if (input.expectedUserId) params.set("expected_user_id", input.expectedUserId);
+  if (input.query !== undefined) params.set("query", input.query);
+  if (input.interest && input.interest !== "All") {
+    params.set("interest", input.interest.toLowerCase());
+  }
+  if (input.limit !== undefined) params.set("limit", String(input.limit));
+  if (input.verifiedOnly) params.set("verified_only", "true");
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    `/discover/people?${params.toString()}`,
+    { method: "GET" },
+    "People could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (
+    !Array.isArray(result.data?.items) ||
+    !result.data.items.every((item) =>
+      !!item && typeof item === "object" &&
+      typeof (item as Record<string, unknown>).id === "string"
+    )
+  ) {
+    return {
+      data: null,
+      error: { message: "People service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as AfuChatDiscoverPerson[], error: null };
+}
+
+export async function getAfuChatNearbyPeople(input: {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  expectedUserId: string;
+}): Promise<{
+  data: AfuChatDiscoverPerson[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams({
+    latitude: String(input.latitude),
+    longitude: String(input.longitude),
+    radius_km: String(input.radiusKm),
+    expected_user_id: input.expectedUserId,
+  });
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    `/discover/nearby?${params.toString()}`,
+    { method: "GET" },
+    "Nearby people could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (
+    !Array.isArray(result.data?.items) ||
+    !result.data.items.every((item) =>
+      !!item && typeof item === "object" &&
+      typeof (item as Record<string, unknown>).id === "string"
+    )
+  ) {
+    return {
+      data: null,
+      error: { message: "Nearby people returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { data: result.data.items as AfuChatDiscoverPerson[], error: null };
+}
+
+export async function saveAfuChatDiscoverLocation(input: {
+  latitude: number;
+  longitude: number;
+  expectedUserId: string;
+}): Promise<{
+  updated: boolean | null;
+  locationUpdatedAt: string | null;
+  error: AfuChatApiError | null;
+}> {
+  const result = await postEndpointRequest<Record<string, unknown>>(
+    "/discover/location",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        latitude: input.latitude,
+        longitude: input.longitude,
+        expected_user_id: input.expectedUserId,
+      }),
+    },
+    "The location could not be saved",
+  );
+  if (result.error) return { updated: null, locationUpdatedAt: null, error: result.error };
+  if (typeof result.data?.updated !== "boolean") {
+    return {
+      updated: null,
+      locationUpdatedAt: null,
+      error: { message: "The location service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return {
+    updated: result.data.updated,
+    locationUpdatedAt: typeof result.data.location_updated_at === "string"
+      ? result.data.location_updated_at
+      : null,
+    error: null,
+  };
+}
+
+export async function updateAfuChatDiscoverPresence(
+  expectedUserId: string,
+): Promise<{ error: AfuChatApiError | null }> {
+  const result = await postEndpointRequest<{ updated?: unknown }>(
+    "/discover/presence",
+    {
+      method: "POST",
+      body: JSON.stringify({ expected_user_id: expectedUserId }),
+    },
+    "Presence could not be updated",
+  );
+  if (result.error) return { error: result.error };
+  if (result.data?.updated !== true) {
+    return {
+      error: { message: "Presence service returned an invalid response.", code: "INVALID_RESPONSE" },
+    };
+  }
+  return { error: null };
+}
+
+export async function getAfuChatOrganizationPosts(input: {
+  limit?: number;
+  olderThan?: string | null;
+  expectedUserId: string;
+}): Promise<{
+  data: AfuChatPostRecord[] | null;
+  error: AfuChatApiError | null;
+}> {
+  const params = new URLSearchParams({
+    limit: String(input.limit ?? 6),
+    expected_user_id: input.expectedUserId,
+  });
+  if (input.olderThan) params.set("older_than", input.olderThan);
+  const result = await postEndpointRequest<{ items?: unknown }>(
+    `/feed/organization-posts?${params.toString()}`,
+    { method: "GET" },
+    "Organization posts could not be loaded",
+  );
+  if (result.error) return { data: null, error: result.error };
+  if (
+    !Array.isArray(result.data?.items) ||
+    !result.data.items.every((item) =>
+      !!item && typeof item === "object" &&
+      typeof (item as Record<string, unknown>).id === "string" &&
+      typeof (item as Record<string, unknown>).author_id === "string" &&
+      typeof (item as Record<string, unknown>).created_at === "string"
+    )
+  ) {
+    return {
+      data: null,
+      error: {
+        message: "Organization post service returned an invalid response.",
+        code: "INVALID_RESPONSE",
+      },
+    };
+  }
+  return { data: result.data.items as AfuChatPostRecord[], error: null };
+}
+
 export async function createAfuChatPost(input: AfuChatPostCreateInput): Promise<{
   data: AfuChatPostRecord | null;
   error: AfuChatApiError | null;
@@ -1340,10 +1515,13 @@ async function setPostLike(
   liked: boolean,
   fallback: string,
   expectedUserId?: string,
+  organizationPost = false,
 ): Promise<{ error: AfuChatApiError | null }> {
-  const requestPath = expectedUserId
-    ? `${path}?expected_user_id=${encodeURIComponent(expectedUserId)}`
-    : path;
+  const params = new URLSearchParams();
+  if (expectedUserId) params.set("expected_user_id", expectedUserId);
+  if (organizationPost) params.set("organization_post", "true");
+  const query = params.toString();
+  const requestPath = query ? `${path}?${query}` : path;
   const result = await postEndpointRequest<{ liked?: unknown }>(
     requestPath,
     { method: liked ? "POST" : "DELETE" },
@@ -1362,12 +1540,14 @@ export function setAfuChatPostLike(
   postId: string,
   liked: boolean,
   expectedUserId?: string,
+  organizationPost = false,
 ): Promise<{ error: AfuChatApiError | null }> {
   return setPostLike(
     `/posts/${encodeURIComponent(postId)}/like`,
     liked,
     liked ? "Post could not be liked" : "Post like could not be removed",
     expectedUserId,
+    organizationPost,
   );
 }
 

@@ -52,7 +52,7 @@ function restHeaders(session: VerifiedSession, anonKey: string, schema = "public
 
 async function restRequest<T>(
   url: URL,
-  method: "GET" | "POST" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   session: VerifiedSession,
   anonKey: string,
   body?: unknown,
@@ -795,6 +795,7 @@ export async function handlePostSubroute(
   postId: string,
   action: "like" | "replies" | "reply-like",
   replyId?: string,
+  organizationPost = false,
 ): Promise<Response> {
   const requestId = crypto.randomUUID();
   if (!UUID_PATTERN.test(postId) || (replyId !== undefined && !UUID_PATTERN.test(replyId))) {
@@ -821,6 +822,73 @@ export async function handlePostSubroute(
   }
 
   if (action === "like") {
+    if (organizationPost) {
+      const organizationPostResult = await restRequest<Record<string, unknown>[]>(
+        makeUrl(auth.base, "organization_page_posts", {
+          select: "id",
+          id: `eq.${postId}`,
+          limit: "2",
+        }),
+        "GET",
+        auth.session,
+        auth.anonKey,
+      );
+      if (
+        !organizationPostResult.ok ||
+        !Array.isArray(organizationPostResult.data) ||
+        organizationPostResult.data.length !== 1
+      ) {
+        logRestFailure("organization post validation", requestId, organizationPostResult);
+        return errorResponse(request, requestId, "The organization post could not be found.", 404);
+      }
+    }
+
+    const syncOrganizationLikeCount = async (): Promise<boolean> => {
+      if (!organizationPost) return true;
+      const countResult = await restRequest<Record<string, unknown>[]>(
+        makeUrl(auth.base, "post_acknowledgments", {
+          select: "id",
+          post_id: `eq.${postId}`,
+        }),
+        "GET",
+        auth.session,
+        auth.anonKey,
+        undefined,
+        "public",
+        "count=exact",
+      );
+      if (!countResult.ok || !Array.isArray(countResult.data)) {
+        logRestFailure("organization post like count", requestId, countResult);
+        return false;
+      }
+      const count = exactCount(countResult.response);
+      if (count === null) {
+        console.error("[afuchat-api] organization post like count was unavailable", {
+          requestId,
+        });
+        return false;
+      }
+      const updateResult = await restRequest<Record<string, unknown>[]>(
+        makeUrl(auth.base, "organization_page_posts", {
+          id: `eq.${postId}`,
+          select: "id,likes",
+        }),
+        "PATCH",
+        auth.session,
+        auth.anonKey,
+        { likes: count },
+      );
+      if (
+        !updateResult.ok ||
+        !Array.isArray(updateResult.data) ||
+        updateResult.data.length !== 1
+      ) {
+        logRestFailure("organization post like count sync", requestId, updateResult);
+        return false;
+      }
+      return true;
+    };
+
     if (request.method === "POST") {
       const result = await restRequest<Record<string, unknown>[]>(
         makeUrl(auth.base, "post_acknowledgments", {
@@ -838,6 +906,9 @@ export async function handlePostSubroute(
         logRestFailure("post like", requestId, result);
         return errorResponse(request, requestId, "The post could not be liked.", 502);
       }
+      if (!(await syncOrganizationLikeCount())) {
+        return errorResponse(request, requestId, "The organization post like could not be synced.", 502);
+      }
       return privateJsonResponse(request, requestId, { liked: true }, 200);
     }
     const result = await restRequest<unknown>(
@@ -853,6 +924,9 @@ export async function handlePostSubroute(
     if (!result.ok) {
       logRestFailure("post unlike", requestId, result);
       return errorResponse(request, requestId, "The post like could not be removed.", 502);
+    }
+    if (!(await syncOrganizationLikeCount())) {
+      return errorResponse(request, requestId, "The organization post like could not be synced.", 502);
     }
     return privateJsonResponse(request, requestId, { liked: false }, 200);
   }

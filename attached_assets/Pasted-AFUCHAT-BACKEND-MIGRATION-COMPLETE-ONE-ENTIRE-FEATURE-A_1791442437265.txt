@@ -1,0 +1,1491 @@
+AFUCHAT BACKEND MIGRATION — COMPLETE ONE ENTIRE FEATURE AT A TIME
+
+Continue from the actual latest repository state.
+
+Repository:
+
+afuchat1/AfuChat-Supa
+
+Latest verified HEAD:
+
+da88252ee661ffc136ced79cda2dc90182593ff6
+
+Latest commit:
+
+Refactor mobile navigation and screen components
+
+Do NOT restart the migration.
+
+Do NOT use the old "d947be3", "23ec74f", or earlier repository state as the working baseline.
+
+First inspect the current HEAD and current source.
+
+---
+
+1. NEW MIGRATION RULE: FEATURE-FIRST, NOT FILE-FIRST
+
+From this point forward, the migration must be done feature by feature / domain by domain.
+
+Do NOT migrate random ".from()" calls across unrelated screens.
+
+Do NOT migrate one endpoint from Discover, then jump to Stories, then Profile, then Chat.
+
+Instead:
+
+FEATURE
+↓
+inventory every data flow belonging to that feature
+↓
+design all required API operations
+↓
+implement backend
+↓
+implement every mobile caller
+↓
+handle realtime
+↓
+handle offline/cache if applicable
+↓
+test the complete feature
+↓
+verify production
+↓
+deploy the completed implementation to the afuchat-api Worker
+↓
+mark feature COMPLETE
+↓
+ONLY THEN move to next feature
+
+A feature is NOT complete because one screen works.
+
+A feature is complete only when all data flows and user actions belonging to that feature have been audited and migrated or intentionally classified.
+
+---
+
+2. WHAT “COMPLETE FEATURE” MEANS
+
+For every feature batch, inspect:
+
+READS
+CREATES
+UPDATES
+DELETES
+LIKES
+COMMENTS/REPLIES
+COUNTS
+RELATIONSHIPS
+PROFILE DATA
+MEDIA
+PERMISSIONS
+PRIVACY
+NOTIFICATIONS
+REALTIME
+OFFLINE CACHE
+OFFLINE QUEUE
+OPTIMISTIC UI
+SEARCH
+PAGINATION
+SORTING
+ANALYTICS
+XP/REWARDS
+ACOIN/TRANSACTIONS
+SHARING
+DEEP LINKS
+
+Only include categories that actually belong to that feature.
+
+The key rule:
+
+«Do not declare a feature migrated until every data path used by that feature has been traced from the mobile UI to the backend and back.»
+
+---
+
+3. CURRENT REPOSITORY BASELINE
+
+The latest migration audit reports approximately:
+
+585 literal .from("relation") call sites
+84 relation names
+110 mobile files
+
+91 direct RPC call sites
+36 RPC function names
+
+This is NOT a target that must be reduced blindly to zero.
+
+Some direct Supabase operations may legitimately remain for:
+
+Auth
+Realtime
+local/offline infrastructure
+non-product infrastructure
+
+But product CRUD and mutations should move behind the appropriate product API.
+
+Do not blindly remove all Supabase usage.
+
+---
+
+4. ALREADY-MIGRATED AREAS
+
+The repository already contains AfuChat API routes for:
+
+/v1/chat/me
+
+/v1/chat/conversations
+
+/v1/chat/bookmarks
+
+/v1/chat/posts
+/v1/chat/posts/mine
+/v1/chat/posts/{postId}
+/v1/chat/posts/{postId}/like
+/v1/chat/posts/{postId}/replies
+
+/v1/chat/follows/*
+/v1/chat/feed/for-you
+/v1/chat/feed/following
+/v1/chat/feed/views
+
+/v1/chat/messages
+/v1/chat/messages/status
+/v1/chat/messages/reactions
+/v1/chat/messages/edit
+/v1/chat/messages/delete
+/v1/chat/messages/report
+/v1/chat/messages/starred
+/v1/chat/messages/edit-history
+/v1/chat/messages/clear
+
+/v1/chat/support/ai-reply
+/v1/chat/push/register
+/v1/chat/push/send
+
+Do not recreate these.
+
+Instead, determine whether every relevant mobile caller actually uses them.
+
+---
+
+5. BATCH 1 — DISCOVER
+
+Treat Discover as one complete feature, not just a feed.
+
+Before touching another feature, finish Discover completely.
+
+Audit every Discover surface, including wherever the current app places these:
+
+For You
+Following
+Trending
+Videos
+People
+Suggested users
+Search/discovery
+Hashtags
+Popular posts
+Popular videos
+Post recommendations
+Follow/unfollow
+Like
+Bookmark
+Reply
+Post views
+Profile previews
+Author information
+
+Also trace:
+
+pagination
+refresh
+pull-to-refresh
+infinite scroll
+cached results
+offline behavior
+loading states
+empty states
+error states
+
+The latest repository already has migrated:
+
+For You feed
+Following feed
+post-view recording
+follow state
+
+Do NOT redo those.
+
+Instead verify that they are fully integrated with the rest of Discover.
+
+For example:
+
+Discover video
+↓
+video post
+↓
+author profile
+↓
+follow state
+↓
+like state
+↓
+bookmark state
+↓
+reply state
+↓
+view tracking
+
+must work as one coherent feature.
+
+If Discover requires a missing API operation, add it under:
+
+/v1/chat/*
+
+Do not create:
+
+/v1/discover/*
+
+---
+
+6. DISCOVER COMPLETION GATE
+
+Do not leave Discover until all of these are verified:
+
+[ ] For You
+[ ] Following
+[ ] video feed
+[ ] trending content
+[ ] hashtags
+[ ] search/discovery results
+[ ] people discovery
+[ ] suggested users
+[ ] follow state
+[ ] like state
+[ ] bookmark state
+[ ] replies
+[ ] post view recording
+[ ] profile preview
+[ ] pagination
+[ ] refresh
+[ ] offline/cache behavior
+[ ] errors
+[ ] authentication
+[ ] privacy/visibility
+
+Only after this checklist passes:
+
+DISCOVER = COMPLETE
+
+Then commit the Discover batch.
+
+---
+
+7. BATCH 2 — PROFILE / USER DATA
+
+After Discover is completely finished, move to Profile.
+
+Profile means all profile data flows, not just the profile screen.
+
+Audit:
+
+My Profile
+Other User Profile
+Profile Header
+Avatar
+Cover/media
+Display name
+Handle
+Bio
+Verification
+Organization verification
+Followers
+Following
+Follow state
+Posts
+Videos
+Articles
+Achievements
+Statistics
+Online status
+Last seen
+Privacy settings
+Contact information visibility
+Profile editing
+Username
+Username availability
+Afu ID
+Digital identity
+Profile sharing
+Profile deep links
+Blocked users
+User recommendations
+Profile search
+
+Trace every screen/component that consumes profile data.
+
+Current repository evidence shows profile access is spread across many files, including:
+
+contact/[id].tsx
+chat-info/[id].tsx
+me.tsx
+profile/edit.tsx
+search.tsx
+settings/*
+digital-id.tsx
+wallet/*
+gifts/*
+music/*
+shop/*
+match/*
+
+Do not migrate only "me.tsx".
+
+The entire profile data contract must become coherent.
+
+Use the shared profile source:
+
+accounts.profiles
+
+where appropriate.
+
+Do NOT create:
+
+afuchat.profiles
+
+or another duplicate user table.
+
+---
+
+8. PROFILE COMPLETION GATE
+
+Before leaving Profile:
+
+[ ] own profile
+[ ] other profiles
+[ ] profile posts
+[ ] profile videos
+[ ] profile statistics
+[ ] followers
+[ ] following
+[ ] follow state
+[ ] verification state
+[ ] avatar/media
+[ ] username/handle
+[ ] profile editing
+[ ] privacy
+[ ] online/last-seen rules
+[ ] profile search
+[ ] profile sharing
+[ ] profile deep links
+[ ] digital identity connections
+[ ] recommendations
+[ ] error handling
+[ ] caching
+
+Then:
+
+PROFILE = COMPLETE
+
+Commit the batch.
+
+---
+
+9. BATCH 3 — CHAT
+
+Chat is a major complete feature batch.
+
+Do NOT split the migration into “messages only”.
+
+Chat includes:
+
+normal 1-to-1 chats
+groups
+channels
+communities where they are chat-related
+conversation list
+chat creation
+message history
+sending
+editing
+deleting
+replying
+forwarding
+reactions
+read status
+delivery status
+typing
+online state
+attachments
+voice messages
+media
+message reports
+starred messages
+search
+chat info
+members
+admins
+roles
+permissions
+mute
+archive
+delete/clear history
+leave group
+join group
+invite links
+QR/join flows
+channel subscriptions
+group creation
+channel creation
+direct chat creation
+
+Also include:
+
+offline SQLite
+sync queue
+retry
+idempotency
+Realtime
+push notifications
+notification state
+
+Current source still contains direct access to areas such as:
+
+chat_members
+chats
+channels
+
+and related message infrastructure.
+
+Audit all of it.
+
+---
+
+10. CHAT MUST BE TREATED AS ONE DATA GRAPH
+
+Do not migrate:
+
+messages
+
+without migrating the related:
+
+conversation
+chat
+member
+profile
+permissions
+message state
+
+For example:
+
+User A
+↓
+Conversation
+↓
+Chat membership
+↓
+Chat permissions
+↓
+Messages
+↓
+Message reactions
+↓
+Read/delivery state
+↓
+Realtime
+↓
+Offline queue
+
+The entire graph must remain functional.
+
+---
+
+11. NORMAL CHAT
+
+Complete:
+
+[ ] direct chat creation
+[ ] conversation list
+[ ] opening chat
+[ ] message history
+[ ] sending
+[ ] replying
+[ ] editing
+[ ] deleting
+[ ] reactions
+[ ] status
+[ ] starred
+[ ] reports
+[ ] attachments
+[ ] voice
+[ ] media
+[ ] clear history
+[ ] chat info
+[ ] profile preview
+[ ] mute/settings
+
+Then integrate offline sync.
+
+---
+
+12. GROUP CHAT
+
+Complete:
+
+[ ] create group
+[ ] group metadata
+[ ] group members
+[ ] member roles
+[ ] permissions
+[ ] add member
+[ ] remove member
+[ ] leave group
+[ ] admin operations
+[ ] invite link
+[ ] join flow
+[ ] QR/join
+[ ] messages
+[ ] attachments
+[ ] reactions
+[ ] read state
+[ ] notifications
+[ ] realtime
+
+Do not leave group functionality partially on Supabase while normal chat is on the Worker.
+
+---
+
+13. CHANNELS
+
+Complete:
+
+[ ] create channel
+[ ] channel metadata
+[ ] ownership
+[ ] admins
+[ ] subscriptions
+[ ] members/subscribers
+[ ] permissions
+[ ] posts/messages
+[ ] media
+[ ] reactions
+[ ] notifications
+[ ] join links
+[ ] search
+[ ] channel info
+
+Current source contains direct "channels" access.
+
+Audit every one.
+
+Do not simply create one "/channels" route and call the feature migrated.
+
+All channel data flows must use the correct AfuChat API boundary.
+
+---
+
+14. CHAT COMPLETION GATE
+
+Only declare Chat complete when:
+
+[ ] 1-to-1 chat
+[ ] groups
+[ ] channels
+[ ] conversations
+[ ] membership
+[ ] permissions
+[ ] messages
+[ ] replies
+[ ] reactions
+[ ] edit/delete
+[ ] read/delivery
+[ ] attachments
+[ ] voice/media
+[ ] offline queue
+[ ] SQLite
+[ ] reconnect
+[ ] Realtime
+[ ] push
+[ ] chat search
+[ ] chat info
+[ ] invites
+[ ] join flows
+[ ] mute/settings
+
+all work.
+
+Then:
+
+CHAT = COMPLETE
+
+Commit.
+
+---
+
+15. BATCH 4 — STORIES
+
+Only after Chat is complete, move to Stories.
+
+Current repository still contains direct access to:
+
+stories
+story_views
+story_replies
+
+Audit:
+
+create story
+load stories
+story tray
+story viewer
+view tracking
+view counts
+likes
+replies
+delete
+expiration
+privacy
+audience
+media
+sharing
+profile integration
+notifications
+achievements
+
+Do not migrate "stories" table access alone.
+
+Stories are complete only when:
+
+create
+→ publish
+→ discover
+→ view
+→ track view
+→ interact
+→ reply
+→ delete
+→ expire
+
+all work.
+
+Preserve Realtime where used.
+
+Story views must be server-authoritative and idempotent according to existing product semantics.
+
+Then:
+
+STORIES = COMPLETE
+
+Commit.
+
+---
+
+16. BATCH 5 — POSTS / MOMENTS
+
+Then complete the entire Posts/Moments feature.
+
+This includes:
+
+text posts
+articles
+videos
+images
+post creation
+editing if supported
+deletion
+visibility
+likes
+replies
+reply likes
+bookmarks
+views
+sharing
+mentions
+hashtags
+author information
+profile posts
+post detail
+my posts
+feed integration
+video feed
+post media
+video assets
+
+The existing post API routes must be reused where applicable.
+
+Do not create duplicate post APIs.
+
+Any missing post operation goes under:
+
+/v1/chat/posts/*
+
+or the existing "/v1/chat/feed/*" where it truly belongs.
+
+---
+
+17. BATCH 6 — SEARCH
+
+Search should be treated as a complete feature.
+
+Audit:
+
+people
+posts
+videos
+hashtags
+channels
+organizations
+profiles
+trending
+recent searches
+popular searches
+
+The latest code has already moved parts of post/video/trending search toward:
+
+searchAfuChatPosts()
+getAfuChatTrendingHashtags()
+
+Continue from that implementation.
+
+Do not leave profile/post/channel search using unrelated direct queries.
+
+Finish the entire Search data flow.
+
+Then:
+
+SEARCH = COMPLETE
+
+Commit.
+
+---
+
+18. BATCH 7 — NOTIFICATIONS
+
+Treat Notifications as its own complete domain.
+
+Audit:
+
+notification list
+read/unread
+mark read
+mark all read
+likes
+comments
+follows
+messages
+mentions
+stories
+system notifications
+push registration
+push delivery
+notification preferences
+Realtime
+
+Do not migrate only notification rendering.
+
+Trace the entire lifecycle:
+
+event
+→ notification creation
+→ storage
+→ API
+→ mobile list
+→ read state
+→ push
+→ realtime
+
+Then:
+
+NOTIFICATIONS = COMPLETE
+
+Commit.
+
+---
+
+19. BATCH 8 — WALLET / ACOIN / NEXA / XP
+
+Only after the social/chat domains are stable, migrate the economy domain.
+
+Treat it as one complete financial/reward feature.
+
+Include:
+
+ACoin balance
+Nexa
+XP
+transactions
+wallet
+send
+receive
+payments
+requests
+red envelopes
+gifts
+purchases
+subscriptions
+premium
+music purchases
+rewards
+XP transfers
+transaction history
+
+Current source still contains direct access to:
+
+acoin_transactions
+
+and multiple RPC calls.
+
+Do not blindly remove those RPCs.
+
+Instead:
+
+mobile
+↓
+authenticated afuchat-api operation
+↓
+existing atomic database function
+
+where appropriate.
+
+All money/balance mutations must remain:
+
+atomic
+server-authoritative
+authenticated
+authorized
+idempotent where required
+
+Then:
+
+ECONOMY = COMPLETE
+
+Commit.
+
+---
+
+20. BATCH 9 — SHOP / MARKETPLACE / GIFTS
+
+Treat commerce as a complete domain.
+
+Audit:
+
+shops
+products
+shopping cart
+orders
+order items
+order messages
+reviews
+gift marketplace
+gifts
+gift transactions
+user gifts
+seller operations
+
+Respect existing schema.
+
+Especially:
+
+shop.orders
+
+must not become:
+
+public.orders
+
+Do not create duplicate tables.
+
+Complete all flows before declaring this batch finished.
+
+---
+
+21. BATCH 10 — MUSIC
+
+Complete:
+
+music tracks
+music purchases
+playback
+ownership
+purchased tracks
+artist/profile data
+payments
+
+Use the correct Afu product boundary.
+
+If AfuMusic is an AfuChat feature, its user-facing operations remain under the appropriate AfuChat namespace.
+
+Do not duplicate users or purchases.
+
+---
+
+22. BATCH 11 — ORGANIZATIONS / BUSINESS
+
+Complete the entire organization/business domain:
+
+organization pages
+verification
+organization profiles
+organization posts
+followers
+connections
+jobs
+business verification
+business settings
+
+Investigate unresolved references such as:
+
+blocks
+business_verification_requests
+org_page_jobs
+
+Do NOT create tables simply because the names appear in old code.
+
+Trace their actual usage and map them to the current schema.
+
+---
+
+23. BATCH 12 — MATCH / OTHER REMAINING PRODUCT FEATURES
+
+After the major domains:
+
+match
+freelance
+support
+achievements
+collections
+life/earth
+advanced features
+app settings
+other remaining AfuChat-owned features
+
+Handle each as its own complete feature batch.
+
+Do not mix them together.
+
+---
+
+24. EVERY BATCH MUST HAVE A FORMAL CHECKPOINT
+
+For every feature create a short migration record:
+
+FEATURE:
+DATE:
+STARTING COMMIT:
+
+DATA SOURCES:
+API ROUTES:
+MOBILE CALLERS:
+REALTIME:
+OFFLINE:
+RPCS:
+DIRECT SUPABASE CALLS:
+
+TESTS:
+
+STATUS:
+COMPLETE / BLOCKED / PARTIAL
+
+A feature marked "PARTIAL" does NOT count as completed.
+
+---
+
+25. ONE FEATURE PER MIGRATION CYCLE
+
+This is mandatory.
+
+Do NOT make one huge PR containing:
+
+Discover + Profile + Chat + Stories + Economy
+
+Instead:
+
+Batch 1 → Discover
+commit
+verify
+deploy afuchat-api
+verify production
+
+Batch 2 → Profile
+commit
+verify
+deploy afuchat-api
+verify production
+
+Batch 3 → Chat
+commit
+verify
+deploy afuchat-api
+verify production
+
+Batch 4 → Stories
+commit
+verify
+deploy afuchat-api
+verify production
+
+and so on.
+
+Each batch must leave the application working.
+
+---
+
+26. DO NOT STOP AT THE BACKEND
+
+For each feature:
+
+database
+↓
+Worker API
+↓
+API client
+↓
+mobile screen
+↓
+components
+↓
+cache
+↓
+offline
+↓
+Realtime
+↓
+notifications
+↓
+production afuchat-api deployment
+
+must be traced.
+
+Creating an API route without replacing its mobile caller does NOT count.
+
+Replacing the caller without testing the backend does NOT count.
+
+A feature is not complete until the migrated backend is deployed to the "afuchat-api" Worker and the production API is verified.
+
+---
+
+27. DO NOT MIGRATE RANDOM ".from()" CALLS
+
+A direct query should be migrated because it belongs to the feature currently being completed.
+
+For example:
+
+If working on Discover:
+
+posts
+profiles
+follows
+views
+likes
+bookmarks
+video assets
+
+may all belong to the Discover batch.
+
+Do not say:
+
+«“We already migrated posts.”»
+
+if Discover still directly queries posts for a specific surface.
+
+The correct question is:
+
+«“Is every Discover data flow now going through the correct architecture?”»
+
+Same for Profile.
+
+Same for Chat.
+
+Same for Stories.
+
+---
+
+28. SHARED PROFILE DATA
+
+Profile data may appear in:
+
+Discover
+Chat
+Stories
+Posts
+Search
+Notifications
+Wallet
+Gifts
+Music
+Shop
+
+Do not duplicate profile APIs unnecessarily.
+
+Create/reuse a coherent profile data contract.
+
+If another feature requires profile data, use the shared profile API/data contract rather than creating a different profile implementation.
+
+---
+
+29. SHARED AUTH
+
+All product API requests must use the shared AfuAuth session.
+
+Architecture:
+
+AfuAuth
+↓
+shared Supabase identity
+↓
+verified bearer token
+↓
+product Worker
+↓
+authorized operation
+
+Never trust:
+
+user_id
+owner_id
+author_id
+sender_id
+follower_id
+
+from the client as authorization.
+
+---
+
+30. API BOUNDARIES
+
+Current Workers remain:
+
+afuchat-api
+afuauth-api
+afumail-api
+afucloud-api
+afuai-api
+afuads-api
+
+AfuChat features belong under:
+
+/v1/chat/*
+
+Do not create random top-level namespaces.
+
+Do not create another generic gateway Worker.
+
+---
+
+31. REALTIME
+
+Do not remove Supabase Realtime simply because CRUD moves behind Workers.
+
+Preserve Realtime where the existing feature requires it.
+
+Every feature audit must explicitly answer:
+
+Does this feature use Realtime?
+Which tables/events?
+Does migration preserve it?
+
+---
+
+32. OFFLINE
+
+For every feature that currently supports offline behavior:
+
+cache
+queue
+retry
+idempotency
+reconnect
+optimistic UI
+
+must be preserved.
+
+Do not make the feature “API-only” if that breaks existing offline functionality.
+
+---
+
+33. ERROR HANDLING
+
+Never hide backend errors as empty data.
+
+Do not turn:
+
+401
+403
+404
+500
+502
+network failure
+
+into:
+
+[]
+null
+empty screen
+
+unless that is explicitly the correct product behavior.
+
+---
+
+34. DATA PRESERVATION
+
+Do not:
+
+delete data
+bulk-copy production tables
+create duplicate user stores
+recreate existing tables
+change schemas unnecessarily
+
+If a schema/data migration is genuinely unavoidable:
+
+STOP
+explain why
+identify affected resources
+provide rollback
+request approval
+
+before executing it.
+
+---
+
+35. TESTING RULE
+
+A feature batch is not complete after TypeScript compilation.
+
+Run:
+
+unit tests
+Worker tests
+API tests
+mobile tests where available
+real authenticated flow
+unauthenticated flow
+authorization tests
+Realtime tests
+offline tests
+production deployment smoke tests
+
+Then verify production.
+
+---
+
+36. DEPLOYMENT
+
+After each completed feature batch:
+
+commit
+push
+deploy the completed AfuChat backend changes to the afuchat-api Worker
+verify the deployed Worker version
+production verification
+
+Do not deploy unrelated Workers.
+
+Every migrated backend operation required by the completed feature must be included in the "afuchat-api" deployment before the feature is marked complete.
+
+AfuChat backend deployment target:
+
+afuchat-api
+
+Production API:
+
+https://api.afuchat.com/v1/chat/*
+
+---
+
+37. PRODUCTION VERIFICATION
+
+For every completed batch verify real production behavior after deployment to "afuchat-api".
+
+Do not claim:
+
+deployed
+working
+verified
+
+without actually checking it.
+
+Check:
+
+authentication
+authorization
+response shape
+database behavior
+error handling
+Realtime
+mobile integration
+deployed Worker version
+production endpoint behavior
+
+The production verification must confirm that the mobile app can use the deployed "afuchat-api" implementation, not merely that local tests pass.
+
+---
+
+38. DO NOT MOVE TO THE NEXT FEATURE UNTIL THE CURRENT ONE PASSES
+
+This is the most important instruction.
+
+If working on:
+
+DISCOVER
+
+and you discover a Profile dependency:
+
+Profile dependency
+↓
+implement the minimum shared profile contract needed by Discover
+↓
+deploy that required AfuChat API change to afuchat-api
+↓
+return to Discover
+↓
+finish Discover
+
+Do not suddenly start migrating the entire Profile system.
+
+Likewise:
+
+Chat → Profile dependency
+
+should not turn into a full Profile migration unless Profile is the current batch.
+
+The goal is controlled dependency management, not uncontrolled scope expansion.
+
+---
+
+39. REQUIRED ORDER
+
+Unless the actual repository reveals a technical blocker, use this order:
+
+BATCH 1
+DISCOVER
+
+BATCH 2
+PROFILE / USERS
+
+BATCH 3
+CHAT
+  ├── normal chats
+  ├── groups
+  └── channels
+
+BATCH 4
+STORIES
+
+BATCH 5
+POSTS / MOMENTS
+
+BATCH 6
+SEARCH
+
+BATCH 7
+NOTIFICATIONS
+
+BATCH 8
+WALLET / ACOIN / NEXA / XP
+
+BATCH 9
+SHOP / MARKETPLACE / GIFTS
+
+BATCH 10
+MUSIC
+
+BATCH 11
+ORGANIZATIONS / BUSINESS
+
+BATCH 12
+MATCH / FREELANCE / SUPPORT / OTHER REMAINING FEATURES
+
+If the repository proves another ordering is safer, explain the dependency and adjust the order.
+
+Do not arbitrarily change the order.
+
+---
+
+40. FIRST TASK RIGHT NOW
+
+Do NOT start migrating everything.
+
+Your first task is:
+
+AUDIT AND COMPLETE BATCH 1 — DISCOVER
+
+Start from:
+
+da88252ee661ffc136ced79cda2dc90182593ff6
+
+Inspect every current Discover-related screen, component, API helper, Supabase query, RPC, Realtime subscription, cache, and offline path.
+
+Create a Discover feature inventory.
+
+Then migrate all Discover data flows together.
+
+Then test the complete Discover experience.
+
+Then commit, push, deploy the completed Discover backend implementation to the "afuchat-api" Worker, and verify the production API and mobile flows.
+
+Only after Discover passes its completion gate and production verification should you begin:
+
+BATCH 2 — PROFILE / USERS
+
+---
+
+41. FINAL REQUIREMENT
+
+At the end of every batch report:
+
+FEATURE COMPLETED:
+START COMMIT:
+END COMMIT:
+
+DIRECT SUPABASE CALLS:
+BEFORE:
+AFTER:
+
+DIRECT RPC CALLS:
+BEFORE:
+AFTER:
+
+NEW / REUSED API ROUTES:
+
+MOBILE CALLERS UPDATED:
+
+REALTIME VERIFIED:
+YES/NO
+
+OFFLINE VERIFIED:
+YES/NO
+
+TESTS:
+PASS/FAIL
+
+DEPLOYED TO AFUCHAT-API:
+YES/NO
+
+DEPLOYED WORKER VERSION:
+
+PRODUCTION VERIFIED:
+YES/NO
+
+REMAINING WORK INSIDE THIS FEATURE:
+NONE / LIST
+
+Never report the entire AfuChat migration as complete while individual feature batches remain incomplete.
+
+The standard is:
+
+ONE FEATURE
+→ ALL DATA FLOWS
+→ ALL USER ACTIONS
+→ ALL RELATED SCREENS
+→ BACKEND
+→ MOBILE
+→ REALTIME
+→ OFFLINE
+→ TEST
+→ COMMIT
+→ PUSH
+→ DEPLOY TO AFUCHAT-API
+→ PRODUCTION VERIFY
+→ COMPLETE
+→ NEXT FEATURE
+
+Do not optimize for reducing the ".from()" count. Optimize for completing entire product features without leaving split data architectures behind.
