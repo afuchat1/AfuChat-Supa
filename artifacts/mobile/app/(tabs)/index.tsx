@@ -562,6 +562,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   chatsRef.current = chats;
   const [loading, setLoading] = useState(() => !hasPreloadedConversations());
   const [refreshing, setRefreshing] = useState(false);
+  const [chatLoadError, setChatLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchAnim = useRef(new Animated.Value(0)).current;
@@ -686,6 +687,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     }
 
     if (offline) {
+      setChatLoadError(false);
       setChats((prev) => {
         const withoutNotes = prev.filter((item) => !isLocalNotesId(item.id));
         return localNotes ? [...withoutNotes, localNotesToChatItem(localNotes)] : withoutNotes;
@@ -740,6 +742,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       );
     }
     if (chatError) {
+      setChatLoadError(true);
       if (localNotes) {
         setChats((prev) => [
           ...prev.filter((item) => !isLocalNotesId(item.id)),
@@ -751,10 +754,12 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       return;
     }
     if (!chatRows) {
+      setChatLoadError(true);
       setLoading(false);
       setRefreshing(false);
       return;
     }
+    setChatLoadError(false);
     if (chatRows.length === 0) {
       // A successful server response is authoritative. Preserve only the
       // device-only My Notes conversation; cached server chats must not make a
@@ -954,6 +959,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       () => {
         setLoading(false);
         setRefreshing(false);
+        setChatLoadError(true);
       },
     ).finally(() => {
       if (__DEV__) {
@@ -1716,6 +1722,42 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       </View>
       )}
       <OfflineBanner />
+      {chatLoadError && (
+        <TouchableOpacity
+          onPress={() => {
+            setRefreshing(true);
+            void loadChats()
+              .catch(() => {})
+              .finally(() => setRefreshing(false));
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading chats"
+          activeOpacity={0.75}
+          style={{
+            marginHorizontal: panelMode ? 10 : 16,
+            marginTop: 6,
+            marginBottom: 4,
+            paddingHorizontal: 11,
+            paddingVertical: 9,
+            borderRadius: 10,
+            backgroundColor: colors.backgroundSecondary,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9,
+          }}
+        >
+          <Ionicons name="cloud-offline-outline" size={17} color={colors.error} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
+              Couldn't refresh chats
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+              Showing saved chats. Tap to retry.
+            </Text>
+          </View>
+          <Ionicons name="refresh" size={17} color={colors.error} />
+        </TouchableOpacity>
+      )}
 
       {!panelMode && !selectMode && <HomeBanner />}
 

@@ -103,6 +103,8 @@ export default function NewChatScreen() {
   const [starting, setStarting] = useState(false);
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [channels, setChannels] = useState<ChannelItem[]>([]);
+  const [contactsLoadError, setContactsLoadError] = useState(false);
+  const [groupsLoadError, setGroupsLoadError] = useState(false);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -158,9 +160,11 @@ export default function NewChatScreen() {
             );
           setContacts(list);
           saveLocalContacts(list).catch(() => {});
+          setContactsLoadError(false);
         }
       } catch (_) {
-        // Network error — keep showing cached contacts
+        // Keep cached contacts visible, but don't present them as current.
+        setContactsLoadError(true);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -172,35 +176,79 @@ export default function NewChatScreen() {
 
   const loadGroupsAndChannels = useCallback(async () => {
     if (!user) return;
-    const [{ data: memberRows }, { data: subRows }, { data: ownedRows }] = await Promise.all([
-      supabase
-        .from("chat_members")
-        .select("chat_id, chats(id, name, avatar_url, is_group)")
-        .eq("user_id", user.id),
-      supabase
-        .from("channel_subscriptions")
-        .select("channel_id, channels(id, name, avatar_url, is_verified)")
-        .eq("user_id", user.id),
-      supabase.rpc("get_my_channels"),
-    ]);
+    try {
+      const [
+        { data: memberRows, error: membersError },
+        { data: subRows, error: subscriptionsError },
+        { data: ownedRows, error: ownedError },
+      ] = await Promise.all([
+        supabase
+          .from("chat_members")
+          .select("chat_id")
+          .eq("user_id", user.id),
+        supabase
+          .from("channel_subscriptions")
+          .select("channel_id")
+          .eq("user_id", user.id),
+        supabase.rpc("get_my_channels"),
+      ]);
 
-    const groupItems: GroupItem[] = (memberRows || []).flatMap((m: any) => {
-      const chat = Array.isArray(m.chats) ? m.chats[0] : m.chats;
-      if (!chat || !chat.is_group) return [];
-      return [{ id: chat.id, name: chat.name || "Group", avatar_url: chat.avatar_url || null }];
-    });
-    setGroups(groupItems);
+      if (membersError) throw membersError;
+      if (subscriptionsError) throw subscriptionsError;
+      if (ownedError) throw ownedError;
 
-    const subChannels: ChannelItem[] = (subRows || []).flatMap((s: any) => {
-      const ch = Array.isArray(s.channels) ? s.channels[0] : s.channels;
-      if (!ch) return [];
-       return [{ id: ch.id, name: ch.name || "Channel", avatar_url: ch.avatar_url || null, is_verified: !!ch.is_verified }];
-    });
-    const subIds = new Set(subChannels.map((c) => c.id));
-    const ownedChannels: ChannelItem[] = (ownedRows || [])
-      .filter((ch: any) => !subIds.has(ch.id))
-       .map((ch: any) => ({ id: ch.id, name: ch.name || "Channel", avatar_url: ch.avatar_url || null, is_verified: !!ch.is_verified }));
-    setChannels([...subChannels, ...ownedChannels]);
+      const memberChatIds = [...new Set((memberRows || []).map((row: any) => row.chat_id).filter(Boolean))];
+      const subscriptionChannelIds = [...new Set((subRows || []).map((row: any) => row.channel_id).filter(Boolean))];
+
+      const [
+        { data: chatRows, error: chatsError },
+        { data: subscribedChannelRows, error: channelsError },
+      ] = await Promise.all([
+        memberChatIds.length
+          ? supabase.from("chats").select("id, name, avatar_url, is_group").in("id", memberChatIds)
+          : Promise.resolve({ data: [], error: null }),
+        subscriptionChannelIds.length
+          ? supabase.from("channels").select("id, name, avatar_url, is_verified").in("id", subscriptionChannelIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (chatsError) throw chatsError;
+      if (channelsError) throw channelsError;
+
+      const chatsById = new Map((chatRows || []).map((chat: any) => [chat.id, chat]));
+      const groupItems: GroupItem[] = memberChatIds.flatMap((chatId) => {
+        const chat = chatsById.get(chatId);
+        if (!chat || !chat.is_group) return [];
+        return [{ id: chat.id, name: chat.name || "Group", avatar_url: chat.avatar_url || null }];
+      });
+      setGroups(groupItems);
+
+      const channelsById = new Map((subscribedChannelRows || []).map((channel: any) => [channel.id, channel]));
+      const subChannels: ChannelItem[] = subscriptionChannelIds.flatMap((channelId) => {
+        const channel = channelsById.get(channelId);
+        if (!channel) return [];
+        return [{
+          id: channel.id,
+          name: channel.name || "Channel",
+          avatar_url: channel.avatar_url || null,
+          is_verified: !!channel.is_verified,
+        }];
+      });
+      const subIds = new Set(subChannels.map((channel) => channel.id));
+      const ownedChannels: ChannelItem[] = (ownedRows || [])
+        .filter((channel: any) => !subIds.has(channel.id))
+        .map((channel: any) => ({
+          id: channel.id,
+          name: channel.name || "Channel",
+          avatar_url: channel.avatar_url || null,
+          is_verified: !!channel.is_verified,
+        }));
+      setChannels([...subChannels, ...ownedChannels]);
+      setGroupsLoadError(false);
+    } catch {
+      // Preserve any already-rendered rows, but surface the failed live read.
+      setGroupsLoadError(true);
+    }
   }, [user]);
 
   const loadPhoneContacts = useCallback(async () => {
@@ -559,6 +607,14 @@ export default function NewChatScreen() {
                 contactCount={contacts.filter((contact) => contact.id !== user?.id && !phoneOnAfu.some((phone) => phone.id === contact.id)).length}
                 groups={groups}
                 channels={channels}
+                contactsLoadError={contactsLoadError}
+                groupsLoadError={groupsLoadError}
+                onRetryLoad={() => {
+                  setRefreshing(true);
+                  void Promise.all([loadContacts(), loadGroupsAndChannels()])
+                    .catch(() => {})
+                    .finally(() => setRefreshing(false));
+                }}
                 onGroupPress={(g) => router.push({ pathname: "/chat/[id]", params: { id: g.id } } as any)}
                 onChannelPress={(c) => router.push({ pathname: "/chat/[id]", params: { id: c.id, isChannel: "true", chatName: c.name, chatAvatar: c.avatar_url || "" } } as any)}
                 onNotesPress={openMyNotes}
@@ -697,6 +753,9 @@ function ListHeader({
   contactCount,
   groups,
   channels,
+  contactsLoadError,
+  groupsLoadError,
+  onRetryLoad,
   onGroupPress,
   onChannelPress,
   onNotesPress,
@@ -711,6 +770,9 @@ function ListHeader({
   contactCount: number;
   groups: GroupItem[];
   channels: ChannelItem[];
+  contactsLoadError: boolean;
+  groupsLoadError: boolean;
+  onRetryLoad: () => void;
   onGroupPress: (g: GroupItem) => void;
   onChannelPress: (c: ChannelItem) => void;
   onNotesPress: () => void;
@@ -748,6 +810,37 @@ function ListHeader({
           colors={colors}
         />
       </View>
+
+      {(contactsLoadError || groupsLoadError) && (
+        <TouchableOpacity
+          onPress={onRetryLoad}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading contacts, groups, and channels"
+          activeOpacity={0.75}
+          style={{
+            marginHorizontal: 14,
+            marginTop: 8,
+            paddingHorizontal: 11,
+            paddingVertical: 9,
+            borderRadius: 10,
+            backgroundColor: colors.backgroundSecondary,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9,
+          }}
+        >
+          <Ionicons name="cloud-offline-outline" size={17} color={colors.error} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
+              Some data couldn't be refreshed
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
+              Saved results may be out of date. Tap to retry.
+            </Text>
+          </View>
+          <Ionicons name="refresh" size={17} color={colors.error} />
+        </TouchableOpacity>
+      )}
 
       {/* Phone contacts on platform — always at top */}
       {!loading && phoneOnAfu.length > 0 && (
