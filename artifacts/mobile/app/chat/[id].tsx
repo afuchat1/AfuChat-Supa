@@ -1011,9 +1011,10 @@ function hexLuminance(hex: string): number {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-function LensContextCard({ msg, onSuggestionTap }: {
+function LensContextCard({ msg, onSuggestionTap, hideTimestamp }: {
   msg: Message;
   onSuggestionTap?: (text: string) => void;
+  hideTimestamp?: boolean;
 }) {
   const { colors } = useTheme();
   const BRAND_C = colors.accent;
@@ -1135,10 +1136,11 @@ function LensContextCard({ msg, onSuggestionTap }: {
           </View>
         )}
 
-        {/* Timestamp */}
-        <View style={{ paddingHorizontal: 14, paddingBottom: 12, flexDirection: "row", justifyContent: "flex-end" }}>
-          <Text style={{ fontSize: 11, color: colors.textMuted }}>{formatMsgTime(msg.sent_at)}</Text>
-        </View>
+        {!hideTimestamp && (
+          <View style={{ paddingHorizontal: 14, paddingBottom: 12, flexDirection: "row", justifyContent: "flex-end" }}>
+            <Text style={{ fontSize: 11, color: colors.textMuted }}>{formatMsgTime(msg.sent_at)}</Text>
+          </View>
+        )}
       </View>
 
       {/* Suggestion chips */}
@@ -1510,7 +1512,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   // Use inline timestamp only for bare text — exclude AI and flat-surface messages.
   // Speak is rendered in the metadata row, so it can share this line without
   // becoming part of the message text.
-  const useInlineTimestamp = isPlainText && !msg._isAi && !flatSurface;
+  const useInlineTimestamp = isPlainText && !msg._isAi && !flatSurface && !hideTimestamp;
 
   const replyIconOpacity = swipeX.interpolate({
     inputRange: isMe ? [-SWIPE_THRESHOLD, -10, 0] : [0, 10, SWIPE_THRESHOLD],
@@ -7365,6 +7367,7 @@ STRICT RULES:
             <LensContextCard
               msg={item}
               onSuggestionTap={(text) => sendMessage(text)}
+              hideTimestamp={isAfuAiDirectChat}
             />
           </TouchableOpacity>
         ) : (

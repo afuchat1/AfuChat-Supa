@@ -1,0 +1,857 @@
+AfuChat — Complete Production Chat Schema Consolidation, API Fix and Deployment
+
+This is a production-critical consolidation and deployment task.
+
+The latest repository has confirmed that AfuChat still has database dependencies on the legacy "chat" schema while the intended source of truth is "afuchat".
+
+Do the entire job now, end-to-end. Do not waste time redesigning the architecture or creating another layer.
+
+---
+
+1. FINAL ARCHITECTURE — NON-NEGOTIABLE
+
+The final AfuChat architecture is:
+
+Mobile App
+→ "https://api.afuchat.com/v1/chat/*"
+→ "afuchat-api"
+→ Supabase
+→ "afuchat.*" schema
+
+Database
+
+"afuchat.*" is the ONLY canonical AfuChat data source.
+
+API
+
+"/v1/chat/*" is the ONLY canonical AfuChat API namespace.
+
+The word "chat" in "/v1/chat/*" is an API namespace. It does NOT mean PostgreSQL schema "chat".
+
+Worker
+
+"afuchat-api" is the AfuChat API Worker.
+
+Legacy
+
+"chat.*" is legacy and must no longer be used by AfuChat after this consolidation.
+
+Do NOT create another schema.
+
+Do NOT create another API gateway.
+
+Do NOT create another AfuChat Worker.
+
+Do NOT create "/v1/afuchat/*".
+
+Do NOT change "/v1/chat/*".
+
+---
+
+2. START BY PULLING THE ABSOLUTE LATEST REPOSITORY
+
+Use the latest "master" branch.
+
+The latest known commit is:
+
+"f3d226f927279d2b878fca4515b46c7595a06e99"
+
+Do not rely on an older checkout.
+
+Inspect all commits after the previous chat-read-consistency work.
+
+Review:
+
+- "backend/afu-chat-api"
+- all Supabase migrations
+- current schema documentation
+- current reconciliation documentation
+- current mobile API client
+- current chat/message code
+- current follow code
+- current profile code
+- current tests
+- Worker configuration
+- deployment scripts.
+
+---
+
+3. AUDIT THE CURRENT DATABASE BEFORE CHANGING IT
+
+Inspect the actual production database and repository migrations.
+
+Inventory:
+
+"afuchat.*"
+
+Every table, view, function, trigger, index, FK, policy and grant.
+
+"chat.*"
+
+Every table, view, function, trigger, index, FK, policy and grant.
+
+Determine exactly which "chat.*" objects are still referenced.
+
+Pay particular attention to the currently known dependencies:
+
+- "public.get_chat_list"
+- "public.get_or_create_direct_chat"
+- "afuchat.chat_members"
+- "afuchat.messages"
+- message status
+- chat membership
+- chat relationships
+- follows
+- notifications
+- any other functions or tables still referencing "chat.*".
+
+Do not assume the documentation is the complete truth. Verify production.
+
+---
+
+4. "AFUCHAT" IS THE SOURCE OF TRUTH
+
+The intended final state is:
+
+afuchat.chats
+afuchat.chat_members
+afuchat.messages
+afuchat.message_status
+afuchat.follows
+afuchat.posts
+...
+
+where applicable.
+
+Every AfuChat feature must use the corresponding "afuchat.*" data.
+
+Do NOT move AfuChat into "chat".
+
+Do NOT make "chat" the canonical schema.
+
+Do NOT maintain two live copies.
+
+---
+
+5. RECONCILE THE DATA SAFELY
+
+The latest repo already identified substantial differences between "chat" and "afuchat".
+
+Therefore:
+
+DO NOT simply rename SQL references from "chat.*" to "afuchat.*".
+
+First reconcile the data.
+
+For every legacy "chat" table with an AfuChat equivalent:
+
+1. Compare IDs.
+2. Compare row counts.
+3. Identify AfuChat-only rows.
+4. Identify legacy-only rows.
+5. Identify shared rows.
+6. Identify conflicting rows.
+7. Preserve existing AfuChat IDs.
+8. Preserve relationships.
+9. Preserve timestamps.
+10. Preserve ownership/user IDs.
+11. Preserve message status.
+12. Preserve membership.
+13. Preserve valid legacy-only data that belongs to AfuChat.
+
+Conflict rule
+
+Where the same logical record exists in both:
+
+"afuchat" takes precedence.
+
+Do not overwrite canonical "afuchat" records with legacy values merely because the legacy record is different.
+
+If the legacy record contains information that is genuinely missing from "afuchat", recover only the missing/compatible information safely.
+
+Do not convert plaintext message data into encrypted fields without understanding the encryption format.
+
+Do not generate new IDs for existing records.
+
+---
+
+6. FIX THE FOREIGN-KEY GRAPH
+
+This is critical.
+
+The latest repository indicates that:
+
+- "afuchat.chat_members" still references "chat.chats"
+- "afuchat.messages" still references "chat.messages"
+
+That means the old schema remains part of the live dependency graph.
+
+Correct this.
+
+The final AfuChat dependency graph must point to "afuchat.*".
+
+For example, where appropriate:
+
+afuchat.chat_members → afuchat.chats
+afuchat.messages → afuchat.chats
+afuchat.message_status → afuchat.messages
+
+Preserve existing IDs and relationships.
+
+Do not break production references while changing the foreign keys.
+
+---
+
+7. FIX ALL DATABASE FUNCTIONS
+
+Audit every AfuChat-related PostgreSQL function.
+
+Especially:
+
+- "get_chat_list"
+- "get_or_create_direct_chat"
+- message functions
+- membership functions
+- follow functions
+- notification functions
+- profile-related functions
+- chat permission functions
+- any SECURITY DEFINER functions.
+
+Any AfuChat function that currently reads/writes "chat.*" must be corrected to use "afuchat.*".
+
+Do not create duplicate functions.
+
+Do not create parallel implementations.
+
+Do not leave one old RPC secretly reading from "chat".
+
+---
+
+8. FIX "get_chat_list"
+
+"get_chat_list" must operate against the canonical AfuChat data.
+
+It must:
+
+- identify the authenticated user with "auth.uid()";
+- read the user's memberships from "afuchat";
+- retrieve conversations from "afuchat";
+- retrieve latest messages from "afuchat";
+- correctly determine whether the latest message belongs to the current user;
+- respect chat membership;
+- preserve mute/status information;
+- preserve existing chat IDs;
+- return real production data.
+
+It must not query "chat.*".
+
+---
+
+9. FIX "get_or_create_direct_chat"
+
+"get_or_create_direct_chat" must use the canonical "afuchat" tables.
+
+It must:
+
+- use "auth.uid()" for the current user;
+- locate an existing direct chat using "afuchat";
+- avoid duplicate direct chats;
+- create the chat in "afuchat";
+- create memberships in "afuchat";
+- preserve existing IDs and relationships;
+- respect RLS/security requirements.
+
+Search the entire mobile application for callers of this RPC.
+
+Update every caller if necessary so there is only one canonical production path.
+
+---
+
+10. FIX THE API DATABASE SCHEMA CONFIGURATION
+
+This is a major issue found in the latest repository.
+
+The current "afuchat-api" contains:
+
+"AFUCHAT_DATABASE_SCHEMA"
+
+and the repository currently has it configured as:
+
+"public"
+
+Do not leave the AfuChat production API pointed at the wrong schema.
+
+Determine the correct production PostgREST schema configuration required for "afuchat".
+
+The final API must explicitly and consistently target the canonical AfuChat database schema.
+
+If the architecture requires "Accept-Profile: afuchat" / "Content-Profile: afuchat", configure it correctly.
+
+Do not use "public" merely because it was the previous default.
+
+Do not accidentally point the API at "chat".
+
+Do not guess. Verify the production Supabase exposed schemas and configuration first.
+
+---
+
+11. FIX "afuchat-api"
+
+Audit the entire Worker.
+
+Every AfuChat database request must use the canonical AfuChat source.
+
+Verify:
+
+- Supabase URL
+- schema
+- authentication
+- PostgREST headers
+- RPC calls
+- REST table queries
+- error handling
+- CORS
+- request IDs
+- production environment variables
+- bindings
+- Worker routes.
+
+The Worker must remain:
+
+"afuchat-api"
+
+and production host:
+
+"api.afuchat.com"
+
+---
+
+12. KEEP THE API ROUTES EXACTLY AS THEY ARE
+
+These remain canonical:
+
+/v1/chat/me
+/v1/chat/conversations
+/v1/chat/messages
+/v1/chat/posts
+/v1/chat/follows/list
+/v1/chat/follows/ids
+/v1/chat/follows/summary
+/v1/chat/follows/status
+/v1/chat/members
+
+plus all other existing AfuChat routes under:
+
+/v1/chat/*
+
+DO NOT introduce:
+
+/v1/afuchat/*
+
+DO NOT rename "/v1/chat/*".
+
+DO NOT create aliases.
+
+DO NOT create duplicate endpoints.
+
+Again:
+
+API namespace = "chat"
+
+Database schema = "afuchat"
+
+---
+
+13. AUTHENTICATION MUST REMAIN SHARED
+
+Keep the existing authentication architecture:
+
+Mobile Supabase session
+        ↓
+Bearer access token
+        ↓
+afuchat-api
+        ↓
+afuauth-api
+        ↓
+verified user
+        ↓
+same authenticated token
+        ↓
+Supabase/Postgres
+        ↓
+auth.uid()
+
+Verify that the same user UUID exists at every stage.
+
+Do not replace this with anonymous database access.
+
+Do not put a service-role key in the mobile application.
+
+---
+
+14. AUDIT RLS
+
+Now that the schema is being consolidated, audit RLS on all affected "afuchat.*" tables.
+
+For each table verify:
+
+- RLS enabled
+- policies
+- SELECT
+- INSERT
+- UPDATE
+- DELETE
+- authenticated role
+- "auth.uid()"
+- membership checks
+- ownership checks
+- joins to related tables.
+
+Do NOT disable RLS globally.
+
+Do NOT weaken policies just to make the API work.
+
+If a SECURITY DEFINER function is required, audit:
+
+- owner
+- "search_path"
+- "row_security"
+- authorization logic
+- inputs
+- referenced tables
+- EXECUTE grants.
+
+Remove obsolete "PUBLIC"/"anon" execution privileges where appropriate, but do not remove legitimate authenticated/service-role permissions without checking callers.
+
+---
+
+15. FIX MESSAGES COMPLETELY
+
+Verify production behavior for:
+
+- message list
+- message send
+- message read
+- sender identity
+- message status
+- latest message
+- own messages
+- other users' messages
+- pagination
+- chat membership.
+
+The original issue was that authenticated users could not correctly see their own live messages.
+
+Confirm that:
+
+message.sender_id === authenticated_user_id
+
+works correctly with the canonical "afuchat" data.
+
+---
+
+16. FIX CONVERSATIONS
+
+Verify:
+
+- old conversations load;
+- latest message appears;
+- sender information loads;
+- unread state works;
+- mute state works;
+- direct chats work;
+- group chats work;
+- memberships work;
+- no duplicate direct chats are created.
+
+Everything must come from "afuchat".
+
+---
+
+17. FIX FOLLOWS
+
+Verify all production follow functionality:
+
+/v1/chat/follows/list
+/v1/chat/follows/ids
+/v1/chat/follows/summary
+/v1/chat/follows/status
+
+Confirm:
+
+- follow records load;
+- follower/following lists load;
+- counts load;
+- follow status loads;
+- follow/unfollow works;
+- profile relationships load.
+
+Use the canonical AfuChat data.
+
+Do not accidentally continue using legacy "social.*" or "chat.*" for AfuChat follow functionality.
+
+---
+
+18. FIX PROFILES AND POSTS
+
+Verify:
+
+Profile
+
+"/v1/chat/me"
+
+must return the authenticated user's existing AfuChat profile.
+
+Posts
+
+Verify:
+
+- post reads
+- author IDs
+- profile hydration
+- feed relationships
+- follows
+- post creation
+- post retrieval.
+
+Do not break unrelated AfuChat functionality while fixing chat.
+
+---
+
+19. REMOVE EMPTY-DATA MASKING
+
+A production database failure must never become a fake successful empty result.
+
+For example:
+
+Database failure → NOT []
+RLS failure → NOT []
+Wrong schema → NOT []
+API failure → NOT cached data pretending it succeeded
+
+Return a proper sanitized error.
+
+Never expose:
+
+- Worker internal names
+- SQL errors
+- Supabase internals
+- stack traces
+- secrets
+- internal database details.
+
+---
+
+20. CACHE/OFFLINE BEHAVIOR
+
+Audit the mobile fallback behavior.
+
+The app may use cached data for offline operation, but cache must not hide a production API/database failure.
+
+Ensure that:
+
+- successful API data replaces stale cache;
+- API errors are distinguishable from legitimate empty results;
+- online state does not falsely appear offline;
+- cached conversations do not become the only visible conversations;
+- profile cache does not hide profile API failures.
+
+---
+
+21. REMOVE LEGACY "chat" DEPENDENCIES
+
+After migration and verification:
+
+Search the entire repository again for actual database references to:
+
+chat.
+
+Do not treat normal JavaScript/TypeScript variable names such as "chat", "chatId", "chatList", comments, UI text, etc. as database dependencies.
+
+The objective is to eliminate database/runtime dependencies on "chat.*", not the word "chat" from the application.
+
+Any SQL/runtime reference to legacy "chat.*" must be investigated.
+
+A reference may remain temporarily only if it is clearly documentation describing the migration.
+
+---
+
+22. LEGACY SCHEMA REMOVAL
+
+Only after all dependencies are removed and production verification succeeds:
+
+Determine whether the physical legacy "chat" schema can safely be dropped.
+
+Before dropping it, prove:
+
+- no AfuChat table references it;
+- no AfuChat function references it;
+- no trigger references it;
+- no Worker references it;
+- no application code references it;
+- no production endpoint depends on it;
+- all required data exists in "afuchat";
+- all IDs and relationships are preserved.
+
+If all conditions are satisfied, remove the obsolete schema.
+
+If dropping it immediately would create unnecessary production risk, leave the schema physically present but completely unused and report that status.
+
+The application must still use "afuchat" exclusively.
+
+---
+
+23. MIGRATION SAFETY
+
+Create/update the production migration required for this consolidation.
+
+The migration must be:
+
+- deterministic;
+- safe;
+- non-destructive;
+- explicit;
+- repeatable where possible;
+- based on actual production state.
+
+Do not:
+
+- truncate;
+- reset;
+- blindly copy;
+- blindly overwrite;
+- regenerate IDs;
+- delete production data;
+- reset authentication;
+- reset profiles.
+
+Before destructive operations, verify dependency state and recovery capability.
+
+---
+
+24. RUN TESTS
+
+Run all relevant repository tests.
+
+At minimum:
+
+- Worker tests
+- authentication tests
+- API route tests
+- schema targeting tests
+- "/me"
+- conversations
+- messages
+- follows
+- memberships
+- direct chat creation
+- RLS
+- SECURITY DEFINER
+- error sanitization
+- cache behavior.
+
+Add/fix tests where necessary.
+
+There must be a test proving that AfuChat API database requests target "afuchat", not "chat".
+
+---
+
+25. FINAL REPOSITORY SEARCH
+
+After all code/database changes, perform another full repository search.
+
+Confirm there is no active AfuChat runtime path that:
+
+- queries "chat.*";
+- sends "Accept-Profile: chat";
+- sends "Content-Profile: chat";
+- configures the AfuChat API against "chat";
+- calls a legacy chat RPC that reads "chat.*".
+
+Normal application terminology such as:
+
+chat
+chatId
+chatList
+chat screen
+chat message
+
+is completely fine.
+
+We are removing the legacy database dependency, not the word "chat".
+
+---
+
+26. PRODUCTION DEPLOYMENT
+
+Once the consolidation has been verified:
+
+Database
+
+Apply the required migration to production.
+
+Verify:
+
+- schema
+- tables
+- functions
+- foreign keys
+- RLS
+- grants
+- data counts
+- relationships.
+
+Worker
+
+Deploy:
+
+"afuchat-api"
+
+to:
+
+"api.afuchat.com"
+
+Do not deploy unrelated Afu Workers.
+
+Do not change AfuCloud, AfuMail, AfuAI or AfuAds.
+
+---
+
+27. PRODUCTION VERIFICATION
+
+Use an authenticated production test account.
+
+Verify all of these against production:
+
+GET /v1/chat/me
+
+GET /v1/chat/conversations
+
+GET /v1/chat/messages
+
+GET /v1/chat/follows/list
+
+GET /v1/chat/follows/ids
+
+GET /v1/chat/follows/summary
+
+GET /v1/chat/follows/status
+
+GET /v1/chat/members
+
+Also verify:
+
+- sending a message;
+- receiving a message;
+- creating a direct chat;
+- group membership;
+- follow/unfollow;
+- profile loading;
+- post/feed loading.
+
+Confirm that returned records come from the canonical "afuchat" source.
+
+---
+
+28. DO NOT CLAIM SUCCESS WITHOUT VERIFICATION
+
+Do not say:
+
+- “deployed”
+- “fixed”
+- “production ready”
+- “working”
+- “migration complete”
+
+unless the actual operation succeeded and was verified.
+
+If something fails, report the exact blocker and continue with every safe part of the task.
+
+Do not hide failures behind empty arrays or cached results.
+
+---
+
+29. FINAL SUCCESS STATE
+
+The final production architecture must be:
+
+                  ┌─────────────────────┐
+                  │     AfuChat App     │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  /v1/chat/*
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │    afuchat-api      │
+                  └──────────┬──────────┘
+                             │
+                             ▼
+                  ┌─────────────────────┐
+                  │      Supabase       │
+                  │                     │
+                  │     afuchat.*       │
+                  │                     │
+                  │  ONLY SOURCE OF     │
+                  │       TRUTH         │
+                  └─────────────────────┘
+
+There must be no live AfuChat dependency on "chat.*".
+
+The legacy "chat" schema must no longer participate in AfuChat data reads/writes.
+
+---
+
+30. FINAL REPORT
+
+When finished, provide a concise report containing:
+
+Repository
+
+- latest commit used
+- files changed
+- migrations created/updated
+
+Database
+
+- what was reconciled
+- records preserved
+- foreign keys corrected
+- functions corrected
+- RLS status
+- legacy "chat" status
+
+API
+
+- schema configuration
+- routes verified
+- authentication verified
+- database source verified
+
+Deployment
+
+- Worker deployed
+- production hostname
+- deployment/version identifier
+- production endpoints tested
+
+Result
+
+Explicitly state:
+
+AfuChat now uses "afuchat.*" as its sole database source of truth, while "/v1/chat/*" remains the sole API namespace.
+
+Do not redesign anything.
+
+Do not create another schema.
+
+Do not create another Worker.
+
+Do not move data into "chat".
+
+Do not change "/v1/chat/*".
+
+Consolidate the existing legacy "chat" database dependencies into the existing canonical "afuchat" schema, verify the real production data, correct the API configuration, fix the live read/write paths, run tests, and deploy "afuchat-api" to production.
