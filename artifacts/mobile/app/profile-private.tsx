@@ -24,7 +24,8 @@ import { Image as ExpoImage } from "expo-image";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
-import { supabase } from "@/lib/supabase";
+import { setAfuChatFollow } from "@/lib/afuchatApi";
+import { showAlert } from "@/lib/alert";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,12 +73,13 @@ export function ProfilePrivateView({
     if (!user || !profileId || followed) return;
     setLoading(true);
     setFollowed(true);
-    await supabase
-      .from("follows")
-      .upsert(
-        { follower_id: user.id, following_id: profileId },
-        { onConflict: "follower_id,following_id" }
-      );
+    const { error } = await setAfuChatFollow(profileId, true, user.id);
+    if (error) {
+      setFollowed(false);
+      setLoading(false);
+      showAlert("Error", "Could not follow this user. Please try again.");
+      return;
+    }
     setLoading(false);
     if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any);
   }

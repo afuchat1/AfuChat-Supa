@@ -73,8 +73,12 @@ import {
   getAfuChatMessages,
   getAfuChatMessageReactions,
   getAfuChatMessageStatuses,
+  getAfuChatFollowStatuses,
+  getAfuChatFollowSummary,
+  getAfuChatMyPosts,
   postAfuChatMessage,
   reportAfuChatMessage,
+  setAfuChatFollow,
   setAfuChatMessageReaction,
   setAfuChatMessageStatus,
   starAfuChatMessage,
@@ -3496,17 +3500,13 @@ function ChatScreen() {
       return;
     }
 
-    const { data: theyFollowMe, error: followError } = await supabase
-      .from("follows")
-      .select("id")
-      .eq("follower_id", otherId)
-      .eq("following_id", user.id)
-      .maybeSingle();
-    if (followError) {
+    const followResult = await getAfuChatFollowStatuses([otherId]);
+    const followStatus = followResult.data?.get(otherId);
+    if (followResult.error || !followStatus) {
       applyGateState(fallbackStatus(cachedStatus, localOutgoingMessage));
       return;
     }
-    if (theyFollowMe) {
+    if (followStatus.followsYou) {
       persistGateState(chatId, "unlocked");
       applyGateState("unlocked");
       return;
@@ -3561,9 +3561,10 @@ function ChatScreen() {
       return;
     }
     const otherId = info.other_id;
-    const { data: iFollow } = await supabase
-      .from("follows").select("id").eq("follower_id", user.id).eq("following_id", otherId).maybeSingle();
-    if (iFollow) { setIsStranger(false); return; }
+    const followResult = await getAfuChatFollowStatuses([otherId]);
+    const followStatus = followResult.data?.get(otherId);
+    if (followResult.error || !followStatus) return;
+    if (followStatus.isFollowing) { setIsStranger(false); return; }
 
     const chatId = isDraft ? realChatId : id;
     if (!chatId) { setIsStranger(false); return; }
@@ -4379,17 +4380,23 @@ function ChatScreen() {
     if (!user || !profile) return "";
     try {
       const [
-        { count: followersCount }, { count: followingCount }, { count: postsCount },
+        followSummary,
+        postsSummary,
         { data: subData }, { data: recentAcoinTx }, { data: recentNexaSent }, { data: recentNexaRecv },
       ] = await Promise.all([
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id),
-        supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
-        supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
+        getAfuChatFollowSummary(user.id),
+        getAfuChatMyPosts(),
         supabase.from("user_subscriptions").select("plan_id, is_active, expires_at").eq("user_id", user.id).eq("is_active", true).maybeSingle(),
         supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, nexa_spent, fee_charged, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
         supabase.from("xp_transfers").select("id, amount, created_at, status, receiver_id").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(5),
         supabase.from("xp_transfers").select("id, amount, created_at, status, sender_id").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(5),
       ]);
+      if (followSummary.error || !followSummary.data || postsSummary.error || postsSummary.totalCount === null) {
+        throw new Error("AfuChat profile statistics could not be loaded.");
+      }
+      const followersCount = followSummary.data.followers_count;
+      const followingCount = followSummary.data.following_count;
+      const postsCount = postsSummary.totalCount;
       const [transferProfiles, planResult] = await Promise.all([
         fetchAccountProfileMap(
           [
@@ -4506,7 +4513,7 @@ function ChatScreen() {
         const { data: target } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!target) return { success: false, message: `User @${handle} not found` };
         if (target.id === user.id) return { success: false, message: "Cannot follow yourself" };
-        const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: target.id });
+        const { error } = await setAfuChatFollow(target.id, true, user.id);
         if (error) return { success: false, message: error.message };
         return { success: true, message: `You now follow ${(target as any).display_name} (@${handle})` };
       }
@@ -4514,7 +4521,8 @@ function ChatScreen() {
         const { handle } = ea.params;
         const { data: target } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!target) return { success: false, message: `User @${handle} not found` };
-        await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", target.id);
+        const { error } = await setAfuChatFollow(target.id, false, user.id);
+        if (error) return { success: false, message: error.message };
         return { success: true, message: `Unfollowed @${handle}` };
       }
       case "subscribe": {
@@ -7639,8 +7647,9 @@ STRICT RULES:
               style={[st.strangerBtnOutline, { borderColor: colors.border }]}
               onPress={async () => {
                 if (!chatInfo.other_id) return;
-                try { await supabase.from("follows").insert({ follower_id: user?.id, following_id: chatInfo.other_id }); } catch {}
-                setIsStranger(false);
+                if (!user) return;
+                const { error } = await setAfuChatFollow(chatInfo.other_id, true, user.id);
+                if (!error) setIsStranger(false);
               }}
             >
               <Ionicons name="person" size={13} color={colors.text} />

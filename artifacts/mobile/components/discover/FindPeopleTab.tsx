@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
 
 type Person = {
   id: string;
@@ -106,8 +107,8 @@ export default function FindPeopleTab() {
       // history query. last_seen is updated by the session heartbeat.
       const [
         { data, error: profileError },
-        { data: follows, error: followError },
-        { data: followers, error: followersError },
+        followingResult,
+        followersResult,
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -122,12 +123,12 @@ export default function FindPeopleTab() {
           .not("bio", "is", null)
           .order("last_seen", { ascending: false, nullsFirst: false })
           .limit(100),
-        supabase.from("follows").select("following_id").eq("follower_id", user.id),
-        supabase.from("follows").select("follower_id").eq("following_id", user.id),
+        getAfuChatFollowIds(user.id, "following", 5000),
+        getAfuChatFollowIds(user.id, "followers", 5000),
       ]);
       if (profileError) throw profileError;
-      if (followError) throw followError;
-      if (followersError) throw followersError;
+      if (followingResult.error || !followingResult.ids) throw new Error("Following list could not be loaded.");
+      if (followersResult.error || !followersResult.ids) throw new Error("Follower list could not be loaded.");
 
       const [
         { data: groupData, error: groupError },
@@ -151,8 +152,8 @@ export default function FindPeopleTab() {
           .limit(30),
         supabase.from("channel_subscriptions").select("channel_id").eq("user_id", user.id),
       ]);
-      const followed = new Set((follows ?? []).map((row: any) => row.following_id));
-      const followingMe = new Set((followers ?? []).map((row: any) => row.follower_id));
+      const followed = new Set(followingResult.ids);
+      const followingMe = new Set(followersResult.ids);
       const memberSet = new Set((memberships ?? []).map((row: any) => row.chat_id));
       const subscriptionSet = new Set((subscriptions ?? []).map((row: any) => row.channel_id));
       const completeProfiles = ((data ?? []) as any[]).filter((person) =>
@@ -161,14 +162,6 @@ export default function FindPeopleTab() {
         typeof person.avatar_url === "string" && person.avatar_url.trim().length > 0 &&
         typeof person.bio === "string" && person.bio.trim().length > 0
       );
-      const profileIds = completeProfiles.map((person) => person.id);
-      const { data: followerRows } = profileIds.length
-        ? await supabase.from("follows").select("following_id").in("following_id", profileIds)
-        : { data: [] as any[] };
-      const followerCounts = new Map<string, number>();
-      (followerRows ?? []).forEach((row: any) => {
-        followerCounts.set(row.following_id, (followerCounts.get(row.following_id) ?? 0) + 1);
-      });
       setPeople(completeProfiles
         .filter((person) =>
           typeof person.handle === "string" && person.handle.trim().length > 0 &&
@@ -182,8 +175,7 @@ export default function FindPeopleTab() {
           handle: person.handle.trim(),
           avatar_url: person.avatar_url,
           bio: person.bio.trim(),
-          // Always derive this from relationship rows, never the cached profile counter.
-          follower_count: followerCounts.get(person.id) ?? 0,
+          follower_count: Number(person.follower_count) || 0,
           is_verified: !!person.is_verified,
           is_organization_verified: !!person.is_organization_verified,
           last_seen: person.last_seen || null,
@@ -323,9 +315,7 @@ export default function FindPeopleTab() {
       ? { ...item, is_following: next, follower_count: Math.max(0, item.follower_count + (next ? 1 : -1)) }
       : item));
     try {
-      const result = next
-        ? await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id })
-        : await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", person.id);
+      const result = await setAfuChatFollow(person.id, next, user.id);
       if (result.error) throw result.error;
     } catch {
       setPeople((current) => current.map((item) => item.id === person.id

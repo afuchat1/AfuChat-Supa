@@ -35,6 +35,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import * as Haptics from "@/lib/haptics";
 import UserName from "@/components/ui/UserName";
+import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type SuggestedUser = {
@@ -305,15 +306,18 @@ export function SuggestedUsers({
       }
     }
 
-    const [dis, followRes, followersRes] = await Promise.all([
+    const [dis, followResult, followersResult] = await Promise.all([
       loadDismissed(),
-      supabase.from("follows").select("following_id").eq("follower_id", user.id),
-      supabase.from("follows").select("follower_id").eq("following_id", user.id),
+      getAfuChatFollowIds(user.id, "following", 5000),
+      getAfuChatFollowIds(user.id, "followers", 5000),
     ]);
 
     if (!mountedRef.current) return;
 
-    const followingIds = (followRes.data || []).map((f: any) => f.following_id as string);
+    if (followResult.error || !followResult.ids || followersResult.error || !followersResult.ids) {
+      throw new Error("Follow suggestions could not be loaded.");
+    }
+    const followingIds = followResult.ids;
     const followingSetLocal = new Set(followingIds);
     const excludeIds = new Set([user.id, ...followingIds, ...dis]);
     const userInterests: string[] = profile?.interests || [];
@@ -326,19 +330,23 @@ export function SuggestedUsers({
     let mutualSourceMap = new Map<string, string>();  // userId → one follower_id connecting them
 
     if (fofSource.length > 0) {
-      const { data: fofRows } = await supabase
-        .from("follows")
-        .select("follower_id, following_id")
-        .in("follower_id", fofSource)
-        .limit(2000);
+      const fofResults = await Promise.all(
+        fofSource.map(async (sourceId) => ({
+          sourceId,
+          result: await getAfuChatFollowIds(sourceId, "following", 500),
+        })),
+      );
 
       if (!mountedRef.current) return;
 
-      for (const row of fofRows || []) {
-        if (excludeIds.has(row.following_id)) continue;
-        const prev = mutualCountMap.get(row.following_id) || 0;
-        mutualCountMap.set(row.following_id, prev + 1);
-        if (prev === 0) mutualSourceMap.set(row.following_id, row.follower_id);
+      for (const { sourceId, result } of fofResults) {
+        if (result.error || !result.ids) continue;
+        for (const targetId of result.ids) {
+          if (excludeIds.has(targetId)) continue;
+          const prev = mutualCountMap.get(targetId) || 0;
+          mutualCountMap.set(targetId, prev + 1);
+          if (prev === 0) mutualSourceMap.set(targetId, sourceId);
+        }
       }
     }
 
@@ -464,7 +472,7 @@ export function SuggestedUsers({
       finalUsers = pool;
     }
 
-    const followersSetLocal = new Set((followersRes.data || []).map((f: any) => f.follower_id as string));
+    const followersSetLocal = new Set<string>(followersResult.ids);
 
     _cachedResult = {
       users: finalUsers,
@@ -513,10 +521,15 @@ export function SuggestedUsers({
     if (_cachedResult && _cachedResult.userId === user.id) {
       _cachedResult.expiresAt = 0;
     }
-    await supabase.from("follows").upsert({
-      follower_id: user.id,
-      following_id: targetId,
-    }, { onConflict: "follower_id,following_id" });
+    const { error } = await setAfuChatFollow(targetId, true, user.id);
+    if (error) {
+      setFollowingSet((current) => {
+        const next = new Set(current);
+        next.delete(targetId);
+        return next;
+      });
+      if (_cachedResult && _cachedResult.userId === user.id) _cachedResult.expiresAt = 0;
+    }
   }
 
   async function handleDismiss(targetId: string) {

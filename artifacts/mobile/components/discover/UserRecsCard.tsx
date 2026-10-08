@@ -14,6 +14,7 @@ import { safeRouter } from "@/lib/navUtils";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import * as Haptics from "@/lib/haptics";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
 
 type SuggestUser = {
   id: string;
@@ -50,10 +51,10 @@ async function fetchRecommendations(userId: string | null): Promise<SuggestUser[
   if (cached?.promise) return cached.promise;
 
   const promise = (async () => {
-    const [{ data: followData }, { data }] = await Promise.all([
+    const [followResult, { data }] = await Promise.all([
       userId
-        ? supabase.from("follows").select("following_id").eq("follower_id", userId).limit(500)
-        : Promise.resolve({ data: [] as { following_id: string }[] }),
+        ? getAfuChatFollowIds(userId, "following", 500)
+        : Promise.resolve({ ids: [] as string[], error: null }),
       supabase
         .from("profiles")
         .select("id, display_name, handle, avatar_url, is_verified, is_organization_verified, follower_count, bio")
@@ -64,7 +65,10 @@ async function fetchRecommendations(userId: string | null): Promise<SuggestUser[
         .limit(60),
     ]);
 
-    const excluded = new Set((followData || []).map((f: any) => f.following_id));
+    if (followResult.error || !followResult.ids) {
+      throw new Error(followResult.error?.message ?? "Could not load followed users.");
+    }
+    const excluded = new Set(followResult.ids);
     if (userId) excluded.add(userId);
     const users = (data || [])
       .filter((u: any) => !excluded.has(u.id))
@@ -115,14 +119,22 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
     load().catch(() => {});
   }, [load]);
 
-  const follow = useCallback((uid: string) => {
+  const follow = useCallback(async (uid: string) => {
     if (!user) { onRequireAuth?.(); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setUsers((prev) => prev.map((u) => u.id === uid ? { ...u, followed: !u.followed } : u));
+    const before = users.find((u) => u.id === uid)?.followed ?? false;
+    setUsers((prev) => prev.map((u) => u.id === uid ? { ...u, followed: true } : u));
     const cache = recommendationsCache.get(user.id);
     if (cache) cache.users = cache.users.map((u) => u.id === uid ? { ...u, followed: true } : u);
-    supabase.from("follows").upsert({ follower_id: user.id, following_id: uid }).then(() => {});
-  }, [onRequireAuth, user]);
+    const { error } = await setAfuChatFollow(uid, true, user.id);
+    if (error) {
+      setUsers((prev) => prev.map((u) => u.id === uid ? { ...u, followed: before } : u));
+      if (cache) {
+        cache.users = cache.users.map((u) => u.id === uid ? { ...u, followed: before } : u);
+        cache.fetchedAt = 0;
+      }
+    }
+  }, [onRequireAuth, user, users]);
 
   if (loading) {
     return (

@@ -29,6 +29,7 @@ import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import { isOnline } from "@/lib/offlineStore";
 import { TIER_GROUP_LIMITS } from "@/lib/featureUsage";
 import { checkPublicChatUsername } from "@/lib/usernameAvailability";
+import { getAfuChatFollowIds } from "@/lib/afuchatApi";
 
 type FollowedUser = {
   id: string;
@@ -56,19 +57,20 @@ export default function CreateGroupScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
-      if (error) throw error;
+      const followResult = await getAfuChatFollowIds(user.id, "following", 5000);
+      if (followResult.error || !followResult.ids) {
+        throw followResult.error ?? new Error("Following list could not be loaded.");
+      }
 
-      if (data?.length) {
+      if (followResult.ids.length) {
         const { profiles, error: profilesError } = await fetchAccountProfileMap<FollowedUser>(
-          data.map((row: any) => row.following_id),
+          followResult.ids,
           ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
         );
         if (profilesError) throw profilesError;
-        setFollowedUsers(data.map((row: any) => profiles.get(row.following_id)).filter(Boolean) as FollowedUser[]);
+        setFollowedUsers(followResult.ids.map((id) => profiles.get(id)).filter(Boolean) as FollowedUser[]);
+      } else {
+        setFollowedUsers([]);
       }
     } catch (_) {} finally {
       setLoading(false);

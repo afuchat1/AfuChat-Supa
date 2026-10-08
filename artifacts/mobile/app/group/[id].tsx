@@ -30,6 +30,7 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
 import UserName from "@/components/ui/UserName";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { getAfuChatFollowRecords } from "@/lib/afuchatApi";
 import { showAlert } from "@/lib/alert";
 import { isOnline } from "@/lib/offlineStore";
 import * as Haptics from "@/lib/haptics";
@@ -411,16 +412,15 @@ export default function GroupManageScreen() {
     setAddSelected(new Set());
 
     const existingIds = new Set(members.map((m) => m.user_id));
-    const { data } = await supabase
-      .from("follows")
-      .select(
-        "following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified)"
-      )
-      .eq("follower_id", user.id);
+    const followPage = await getAfuChatFollowRecords(user.id, "following", 100, 0);
+    if (followPage.error || !followPage.items) {
+      setAddLoading(false);
+      showAlert("Error", "Could not load people you follow.");
+      return;
+    }
 
-    const candidates: Follower[] = ((data || []) as any[])
-      .map((f) => f.profiles)
-      .filter(Boolean)
+    const candidates: Follower[] = followPage.items
+      .map((row) => row.profile)
       .filter((p: any) => !existingIds.has(p.id))
       .map((p: any) => ({
         id: p.id,

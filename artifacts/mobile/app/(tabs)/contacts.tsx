@@ -32,6 +32,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalContacts, saveLocalContacts, getAllPhonebookNames } from "@/lib/storage/localContacts";
 import { createLocalNotesConversation } from "@/lib/storage/localNotes";
+import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
 
 type Contact = {
   id: string;
@@ -139,20 +140,19 @@ export default function ContactsScreen() {
     }
 
     try {
-      const { data: followRows, error } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
-      if (error) throw error;
+      const followResult = await getAfuChatFollowIds(user.id, "following", 5000);
+      if (followResult.error || !followResult.ids) {
+        throw followResult.error ?? new Error("Following list could not be loaded.");
+      }
 
-      if (followRows) {
+      if (followResult.ids) {
         const { profiles, error: profileError } = await fetchAccountProfileMap<Contact>(
-          followRows.map((row: any) => row.following_id),
+          followResult.ids,
           ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
         );
         if (profileError) throw profileError;
-        const list = followRows
-          .map((row: any) => profiles.get(row.following_id))
+        const list = followResult.ids
+          .map((id) => profiles.get(id))
           .filter(Boolean)
           .sort((a: any, b: any) => a.display_name.localeCompare(b.display_name)) as Contact[];
         setContacts(list);
@@ -202,10 +202,11 @@ export default function ContactsScreen() {
 
   async function followUser() {
     if (!addResult || !user) return;
-    await supabase.from("follows").upsert({
-      follower_id: user.id,
-      following_id: addResult.id,
-    });
+    const { error } = await setAfuChatFollow(addResult.id, true, user.id);
+    if (error) {
+      showAlert("Error", "Could not follow this user. Please try again.");
+      return;
+    }
     setAdding(false);
     setAddQuery("");
     setAddResult(null);

@@ -27,8 +27,14 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useNearbyLocation } from "@/hooks/useNearbyLocation";
 import { supabase } from "@/lib/supabase";
+import { showAlert } from "@/lib/alert";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import {
+  getAfuChatFollowIds,
+  getAfuChatFollowStatuses,
+  setAfuChatFollow,
+} from "@/lib/afuchatApi";
 
 type DiscoverUser = {
   id: string;
@@ -313,11 +319,11 @@ export default function UserDiscoveryScreen() {
 
   async function loadFollowSet(): Promise<Set<string>> {
     if (!user) return new Set();
-    const { data } = await supabase
-      .from("follows")
-      .select("following_id")
-      .eq("follower_id", user.id);
-    return new Set((data || []).map((f: any) => f.following_id));
+    const result = await getAfuChatFollowIds(user.id, "following", 5000);
+    if (result.error || !result.ids) {
+      throw result.error ?? new Error("Following list could not be loaded.");
+    }
+    return new Set(result.ids);
   }
 
   const loadDiscoverUsers = useCallback(async () => {
@@ -350,12 +356,13 @@ export default function UserDiscoveryScreen() {
       const mutualIds = new Set<string>();
       if (data && data.length > 0) {
         const ids = (data as any[]).map((u) => u.id);
-        const { data: mutuals } = await supabase
-          .from("follows")
-          .select("follower_id")
-          .in("follower_id", ids)
-          .eq("following_id", user.id);
-        (mutuals || []).forEach((m: any) => mutualIds.add(m.follower_id));
+        const statusResult = await getAfuChatFollowStatuses(ids);
+        if (statusResult.error || !statusResult.data) {
+          throw statusResult.error ?? new Error("Follow statuses could not be loaded.");
+        }
+        for (const [id, status] of statusResult.data) {
+          if (status.isFollowing && status.followsYou) mutualIds.add(id);
+        }
       }
 
       setUsers(
@@ -525,38 +532,39 @@ export default function UserDiscoveryScreen() {
     }
     setFollowLoading(targetUser.id);
     const isF = following.has(targetUser.id);
-    if (isF) {
-      await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", user.id)
-        .eq("following_id", targetUser.id);
+    setFollowing((prev) => {
+      const next = new Set(prev);
+      if (isF) next.delete(targetUser.id);
+      else next.add(targetUser.id);
+      return next;
+    });
+    setUsers((prev) =>
+      prev.map((u) => u.id === targetUser.id
+        ? { ...u, is_following: !isF, follower_count: Math.max(0, u.follower_count + (isF ? -1 : 1)) }
+        : u
+      )
+    );
+    try {
+      const { error } = await setAfuChatFollow(targetUser.id, !isF, user.id);
+      if (error) throw error;
+    } catch {
       setFollowing((prev) => {
         const s = new Set(prev);
-        s.delete(targetUser.id);
+        if (isF) s.add(targetUser.id);
+        else s.delete(targetUser.id);
         return s;
       });
       setUsers((prev) =>
         prev.map((u) =>
           u.id === targetUser.id
-            ? { ...u, is_following: false, follower_count: Math.max(0, u.follower_count - 1) }
+            ? { ...u, is_following: isF, follower_count: Math.max(0, u.follower_count + (isF ? 1 : -1)) }
             : u
         )
       );
-    } else {
-      await supabase
-        .from("follows")
-        .insert({ follower_id: user.id, following_id: targetUser.id });
-      setFollowing((prev) => new Set([...prev, targetUser.id]));
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === targetUser.id
-            ? { ...u, is_following: true, follower_count: u.follower_count + 1 }
-            : u
-        )
-      );
+      showAlert("Error", "Could not update follow status. Please try again.");
+    } finally {
+      setFollowLoading(null);
     }
-    setFollowLoading(null);
   }
 
   async function onRefresh() {

@@ -33,6 +33,7 @@ import { Separator } from "@/components/ui/Separator";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { isOnline } from "@/lib/offlineStore";
+import { getAfuChatFollowRecords } from "@/lib/afuchatApi";
 import {
   getLocalContacts,
   saveLocalContacts,
@@ -135,17 +136,23 @@ export default function NewChatScreen() {
       }
 
       try {
-        const { data: followRows } = await supabase
-          .from("follows")
-          .select(
-            "following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified)"
-          )
-          .eq("follower_id", user.id);
+        const followPage = await getAfuChatFollowRecords(user.id, "following", 100, 0);
+        if (followPage.error || !followPage.items) {
+          throw followPage.error ?? new Error("Following list could not be loaded.");
+        }
 
-        if (followRows) {
-          const list = followRows
-            .map((f: any) => f.profiles)
-            .filter((profile: Contact | null): profile is Contact => !!profile && profile.id !== user.id)
+        if (followPage.items) {
+          const list: Contact[] = followPage.items
+            .map(({ profile }) => ({
+              id: profile.id,
+              display_name: profile.display_name || `@${profile.handle || "user"}`,
+              handle: profile.handle || "",
+              avatar_url: profile.avatar_url ?? null,
+              is_verified: profile.is_verified === true,
+              is_organization_verified: profile.is_organization_verified === true,
+              bio: profile.bio ?? null,
+            }))
+            .filter((profile) => profile.id !== user.id && profile.handle.length > 0)
             .sort((a: Contact, b: Contact) =>
               a.display_name.localeCompare(b.display_name, undefined, { sensitivity: "base" }),
             );

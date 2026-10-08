@@ -23,6 +23,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { ContactRowSkeleton, ListRowSkeleton, MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
+import { getAfuChatFollowRecords, getAfuChatFollowSummary } from "@/lib/afuchatApi";
 
 type Screen =
   | "home"
@@ -161,11 +162,13 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("follows")
-      .select("id", { count: "exact", head: true })
-      .eq("following_id", user.id)
-      .then(({ count }) => setFollowerCount(count ?? 0));
+    getAfuChatFollowSummary(user.id).then(({ data, error }) => {
+      if (error || !data) {
+        showAlert("Audience unavailable", "Could not load your follower count.");
+        return;
+      }
+      setFollowerCount(data.followers_count);
+    });
     supabase
       .from("posts")
       .select("id", { count: "exact", head: true })
@@ -207,13 +210,21 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   const loadAudience = useCallback(async (isRefresh = false) => {
     if (!user) return;
     if (isRefresh) setRefreshing(true); else setListLoading(true);
-    const { data } = await supabase
-      .from("follows")
-      .select("follower:profiles!follower_id(id,display_name,handle,avatar_url,is_verified)")
-      .eq("following_id", user.id)
-      .limit(50);
-    setFollowers(((data ?? []).map((r: any) => r.follower).filter(Boolean)) as Follower[]);
-    if (isRefresh) setRefreshing(false); else setListLoading(false);
+    try {
+      const result = await getAfuChatFollowRecords(user.id, "followers", 50, 0);
+      if (result.error || !result.items) throw result.error ?? new Error("Audience could not be loaded.");
+      setFollowers(result.items.map(({ profile }) => ({
+        id: profile.id,
+        display_name: profile.display_name ?? null,
+        handle: profile.handle ?? null,
+        avatar_url: profile.avatar_url ?? null,
+        is_verified: profile.is_verified === true,
+      })));
+    } catch {
+      showAlert("Audience unavailable", "Could not load your followers. Please try again.");
+    } finally {
+      if (isRefresh) setRefreshing(false); else setListLoading(false);
+    }
   }, [user]);
 
   const loadAnalytics = useCallback(async () => {

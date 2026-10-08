@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { PRESTIGE_TIERS, getPrestigeTier, getNextPrestigeTier, prestigeProgress } from "@/lib/prestige";
+import { getAfuChatFollowSummary, getAfuChatMyPosts } from "@/lib/afuchatApi";
 import { Avatar } from "@/components/ui/Avatar";
 import { invalidateUserEffects } from "@/hooks/useUserEffects";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
@@ -123,8 +124,8 @@ export default function PrestigeScreen() {
       supabase.from("profiles").select("id", { count: "exact", head: true }).gt("acoin", 0),
       supabase.from("status_goods_purchases").select("id, good_id, good_name, good_emoji, acoin_cost, tier_required, equipped, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("acoin_transactions").select("id, amount, transaction_type, created_at, metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(40),
-      supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", user.id),
-      supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id),
+      getAfuChatMyPosts(),
+      getAfuChatFollowSummary(user.id),
     ]);
 
     const rank = (aheadRes.count ?? 0) + 1;
@@ -155,13 +156,17 @@ export default function PrestigeScreen() {
       }));
     }
 
-    setProfileStats({
-      posts:     statsRes.count ?? 0,
-      messages:  0,
-      friends:   followsRes.count ?? 0,
-      stories:   0,
-      reactions: 0,
-    });
+    if (statsRes.error || statsRes.totalCount === null || followsRes.error || !followsRes.data) {
+      showAlert("Stats unavailable", "Could not load your latest profile statistics. Please try again.");
+    } else {
+      setProfileStats({
+        posts:     statsRes.totalCount,
+        messages:  0,
+        friends:   followsRes.data.following_count,
+        stories:   0,
+        reactions: 0,
+      });
+    }
 
     setLoadingList(false);
   }, [user, acoin]);

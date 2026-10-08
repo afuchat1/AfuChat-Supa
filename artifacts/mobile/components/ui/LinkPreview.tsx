@@ -25,6 +25,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useOpenLink } from "@/lib/useOpenLink";
+import { getAfuChatFollowSummary } from "@/lib/afuchatApi";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -348,10 +349,10 @@ export function LinkPreview({
             setLoading(false);
             return;
           }
-          const { count } = await supabase
-            .from("follows")
-            .select("id", { count: "exact", head: true })
-            .eq("following_id", data.id);
+          const followSummary = await getAfuChatFollowSummary(data.id);
+          if (followSummary.error || !followSummary.data) {
+            throw followSummary.error ?? new Error("Follower count could not be loaded.");
+          }
           const card: ProfileCard = {
             kind: "profile",
             handle: data.handle,
@@ -361,7 +362,7 @@ export function LinkPreview({
             bio: data.bio ?? null,
             is_verified: data.is_verified ?? false,
             is_organization_verified: data.is_organization_verified ?? false,
-            followers_count: count ?? 0,
+            followers_count: followSummary.data.followers_count,
           };
           profileCache[cacheKey] = card;
           if (mounted.current) { setPreview(card); setLoading(false); }

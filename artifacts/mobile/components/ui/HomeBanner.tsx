@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { getLocalContacts, type LocalContact } from "@/lib/storage/localContacts";
 import { isOnline } from "@/lib/offlineStore";
+import { getAfuChatFollowRecords } from "@/lib/afuchatApi";
 
 const SCREEN_H = Dimensions.get("window").height;
 
@@ -219,6 +220,7 @@ type PickerProps = {
 };
 
 function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }: PickerProps) {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const slideAnim  = useRef(new Animated.Value(SCREEN_H)).current;
   const [contacts, setContacts]     = useState<LocalContact[]>([]);
@@ -244,33 +246,40 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
         }
       });
 
-      if (isOnline()) {
-        supabase
-          .from("follows")
-          .select("following_id, profiles!follows_following_id_fkey(id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified)")
-          .then(({ data: rows }) => {
-            if (rows) {
-              const seen = new Set<string>();
-              const list = rows
-                .map((r: any) => r.profiles)
-                .filter(Boolean)
-                .filter((p: any) => {
-                  if (seen.has(p.id)) return false;
-                  seen.add(p.id);
-                  return true;
-                })
-                .sort((a: any, b: any) => a.display_name.localeCompare(b.display_name));
-              setContacts(list);
-            }
-            setLoading(false);
-          });
+      if (isOnline() && user) {
+        getAfuChatFollowRecords(user.id, "following", 100)
+          .then(({ items, error }) => {
+            if (error || !items) return;
+            const seen = new Set<string>();
+            const list: LocalContact[] = items
+              .map((row) => row.profile)
+              .filter((profile) => {
+                if (seen.has(profile.id)) return false;
+                seen.add(profile.id);
+                return true;
+              })
+              .map((profile) => ({
+                id: profile.id,
+                display_name: profile.display_name || `@${profile.handle || "user"}`,
+                handle: profile.handle || "",
+                avatar_url: profile.avatar_url ?? null,
+                bio: profile.bio ?? null,
+                is_verified: profile.is_verified === true,
+                is_organization_verified: profile.is_organization_verified === true,
+                stored_at: Date.now(),
+              }))
+              .sort((a, b) => a.display_name.localeCompare(b.display_name));
+            setContacts(list);
+          })
+          .catch(() => {})
+          .finally(() => setLoading(false));
       } else {
         setLoading(false);
       }
     } else {
       Animated.timing(slideAnim, { toValue: SCREEN_H, duration: 220, useNativeDriver: true }).start();
     }
-  }, [visible]);
+  }, [visible, user?.id]);
 
   const filtered = (() => {
     const base = search.trim()

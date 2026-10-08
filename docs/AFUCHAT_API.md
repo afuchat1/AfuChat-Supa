@@ -41,12 +41,34 @@ tracked in [`AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](./AFUCHAT_BACKEND_MIGRATION_AU
 | `POST /v1/chat/bookmarks` | Saves a post. JSON body: `{ "post_id": "..." }`. An optional `expected_user_id` is accepted only as an offline-queue account check; the target user is always derived from the verified session. | Shared-session bearer. | Idempotent `200 { bookmarked: true }`; invalid input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
 | `DELETE /v1/chat/bookmarks?post_id={uuid}&expected_user_id={uuid}` | Removes a saved post. `expected_user_id` is optional and only prevents an offline action from crossing accounts. | Shared-session bearer; the delete filter always uses the verified user ID. | Idempotent `200 { bookmarked: false }`; invalid input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
 
+### Follows
+
+The signed-in user's identity is always taken from the verified shared session.
+Profile follow-list privacy settings are enforced for list and ID queries.
+
+| Method and path | Purpose and inputs | Authentication | Response |
+|---|---|---|---|
+| `GET /v1/chat/follows/summary?profile_id={uuid}` | Returns follower/following counts and whether the current account follows the profile or is followed by it. | Shared-session bearer. | `200 { followers_count, following_count, follows_you, is_following }`; invalid IDs return `400`; missing/invalid session returns `401`. |
+| `GET /v1/chat/follows/status?user_ids={uuid,...}` | Checks the current account's follow relationship with up to 100 profiles. IDs may be comma-separated or repeated. | Shared-session bearer. | `200 { items: [{ user_id, is_following, follows_you }] }`; invalid or oversized lists return `400`. |
+| `GET /v1/chat/follows/list?profile_id={uuid}&direction={followers\|following}&limit={1..100}&offset={n}` | Lists paginated follow records with public account-profile fields. | Shared-session bearer; the target profile's list privacy setting is enforced. | `200 { items, hidden, next_offset }`; private lists return an empty `items` array with `hidden: true`; invalid input returns `400`. |
+| `GET /v1/chat/follows/ids?profile_id={uuid}&direction={followers\|following}&limit={1..100}&offset={n}` | Returns paginated profile IDs for follow-set and feed operations, with the same list-privacy enforcement. | Shared-session bearer. | `200 { items: [uuid, ...], hidden, next_offset }`; invalid input returns `400`. |
+| `POST /v1/chat/follows` | Follows a profile. JSON body: `{ "target_user_id": "uuid", "expected_user_id": "optional uuid" }`. The optional account check prevents queued work from crossing accounts. | Shared-session bearer; `follower_id` is derived from the verified session. | Idempotent `200 { is_following: true, target_user_id }`; invalid or mismatched input returns `409`. |
+| `DELETE /v1/chat/follows?target_user_id={uuid}&expected_user_id={uuid}` | Unfollows a profile. The optional account check is used for queued work. | Shared-session bearer; deletion is scoped to the verified follower. | Idempotent `200 { is_following: false, target_user_id }`; invalid or mismatched input returns `409`. |
+
+### Discover feeds and post views
+
+| Method and path | Purpose and inputs | Authentication | Response |
+|---|---|---|---|
+| `GET /v1/chat/feed/for-you` | Returns the recent, mid-range, and throwback streams. Supports bounded paging/cursor parameters (`recent_since`, `mid_before`, `mid_since`, `throwback_before`, offsets, `recent_limit`, and stream-exhaustion flags), plus `older_than`, `newer_than`, and `exclude_self`. | Shared-session bearer; author identity and interaction state are based on the verified account. | `200 { recent, mid, throwback }`; invalid cursors or limits return `400`, missing/invalid session returns `401`, and database failures return a generic `502`. |
+| `GET /v1/chat/feed/following?limit={n}&older_than={timestamp}&newer_than={timestamp}` | Returns posts from profiles followed by the signed-in account, plus the current following ID set. | Shared-session bearer; followed IDs are derived from the verified account. | `200 { items, following_ids }`; invalid cursors or limits return `400`, missing/invalid session returns `401`, and database failures return a generic `502`. |
+| `POST /v1/chat/feed/views` | Records one batch of up to 100 post IDs. JSON body: `{ "post_ids": ["uuid", ...], "expected_user_id": "optional uuid" }`. The optional account check prevents queued work from crossing accounts. | Shared-session bearer; the view owner is derived from the verified session. | `200 { recorded: true, count }`; malformed input returns `400`, an account mismatch returns `409`, and database failures return a generic `502`. |
+
 ### Posts (initial migration slice)
 
 These named routes cover post creation, the signed-in user's post list,
-single-post details, owner deletion, acknowledgments, and replies. Feed ranking,
-post views, mention search, and unrelated post surfaces remain separate
-operations and are not covered by these routes yet.
+single-post details, owner deletion, acknowledgments, and replies. Feed ranking
+and post-view recording use the separate named routes above. Mention search and
+other post surfaces remain outside this slice.
 
 | Method and path | Purpose and inputs | Authentication | Response |
 |---|---|---|---|
@@ -140,11 +162,11 @@ The `afu-cdn` Worker owns `cdn.afuchat.com/*` and dispatches
 object URLs use `LEGACY_MEDIA`, which points to that same bucket. The separate
 URL paths remain intact; no objects were moved or copied.
 
-There is no general-purpose PostgREST forwarding route. The bookmark endpoints
-are a narrow operation over the existing `post_bookmarks`, `posts`, and
-`profiles` relations; they do not expose caller-selected tables, columns, or
-filters. Other product data operations remain in the migration inventory until
-their own route and client flow are migrated.
+There is no general-purpose PostgREST forwarding route. Bookmark, follow, feed,
+and post endpoints use fixed, product-owned operations; they do not expose
+caller-selected tables, columns, or filters. Other product data operations
+remain in the migration inventory until their own route and client flow are
+migrated.
 
 ## Deployment verification
 

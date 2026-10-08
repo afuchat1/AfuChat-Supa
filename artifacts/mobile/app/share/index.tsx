@@ -20,11 +20,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDataMode } from "@/context/DataModeContext";
 import { supabase } from "@/lib/supabase";
 import { createAfuChatClientMessageId, postAfuChatMessage } from "@/lib/afuchatApi";
-import { getAfuChatConversations } from "@/lib/afuchatApi";
-import {
-  ACCOUNT_PROFILE_CHAT_COLUMNS,
-  fetchAccountProfileMap,
-} from "@/lib/sharedProfiles";
+import { getAfuChatConversations, getAfuChatFollowRecords } from "@/lib/afuchatApi";
 import { safeRouter } from "@/lib/navUtils";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
@@ -292,19 +288,14 @@ export default function ShareToAfuChatScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await supabase
-          .from("follows")
-          .select("following_id")
-          .eq("follower_id", user.id);
+        const followPage = await getAfuChatFollowRecords(user.id, "following", 100, 0);
+        if (followPage.error || !followPage.items) {
+          throw followPage.error ?? new Error("Following list could not be loaded.");
+        }
         if (cancelled) return;
-        const { profiles } = await fetchAccountProfileMap<Contact>(
-          (data ?? []).map((row: any) => row.following_id),
-          ACCOUNT_PROFILE_CHAT_COLUMNS,
-        );
-        if (cancelled) return;
-        const next = (data ?? [])
-          .map((row: any) => profiles.get(row.following_id))
-          .filter(Boolean) as Contact[];
+        const next = followPage.items
+          .map((row) => row.profile)
+          .filter((profile): profile is Contact => !!profile);
         next.sort((a, b) => a.display_name.localeCompare(b.display_name));
         setContacts(next);
       } catch {

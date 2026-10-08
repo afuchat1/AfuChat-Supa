@@ -40,23 +40,24 @@ PostgREST probes against the new project confirmed `accounts.profiles` and
 `public.get_chat_list` are present. No database migration is needed for this
 Worker integration.
 
-### Fresh application/catalog audit (2026-10-07)
+### Mobile inventory refresh (2026-10-08)
 
 The current audit and exact source inventories are recorded in
 [`docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](../../docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
 The read-only Management API catalog query now succeeds from this workspace;
 direct PostgreSQL connections still fail from Replit. The mobile baseline
-before the bookmark work was 723 direct table-query sites across 92 relation
-names and 36 RPC names. Current source has 706 direct table-query sites over
-89 relation names. All 36 called RPCs exist in `public` and are
-`SECURITY DEFINER`.
+was refreshed after the follow/feed work: current source has 585 literal
+`.from("relation")` call sites over 84 relation names in 110 files, and 91
+direct RPC call sites over 36 function names. The latest catalog cross-check
+remains dated 2026-10-07 and covered the prior 89-name relation set; the three
+current names `app_banners`, `app_settings`, and `collections` have not been
+checked against that catalog.
 
-The first migrated domain is saved posts: a named `/v1/chat/bookmarks` route
-uses the existing `post_bookmarks`, `posts`, and `profiles` relations and
-derives the acting user from AfuAuth verification. The mobile saved-post,
-bookmark status/mutation, feed, video-feed, and queued-offline bookmark paths
-use that route. The Worker change is local source only and has not been
-deployed.
+Named `/v1/chat/*` routes now cover saved posts, post create/detail/likes/replies,
+follow lists/status/mutations, discover feeds, and batched post-view recording.
+The mobile follow surfaces use these routes rather than direct
+`.from("follows")` queries. Chat, Auth, Realtime, and SQLite offline behavior
+remain separate boundaries; this is not a blanket PostgREST migration.
 
 The current source still references four absent relation names
 (`blocks`, `business_verification_requests`, `life_earth_leaderboard`, and

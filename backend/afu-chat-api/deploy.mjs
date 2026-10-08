@@ -329,6 +329,34 @@ async function assertProductionPostflight() {
     throw new Error(`Unauthenticated post-like request returned HTTP ${unauthenticatedPostLike.status}.`);
   }
 
+  const socialRouteProbes = [
+    { method: "GET", path: "/v1/chat/follows/ids?profile_id=123e4567-e89b-42d3-a456-426614174123&direction=following" },
+    { method: "GET", path: "/v1/chat/follows/list?profile_id=123e4567-e89b-42d3-a456-426614174123&direction=following" },
+    { method: "GET", path: "/v1/chat/follows/summary?profile_id=123e4567-e89b-42d3-a456-426614174123" },
+    { method: "GET", path: "/v1/chat/follows/status?user_ids=123e4567-e89b-42d3-a456-426614174123" },
+    { method: "POST", path: "/v1/chat/follows", body: { target_user_id: "123e4567-e89b-42d3-a456-426614174123" } },
+    { method: "DELETE", path: "/v1/chat/follows?target_user_id=123e4567-e89b-42d3-a456-426614174123" },
+    { method: "GET", path: "/v1/chat/feed/for-you" },
+    { method: "GET", path: "/v1/chat/feed/following" },
+    { method: "POST", path: "/v1/chat/feed/views", body: { post_ids: [] } },
+  ];
+  for (const probe of socialRouteProbes) {
+    const response = await fetch(`https://api.afuchat.com${probe.path}`, {
+      method: probe.method,
+      ...(probe.body
+        ? {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(probe.body),
+          }
+        : {}),
+    });
+    if (response.status !== 401) {
+      throw new Error(
+        `Unauthenticated social request ${probe.method} ${probe.path.split("?")[0]} returned HTTP ${response.status}.`,
+      );
+    }
+  }
+
   const unauthenticatedProfile = await fetch("https://api.afuchat.com/v1/chat/me");
   if (unauthenticatedProfile.status !== 401) {
     throw new Error(`Unauthenticated profile request returned HTTP ${unauthenticatedProfile.status}.`);
@@ -580,6 +608,10 @@ if (!APPLY) {
       "POST|DELETE /v1/chat/posts/{postId}/like",
       "GET|POST /v1/chat/posts/{postId}/replies",
       "POST|DELETE /v1/chat/posts/{postId}/replies/{replyId}/like",
+      "GET|POST|DELETE /v1/chat/follows/*",
+      "GET /v1/chat/feed/for-you",
+      "GET /v1/chat/feed/following",
+      "POST /v1/chat/feed/views",
       "POST /v1/chat/support/ai-reply",
       "POST /v1/chat/push/register",
       "POST /v1/chat/push/send",
@@ -647,6 +679,7 @@ console.log(JSON.stringify({
     "unauthenticated rejection",
     "AfuAuth shared-session rejection",
     "current-profile unauthenticated rejection",
+    "follow and feed routes require a shared session",
     "support and direct-FCM routes require a shared session",
     "support and direct-FCM Supabase functions are present",
     "storage handler route",

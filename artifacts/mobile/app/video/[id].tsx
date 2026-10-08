@@ -52,7 +52,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 
 import { supabase } from "@/lib/supabase";
-import { getAfuChatBookmarkedPostIds, setAfuChatBookmark } from "@/lib/afuchatApi";
+import {
+  getAfuChatBookmarkedPostIds,
+  getAfuChatFollowIds,
+  getAfuChatFollowStatuses,
+  setAfuChatBookmark,
+  setAfuChatFollow,
+} from "@/lib/afuchatApi";
 import {
   ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
   fetchAccountProfileMap,
@@ -1232,8 +1238,11 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     try {
     if (tab === "following" && currentUser) {
-      const { data: followData } = await supabase.from("follows").select("following_id").eq("follower_id", currentUser.id);
-      followingIds = (followData || []).map((f: any) => f.following_id);
+      const followResult = await getAfuChatFollowIds(currentUser.id, "following", 5000);
+      if (followResult.error || !followResult.ids) {
+        throw new Error(followResult.error?.message ?? "Following list could not be loaded.");
+      }
+      followingIds = followResult.ids;
       if (followingIds.length === 0) {
         setVideos([]); setLoading(false); loadingMoreRef.current = false; setLoadingMore(false); return;
       }
@@ -1296,7 +1305,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
       const [
         { data: likesData }, { data: repliesData }, { data: viewsData },
-        { data: myLikes }, myBookmarksResult, { data: myFollows },
+        { data: myLikes }, myBookmarksResult, myFollowResult,
       ] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
@@ -1305,14 +1314,23 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         currentUser
           ? getAfuChatBookmarkedPostIds(postIds)
           : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
-        currentUser ? supabase.from("follows").select("following_id").eq("follower_id", currentUser.id).in("following_id", authorIds) : { data: [] },
+        currentUser
+          ? getAfuChatFollowStatuses(authorIds)
+          : Promise.resolve({ data: new Map(), error: null }),
       ]);
       if (myBookmarksResult.error) {
         showAlert("Saved status unavailable", myBookmarksResult.error.message);
       }
       const myBookmarks = myBookmarksResult.data ?? [];
 
-      setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
+      if (currentUser && (myFollowResult.error || !myFollowResult.data)) {
+        throw new Error(myFollowResult.error?.message ?? "Follow status could not be loaded.");
+      }
+      setFollowingSet(new Set(
+        [...(myFollowResult.data ?? new Map()).entries()]
+          .filter(([, status]) => status.isFollowing)
+          .map(([authorId]) => authorId),
+      ));
 
       const likeMap: Record<string, number> = {};
       for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
@@ -1322,7 +1340,10 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
-      const followedSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
+      const followedSet = new Set<string>();
+      myFollowResult.data?.forEach((status, authorId) => {
+        if (status.isFollowing) followedSet.add(authorId);
+      });
 
       const allMapped: VideoPost[] = data.map((p: any) => ({
         id: p.id, author_id: p.author_id, content: p.content || "",
@@ -1659,12 +1680,15 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     if (!currentUser) { setShowSignInPrompt(true); return; }
     // Optimistic update first
     setFollowingSet((prev) => { const next = new Set(prev); if (isFollowing) next.delete(authorId); else next.add(authorId); return next; });
-    if (isFollowing) {
-      const { error } = await supabase.from("follows").delete().eq("follower_id", currentUser.id).eq("following_id", authorId);
-      if (error) setFollowingSet((prev) => { const next = new Set(prev); next.add(authorId); return next; });
-    } else {
-      const { error } = await supabase.from("follows").upsert({ follower_id: currentUser.id, following_id: authorId }, { onConflict: "follower_id,following_id", ignoreDuplicates: true });
-      if (error) setFollowingSet((prev) => { const next = new Set(prev); next.delete(authorId); return next; });
+    const { error } = await setAfuChatFollow(authorId, !isFollowing, currentUser.id);
+    if (error) {
+      setFollowingSet((prev) => {
+        const next = new Set(prev);
+        if (isFollowing) next.add(authorId);
+        else next.delete(authorId);
+        return next;
+      });
+      showAlert("Could not update follow status", error.message);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

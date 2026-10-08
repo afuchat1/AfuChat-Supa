@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import {
-  ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
   ACCOUNT_PROFILE_PRIVACY_COLUMNS,
   fetchAccountProfileMap,
   type SharedProfile,
@@ -26,6 +25,13 @@ import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
+import { showAlert } from "@/lib/alert";
+import {
+  getAfuChatFollowRecords,
+  getAfuChatFollowStatuses,
+  setAfuChatFollow,
+  type AfuChatFollowProfile,
+} from "@/lib/afuchatApi";
 
 type FollowUser = {
   id: string;
@@ -109,25 +115,15 @@ export default function FollowersScreen() {
         }
       }
 
-      const followCol = type === "followers" ? "following_id" : "follower_id";
-      const joinCol = type === "followers" ? "follower_id" : "following_id";
-      const { data: followRows, error: followsError } = await supabase
-        .from("follows")
-        .select(joinCol)
-        .eq(followCol, userId)
-        .order("created_at", { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-      if (followsError) throw followsError;
-
-      const profileIds = (followRows || [])
-        .map((row: any) => row[joinCol] as string)
-        .filter(Boolean);
-      const { profiles: profilesById, error: profilesError } =
-        await fetchAccountProfileMap<FollowUser>(
-          profileIds,
-          ACCOUNT_PROFILE_FOLLOWER_COLUMNS,
-        );
-      if (profilesError) throw profilesError;
+      const followPage = await getAfuChatFollowRecords(userId, type, PAGE_SIZE, page * PAGE_SIZE);
+      if (followPage.error) throw followPage.error;
+      if (followPage.hidden && !isOwnProfile) {
+        setListHidden(true);
+        setLoading(false);
+        return;
+      }
+      setListHidden(false);
+      const followRows = followPage.items ?? [];
 
       let blockedIds: string[] = [];
       if (user) {
@@ -142,9 +138,22 @@ export default function FollowersScreen() {
         }
       }
 
-      const profiles = profileIds
-        .map((id) => profilesById.get(id))
-        .filter((p): p is FollowUser => !!p && !blockedIds.includes(p.id));
+      const profiles = followRows
+        .map((row) => row.profile)
+        .filter((profile): profile is AfuChatFollowProfile & { display_name: string; handle: string } =>
+          typeof profile.display_name === "string" &&
+          typeof profile.handle === "string" &&
+          !blockedIds.includes(profile.id)
+        )
+        .map((profile): FollowUser => ({
+          id: profile.id,
+          display_name: profile.display_name,
+          handle: profile.handle,
+          avatar_url: profile.avatar_url ?? null,
+          bio: profile.bio ?? null,
+          is_verified: profile.is_verified === true,
+          is_organization_verified: profile.is_organization_verified === true,
+        }));
 
       if (isReset) {
         setUsers(profiles as FollowUser[]);
@@ -153,30 +162,21 @@ export default function FollowersScreen() {
       }
 
       const visibleIds = profiles.map((p: any) => p.id);
-      setHasMore((followRows?.length ?? 0) === PAGE_SIZE);
+      setHasMore(followPage.nextOffset !== null);
 
       if (user && visibleIds.length > 0) {
-        const { data: myFollowing } = await supabase
-          .from("follows")
-          .select("following_id")
-          .eq("follower_id", user.id)
-          .in("following_id", visibleIds);
-        if (myFollowing) {
-          setFollowingIds(prev => new Set([...prev, ...myFollowing.map((f: any) => f.following_id)]));
+        const statuses = await getAfuChatFollowStatuses(visibleIds);
+        if (statuses.error || !statuses.data) {
+          throw statuses.error ?? new Error("Follow statuses could not be loaded.");
         }
-
-        if (type === "following") {
-          const { data: theyFollow } = await supabase
-            .from("follows")
-            .select("follower_id")
-            .eq("following_id", user.id)
-            .in("follower_id", visibleIds);
-          if (theyFollow) {
-            setMyFollowerIds(prev => new Set([...prev, ...theyFollow.map((f: any) => f.follower_id)]));
-          }
-        } else {
-          setMyFollowerIds(prev => new Set([...prev, ...visibleIds]));
-        }
+        const nowFollowing = [...statuses.data.entries()]
+          .filter(([, status]) => status.isFollowing)
+          .map(([id]) => id);
+        const followingYou = [...statuses.data.entries()]
+          .filter(([, status]) => status.followsYou)
+          .map(([id]) => id);
+        setFollowingIds(prev => new Set([...prev, ...nowFollowing]));
+        setMyFollowerIds(prev => new Set([...prev, ...followingYou]));
       }
     } catch {
       if (isReset) setLoadError(true);
@@ -192,25 +192,26 @@ export default function FollowersScreen() {
 
     const isCurrentlyFollowing = followingIds.has(targetId);
 
-    if (isCurrentlyFollowing) {
-      await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", user.id)
-        .eq("following_id", targetId);
+    setFollowingIds((prev) => {
+      const next = new Set(prev);
+      if (isCurrentlyFollowing) next.delete(targetId);
+      else next.add(targetId);
+      return next;
+    });
+    try {
+      const { error } = await setAfuChatFollow(targetId, !isCurrentlyFollowing, user.id);
+      if (error) throw error;
+    } catch {
       setFollowingIds((prev) => {
         const next = new Set(prev);
-        next.delete(targetId);
+        if (isCurrentlyFollowing) next.add(targetId);
+        else next.delete(targetId);
         return next;
       });
-    } else {
-      await supabase
-        .from("follows")
-        .insert({ follower_id: user.id, following_id: targetId });
-      setFollowingIds((prev) => new Set(prev).add(targetId));
+      showAlert("Error", "Could not update follow status. Please try again.");
+    } finally {
+      setTogglingFollow(null);
     }
-
-    setTogglingFollow(null);
   }, [user, followingIds, togglingFollow]);
 
   const renderUser = useCallback(({ item }: { item: FollowUser }) => {
