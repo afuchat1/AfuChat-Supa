@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
-  View, Text, TouchableOpacity, ScrollView,
+  ActivityIndicator, View, Text, TouchableOpacity, ScrollView,
   StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -44,7 +44,7 @@ const recommendationsCache = new Map<string, RecommendationCacheEntry>();
 async function fetchRecommendations(userId: string | null): Promise<SuggestUser[]> {
   const cacheKey = userId ?? "anonymous";
   const cached = recommendationsCache.get(cacheKey);
-  if (cached?.users.length && Date.now() - cached.fetchedAt < RECOMMENDATIONS_TTL) {
+  if (cached && Date.now() - cached.fetchedAt < RECOMMENDATIONS_TTL) {
     return cached.users;
   }
   if (cached?.promise) return cached.promise;
@@ -87,6 +87,9 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
   const [users, setUsers] = useState<SuggestUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [followBusyId, setFollowBusyId] = useState<string | null>(null);
+  const [followError, setFollowError] = useState(false);
+  const followBusyRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,18 +111,40 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
 
   const follow = useCallback(async (uid: string) => {
     if (!user) { onRequireAuth?.(); return; }
+    if (followBusyRef.current) return;
+    followBusyRef.current = true;
+    setFollowBusyId(uid);
+    setFollowError(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const before = users.find((u) => u.id === uid)?.followed ?? false;
-    setUsers((prev) => prev.map((u) => u.id === uid ? { ...u, followed: true } : u));
+    const next = !before;
+    const countDelta = next ? 1 : -1;
+    setUsers((prev) => prev.map((u) => u.id === uid
+      ? { ...u, followed: next, follower_count: Math.max(0, u.follower_count + countDelta) }
+      : u));
     const cache = recommendationsCache.get(user.id);
-    if (cache) cache.users = cache.users.map((u) => u.id === uid ? { ...u, followed: true } : u);
-    const { error } = await setAfuChatFollow(uid, true, user.id);
-    if (error) {
-      setUsers((prev) => prev.map((u) => u.id === uid ? { ...u, followed: before } : u));
+    if (cache) {
+      cache.users = cache.users.map((u) => u.id === uid
+        ? { ...u, followed: next, follower_count: Math.max(0, u.follower_count + countDelta) }
+        : u);
+    }
+    try {
+      const { error } = await setAfuChatFollow(uid, next, user.id);
+      if (error) throw error;
+    } catch {
+      setUsers((prev) => prev.map((u) => u.id === uid
+        ? { ...u, followed: before, follower_count: Math.max(0, u.follower_count - countDelta) }
+        : u));
       if (cache) {
-        cache.users = cache.users.map((u) => u.id === uid ? { ...u, followed: before } : u);
+        cache.users = cache.users.map((u) => u.id === uid
+          ? { ...u, followed: before, follower_count: Math.max(0, u.follower_count - countDelta) }
+          : u);
         cache.fetchedAt = 0;
       }
+      setFollowError(true);
+    } finally {
+      followBusyRef.current = false;
+      setFollowBusyId(null);
     }
   }, [onRequireAuth, user, users]);
 
@@ -173,6 +198,11 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
           <Text style={[styles.seeAll, { color: colors.accent }]}>See all</Text>
         </TouchableOpacity>
       </View>
+      {followError && (
+        <Text accessibilityRole="alert" style={{ color: colors.textMuted, fontSize: 12, paddingHorizontal: 14, paddingBottom: 8 }}>
+          Could not update follow status. Try again.
+        </Text>
+      )}
 
       <ScrollView
         horizontal
@@ -206,11 +236,16 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
                 borderWidth: u.followed ? 1 : 0,
               }]}
               onPress={() => follow(u.id)}
+              disabled={followBusyId !== null}
               activeOpacity={0.8}
             >
-              <Text style={[styles.followBtnText, { color: u.followed ? colors.text : "#fff" }]}>
-                {u.followed ? "Following" : "Follow"}
-              </Text>
+              {followBusyId === u.id ? (
+                <ActivityIndicator size="small" color={u.followed ? colors.text : "#fff"} />
+              ) : (
+                <Text style={[styles.followBtnText, { color: u.followed ? colors.text : "#fff" }]}>
+                  {u.followed ? "Following" : "Follow"}
+                </Text>
+              )}
             </TouchableOpacity>
           </TouchableOpacity>
         ))}

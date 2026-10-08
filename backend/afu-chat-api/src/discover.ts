@@ -340,6 +340,10 @@ export async function handleDiscoverPeople(request: Request, env: Env): Promise<
       readPublicProfiles(context, {
         select: PUBLIC_PERSON_FIELDS,
         not: "(avatar_url.is.null,bio.is.null,display_name.is.null)",
+        onboarding_completed: "eq.true",
+        is_banned: "eq.false",
+        account_deleted: "eq.false",
+        or: "(hide_from_search.is.null,hide_from_search.eq.false)",
         order: "follower_count.desc",
         limit: "60",
       }, "Discover suggested people"),
@@ -361,11 +365,12 @@ export async function handleDiscoverPeople(request: Request, env: Env): Promise<
     }
   } else if (mode === "active") {
     const candidates = await readPublicProfiles(context, {
-      select: PUBLIC_PERSON_FIELDS,
+      select: `${PUBLIC_PERSON_FIELDS},show_online_status`,
       id: `neq.${context.session!.user.id}`,
       onboarding_completed: "eq.true",
       is_banned: "eq.false",
       account_deleted: "eq.false",
+      or: "(hide_from_search.is.null,hide_from_search.eq.false)",
       handle: "not.is.null",
       display_name: "not.is.null",
       avatar_url: "not.is.null",
@@ -374,7 +379,18 @@ export async function handleDiscoverPeople(request: Request, env: Env): Promise<
       limit: "100",
     }, "Discover active people");
     if (candidates) {
-      items = await hydrateSharedProfiles(context, candidates, "Discover active people hydration");
+      const privacySafeCandidates = candidates.map(({
+        show_online_status,
+        ...profile
+      }) => ({
+        ...profile,
+        last_seen: show_online_status === false ? null : profile.last_seen ?? null,
+      }));
+      items = await hydrateSharedProfiles(
+        context,
+        privacySafeCandidates,
+        "Discover active people hydration",
+      );
     }
   } else if (mode === "directory") {
     const interest = incoming.searchParams.get("interest");

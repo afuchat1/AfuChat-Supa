@@ -241,12 +241,14 @@ async function waitForChatHealth() {
       const appStatus = await fetch("https://api.afuchat.com/v1/chat/status");
       const appStatusBody = await appStatus.json().catch(() => null);
       if (appStatus.status === 200 && appStatusBody?.ok === true) {
-        // Health and status are also served by the previous Worker version.
-        // Wait until the newly deployed current-profile handler is live at the
-        // public route before running postflight checks or rolling back.
-        const profile = await fetch("https://api.afuchat.com/v1/chat/me");
-        lastStatus = profile.status;
-        if (profile.status === 401) {
+        // Health, status, and /me are also served by older Worker versions.
+        // Wait for this batch's protected Discover route so an old 401 cannot
+        // make the smoke checks race ahead of route propagation.
+        const activePeople = await fetch(
+          "https://api.afuchat.com/v1/chat/discover/people?mode=active",
+        );
+        lastStatus = activePeople.status;
+        if (activePeople.status === 401) {
           return;
         }
       } else {
@@ -339,6 +341,8 @@ async function assertProductionPostflight() {
     { method: "GET", path: "/v1/chat/feed/for-you" },
     { method: "GET", path: "/v1/chat/feed/following" },
     { method: "POST", path: "/v1/chat/feed/views", body: { post_ids: [] } },
+    { method: "GET", path: "/v1/chat/discover/people?mode=active" },
+    { method: "POST", path: "/v1/chat/discover/presence", body: {} },
   ];
   for (const probe of socialRouteProbes) {
     const response = await fetch(`https://api.afuchat.com${probe.path}`, {
@@ -612,6 +616,8 @@ if (!APPLY) {
       "GET /v1/chat/feed/for-you",
       "GET /v1/chat/feed/following",
       "POST /v1/chat/feed/views",
+      "GET /v1/chat/discover/people?mode=active|suggested",
+      "POST /v1/chat/discover/presence",
       "POST /v1/chat/support/ai-reply",
       "POST /v1/chat/push/register",
       "POST /v1/chat/push/send",
@@ -680,6 +686,7 @@ console.log(JSON.stringify({
     "AfuAuth shared-session rejection",
     "current-profile unauthenticated rejection",
     "follow and feed routes require a shared session",
+    "Discover active people and presence routes require a shared session",
     "support and direct-FCM routes require a shared session",
     "support and direct-FCM Supabase functions are present",
     "storage handler route",

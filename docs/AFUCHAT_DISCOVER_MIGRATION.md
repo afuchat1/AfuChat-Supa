@@ -1,57 +1,54 @@
 # AfuChat Discover migration record
 
-**Feature:** Batch 1 — Discover  
+**Batch:** Discover — People Discovery + Suggested People
 **Date:** 2026-10-08  
-**Starting commit:** `da88252ee661ffc136ced79cda2dc90182593ff6`  
-**Status:** IN PROGRESS
+**Starting commit:** `521b8c054abd34f512e3d52043bfc41efe137728`
+**Status:** Local verification passed; production deployment pending
 
-## Feature inventory
+## Scope
 
-| Surface / flow | Current data path | Discover disposition |
-|---|---|---|
-| For You and Following posts | `getAfuChatForYouFeed`, `getAfuChatFollowingFeed`, feed Worker routes; follow IDs, bookmarks, likes, replies and views use named AfuChat API helpers | Already migrated; verify the integrated response shape, privacy, refresh, paging and offline cache. |
-| Feed ranking, seen state and pagination | Client scoring/diversification, SQLite `localFeed`, AsyncStorage fallback, connectivity refresh and background poller | Preserve. These are client/offline responsibilities, not Worker CRUD. |
-| Video feed | `/feed/videos`; video post likes, bookmarks, follows and views use existing API helpers; replies use post API helpers | Already routed. Verify feed states, relationships, comment author data, view tracking, Realtime and offline playback/cache. |
-| Trending posts/videos and hashtags | `/posts/search` and `/posts/trending/hashtags` | Already routed; verify callers and returned author metadata. |
-| Suggested users | `UserRecsCard` directly queries profiles; follow state already uses `/follows/ids` and `/follows` | Replace the profile query with a fixed Discover API operation; retain its short-lived client cache and seeded selection. |
-| Active people in Discover's Find tab | `FindPeopleTab` directly queries profiles; follow/follower IDs already use `/follows/ids`; `update_last_seen` is called directly | Move the active-profile read and heartbeat behind named Discover operations; retain profile Realtime and polling. |
-| People directory and Nearby | `app/user-discovery.tsx` directly queries profiles, reads/writes the current profile's coordinates, and calls `nearby_users`; follows/status already use Worker routes | Move the profile directory, location update and Nearby RPC behind authenticated Discover operations. Preserve the opt-in check, current-account scoping, location permission flow, radius and Realtime reload. |
-| Search people and trending people | Search screen directly queries `profiles`; posts, videos and hashtags already use Worker routes | Move only the user/profile discovery lookup needed by Discover/Search. Keep non-Discover Search domains classified below. |
-| Video-reply @mention suggestions | `VideoCommentsSheet` directly queries profiles; reply reads/writes/likes already use post API routes | Replace the profile lookup with the shared Discover people-search operation; preserve replies Realtime. |
-| Organization posts inserted into For You | Discover directly reads `organization_page_posts`, `organization_pages`, reply counts and current-user likes; like/unlike then directly updates the denormalized organization-post count | Add the minimum fixed feed-read operation needed for this Discover surface and route the count synchronization through the existing post-like operation. This does not complete the Organizations/Business feature. |
-| Story tray in the Discover header | `StoriesRow` reads `stories` and `story_views`, hydrates account profiles, caches rows/media, and listens to story Realtime | Classify with Batch 4 — Stories. Preserve it unchanged in this batch; its viewer, privacy and lifecycle are Stories work, not Discover feed CRUD. |
-| Public groups/channels in Find tab | `FindPeopleTab` reads `chats`, `chat_members`, `channels`, `channel_subscriptions`; group join inserts `chat_members` | Classify with Batch 3 — Chat / Channels. Preserve current behavior; do not partially migrate membership or channel operations during Discover. |
-| Other global Search results | Search also queries events, gifts, jobs, marketplace, freelance and paid communities; its organization-page results are business data | Leave those domains for their scheduled batches. Do not turn Discover into a cross-domain Search migration. |
-| `SuggestedUsers` component | Imported by Discover but not rendered there; its direct profile queries are not on the active Discover path | No Discover caller to migrate; revisit only when auditing its actual consumer feature. |
+This batch covers only active/recent people in Discover's Find tab and the suggested-people cards. The For You feed itself, profiles as a global domain, global search, groups/channels, Stories, and other product areas remain outside scope.
 
-## Existing API routes to reuse
+## Data flow and safeguards
 
-- `GET /v1/chat/feed/for-you`
-- `GET /v1/chat/feed/following`
-- `GET /v1/chat/feed/videos`
-- `POST /v1/chat/feed/views`
-- `GET /v1/chat/posts/search`
-- `GET /v1/chat/posts/trending/hashtags`
-- `/v1/chat/posts/{postId}`, `/like`, `/replies`, and reply likes
-- `/v1/chat/bookmarks` and `/v1/chat/follows/*`
+- Active people: `GET /v1/chat/discover/people?mode=active`; requires the shared AfuAuth session and checks the optional expected account ID.
+- Suggested people: `GET /v1/chat/discover/people?mode=suggested`; candidates are public, exclude the current account and already-followed accounts, and respect onboarding, banned/deleted, and search-visibility filters.
+- Follow state: `GET /v1/chat/follows/ids` for the signed-in account's following and follower IDs. Follow/unfollow uses the existing `/v1/chat/follows` route; no second follow API was added.
+- Presence: `POST /v1/chat/discover/presence`; the Worker verifies the shared bearer and invokes the named `update_last_seen` operation for that verified account.
+- Active presence respects `show_online_status`: a user who hides it can remain discoverable, but their `last_seen` is returned as `null`.
+- Profile hydration continues through the shared `accounts.profiles` relation for authenticated results. No schema exposure, data copy, or database migration was made.
 
-## Planned Discover API additions
+## Mobile behavior
 
-- Fixed profile-discovery reads for suggested, trending, active, searched, directory and Nearby people.
-- Authenticated current-user presence heartbeat and privacy-checked location update.
-- A bounded, hydrated organization-post feed read for the Discover For You interleave.
-- Organization-post like-count synchronization inside the existing post-like API operation.
+- `FindPeopleTab` keeps search/filtering local, preserves loading/error/empty states, and rolls back optimistic follow changes on failure.
+- `UserRecsCard` uses the existing suggestion and follow helpers, supports follow/unfollow with a busy state and rollback, and caches even a successful empty result for five minutes. Failed requests remain retryable and are not cached as empty results.
+- Presence sends one heartbeat per minute, has a one-minute polling fallback, coalesces profile Realtime refresh bursts, and clears timers/subscriptions on unmount.
+- Groups/channels retain their existing direct Supabase path and are not migrated in this batch.
 
-All operations remain under `/v1/chat/*`; no generic PostgREST forwarding route or duplicate profile store is permitted. Profile hydration must use the shared `accounts.profiles` source where applicable, and identity must come from the verified AfuAuth session.
+## Direct Supabase boundary
 
-## Realtime, offline, privacy and errors
+In `FindPeopleTab.tsx` and `UserRecsCard.tsx`, before and after this batch:
 
-- Preserve Discover feed Realtime for post deletion, likes, replies and follow changes; preserve video/comment and active-presence subscriptions.
-- Preserve SQLite and AsyncStorage feed hydration, offline pagination, reconnect refresh, video cache/offline playback, watch progress and local search history.
-- Keep location permission and `location_sharing_enabled` enforcement; never accept a client-supplied user ID as authority.
-- Keep feed visibility and search/profile discovery exclusions; return API errors as errors rather than silently converting them to empty results.
-- The story tray and group/channel sections retain their existing Realtime and data paths until their own feature batches.
+- Direct `.from()` call sites: **5 → 5**, all for public group/channel discovery, membership/subscription state, or joining a group.
+- Direct `.rpc()` call sites: **0 → 0**. Presence now goes through the AfuChat Worker route.
+- Profile and follow data for these people cards use named AfuChat routes. The existing profile Realtime subscription remains in place.
 
-## Verification and completion gate
+## Verification
 
-Pending: Worker tests, mobile typecheck/tests available in this workspace, authenticated and unauthenticated behavior, privacy/error cases, Realtime preservation, offline behavior, commit/push, `afuchat-api` deployment, deployed version check, and production verification with a normal signed-in session.
+The focused Worker tests cover authenticated active discovery, suggested-account filtering, following/follower ID responses, presence ownership, unauthenticated rejection, hidden-presence redaction, and sanitized API failures. Existing follow mutation tests cover server-side follow/unfollow authorization. Mobile typecheck covers the UI and API helpers.
+
+## Deployment safety
+
+- The first `afuchat-api` apply was automatically rolled back after postflight received HTTP 501 from `GET /v1/chat/posts/mine`. The rollback was confirmed.
+- After rollback, production returned 200 for health/status, 401 for `/me`, and 501 for `/posts/mine`, active Discover people, and Discover presence.
+- The original readiness check treated `/me` returning 401 as proof that the new Worker was live, but that response also came from the restored old Worker. The deploy script now waits for `GET /v1/chat/discover/people?mode=active` to return 401 before running the remaining postflight checks. No smoke assertions were removed or weakened.
+
+## Remaining Discover batches — not started
+
+1. Public groups + public channels
+2. For You feed
+3. Following feed
+4. Discover post interactions
+5. Discover pagination/cache/offline behavior
+
+**Next batch:** Public groups + public channels. Do not start until instructed.

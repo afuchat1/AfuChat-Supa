@@ -103,7 +103,7 @@ export default function FindPeopleTab() {
   const [channels, setChannels] = useState<PublicChannel[]>([]);
   const [lastUpdated, setLastUpdated] = useState(Date.now());
 
-  const loadPeople = useCallback(async (silent = false) => {
+  const loadPeople = useCallback(async (silent = false, includeCommunities = true) => {
     if (!user) return;
     if (!silent) setLoading(true);
     setError(null);
@@ -126,32 +126,8 @@ export default function FindPeopleTab() {
       if (followingResult.error || !followingResult.ids) throw new Error("Following list could not be loaded.");
       if (followersResult.error || !followersResult.ids) throw new Error("Follower list could not be loaded.");
 
-      const [
-        { data: groupData, error: groupError },
-        { data: memberships, error: membershipError },
-        { data: channelData, error: channelError },
-        { data: subscriptions, error: subscriptionError },
-      ] = await Promise.all([
-        supabase
-          .from("chats")
-          .select("id, name, description, avatar_url, is_group, is_channel, is_public, chat_members(count)")
-          .eq("is_group", true)
-          .eq("is_public", true)
-          .order("updated_at", { ascending: false })
-          .limit(30),
-        supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
-        supabase
-          .from("channels")
-          .select("id, name, handle, description, avatar_url, subscriber_count, is_verified, is_public")
-          .eq("is_public", true)
-          .order("subscriber_count", { ascending: false })
-          .limit(30),
-        supabase.from("channel_subscriptions").select("channel_id").eq("user_id", user.id),
-      ]);
       const followed = new Set(followingResult.ids);
       const followingMe = new Set(followersResult.ids);
-      const memberSet = new Set((memberships ?? []).map((row: any) => row.chat_id));
-      const subscriptionSet = new Set((subscriptions ?? []).map((row: any) => row.channel_id));
       const completeProfiles = ((data ?? []) as any[]).filter((person) =>
         typeof person.handle === "string" && person.handle.trim().length > 0 &&
         typeof person.display_name === "string" && person.display_name.trim().length > 0 &&
@@ -178,29 +154,56 @@ export default function FindPeopleTab() {
           is_following: followed.has(person.id),
           is_following_me: followingMe.has(person.id),
         })));
-      if (!groupError && !membershipError) {
-        setGroups(((groupData ?? []) as any[]).map((group) => ({
-          id: group.id,
-          name: group.name || "Unnamed group",
-          description: group.description || null,
-          avatar_url: group.avatar_url || null,
-          member_count: Array.isArray(group.chat_members) && group.chat_members[0]?.count != null
-            ? Number(group.chat_members[0].count)
-            : 0,
-          is_member: memberSet.has(group.id),
-        })));
-      }
-      if (!channelError && !subscriptionError) {
-        setChannels(((channelData ?? []) as any[]).map((channel) => ({
-          id: channel.id,
-          name: channel.name || "Unnamed channel",
-          handle: channel.handle || null,
-          description: channel.description || null,
-          avatar_url: channel.avatar_url || null,
-          subscriber_count: Number(channel.subscriber_count || 0),
-          is_verified: !!channel.is_verified,
-          is_subscriber: subscriptionSet.has(channel.id),
-        })));
+
+      if (includeCommunities) {
+        const [
+          { data: groupData, error: groupError },
+          { data: memberships, error: membershipError },
+          { data: channelData, error: channelError },
+          { data: subscriptions, error: subscriptionError },
+        ] = await Promise.all([
+          supabase
+            .from("chats")
+            .select("id, name, description, avatar_url, is_group, is_channel, is_public, chat_members(count)")
+            .eq("is_group", true)
+            .eq("is_public", true)
+            .order("updated_at", { ascending: false })
+            .limit(30),
+          supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
+          supabase
+            .from("channels")
+            .select("id, name, handle, description, avatar_url, subscriber_count, is_verified, is_public")
+            .eq("is_public", true)
+            .order("subscriber_count", { ascending: false })
+            .limit(30),
+          supabase.from("channel_subscriptions").select("channel_id").eq("user_id", user.id),
+        ]);
+        const memberSet = new Set((memberships ?? []).map((row: any) => row.chat_id));
+        const subscriptionSet = new Set((subscriptions ?? []).map((row: any) => row.channel_id));
+        if (!groupError && !membershipError) {
+          setGroups(((groupData ?? []) as any[]).map((group) => ({
+            id: group.id,
+            name: group.name || "Unnamed group",
+            description: group.description || null,
+            avatar_url: group.avatar_url || null,
+            member_count: Array.isArray(group.chat_members) && group.chat_members[0]?.count != null
+              ? Number(group.chat_members[0].count)
+              : 0,
+            is_member: memberSet.has(group.id),
+          })));
+        }
+        if (!channelError && !subscriptionError) {
+          setChannels(((channelData ?? []) as any[]).map((channel) => ({
+            id: channel.id,
+            name: channel.name || "Unnamed channel",
+            handle: channel.handle || null,
+            description: channel.description || null,
+            avatar_url: channel.avatar_url || null,
+            subscriber_count: Number(channel.subscriber_count || 0),
+            is_verified: !!channel.is_verified,
+            is_subscriber: subscriptionSet.has(channel.id),
+          })));
+        }
       }
       setLastUpdated(Date.now());
     } catch {
@@ -225,10 +228,18 @@ export default function FindPeopleTab() {
     };
     heartbeat();
     const heartbeatTimer = setInterval(heartbeat, 60_000);
-    const pollTimer = setInterval(() => void loadPeople(true), 30_000);
+    const pollTimer = setInterval(() => void loadPeople(true, false), 60_000);
+    let profileRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshPeopleFromProfileChange = () => {
+      if (profileRefreshTimer !== null) return;
+      profileRefreshTimer = setTimeout(() => {
+        profileRefreshTimer = null;
+        void loadPeople(true, false);
+      }, 1_000);
+    };
     const channel = supabase
       .channel(`find-presence-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadPeople(true))
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refreshPeopleFromProfileChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "chats" }, () => void loadPeople(true))
       .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => void loadPeople(true))
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_members" }, () => void loadPeople(true))
@@ -237,6 +248,7 @@ export default function FindPeopleTab() {
     return () => {
       clearInterval(heartbeatTimer);
       clearInterval(pollTimer);
+      if (profileRefreshTimer !== null) clearTimeout(profileRefreshTimer);
       supabase.removeChannel(channel);
     };
   }, [loadPeople, user]);
@@ -316,6 +328,7 @@ export default function FindPeopleTab() {
       const result = await setAfuChatFollow(person.id, next, user.id);
       if (result.error) throw result.error;
     } catch {
+      setError("Could not update follow status. Try again.");
       setPeople((current) => current.map((item) => item.id === person.id
         ? { ...item, is_following: !next, follower_count: Math.max(0, item.follower_count + (next ? -1 : 1)) }
         : item));
@@ -454,6 +467,14 @@ export default function FindPeopleTab() {
         ))}
       </View>
       <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 10 }]}>People</Text>
+      {error && people.length > 0 && (
+        <View style={styles.inlineError}>
+          <Text style={[styles.inlineErrorText, { color: colors.textMuted }]}>{error}</Text>
+          <TouchableOpacity onPress={() => void loadPeople()}>
+            <Text style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {loading && people.length === 0 ? <View style={styles.center}><ActivityIndicator color={accent} /></View> : error && people.length === 0 ? (
         <View style={styles.center}><Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} /><Text style={[styles.subtitle, { color: colors.textMuted }]}>{error}</Text><TouchableOpacity onPress={() => void loadPeople()}><Text style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>Try again</Text></TouchableOpacity></View>
       ) : (
@@ -518,6 +539,8 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: "row", gap: 8, paddingVertical: 14 },
   filterChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
   filterText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  inlineError: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6, paddingHorizontal: 10, marginBottom: 8, borderRadius: 10 },
+  inlineErrorText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, marginRight: 8 },
   tinyDot: { width: 6, height: 6, borderRadius: 3 },
   list: { paddingBottom: 24, gap: 10 },
   emptyList: { flexGrow: 1 },

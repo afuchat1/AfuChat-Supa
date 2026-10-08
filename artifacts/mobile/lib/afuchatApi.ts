@@ -1361,7 +1361,7 @@ export async function saveAfuChatDiscoverLocation(input: {
   };
 }
 
-export async function updateAfuChatDiscoverPresence(
+export async function setAfuChatDiscoverPresence(
   expectedUserId: string,
 ): Promise<{ error: AfuChatApiError | null }> {
   const result = await postEndpointRequest<{ updated?: unknown }>(

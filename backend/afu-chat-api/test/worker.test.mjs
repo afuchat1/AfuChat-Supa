@@ -2938,3 +2938,273 @@ test("post metrics return exact activity counts through the named route", async 
     view_count: 23,
   });
 });
+
+test("Discover active people requires the verified account and redacts hidden presence", async () => {
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json([]);
+  };
+  const unauthenticated = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/discover/people?mode=active"),
+    makeEnv(),
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(databaseCalls, 0);
+
+  const token = "discover-active-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174010";
+  const personId = "123e4567-e89b-42d3-a456-426614174011";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async (input) => {
+    const request = input instanceof Request ? input : new Request(input);
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    return Response.json({ user: { id: viewerId }, accessToken: token });
+  };
+
+  const seenRequests = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    seenRequests.push({ request, url });
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    if (request.headers.get("Accept-Profile") === "public") {
+      assert.equal(url.searchParams.get("id"), `neq.${viewerId}`);
+      assert.equal(url.searchParams.get("hide_from_search"), null);
+      assert.equal(
+        url.searchParams.get("or"),
+        "(hide_from_search.is.null,hide_from_search.eq.false)",
+      );
+      assert.equal(url.searchParams.get("show_online_status"), null);
+      assert.match(url.searchParams.get("select"), /show_online_status/);
+      return Response.json([{
+        id: personId,
+        display_name: "Visible person",
+        handle: "visible",
+        avatar_url: "https://cdn.example.test/avatar.jpg",
+        bio: "A public bio",
+        follower_count: 3,
+        is_verified: false,
+        is_organization_verified: false,
+        last_seen: "2026-10-08T07:00:00.000Z",
+        show_online_status: false,
+      }]);
+    }
+    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    return Response.json([{
+      id: personId,
+      display_name: "Visible person",
+      handle: "visible",
+      avatar_url: "https://cdn.example.test/avatar.jpg",
+      bio: "A public bio",
+      is_verified: false,
+      is_organization_verified: false,
+    }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/discover/people?mode=active&expected_user_id=${viewerId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.items.length, 1);
+  assert.equal(payload.items[0].id, personId);
+  assert.equal(payload.items[0].last_seen, null);
+  assert.equal("show_online_status" in payload.items[0], false);
+  assert.equal(seenRequests.length, 2);
+});
+
+test("Discover suggested people excludes self and followed accounts with privacy filters", async () => {
+  const token = "discover-suggested-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174020";
+  const followedId = "123e4567-e89b-42d3-a456-426614174021";
+  const suggestedId = "123e4567-e89b-42d3-a456-426614174022";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+
+  let candidateQuery;
+  let followQuery;
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    if (url.pathname.endsWith("/follows")) {
+      followQuery = url;
+      return Response.json([{ following_id: followedId }]);
+    }
+    assert.ok(url.pathname.endsWith("/profiles"));
+    if (request.headers.get("Accept-Profile") === "public") {
+      candidateQuery = url;
+      return Response.json([
+        { id: viewerId, display_name: "Viewer", handle: "viewer" },
+        { id: followedId, display_name: "Already followed", handle: "followed" },
+        { id: suggestedId, display_name: "Suggestion", handle: "suggestion" },
+      ]);
+    }
+    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    return Response.json([{
+      id: suggestedId,
+      display_name: "Suggestion",
+      handle: "suggestion",
+      avatar_url: "https://cdn.example.test/suggestion.jpg",
+      bio: "A public bio",
+      is_verified: false,
+      is_organization_verified: false,
+    }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/discover/people?mode=suggested&expected_user_id=${viewerId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.items.map((person) => person.id), [suggestedId]);
+  assert.equal(followQuery.searchParams.get("follower_id"), `eq.${viewerId}`);
+  assert.equal(candidateQuery.searchParams.get("onboarding_completed"), "eq.true");
+  assert.equal(candidateQuery.searchParams.get("is_banned"), "eq.false");
+  assert.equal(candidateQuery.searchParams.get("account_deleted"), "eq.false");
+  assert.equal(
+    candidateQuery.searchParams.get("or"),
+    "(hide_from_search.is.null,hide_from_search.eq.false)",
+  );
+});
+
+test("Discover presence heartbeat verifies the shared identity and only updates that account", async () => {
+  const token = "discover-presence-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174030";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+
+  let databaseCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    databaseCalls += 1;
+    const request = new Request(input, init);
+    assert.equal(request.method, "POST");
+    assert.equal(new URL(request.url).pathname, "/rest/v1/rpc/update_last_seen");
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    assert.deepEqual(await request.json(), {});
+    return Response.json(null);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/discover/presence", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ expected_user_id: viewerId }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { updated: true });
+  assert.equal(databaseCalls, 1);
+
+  const staleAccountResponse = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/discover/presence", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        expected_user_id: "123e4567-e89b-42d3-a456-426614174031",
+      }),
+    }),
+    env,
+  );
+  assert.equal(staleAccountResponse.status, 400);
+  assert.equal(databaseCalls, 1);
+});
+
+test("Discover people reports sanitized API errors instead of returning an empty list", async () => {
+  const token = "discover-error-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174040";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+  globalThis.fetch = async () => Response.json(
+    { code: "42501", message: "sensitive profile policy detail" },
+    { status: 403 },
+  );
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/discover/people?mode=active&expected_user_id=${viewerId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(response.status, 502);
+  const payload = await response.json();
+  assert.equal(payload.error, "People could not be loaded.");
+  assert.equal(JSON.stringify(payload).includes("sensitive profile policy detail"), false);
+});
+
+test("Discover follow-state reads return the signed-in user's followers and following IDs", async () => {
+  const token = "discover-follow-ids-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174050";
+  const followerId = "123e4567-e89b-42d3-a456-426614174051";
+  const followingId = "123e4567-e89b-42d3-a456-426614174052";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+
+  const relationshipQueries = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    if (request.headers.get("Accept-Profile") === "accounts") {
+      assert.equal(url.searchParams.get("id"), `eq.${viewerId}`);
+      return Response.json([{
+        id: viewerId,
+        hide_followers_list: false,
+        hide_following_list: false,
+      }]);
+    }
+
+    relationshipQueries.push(url);
+    if (url.searchParams.has("following_id")) {
+      assert.equal(url.searchParams.get("following_id"), `eq.${viewerId}`);
+      return Response.json([{
+        follower_id: followerId,
+        following_id: viewerId,
+        created_at: "2026-10-08T08:00:00.000Z",
+      }]);
+    }
+    assert.equal(url.searchParams.get("follower_id"), `eq.${viewerId}`);
+    return Response.json([{
+      follower_id: viewerId,
+      following_id: followingId,
+      created_at: "2026-10-08T08:01:00.000Z",
+    }]);
+  };
+
+  const readIds = async (direction) => worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/follows/ids?profile_id=${viewerId}&direction=${direction}&limit=100&offset=0`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  const followersResponse = await readIds("followers");
+  const followingResponse = await readIds("following");
+
+  assert.equal(followersResponse.status, 200);
+  assert.deepEqual((await followersResponse.json()).items, [followerId]);
+  assert.equal(followingResponse.status, 200);
+  assert.deepEqual((await followingResponse.json()).items, [followingId]);
+  assert.equal(relationshipQueries.length, 2);
+});
