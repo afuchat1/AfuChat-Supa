@@ -10,7 +10,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MEMBER_FIELDS = "id,chat_id,user_id,is_admin,joined_at";
 const PAGE_SIZE = 1_000;
-const MAX_ROWS_PER_SCHEMA = 10_000;
+const MAX_ROWS = 10_000;
 
 type MemberRow = {
   id: string;
@@ -43,11 +43,10 @@ async function readMemberRows(
   anonKey: string,
   session: VerifiedSession,
   baseFilters: Record<string, string>,
-  schema: "public" | "chat",
 ): Promise<MemberRow[] | null> {
   const rows: MemberRow[] = [];
   try {
-    for (let offset = 0; offset <= MAX_ROWS_PER_SCHEMA; offset += PAGE_SIZE) {
+    for (let offset = 0; offset <= MAX_ROWS; offset += PAGE_SIZE) {
       const response = await fetch(memberUrl(base, {
         ...baseFilters,
         order: "joined_at.asc,user_id.asc",
@@ -59,8 +58,8 @@ async function readMemberRows(
           apikey: anonKey,
           Authorization: `Bearer ${session.token}`,
           Accept: "application/json",
-          "Accept-Profile": schema,
-          "Content-Profile": schema,
+          "Accept-Profile": "public",
+          "Content-Profile": "public",
         },
         redirect: "manual",
       });
@@ -72,7 +71,6 @@ async function readMemberRows(
           : undefined;
         console.error("[afuchat-api] chat membership read failed", {
           requestId,
-          schema,
           status: response.status,
           code,
         });
@@ -88,7 +86,7 @@ async function readMemberRows(
           typeof (value as Record<string, unknown>).user_id !== "string" ||
           !UUID_PATTERN.test((value as Record<string, string>).user_id)
         ) {
-          console.error("[afuchat-api] invalid chat membership row", { requestId, schema });
+          console.error("[afuchat-api] invalid chat membership row", { requestId });
           return null;
         }
         const row = value as Record<string, unknown>;
@@ -103,7 +101,7 @@ async function readMemberRows(
       if (payload.length < PAGE_SIZE) return rows;
     }
   } catch {
-    console.error("[afuchat-api] chat membership read failed", { requestId, schema });
+    console.error("[afuchat-api] chat membership read failed", { requestId });
   }
   return null;
 }
@@ -163,22 +161,18 @@ export async function handleChatMembers(
   else if (chatIds.length === 1) filters.chat_id = `eq.${chatIds[0]}`;
   else filters.chat_id = `in.(${chatIds.join(",")})`;
 
-  const [preferred, legacy] = await Promise.all([
-    readMemberRows(requestId, supabase.url, supabase.anonKey, session, filters, "public"),
-    readMemberRows(requestId, supabase.url, supabase.anonKey, session, filters, "chat"),
-  ]);
-  if (!preferred || !legacy) {
+  const members = await readMemberRows(
+    requestId,
+    supabase.url,
+    supabase.anonKey,
+    session,
+    filters,
+  );
+  if (!members) {
     return errorResponse(request, requestId, "Chat members could not be loaded.", 502);
   }
 
-  const membersByKey = new Map<string, MemberRow>();
-  for (const row of preferred) membersByKey.set(`${row.chat_id}:${row.user_id}`, row);
-  for (const row of legacy) {
-    const key = `${row.chat_id}:${row.user_id}`;
-    if (!membersByKey.has(key)) membersByKey.set(key, row);
-  }
-
-  const members = [...membersByKey.values()].sort((a, b) =>
+  members.sort((a, b) =>
     a.chat_id.localeCompare(b.chat_id) ||
     (a.joined_at ?? "").localeCompare(b.joined_at ?? "") ||
     a.user_id.localeCompare(b.user_id)

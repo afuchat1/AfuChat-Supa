@@ -178,20 +178,30 @@ production state:
   exist in `afuchat.messages`.
 - Thirty-one foreign-key constraints outside the `chat` schema still target
   `chat.*`, including constraints in `afuchat`, `accounts`, `match`,
-  `platform`, `rewards`, and `shop`. Thirty-two `public` functions mention
-  `chat.*`; these include AfuChat routines and shared-product routines that
-  need individual ownership and authorization review before editing.
-- The existing API message and membership routes still read both the public
-  AfuChat-backed relations and the legacy `chat` schema. Removing that fallback
-  now would hide the unresolved legacy-only rows.
+  `platform`, `rewards`, and `shop`. Twenty-six `public` function bodies
+  explicitly reference `chat.*`; each needs its existing logic redirected to
+  `afuchat.*` without changing its signature or grants. A broad default
+  `search_path` includes `chat` on many routines, but every current `chat`
+  relation name also has a `public` compatibility view, so do not mass-edit
+  unrelated routines' settings.
+- The Worker source has now been changed so message history, message counts,
+  and membership reads use only the AfuChat-backed `public` relations. This
+  source change is not deployed yet. The live Worker still needs deployment
+  before the schema drop.
 
-This means the attached no-replacement-IDs and no-overwrite rules currently
-prevent a complete row merge for memberships and read statuses. The three
-ciphertext message rows also cannot be copied without resolving missing
-timestamps, and the two notification references need an explicit disposition.
-No live schema, rows, function, grant, Worker, or API setting was changed during
-this preflight. Do not cut over reads/writes or drop `chat` until these conflicts
-and all 31 FK / 32 function dependencies are resolved and reverified.
+The user clarified on 2026-10-08 that `afuchat` is authoritative and explicitly
+authorized dropping the legacy `chat` schema, accepting loss of rows inside
+that schema. Do not copy or re-key legacy rows. Thirty of the 31 external FKs
+can be retargeted to matching AfuChat parent tables and validated. The one
+`platform.notification_events.message_id` FK cannot be validated because two
+external notification rows point to messages absent from AfuChat; preserve
+those rows and let the schema drop remove only that FK constraint.
+
+No live schema, rows, function, grant, Worker, or API setting has been changed
+yet. The cutover migration must rewrite the 26 explicit function references,
+rebind the valid external FKs, verify there are no remaining external views,
+policies, or function dependencies on `chat`, and only then drop the schema.
+Deploy the updated Worker before applying that production migration.
 
 ## Remaining work
 

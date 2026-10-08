@@ -1,482 +1,222 @@
--- Draft only: do not apply without explicit production approval.
+-- Canonical AfuChat database cutover.
+-- Deploy the updated afu-chat-api Worker before applying this migration.
+-- The project owner explicitly authorized dropping the legacy chat schema and
+-- accepted data loss within it. This migration does not copy or re-key rows.
+-- External rows remain; valid foreign keys are rebound to AfuChat.
 --
--- Prefer AfuChat rows when a product key exists in both schemas, while keeping
--- legacy-only rows visible. This changes read and authorization behavior only;
--- it copies/deletes no data and does not alter policies or disable RLS.
-
-CREATE OR REPLACE FUNCTION public.can_view_chat_member(
-  p_chat_id uuid,
-  p_member_user_id uuid,
-  p_viewer_id uuid DEFAULT auth.uid()
-)
-RETURNS boolean
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'chat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'social'
-SET row_security TO 'off'
-AS $function$
+-- The whole cutover is one DO statement so any failed check rolls back all
+-- routine changes, foreign-key changes, and the schema drop together.
+DO $afuchat_cutover$
 DECLARE
-  v_is_channel boolean;
-  v_created_by uuid;
-  v_afuchat_admin boolean;
+  v_routine record;
+  v_definition text;
+  v_fk record;
+  v_afuchat_relation regclass;
+  v_new_fk_definition text;
+  v_temporary_name text;
+  v_validated boolean;
 BEGIN
-  IF p_viewer_id IS NULL THEN
-    RETURN false;
-  END IF;
-
-  SELECT COALESCE(c.is_channel, false), c.created_by
-  INTO v_is_channel, v_created_by
-  FROM chat.chats c
-  WHERE c.id = p_chat_id;
-
-  IF NOT FOUND THEN
-    RETURN false;
-  END IF;
-
-  IF NOT v_is_channel
-     OR p_member_user_id = p_viewer_id
-     OR v_created_by = p_viewer_id THEN
-    RETURN true;
-  END IF;
-
-  SELECT cm.is_admin
-  INTO v_afuchat_admin
-  FROM afuchat.chat_members cm
-  WHERE cm.chat_id = p_chat_id
-    AND cm.user_id = p_viewer_id
-  LIMIT 1;
-
-  IF FOUND THEN
-    RETURN COALESCE(v_afuchat_admin, false);
-  END IF;
-
-  RETURN EXISTS (
-    SELECT 1
-    FROM chat.chat_members cm
-    WHERE cm.chat_id = p_chat_id
-      AND cm.user_id = p_viewer_id
-      AND COALESCE(cm.is_admin, false)
-  );
-END;
-$function$;
-
-CREATE OR REPLACE FUNCTION public.is_chat_participant(
-  p_chat_id uuid,
-  p_user_id uuid DEFAULT auth.uid()
-)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'chat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'shop', 'social'
-SET row_security TO 'off'
-AS $function$
-  SELECT
-    p_user_id IS NOT NULL
-    AND (
-      EXISTS (
-        SELECT 1
-        FROM afuchat.chat_members cm
-        WHERE cm.chat_id = p_chat_id
-          AND cm.user_id = p_user_id
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM chat.chat_members cm
-        WHERE cm.chat_id = p_chat_id
-          AND cm.user_id = p_user_id
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM chat.chats c
-        WHERE c.id = p_chat_id
-          AND (c.created_by = p_user_id OR c.user_id = p_user_id)
-      )
+  -- Keep existing signatures, return types, owners, grants, and security
+  -- attributes. Only change explicitly qualified chat-schema references.
+  FOR v_routine IN
+    SELECT p.oid
+    FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname <> 'chat'
+      AND p.prokind = 'f'
+      AND p.prosrc ~ '(^|[^A-Za-z0-9_])chat\.'
+    ORDER BY p.oid
+  LOOP
+    v_definition := pg_catalog.pg_get_functiondef(v_routine.oid);
+    v_definition := pg_catalog.regexp_replace(
+      v_definition,
+      '(^|[^A-Za-z0-9_])chat\.',
+      '\1afuchat.',
+      'g'
     );
-$function$;
+    v_definition := pg_catalog.replace(
+      v_definition,
+      ', ''chat'',',
+      ', ''afuchat'','
+    );
+    EXECUTE v_definition;
+  END LOOP;
 
-CREATE OR REPLACE FUNCTION public.can_send_chat_message(
-  p_chat_id uuid,
-  p_sender_id uuid DEFAULT auth.uid()
-)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'chat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'shop', 'social'
-SET row_security TO 'off'
-AS $function$
-  SELECT EXISTS (
+  IF EXISTS (
     SELECT 1
-    FROM chat.chats c
-    LEFT JOIN LATERAL (
-      SELECT cm.chat_id, cm.is_admin
-      FROM afuchat.chat_members cm
-      WHERE cm.chat_id = c.id
-        AND cm.user_id = p_sender_id
-      ORDER BY cm.id
-      LIMIT 1
-    ) afu_member ON true
-    LEFT JOIN LATERAL (
-      SELECT cm.chat_id, cm.is_admin
-      FROM chat.chat_members cm
-      WHERE cm.chat_id = c.id
-        AND cm.user_id = p_sender_id
-        AND afu_member.chat_id IS NULL
-      ORDER BY cm.id
-      LIMIT 1
-    ) legacy_member ON true
-    WHERE c.id = p_chat_id
-      AND (afu_member.chat_id IS NOT NULL OR legacy_member.chat_id IS NOT NULL)
-      AND (
-        (
-          NOT COALESCE(c.is_group, false)
-          AND NOT COALESCE(c.is_channel, false)
-        )
-        OR (
-          COALESCE(c.is_channel, false)
-          AND CASE
-            WHEN afu_member.chat_id IS NOT NULL THEN COALESCE(afu_member.is_admin, false)
-            ELSE COALESCE(legacy_member.is_admin, false)
-          END
-        )
-        OR (
-          COALESCE(c.is_group, false)
-          AND (
-            c.who_can_send = 'everyone'
-            OR CASE
-              WHEN afu_member.chat_id IS NOT NULL THEN COALESCE(afu_member.is_admin, false)
-              ELSE COALESCE(legacy_member.is_admin, false)
-            END
-          )
-        )
-      )
-  );
-$function$;
+    FROM pg_catalog.pg_proc p
+    JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname <> 'chat'
+      AND p.prokind = 'f'
+      AND p.prosrc ~ '(^|[^A-Za-z0-9_])chat\.'
+  ) THEN
+    RAISE EXCEPTION 'A non-legacy routine still explicitly references chat.*';
+  END IF;
 
-CREATE OR REPLACE FUNCTION public.is_channel_owner_or_admin(
-  p_chat_id uuid,
-  p_user_id uuid DEFAULT auth.uid()
-)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'chat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'shop', 'social'
-SET row_security TO 'off'
-AS $function$
-  SELECT EXISTS (
+  -- Rebind external foreign keys to matching AfuChat tables. Keep each old
+  -- foreign key until the replacement has validated successfully.
+  FOR v_fk IN
+    SELECT
+      con.oid AS constraint_oid,
+      child_ns.nspname AS child_schema,
+      child.relname AS child_table,
+      con.conname AS constraint_name,
+      parent.relname AS parent_table,
+      pg_catalog.pg_get_constraintdef(con.oid) AS constraint_definition
+    FROM pg_catalog.pg_constraint con
+    JOIN pg_catalog.pg_class child ON child.oid = con.conrelid
+    JOIN pg_catalog.pg_namespace child_ns ON child_ns.oid = child.relnamespace
+    JOIN pg_catalog.pg_class parent ON parent.oid = con.confrelid
+    JOIN pg_catalog.pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace
+    WHERE con.contype = 'f'
+      AND parent_ns.nspname = 'chat'
+      AND child_ns.nspname <> 'chat'
+    ORDER BY child_ns.nspname, child.relname, con.conname
+  LOOP
+    v_afuchat_relation := pg_catalog.to_regclass(
+      pg_catalog.format('%I.%I', 'afuchat', v_fk.parent_table)
+    );
+    IF v_afuchat_relation IS NULL THEN
+      RAISE EXCEPTION 'Cannot rebind %.% constraint %: AfuChat parent %.% is missing',
+        v_fk.child_schema, v_fk.child_table, v_fk.constraint_name,
+        'afuchat', v_fk.parent_table;
+    END IF;
+
+    v_new_fk_definition := pg_catalog.replace(
+      v_fk.constraint_definition,
+      'REFERENCES chat.',
+      'REFERENCES afuchat.'
+    );
+    IF v_new_fk_definition = v_fk.constraint_definition THEN
+      RAISE EXCEPTION 'Could not rewrite foreign key %.% constraint %',
+        v_fk.child_schema, v_fk.child_table, v_fk.constraint_name;
+    END IF;
+    v_temporary_name := 'afuchat_cutover_fk_' || v_fk.constraint_oid::text;
+
+    EXECUTE pg_catalog.format(
+      'ALTER TABLE %I.%I ADD CONSTRAINT %I %s NOT VALID',
+      v_fk.child_schema,
+      v_fk.child_table,
+      v_temporary_name,
+      v_new_fk_definition
+    );
+
+    v_validated := false;
+    BEGIN
+      EXECUTE pg_catalog.format(
+        'ALTER TABLE %I.%I VALIDATE CONSTRAINT %I',
+        v_fk.child_schema,
+        v_fk.child_table,
+        v_temporary_name
+      );
+      v_validated := true;
+    EXCEPTION
+      WHEN foreign_key_violation THEN
+        EXECUTE pg_catalog.format(
+          'ALTER TABLE %I.%I DROP CONSTRAINT %I',
+          v_fk.child_schema,
+          v_fk.child_table,
+          v_temporary_name
+        );
+        IF v_fk.child_schema = 'platform'
+           AND v_fk.child_table = 'notification_events'
+           AND v_fk.parent_table = 'messages' THEN
+          RAISE WARNING
+            'Retaining platform.notification_events rows with unresolved message IDs; the old FK will be removed with chat';
+        ELSE
+          RAISE;
+        END IF;
+    END;
+
+    IF v_validated THEN
+      EXECUTE pg_catalog.format(
+        'ALTER TABLE %I.%I DROP CONSTRAINT %I',
+        v_fk.child_schema,
+        v_fk.child_table,
+        v_fk.constraint_name
+      );
+      EXECUTE pg_catalog.format(
+        'ALTER TABLE %I.%I RENAME CONSTRAINT %I TO %I',
+        v_fk.child_schema,
+        v_fk.child_table,
+        v_temporary_name,
+        v_fk.constraint_name
+      );
+    END IF;
+  END LOOP;
+
+  -- The two known platform notification rows have no AfuChat message parent.
+  -- Preserve those external rows and remove only their now-invalid FK through
+  -- DROP SCHEMA CASCADE. Any other unretargeted external FK aborts the cutover.
+  IF EXISTS (
     SELECT 1
-    FROM chat.chats c
-    WHERE c.id = p_chat_id
-      AND c.is_channel = true
+    FROM pg_catalog.pg_constraint con
+    JOIN pg_catalog.pg_class child ON child.oid = con.conrelid
+    JOIN pg_catalog.pg_namespace child_ns ON child_ns.oid = child.relnamespace
+    JOIN pg_catalog.pg_class parent ON parent.oid = con.confrelid
+    JOIN pg_catalog.pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace
+    WHERE con.contype = 'f'
+      AND parent_ns.nspname = 'chat'
+      AND child_ns.nspname <> 'chat'
+      AND NOT (
+        child_ns.nspname = 'platform'
+        AND child.relname = 'notification_events'
+        AND con.conname = 'notification_events_message_id_fkey'
+        AND parent.relname = 'messages'
+      )
+  ) THEN
+    RAISE EXCEPTION 'Unexpected external foreign keys still reference chat.*';
+  END IF;
+
+  -- Do not let CASCADE remove external views, RLS policies, or SQL routines.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_depend d
+    JOIN pg_catalog.pg_class target ON target.oid = d.refobjid
+    JOIN pg_catalog.pg_namespace target_ns ON target_ns.oid = target.relnamespace
+    JOIN pg_catalog.pg_rewrite rw
+      ON d.classid = 'pg_catalog.pg_rewrite'::regclass
+     AND rw.oid = d.objid
+    JOIN pg_catalog.pg_class dependent ON dependent.oid = rw.ev_class
+    JOIN pg_catalog.pg_namespace dependent_ns ON dependent_ns.oid = dependent.relnamespace
+    WHERE target_ns.nspname = 'chat'
+      AND dependent_ns.nspname <> 'chat'
+  ) THEN
+    RAISE EXCEPTION 'An external view still depends on the legacy chat schema';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_depend d
+    JOIN pg_catalog.pg_class target ON target.oid = d.refobjid
+    JOIN pg_catalog.pg_namespace target_ns ON target_ns.oid = target.relnamespace
+    JOIN pg_catalog.pg_proc dependent ON dependent.oid = d.objid
+    JOIN pg_catalog.pg_namespace dependent_ns ON dependent_ns.oid = dependent.pronamespace
+    WHERE d.classid = 'pg_catalog.pg_proc'::regclass
+      AND target_ns.nspname = 'chat'
+      AND dependent_ns.nspname <> 'chat'
+  ) THEN
+    RAISE EXCEPTION 'An external SQL routine still depends on the legacy chat schema';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_policy policy
+    JOIN pg_catalog.pg_class dependent ON dependent.oid = policy.polrelid
+    JOIN pg_catalog.pg_namespace dependent_ns ON dependent_ns.oid = dependent.relnamespace
+    WHERE dependent_ns.nspname <> 'chat'
       AND (
-        c.created_by = p_user_id
-        OR EXISTS (
-          SELECT 1
-          FROM afuchat.chat_members cm
-          WHERE cm.chat_id = c.id
-            AND cm.user_id = p_user_id
-            AND COALESCE(cm.is_admin, false)
-        )
-        OR (
-          NOT EXISTS (
-            SELECT 1
-            FROM afuchat.chat_members preferred
-            WHERE preferred.chat_id = c.id
-              AND preferred.user_id = p_user_id
-          )
-          AND EXISTS (
-            SELECT 1
-            FROM chat.chat_members legacy
-            WHERE legacy.chat_id = c.id
-              AND legacy.user_id = p_user_id
-              AND COALESCE(legacy.is_admin, false)
-          )
-        )
+        COALESCE(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), '') ~ '(^|[^A-Za-z0-9_])chat\.'
+        OR COALESCE(pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid), '') ~ '(^|[^A-Za-z0-9_])chat\.'
       )
-  );
-$function$;
-
-CREATE OR REPLACE FUNCTION public.get_or_create_direct_chat(other_user_id uuid)
-RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'chat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'shop', 'social'
-AS $function$
-DECLARE
-  v_chat_id uuid;
-  v_me uuid := auth.uid();
-BEGIN
-  IF v_me IS NULL OR other_user_id IS NULL OR other_user_id = v_me THEN
-    RAISE EXCEPTION 'Invalid direct chat participants';
+  ) THEN
+    RAISE EXCEPTION 'An external RLS policy still explicitly references chat.*';
   END IF;
 
-  PERFORM pg_advisory_xact_lock(
-    hashtextextended(
-      LEAST(v_me::text, other_user_id::text) || ':' ||
-      GREATEST(v_me::text, other_user_id::text),
-      0
-    )
-  );
+  EXECUTE 'DROP SCHEMA IF EXISTS chat CASCADE';
 
-  WITH membership_pairs AS (
-    SELECT cm.chat_id, cm.user_id
-    FROM afuchat.chat_members cm
-    UNION
-    SELECT cm.chat_id, cm.user_id
-    FROM chat.chat_members cm
-  )
-  SELECT c.id
-  INTO v_chat_id
-  FROM chat.chats c
-  JOIN membership_pairs mine
-    ON mine.chat_id = c.id
-   AND mine.user_id = v_me
-  JOIN membership_pairs other
-    ON other.chat_id = c.id
-   AND other.user_id = other_user_id
-  WHERE COALESCE(c.is_group, false) = false
-    AND COALESCE(c.is_channel, false) = false
-  ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC NULLS LAST, c.id
-  LIMIT 1;
-
-  IF v_chat_id IS NULL THEN
-    INSERT INTO chat.chats (is_group, is_channel, created_by)
-    VALUES (false, false, v_me)
-    RETURNING id INTO v_chat_id;
-
-    INSERT INTO chat.chat_members (chat_id, user_id)
-    VALUES (v_chat_id, v_me), (v_chat_id, other_user_id);
+  IF pg_catalog.to_regnamespace('chat') IS NOT NULL THEN
+    RAISE EXCEPTION 'Legacy chat schema still exists after cutover';
   END IF;
-
-  RETURN v_chat_id;
 END;
-$function$;
-
-CREATE OR REPLACE FUNCTION public.get_chat_list(
-  p_unread_excluded_ids uuid[] DEFAULT '{}'::uuid[]
-)
-RETURNS TABLE (
-  chat_id text,
-  kind text,
-  channel_id uuid,
-  chat_name text,
-  created_by uuid,
-  is_group boolean,
-  is_channel boolean,
-  is_pinned boolean,
-  is_archived boolean,
-  avatar_url text,
-  chat_updated_at timestamptz,
-  other_id uuid,
-  other_display_name text,
-  other_avatar text,
-  is_verified boolean,
-  is_organization_verified boolean,
-  other_last_seen timestamptz,
-  other_show_online boolean,
-  last_message text,
-  last_message_at timestamptz,
-  last_message_attachment_type text,
-  last_message_is_mine boolean,
-  last_message_status text,
-  unread_count bigint,
-  is_muted boolean,
-  muted_until timestamptz
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'chat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'shop', 'social'
-AS $function$
-DECLARE
-  v_user_id uuid := auth.uid();
-BEGIN
-  IF v_user_id IS NULL THEN
-    RETURN;
-  END IF;
-
-  RETURN QUERY
-  WITH member_candidates AS (
-    SELECT cm.chat_id, cm.user_id, cm.is_admin, cm.joined_at, 0 AS source_priority
-    FROM afuchat.chat_members cm
-    UNION ALL
-    SELECT cm.chat_id, cm.user_id, cm.is_admin, cm.joined_at, 1 AS source_priority
-    FROM chat.chat_members cm
-  ),
-  member_pairs AS (
-    SELECT DISTINCT ON (mc.chat_id, mc.user_id)
-      mc.chat_id, mc.user_id, mc.is_admin, mc.joined_at
-    FROM member_candidates mc
-    ORDER BY mc.chat_id, mc.user_id, mc.source_priority
-  ),
-  message_candidates AS (
-    SELECT
-      m.id, m.chat_id, m.encrypted_content, m.sent_at, m.attachment_type,
-      m.sender_id, 0 AS source_priority
-    FROM afuchat.messages m
-    UNION ALL
-    SELECT
-      m.id, m.chat_id, m.encrypted_content, m.sent_at, m.attachment_type,
-      m.sender_id, 1 AS source_priority
-    FROM chat.messages m
-  ),
-  message_rows AS (
-    SELECT DISTINCT ON (mc.id)
-      mc.id, mc.chat_id, mc.encrypted_content, mc.sent_at,
-      mc.attachment_type, mc.sender_id
-    FROM message_candidates mc
-    ORDER BY mc.id, mc.source_priority
-  ),
-  status_candidates AS (
-    SELECT
-      s.message_id, s.user_id, s.delivered_at, s.read_at,
-      0 AS source_priority
-    FROM afuchat.message_status s
-    UNION ALL
-    SELECT
-      s.message_id, s.user_id, s.delivered_at, s.read_at,
-      1 AS source_priority
-    FROM chat.message_status s
-  ),
-  status_rows AS (
-    SELECT DISTINCT ON (sc.message_id, sc.user_id)
-      sc.message_id, sc.user_id, sc.delivered_at, sc.read_at
-    FROM status_candidates sc
-    ORDER BY sc.message_id, sc.user_id, sc.source_priority
-  ),
-  mute_candidates AS (
-    SELECT m.chat_id, m.user_id, m.muted_until, 0 AS source_priority
-    FROM afuchat.chat_mutes m
-    UNION ALL
-    SELECT m.chat_id, m.user_id, m.muted_until, 1 AS source_priority
-    FROM chat.chat_mutes m
-  ),
-  mute_rows AS (
-    SELECT DISTINCT ON (mc.chat_id, mc.user_id)
-      mc.chat_id, mc.user_id, mc.muted_until
-    FROM mute_candidates mc
-    ORDER BY mc.chat_id, mc.user_id, mc.source_priority
-  ),
-  member_chats AS (
-    SELECT c.*
-    FROM chat.chats c
-    WHERE EXISTS (
-      SELECT 1
-      FROM member_pairs my_membership
-      WHERE my_membership.chat_id = c.id
-        AND my_membership.user_id = v_user_id
-    )
-  )
-  SELECT
-    c.id::text,
-    NULL::text,
-    NULL::uuid,
-    c.name::text,
-    CASE
-      WHEN c.is_channel AND c.created_by = v_user_id THEN c.created_by
-      WHEN c.is_channel THEN NULL
-      ELSE c.created_by
-    END,
-    COALESCE(c.is_group, false),
-    COALESCE(c.is_channel, false),
-    COALESCE(c.is_pinned, false),
-    COALESCE(c.is_archived, false),
-    c.avatar_url::text,
-    c.updated_at,
-    CASE WHEN c.is_channel THEN NULL ELSE other_member.id END,
-    CASE WHEN c.is_channel THEN NULL ELSE other_member.display_name::text END,
-    CASE WHEN c.is_channel THEN NULL ELSE other_member.avatar_url::text END,
-    CASE WHEN c.is_channel THEN false ELSE COALESCE(other_member.is_verified, false) END,
-    CASE WHEN c.is_channel THEN false ELSE COALESCE(other_member.is_organization_verified, false) END,
-    CASE WHEN c.is_channel THEN NULL ELSE other_member.last_seen END,
-    CASE WHEN c.is_channel THEN false ELSE COALESCE(other_member.show_online, true) END,
-    latest_message.encrypted_content::text,
-    latest_message.sent_at,
-    latest_message.attachment_type::text,
-    COALESCE(latest_message.sender_id = v_user_id, false),
-    CASE
-      WHEN latest_message.sender_id IS NULL OR latest_message.sender_id <> v_user_id THEN 'sent'
-      WHEN EXISTS (
-        SELECT 1
-        FROM status_rows latest_status
-        WHERE latest_status.message_id = latest_message.id
-          AND latest_status.user_id <> v_user_id
-          AND latest_status.read_at IS NOT NULL
-      ) THEN 'read'
-      WHEN EXISTS (
-        SELECT 1
-        FROM status_rows latest_status
-        WHERE latest_status.message_id = latest_message.id
-          AND latest_status.user_id <> v_user_id
-          AND latest_status.delivered_at IS NOT NULL
-      ) THEN 'delivered'
-      ELSE 'sent'
-    END::text,
-    CASE
-      WHEN c.id = ANY(COALESCE(p_unread_excluded_ids, '{}'::uuid[])) THEN 0
-      ELSE (
-        SELECT count(*)::bigint
-        FROM message_rows unread_message
-        WHERE unread_message.chat_id = c.id
-          AND unread_message.sender_id <> v_user_id
-          AND NOT EXISTS (
-            SELECT 1
-            FROM status_rows unread_status
-            WHERE unread_status.message_id = unread_message.id
-              AND unread_status.user_id = v_user_id
-              AND unread_status.read_at IS NOT NULL
-          )
-      )
-    END,
-    (chat_mute.chat_id IS NOT NULL),
-    chat_mute.muted_until
-  FROM member_chats c
-  LEFT JOIN LATERAL (
-    SELECT
-      p.id,
-      p.display_name,
-      p.avatar_url,
-      p.is_verified,
-      p.is_organization_verified,
-      p.last_seen,
-      p.show_online_status AS show_online
-    FROM member_pairs other_membership
-    JOIN accounts.profiles p ON p.id = other_membership.user_id
-    WHERE other_membership.chat_id = c.id
-      AND other_membership.user_id <> v_user_id
-    ORDER BY other_membership.user_id
-    LIMIT 1
-  ) other_member ON true
-  LEFT JOIN LATERAL (
-    SELECT
-      m.id,
-      m.encrypted_content,
-      m.sent_at,
-      m.attachment_type,
-      m.sender_id
-    FROM message_rows m
-    WHERE m.chat_id = c.id
-    ORDER BY m.sent_at DESC, m.id DESC
-    LIMIT 1
-  ) latest_message ON true
-  LEFT JOIN mute_rows chat_mute
-    ON chat_mute.chat_id = c.id
-   AND chat_mute.user_id = v_user_id;
-END;
-$function$;
-
--- CREATE OR REPLACE preserves existing grants; state them explicitly for the
--- authenticated paths that rely on these helpers and the conversation RPC.
-REVOKE ALL ON FUNCTION public.is_chat_participant(uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.can_send_chat_message(uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.can_view_chat_member(uuid, uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.is_channel_owner_or_admin(uuid, uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.get_chat_list(uuid[]) FROM PUBLIC;
-
-GRANT EXECUTE ON FUNCTION public.is_chat_participant(uuid, uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.can_send_chat_message(uuid, uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.can_view_chat_member(uuid, uuid, uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_channel_owner_or_admin(uuid, uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_chat_list(uuid[]) TO authenticated;
+$afuchat_cutover$;

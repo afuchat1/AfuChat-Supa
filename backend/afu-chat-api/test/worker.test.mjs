@@ -1476,25 +1476,19 @@ test("message history uses the verified session, a fixed projection, and bounded
   );
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { messages: rows });
-  assert.equal(databaseRequests.length, 2);
-  const primaryRequest = databaseRequests.find((request) =>
-    request.headers.get("Accept-Profile") === "public");
-  const legacyRequest = databaseRequests.find((request) =>
-    request.headers.get("Accept-Profile") === "chat");
-  assert.ok(primaryRequest);
-  assert.ok(legacyRequest);
-  for (const databaseRequest of databaseRequests) {
-    const databaseUrl = new URL(databaseRequest.url);
-    assert.equal(databaseUrl.pathname, "/rest/v1/messages");
-    assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
-    assert.equal(databaseUrl.searchParams.has("sender_id"), false);
-    assert.equal(databaseUrl.searchParams.get("sent_at"), "gt.2026-10-01T00:00:00.000Z");
-    assert.equal(databaseUrl.searchParams.get("limit"), "50");
-    assert.equal(databaseUrl.searchParams.get("order"), "sent_at.desc,id.desc");
-    assert.equal(databaseUrl.searchParams.has("select"), true);
-    assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
-  }
-  assert.equal(new URL(legacyRequest.url).searchParams.get("encrypted_content"), "not.is.null");
+  assert.equal(databaseRequests.length, 1);
+  const databaseRequest = databaseRequests[0];
+  const databaseUrl = new URL(databaseRequest.url);
+  assert.equal(databaseRequest.headers.get("Accept-Profile"), "public");
+  assert.equal(databaseRequest.headers.get("Content-Profile"), "public");
+  assert.equal(databaseUrl.pathname, "/rest/v1/messages");
+  assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
+  assert.equal(databaseUrl.searchParams.has("sender_id"), false);
+  assert.equal(databaseUrl.searchParams.get("sent_at"), "gt.2026-10-01T00:00:00.000Z");
+  assert.equal(databaseUrl.searchParams.get("limit"), "50");
+  assert.equal(databaseUrl.searchParams.get("order"), "sent_at.desc,id.desc");
+  assert.equal(databaseUrl.searchParams.has("select"), true);
+  assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.match(response.headers.get("Cache-Control"), /private, no-store/);
 });
 
@@ -1525,43 +1519,25 @@ test("message history rejects arbitrary projections, malformed IDs, and missing 
   assert.equal(databaseCalls, 0);
 });
 
-test("chat member reads merge legacy memberships with AfuChat precedence", async () => {
+test("chat member reads use only the AfuChat-backed public relation", async () => {
   const token = "chat-members-session";
   const userId = "123e4567-e89b-42d3-a456-426614174099";
   const chatId = "123e4567-e89b-42d3-a456-426614174000";
-  const sharedUserId = "123e4567-e89b-42d3-a456-426614174010";
-  const legacyOnlyUserId = "123e4567-e89b-42d3-a456-426614174011";
   const env = makeEnv();
   env.AFUAUTH_API.fetch = async () =>
     Response.json({ user: { id: userId }, accessToken: token });
   const requests = [];
-  const preferredMember = {
+  const canonicalMember = {
     id: "123e4567-e89b-42d3-a456-426614174020",
     chat_id: chatId,
-    user_id: sharedUserId,
+    user_id: userId,
     is_admin: true,
     joined_at: "2026-10-07T12:00:00.000Z",
-  };
-  const legacySharedMember = {
-    ...preferredMember,
-    id: "123e4567-e89b-42d3-a456-426614174021",
-    is_admin: false,
-  };
-  const legacyOnlyMember = {
-    id: "123e4567-e89b-42d3-a456-426614174022",
-    chat_id: chatId,
-    user_id: legacyOnlyUserId,
-    is_admin: false,
-    joined_at: "2026-10-07T13:00:00.000Z",
   };
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     requests.push(request);
-    return Response.json(
-      request.headers.get("Accept-Profile") === "public"
-        ? [preferredMember]
-        : [legacySharedMember, legacyOnlyMember],
-    );
+    return Response.json([canonicalMember]);
   };
 
   const response = await worker.fetch(
@@ -1573,20 +1549,16 @@ test("chat member reads merge legacy memberships with AfuChat precedence", async
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
-    members: [preferredMember, legacyOnlyMember],
+    members: [canonicalMember],
   });
-  assert.equal(requests.length, 2);
-  for (const request of requests) {
-    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.equal(new URL(request.url).searchParams.get("chat_id"), `eq.${chatId}`);
-  }
-  assert.deepEqual(
-    requests.map((request) => request.headers.get("Accept-Profile")).sort(),
-    ["chat", "public"],
-  );
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(requests[0].headers.get("Accept-Profile"), "public");
+  assert.equal(requests[0].headers.get("Content-Profile"), "public");
+  assert.equal(new URL(requests[0].url).searchParams.get("chat_id"), `eq.${chatId}`);
 });
 
-test("message count deduplicates schemas and gives AfuChat precedence for sender identity", async () => {
+test("message count reads only the AfuChat-backed public relation", async () => {
   const token = "message-count-session";
   const userId = "123e4567-e89b-42d3-a456-426614174099";
   const chatId = "123e4567-e89b-42d3-a456-426614174000";
@@ -1594,36 +1566,22 @@ test("message count deduplicates schemas and gives AfuChat precedence for sender
   env.AFUAUTH_API.fetch = async () =>
     Response.json({ user: { id: userId }, accessToken: token });
   const databaseRequests = [];
-  const messageId = "123e4567-e89b-42d3-a456-426614174010";
-  const legacyOnlyId = "123e4567-e89b-42d3-a456-426614174011";
   globalThis.fetch = async (input, init) => {
     const databaseRequest = new Request(input, init);
     databaseRequests.push(databaseRequest);
-    if (databaseRequest.headers.get("Accept-Profile") === "public") {
-      if (new URL(databaseRequest.url).searchParams.has("id")) {
-        return Response.json([]);
-      }
-      return Response.json([{
-        id: messageId,
-        chat_id: chatId,
-        sender_id: userId,
-        encrypted_content: "ciphertext",
-        sent_at: "2026-10-07T12:00:00.000Z",
-      }]);
-    }
     return Response.json([
       {
-        id: messageId,
+        id: "123e4567-e89b-42d3-a456-426614174010",
         chat_id: chatId,
         sender_id: "123e4567-e89b-42d3-a456-426614174098",
-        encrypted_content: "legacy-ciphertext",
+        encrypted_content: "ciphertext-from-other-user",
         sent_at: "2026-10-07T12:00:00.000Z",
       },
       {
-        id: legacyOnlyId,
+        id: "123e4567-e89b-42d3-a456-426614174011",
         chat_id: chatId,
-        sender_id: "123e4567-e89b-42d3-a456-426614174098",
-        encrypted_content: "legacy-only-ciphertext",
+        sender_id: userId,
+        encrypted_content: "ciphertext-from-current-user",
         sent_at: "2026-10-07T11:00:00.000Z",
       },
     ]);
@@ -1638,23 +1596,13 @@ test("message count deduplicates schemas and gives AfuChat precedence for sender
   );
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { count: 1 });
-  assert.equal(databaseRequests.length, 3);
-  for (const databaseRequest of databaseRequests) {
-    const databaseUrl = new URL(databaseRequest.url);
-    assert.equal(databaseRequest.method, "GET");
-    assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
-    assert.equal(databaseUrl.searchParams.has("sender_id"), false);
-    assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
-  }
-  const legacyRequest = databaseRequests.find((request) =>
-    request.headers.get("Accept-Profile") === "chat");
-  assert.ok(legacyRequest);
-  assert.equal(new URL(legacyRequest.url).searchParams.get("encrypted_content"), "not.is.null");
-  const preferredLookup = databaseRequests.find((request) =>
-    request.headers.get("Accept-Profile") === "public" &&
-    new URL(request.url).searchParams.has("id"));
-  assert.ok(preferredLookup);
-  assert.match(new URL(preferredLookup.url).searchParams.get("id"), /^in\.\(/);
+  assert.equal(databaseRequests.length, 1);
+  assert.equal(databaseRequests[0].headers.get("Accept-Profile"), "public");
+  assert.equal(databaseRequests[0].headers.get("Authorization"), `Bearer ${token}`);
+  const databaseUrl = new URL(databaseRequests[0].url);
+  assert.equal(databaseUrl.pathname, "/rest/v1/messages");
+  assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
+  assert.equal(databaseUrl.searchParams.has("sender_id"), false);
 });
 
 test("message status reads and updates use the authenticated user, not caller identity", async () => {

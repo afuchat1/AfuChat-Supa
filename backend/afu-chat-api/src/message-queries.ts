@@ -35,14 +35,13 @@ function makeUrl(
 function restHeaders(
   session: VerifiedSession,
   anonKey: string,
-  schema: "public" | "chat",
 ): Headers {
   return new Headers({
     apikey: anonKey,
     Authorization: `Bearer ${session.token}`,
     Accept: "application/json",
-    "Accept-Profile": schema,
-    "Content-Profile": schema,
+    "Accept-Profile": "public",
+    "Content-Profile": "public",
   });
 }
 
@@ -56,12 +55,11 @@ async function readMessageSchemaRows(
   anonKey: string,
   session: VerifiedSession,
   filters: Record<string, string>,
-  schema: "public" | "chat",
 ): Promise<MessageReadResult> {
   try {
     const response = await fetch(makeUrl(base, "messages", filters), {
       method: "GET",
-      headers: restHeaders(session, anonKey, schema),
+      headers: restHeaders(session, anonKey),
       redirect: "manual",
     });
     const payload: unknown = await response.json().catch(() => null);
@@ -87,28 +85,7 @@ async function readMessageSchemaRows(
   }
 }
 
-function mergePreferredMessages(
-  preferred: Record<string, unknown>[],
-  legacy: Record<string, unknown>[],
-): Record<string, unknown>[] | null {
-  const byId = new Map<string, Record<string, unknown>>();
-  for (const row of preferred) {
-    if (!row || typeof row.id !== "string" || !UUID_PATTERN.test(row.id)) return null;
-    byId.set(row.id, row);
-  }
-  for (const row of legacy) {
-    if (!row || typeof row.id !== "string" || !UUID_PATTERN.test(row.id)) return null;
-    if (!byId.has(row.id)) byId.set(row.id, row);
-  }
-  return [...byId.values()].sort((a, b) => {
-    const sentAtA = typeof a.sent_at === "string" ? Date.parse(a.sent_at) : 0;
-    const sentAtB = typeof b.sent_at === "string" ? Date.parse(b.sent_at) : 0;
-    if (sentAtA !== sentAtB) return sentAtB - sentAtA;
-    return String(a.id).localeCompare(String(b.id));
-  });
-}
-
-async function readMergedMessages(
+async function readCanonicalMessages(
   requestId: string,
   base: string,
   anonKey: string,
@@ -126,45 +103,19 @@ async function readMergedMessages(
       limit: String(chunkSize),
       offset: String(offset),
     };
-    const legacyFilters = { ...pageFilters, encrypted_content: "not.is.null" };
-    const [preferred, legacy] = await Promise.all([
-      readMessageSchemaRows(requestId, base, anonKey, session, pageFilters, "public"),
-      readMessageSchemaRows(requestId, base, anonKey, session, legacyFilters, "chat"),
-    ]);
-    if (!preferred.ok) return preferred;
-    if (!legacy.ok) return legacy;
-
-    const preferredRows = [...preferred.data];
-    const preferredIds = new Set(preferredRows.map((row) => row.id));
-    const legacyIdsMissingFromPage = legacy.data
-      .map((row) => row.id)
-      .filter((id): id is string =>
-        typeof id === "string" && !preferredIds.has(id));
-    if (legacyIdsMissingFromPage.length) {
-      const lookupFilters: Record<string, string> = {
-        select: filters.select,
-        id: `in.(${legacyIdsMissingFromPage.join(",")})`,
-      };
-      if (filters.chat_id) lookupFilters.chat_id = filters.chat_id;
-      const preferredLookup = await readMessageSchemaRows(
-        requestId,
-        base,
-        anonKey,
-        session,
-        lookupFilters,
-        "public",
-      );
-      if (!preferredLookup.ok) return preferredLookup;
-      preferredRows.push(...preferredLookup.data);
-    }
-
-    const mergedPage = mergePreferredMessages(preferredRows, legacy.data);
-    if (!mergedPage) return { ok: false, status: 502, code: "MESSAGE_ROWS_INVALID" };
-    for (const row of mergedPage) {
-      const id = row.id as string;
-      if (!byId.has(id) || preferredRows.some((preferredRow) => preferredRow.id === id)) {
-        byId.set(id, row);
+    const canonical = await readMessageSchemaRows(
+      requestId,
+      base,
+      anonKey,
+      session,
+      pageFilters,
+    );
+    if (!canonical.ok) return canonical;
+    for (const row of canonical.data) {
+      if (!row || typeof row.id !== "string" || !UUID_PATTERN.test(row.id)) {
+        return { ok: false, status: 502, code: "MESSAGE_ROWS_INVALID" };
       }
+      byId.set(row.id, row);
     }
 
     const rows = [...byId.values()].sort((a, b) => {
@@ -191,7 +142,7 @@ async function readMergedMessages(
       filters.id ||
       !sender ||
       matching.length >= limit ||
-      (preferred.data.length < chunkSize && legacy.data.length < chunkSize)
+      canonical.data.length < chunkSize
     ) {
       return { ok: true, data: matching.slice(0, limit) };
     }
@@ -264,7 +215,7 @@ export async function handleMessageQueries(
   if (messageId) filters.id = `eq.${messageId}`;
   if (before) filters.sent_at = `lt.${before}`;
   if (after) filters.sent_at = `gt.${after}`;
-  const result = await readMergedMessages(
+  const result = await readCanonicalMessages(
     requestId,
     supabase.url,
     supabase.anonKey,
@@ -331,7 +282,7 @@ export async function handleMessageCount(
     select: "id,chat_id,sender_id,encrypted_content,sent_at",
   };
   if (chatId) filters.chat_id = `eq.${chatId}`;
-  const result = await readMergedMessages(
+  const result = await readCanonicalMessages(
     requestId,
     supabase.url,
     supabase.anonKey,
