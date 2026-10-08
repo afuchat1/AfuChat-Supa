@@ -29,7 +29,7 @@ BEGIN
     LANGUAGE sql
     STABLE
     SECURITY DEFINER
-    SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'afuchat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'shop', 'social'
+    SET search_path TO 'public', 'extensions', 'accounts', 'ads', 'afuai', 'billing', 'afuchat', 'devs', 'games', 'mail', 'match', 'media', 'platform', 'rewards', 'social'
     SET row_security TO 'off'
     AS $body$
       SELECT EXISTS (
