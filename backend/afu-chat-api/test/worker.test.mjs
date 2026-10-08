@@ -1160,6 +1160,87 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
   assert.deepEqual(await response.json(), [{ chat_id: "chat-1" }]);
 });
 
+test("direct conversation creation uses the authenticated public RPC and returns its chat ID", async () => {
+  const token = "same-supabase-session";
+  const otherUserId = "123e4567-e89b-42d3-a456-426614174123";
+  const chatId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let rpcRequest;
+  globalThis.fetch = async (input, init) => {
+    rpcRequest = input instanceof Request ? input : new Request(input, init);
+    return Response.json(chatId);
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ other_user_id: otherUserId }),
+    }),
+    env,
+  );
+
+  assert.equal(new URL(rpcRequest.url).pathname, "/rest/v1/rpc/get_or_create_direct_chat");
+  assert.equal(rpcRequest.headers.get("Authorization"), `Bearer ${token}`);
+  assert.equal(rpcRequest.headers.get("Accept-Profile"), "public");
+  assert.equal(rpcRequest.headers.get("Content-Profile"), "public");
+  assert.deepEqual(await rpcRequest.json(), { other_user_id: otherUserId });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { chat_id: chatId });
+});
+
+test("direct conversation creation rejects an invalid contact ID without querying Supabase", async () => {
+  const token = "same-supabase-session";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
+    return Response.json("unexpected");
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ other_user_id: "not-a-uuid" }),
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(databaseCalls, 0);
+});
+
+test("conversation endpoint fails closed for an unexposed database schema", async () => {
+  const env = makeEnv();
+  env.AFUCHAT_DATABASE_SCHEMA = "afuchat";
+  let authCalls = 0;
+  env.AFUAUTH_API.fetch = async () => {
+    authCalls += 1;
+    return Response.json({});
+  };
+
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/conversations", {
+      headers: { Authorization: "Bearer valid-session" },
+    }),
+    env,
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(authCalls, 0);
+});
+
 test("conversation endpoint sanitizes upstream database errors", async () => {
   const env = makeEnv();
   const token = "same-supabase-session";

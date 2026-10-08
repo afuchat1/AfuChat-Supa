@@ -33,7 +33,11 @@ import { Separator } from "@/components/ui/Separator";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { isOnline } from "@/lib/offlineStore";
-import { getAfuChatChatMembers, getAfuChatFollowRecords } from "@/lib/afuchatApi";
+import {
+  createAfuChatDirectConversation,
+  getAfuChatChatMembers,
+  getAfuChatFollowRecords,
+} from "@/lib/afuchatApi";
 import {
   getLocalContacts,
   saveLocalContacts,
@@ -383,10 +387,7 @@ export default function NewChatScreen() {
     }
     setStarting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const { data: chatId, error } = await supabase.rpc(
-      "get_or_create_direct_chat",
-      { other_user_id: contactId }
-    );
+    const { data: chatId, error } = await createAfuChatDirectConversation(contactId);
     setStarting(false);
     if (error || !chatId) {
       showAlert("Error", "Could not start conversation. Please try again.");

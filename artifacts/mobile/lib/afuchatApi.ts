@@ -213,6 +213,68 @@ export async function getAfuChatConversations(
   }
 }
 
+export async function createAfuChatDirectConversation(
+  otherUserId: string,
+): Promise<{ data: string | null; error: AfuChatApiError | null }> {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(otherUserId)) {
+    return {
+      data: null,
+      error: { message: "A valid contact is required.", code: "INVALID_USER_ID" },
+    };
+  }
+
+  try {
+    const response = await afuChatApiFetch("/conversations", {
+      method: "POST",
+      body: JSON.stringify({ other_user_id: otherUserId }),
+    });
+    const payload: unknown = await response.json().catch(() => null);
+    logLiveDataResponse("/conversations", response, payload, undefined, "POST");
+    const record = payload && typeof payload === "object"
+      ? payload as Record<string, unknown>
+      : null;
+
+    if (!response.ok) {
+      return {
+        data: null,
+        error: {
+          message: typeof record?.error === "string"
+            ? record.error
+            : `Chat request failed (HTTP ${response.status})`,
+          code: typeof record?.code === "string" ? record.code : String(response.status),
+          requestId: typeof record?.request_id === "string"
+            ? record.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+
+    if (
+      typeof record?.chat_id !== "string" ||
+      !uuidPattern.test(record.chat_id)
+    ) {
+      return {
+        data: null,
+        error: {
+          message: "Chat service returned an invalid response",
+          code: "INVALID_RESPONSE",
+          requestId: response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
+    }
+    return { data: record.chat_id, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: {
+        message: error instanceof Error ? error.message : "Chat service is unavailable",
+        code: "NETWORK_ERROR",
+      },
+    };
+  }
+}
+
 export type AfuChatMember = {
   id: string;
   chat_id: string;

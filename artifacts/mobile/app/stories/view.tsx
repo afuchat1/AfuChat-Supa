@@ -21,7 +21,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { supabase } from "@/lib/supabase";
-import { createAfuChatClientMessageId, postAfuChatMessage } from "@/lib/afuchatApi";
+import {
+  createAfuChatClientMessageId,
+  createAfuChatDirectConversation,
+  postAfuChatMessage,
+} from "@/lib/afuchatApi";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -497,9 +501,8 @@ export default function ViewStoryScreen() {
       });
 
       if (s.user_id !== user.id) {
-        const { data: chatId } = await supabase.rpc("get_or_create_direct_chat", {
-          other_user_id: s.user_id,
-        });
+        const { data: chatId, error } = await createAfuChatDirectConversation(s.user_id);
+        if (error) throw error;
         if (chatId) {
           await postAfuChatMessage({
             chat_id: chatId,

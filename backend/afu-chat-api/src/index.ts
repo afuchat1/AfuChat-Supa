@@ -277,7 +277,7 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });
   }
-  if (request.method !== "GET") {
+  if (request.method !== "GET" && request.method !== "POST") {
     const response = privateJsonResponse(
       request,
       requestId,
@@ -285,7 +285,7 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       405,
     );
     const responseHeaders = new Headers(response.headers);
-    responseHeaders.set("Allow", "GET, OPTIONS");
+    responseHeaders.set("Allow", "GET, POST, OPTIONS");
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -302,8 +302,10 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       401,
     );
   }
+  // Production PostgREST exposes public, not afuchat. Public compatibility
+  // views/RPCs are the supported API surface and now resolve only to afuchat.
   const schema = env.AFUCHAT_DATABASE_SCHEMA?.trim() || "public";
-  if (!/^[a-z][a-z0-9_]*$/i.test(schema)) {
+  if (schema !== "public") {
     return privateJsonResponse(
       request,
       requestId,
@@ -398,6 +400,69 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       { error: "The request could not be verified.", request_id: requestId },
       503,
     );
+  }
+
+  if (request.method === "POST") {
+    const payload = await readJsonRecord(request);
+    const otherUserId = payload?.other_user_id;
+    if (typeof otherUserId !== "string" || !uuidPattern.test(otherUserId)) {
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "other_user_id must be a valid UUID", request_id: requestId },
+        400,
+      );
+    }
+
+    const target = new URL(supabase.url);
+    target.pathname = "/rest/v1/rpc/get_or_create_direct_chat";
+    target.search = "";
+    try {
+      const upstream = await fetch(new Request(target, {
+        method: "POST",
+        headers: new Headers({
+          apikey: supabase.anonKey,
+          Authorization: authorization,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Accept-Profile": schema,
+          "Content-Profile": schema,
+        }),
+        body: JSON.stringify({ other_user_id: otherUserId }),
+        redirect: "manual",
+      }));
+      if (!upstream.ok) {
+        console.error("[afuchat-api] direct conversation request failed", {
+          requestId,
+          status: upstream.status,
+        });
+        return privateJsonResponse(
+          request,
+          requestId,
+          { error: "Conversation could not be created.", request_id: requestId },
+          upstream.status >= 500 ? 502 : upstream.status,
+        );
+      }
+
+      const chatId: unknown = await upstream.json().catch(() => null);
+      if (typeof chatId !== "string" || !uuidPattern.test(chatId)) {
+        return privateJsonResponse(
+          request,
+          requestId,
+          { error: "Chat service returned an invalid response.", request_id: requestId },
+          502,
+        );
+      }
+      return privateJsonResponse(request, requestId, { chat_id: chatId }, 200);
+    } catch {
+      console.error("[afuchat-api] direct conversation request failed", { requestId });
+      return privateJsonResponse(
+        request,
+        requestId,
+        { error: "Conversation could not be created.", request_id: requestId },
+        502,
+      );
+    }
   }
 
   const target = new URL(supabase.url);

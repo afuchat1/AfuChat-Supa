@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { createAfuChatDirectConversation } from "@/lib/afuchatApi";
 import { Avatar } from "@/components/ui/Avatar";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { usePhoneContacts } from "@/lib/usePhoneContacts";
@@ -210,8 +211,12 @@ export default function PhoneContactsScreen() {
                             }
                             return;
                           }
-                          const { data } = await supabase.rpc("get_or_create_direct_chat", { other_user_id: item.id });
-                          if (data) router.push({ pathname: "/chat/[id]", params: { id: data } });
+                          const { data, error } = await createAfuChatDirectConversation(item.id);
+                          if (error || !data) {
+                            showAlert("Error", "Could not start conversation. Please try again.");
+                            return;
+                          }
+                          router.push({ pathname: "/chat/[id]", params: { id: data } });
                         }}
                         accessibilityRole="button"
                         accessibilityLabel={`Message ${item.display_name}`}

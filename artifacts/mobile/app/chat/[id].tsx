@@ -77,6 +77,7 @@ import {
   getAfuChatFollowSummary,
   getAfuChatChatMembers,
   getAfuChatMyPosts,
+  createAfuChatDirectConversation,
   postAfuChatMessage,
   reportAfuChatMessage,
   setAfuChatFollow,
@@ -5539,12 +5540,10 @@ STRICT RULES:
     if (creatingChatIdRef.current) return creatingChatIdRef.current;
 
     const createPromise = (async () => {
-      const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
-        other_user_id: contactId,
-      });
+      const { data: chatId, error } = await createAfuChatDirectConversation(contactId);
 
       if (error || !chatId) {
-        console.error("[getOrCreateChatId] RPC error:", error?.message);
+        console.error("[getOrCreateChatId] API error:", error?.message);
         return null;
       }
 

@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import {
+  createAfuChatDirectConversation,
   getAfuChatContactProfile,
   getAfuChatFollowRecords,
   getAfuChatFollowStatuses,
@@ -335,7 +336,7 @@ export default function ContactScreen() {
     if (!user || !id) return;
     Haptics.selectionAsync();
     try {
-      const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", { other_user_id: id });
+      const { data: chatId, error } = await createAfuChatDirectConversation(id);
       if (error || !chatId) throw new Error();
       router.push({ pathname: "/chat/[id]", params: { id: chatId } });
     } catch { showAlert("Error", "Could not start conversation. Please try again."); }

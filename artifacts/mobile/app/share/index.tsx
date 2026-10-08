@@ -19,8 +19,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useDataMode } from "@/context/DataModeContext";
 import { supabase } from "@/lib/supabase";
-import { createAfuChatClientMessageId, postAfuChatMessage } from "@/lib/afuchatApi";
-import { getAfuChatConversations, getAfuChatFollowRecords } from "@/lib/afuchatApi";
+import {
+  createAfuChatClientMessageId,
+  createAfuChatDirectConversation,
+  getAfuChatConversations,
+  getAfuChatFollowRecords,
+  postAfuChatMessage,
+} from "@/lib/afuchatApi";
 import { safeRouter } from "@/lib/navUtils";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
@@ -352,11 +357,8 @@ export default function ShareToAfuChatScreen() {
       let chatId: string | undefined = contact.chatId;
       let chatError: { message?: string } | null = null;
       if (!chatId) {
-        const result = await supabase.rpc(
-          "get_or_create_direct_chat",
-          { other_user_id: contact.id },
-        );
-        chatId = result.data as string | undefined;
+        const result = await createAfuChatDirectConversation(contact.id);
+        chatId = result.data ?? undefined;
         chatError = result.error;
       }
       if (chatError || !chatId) throw new Error("Could not open the conversation.");

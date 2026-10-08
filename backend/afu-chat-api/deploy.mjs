@@ -304,6 +304,21 @@ async function assertProductionPostflight() {
   if (invalidSession.status !== 401) {
     throw new Error(`Invalid-session request returned HTTP ${invalidSession.status}.`);
   }
+  const unauthenticatedDirectConversation = await fetch(
+    "https://api.afuchat.com/v1/chat/conversations",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        other_user_id: "123e4567-e89b-42d3-a456-426614174123",
+      }),
+    },
+  );
+  if (unauthenticatedDirectConversation.status !== 401) {
+    throw new Error(
+      `Unauthenticated direct-conversation creation returned HTTP ${unauthenticatedDirectConversation.status}.`,
+    );
+  }
 
   const unauthenticatedPosts = await fetch("https://api.afuchat.com/v1/chat/posts/mine");
   if (unauthenticatedPosts.status !== 401) {
@@ -607,7 +622,7 @@ if (!APPLY) {
     endpoints: [
       "GET /v1/chat/healthz",
       "GET|POST /v1/chat/status",
-      "GET /v1/chat/conversations",
+      "GET|POST /v1/chat/conversations",
       "GET /v1/chat/me",
       "GET /v1/chat/profiles/{profileId}",
       "POST /v1/chat/posts",

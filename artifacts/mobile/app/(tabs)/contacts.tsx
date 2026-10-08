@@ -32,7 +32,11 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { isOnline } from "@/lib/offlineStore";
 import { getLocalContacts, saveLocalContacts, getAllPhonebookNames } from "@/lib/storage/localContacts";
 import { createLocalNotesConversation } from "@/lib/storage/localNotes";
-import { getAfuChatFollowIds, setAfuChatFollow } from "@/lib/afuchatApi";
+import {
+  createAfuChatDirectConversation,
+  getAfuChatFollowIds,
+  setAfuChatFollow,
+} from "@/lib/afuchatApi";
 
 type Contact = {
   id: string;
@@ -65,9 +69,7 @@ function ContactRow({ item, phonebookName }: { item: Contact; phonebookName?: st
   async function startChat() {
     Haptics.selectionAsync();
     if (!user) return;
-    const { data: chatId, error } = await supabase.rpc("get_or_create_direct_chat", {
-      other_user_id: item.id,
-    });
+    const { data: chatId, error } = await createAfuChatDirectConversation(item.id);
     if (error || !chatId) {
       showAlert("Error", "Could not start conversation. Please try again.");
       return;
