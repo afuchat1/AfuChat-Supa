@@ -2715,6 +2715,56 @@ test("follow lists hydrate relationship rows from the shared accounts profile so
   assert.ok(requests.every((request) => request.headers.get("Authorization") === `Bearer ${token}`));
 });
 
+test("follow lists fail explicitly when a relationship profile cannot be hydrated", async () => {
+  const token = "follow-list-incomplete-session";
+  const userId = "123e4567-e89b-42d3-a456-426614174099";
+  const profileId = "123e4567-e89b-42d3-a456-426614174123";
+  const followerId = "123e4567-e89b-42d3-a456-426614174124";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: userId }, accessToken: token });
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    if (
+      url.pathname.endsWith("/profiles") &&
+      request.headers.get("Accept-Profile") === "accounts"
+    ) {
+      if (url.searchParams.get("select")?.includes("hide_followers_list")) {
+        return Response.json([{
+          id: profileId,
+          hide_followers_list: false,
+          hide_following_list: false,
+        }]);
+      }
+      return Response.json([]);
+    }
+    if (url.pathname.endsWith("/follows")) {
+      return Response.json([{
+        follower_id: followerId,
+        following_id: profileId,
+        created_at: "2026-10-07T12:00:00Z",
+      }]);
+    }
+    return Response.json({ error: "unexpected query" }, { status: 404 });
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/follows/list?profile_id=${profileId}&direction=followers&limit=20&offset=0`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+
+  const payload = await response.json();
+  assert.equal(response.status, 502);
+  assert.equal(payload.code, "FOLLOW_PROFILE_HYDRATION_INCOMPLETE");
+  assert.equal(typeof payload.request_id, "string");
+  assert.equal(payload.items, undefined);
+  assert.equal(JSON.stringify(payload).includes(followerId), false);
+});
+
 test("follow status batches return both relationship directions for authenticated viewer", async () => {
   const token = "follow-status-session";
   const userId = "123e4567-e89b-42d3-a456-426614174099";

@@ -294,6 +294,20 @@ async function handleFollowList(
     typeof row.following_id === "string" &&
     typeof row.created_at === "string"
   );
+  if (rows.length !== result.data.length) {
+    console.error("[afuchat-api] follow rows were incomplete", {
+      requestId: context.requestId,
+      receivedCount: result.data.length,
+      validCount: rows.length,
+    });
+    return errorResponse(
+      request,
+      context.requestId,
+      "Follow data could not be loaded.",
+      502,
+      "FOLLOW_ROWS_INVALID",
+    );
+  }
   const profileIds = rows.map((row) =>
     direction === "followers" ? String(row.follower_id) : String(row.following_id)
   );
@@ -314,6 +328,24 @@ async function handleFollowList(
   const profiles = await hydrateProfiles(context, [...new Set(profileIds)]);
   if (!profiles) {
     return errorResponse(request, context.requestId, "Follow profiles could not be loaded.", 502);
+  }
+  const uniqueProfileIds = [...new Set(profileIds)];
+  const missingProfileCount = uniqueProfileIds.filter((id) => !profiles.has(id)).length;
+  if (missingProfileCount > 0) {
+    console.error("[afuchat-api] follow profile hydration was incomplete", {
+      requestId: context.requestId,
+      relationshipCount: rows.length,
+      requiredProfileCount: uniqueProfileIds.length,
+      hydratedProfileCount: profiles.size,
+      missingProfileCount,
+    });
+    return errorResponse(
+      request,
+      context.requestId,
+      "Follow profiles could not be loaded.",
+      502,
+      "FOLLOW_PROFILE_HYDRATION_INCOMPLETE",
+    );
   }
   const items = rows.flatMap((row) => {
     const id = direction === "followers"

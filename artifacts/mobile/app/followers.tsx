@@ -95,6 +95,8 @@ export default function FollowersScreen() {
       setLoading(true);
       setUsers([]);
       setLoadError(false);
+      setFollowingIds(new Set());
+      setMyFollowerIds(new Set());
     }
     try {
       // Enforce visibility privacy: if the list owner has hidden this list, block non-owners
@@ -167,16 +169,23 @@ export default function FollowersScreen() {
       if (user && visibleIds.length > 0) {
         const statuses = await getAfuChatFollowStatuses(visibleIds);
         if (statuses.error || !statuses.data) {
-          throw statuses.error ?? new Error("Follow statuses could not be loaded.");
+          if (__DEV__) {
+            console.warn("[Followers] Relationship rows loaded, but follow status lookup failed", {
+              code: statuses.error?.code ?? "INVALID_RESPONSE",
+              requestId: statuses.error?.requestId ?? null,
+              rowCount: visibleIds.length,
+            });
+          }
+        } else {
+          const nowFollowing = [...statuses.data.entries()]
+            .filter(([, status]) => status.isFollowing)
+            .map(([id]) => id);
+          const followingYou = [...statuses.data.entries()]
+            .filter(([, status]) => status.followsYou)
+            .map(([id]) => id);
+          setFollowingIds(prev => new Set([...prev, ...nowFollowing]));
+          setMyFollowerIds(prev => new Set([...prev, ...followingYou]));
         }
-        const nowFollowing = [...statuses.data.entries()]
-          .filter(([, status]) => status.isFollowing)
-          .map(([id]) => id);
-        const followingYou = [...statuses.data.entries()]
-          .filter(([, status]) => status.followsYou)
-          .map(([id]) => id);
-        setFollowingIds(prev => new Set([...prev, ...nowFollowing]));
-        setMyFollowerIds(prev => new Set([...prev, ...followingYou]));
       }
     } catch {
       if (isReset) setLoadError(true);

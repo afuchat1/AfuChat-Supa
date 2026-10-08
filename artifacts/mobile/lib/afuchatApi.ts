@@ -1,10 +1,112 @@
 import { AFUCHAT_API_URL } from "./env";
 import { supabase } from "./supabase";
+import { isOnline } from "./offlineStore";
 
 export interface AfuChatApiError {
   message: string;
   code?: string;
   requestId?: string;
+}
+
+const LIVE_DATA_ENDPOINTS = new Set([
+  "/me",
+  "/conversations",
+  "/messages",
+  "/follows/list",
+  "/follows/ids",
+  "/follows/summary",
+  "/follows/status",
+]);
+
+function getLiveDataEndpoint(path: string): string {
+  return path.split("?")[0];
+}
+
+function getLiveDataItemCount(payload: unknown): number | null {
+  if (Array.isArray(payload)) return payload.length;
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.items)) return record.items.length;
+  if (Array.isArray(record.messages)) return record.messages.length;
+  return null;
+}
+
+function logLiveDataResponse(
+  path: string,
+  response: Response,
+  payload: unknown,
+  identityMatches?: boolean,
+  method = "GET",
+): void {
+  const endpoint = getLiveDataEndpoint(path);
+  if (!__DEV__ || !LIVE_DATA_ENDPOINTS.has(endpoint)) return;
+
+  void (async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
+      const record = payload && typeof payload === "object"
+        ? payload as Record<string, unknown>
+        : null;
+      const requestId =
+        (typeof record?.request_id === "string" ? record.request_id : null) ??
+        response.headers.get("X-AfuChat-Request-Id");
+      const errorMessage = !response.ok && typeof record?.error === "string"
+        ? record.error.slice(0, 120)
+        : undefined;
+      const details = {
+        endpoint: `/v1/chat${endpoint}`,
+        method,
+        status: response.status,
+        requestId,
+        clientUserId: session?.user.id ?? null,
+        sessionPresent: !!session?.access_token,
+        deviceOnline: isOnline(),
+        apiReachable: true,
+        sessionAccepted: response.status < 400
+          ? true
+          : response.status === 401
+            ? false
+            : null,
+        itemCount: getLiveDataItemCount(payload),
+        ...(identityMatches === undefined ? {} : { profileIdentityMatches: identityMatches }),
+        ...(typeof record?.code === "string"
+          ? { errorCode: record.code }
+          : !response.ok
+            ? { errorCode: String(response.status) }
+            : {}),
+        ...(errorMessage ? { errorMessage } : {}),
+      };
+      (response.ok ? console.info : console.warn)("[AfuChat live data]", details);
+    } catch {
+      // Diagnostics must never interfere with the request or the chat UI.
+    }
+  })();
+}
+
+function logLiveDataNetworkFailure(path: string, error: unknown, method = "GET"): void {
+  const endpoint = getLiveDataEndpoint(path);
+  if (!__DEV__ || !LIVE_DATA_ENDPOINTS.has(endpoint)) return;
+
+  void (async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      console.warn("[AfuChat live data]", {
+        endpoint: `/v1/chat${endpoint}`,
+        method,
+        status: null,
+        requestId: null,
+        clientUserId: data.session?.user.id ?? null,
+        sessionPresent: !!data.session?.access_token,
+        deviceOnline: isOnline(),
+        apiReachable: false,
+        sessionAccepted: null,
+        errorCode: error instanceof Error ? error.name : "NETWORK_ERROR",
+      });
+    } catch {
+      // Diagnostics must never interfere with the request or the chat UI.
+    }
+  })();
 }
 
 export async function getAfuChatAccessToken(): Promise<string> {
@@ -40,10 +142,15 @@ export async function afuChatApiFetch(
     const token = await getAfuChatAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`${AFUCHAT_API_URL}/v1/chat${path.startsWith("/") ? path : `/${path}`}`, {
-    ...init,
-    headers,
-  });
+  try {
+    return await fetch(`${AFUCHAT_API_URL}/v1/chat${path.startsWith("/") ? path : `/${path}`}`, {
+      ...init,
+      headers,
+    });
+  } catch (error) {
+    logLiveDataNetworkFailure(path, error, init.method ?? "GET");
+    throw error;
+  }
 }
 
 export async function getAfuChatConversations(
@@ -62,16 +169,35 @@ export async function getAfuChatConversations(
       { method: "GET" },
     );
     const payload: unknown = await response.json().catch(() => null);
+    logLiveDataResponse("/conversations", response, payload);
     if (!response.ok) {
+      const record = payload && typeof payload === "object"
+        ? payload as Record<string, unknown>
+        : null;
       const message =
-        payload && typeof payload === "object" && "error" in payload &&
-        typeof payload.error === "string"
-          ? payload.error
+        typeof record?.error === "string"
+          ? record.error
           : `Chat request failed (HTTP ${response.status})`;
-      return { data: null, error: { message } };
+      return {
+        data: null,
+        error: {
+          message,
+          code: typeof record?.code === "string" ? record.code : String(response.status),
+          requestId: typeof record?.request_id === "string"
+            ? record.request_id
+            : response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
     }
     if (!Array.isArray(payload)) {
-      return { data: null, error: { message: "Chat service returned an invalid response" } };
+      return {
+        data: null,
+        error: {
+          message: "Chat service returned an invalid response",
+          code: "INVALID_RESPONSE",
+          requestId: response.headers.get("X-AfuChat-Request-Id") ?? undefined,
+        },
+      };
     }
     return { data: payload, error: null };
   } catch (error) {
@@ -79,6 +205,7 @@ export async function getAfuChatConversations(
       data: null,
       error: {
         message: error instanceof Error ? error.message : "Chat service is unavailable",
+        code: "NETWORK_ERROR",
       },
     };
   }
@@ -104,6 +231,10 @@ export async function getAfuChatCurrentProfile<T extends { id: string }>(
       },
     });
     const payload: unknown = await response.json().catch(() => null);
+    const responseRecord = payload && typeof payload === "object"
+      ? payload as Record<string, unknown>
+      : null;
+    logLiveDataResponse("/me", response, payload, responseRecord?.id === expectedUserId);
     const record = payload && typeof payload === "object"
       ? payload as Record<string, unknown>
       : null;
@@ -130,6 +261,7 @@ export async function getAfuChatCurrentProfile<T extends { id: string }>(
 
     return { data: record as T, error: null };
   } catch (error) {
+    logLiveDataNetworkFailure("/me", error);
     return {
       data: null,
       error: {
@@ -242,6 +374,7 @@ export async function afuChatApiJson<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   }, requireAuth);
   const data = await response.json().catch(() => null) as T | null;
+  logLiveDataResponse(path, response, data, undefined, body === undefined ? "GET" : "POST");
   return { response, data };
 }
 
@@ -364,6 +497,7 @@ export async function getAfuChatMessages(
     if (query.sender) params.set("sender", query.sender);
     const response = await afuChatApiFetch(`/messages?${params.toString()}`, { method: "GET" });
     const payload: unknown = await response.json().catch(() => null);
+    logLiveDataResponse("/messages", response, payload);
     if (!response.ok) {
       const record = payload && typeof payload === "object"
         ? payload as Record<string, unknown>

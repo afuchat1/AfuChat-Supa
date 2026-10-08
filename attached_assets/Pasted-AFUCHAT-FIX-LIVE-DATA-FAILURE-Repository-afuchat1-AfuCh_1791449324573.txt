@@ -1,0 +1,1169 @@
+AFUCHAT — FIX LIVE DATA FAILURE
+
+Repository:
+
+afuchat1/AfuChat-Supa
+
+Current repository state to inspect:
+
+ec1b90e6b4d5b917e4ef5f5f17fca3636c93ecee
+
+CRITICAL USER SYMPTOMS
+
+The currently logged-in AfuChat user has these production problems:
+
+1. The user can see messages sent by other people.
+2. The user cannot see messages that THEY sent.
+3. Follow counts do not load correctly.
+4. Followers/following users do not load.
+5. Follow lists appear empty.
+6. New chats do not appear.
+7. The Chats screen mostly shows old/cached/system/coached conversations.
+8. The app behaves as if the user is offline even though the device is online.
+9. Existing login works.
+10. "/v1/chat/me" works.
+11. The problem started around the AfuChat backend/API migration.
+
+This must be treated as a live authenticated-data-path failure, not merely a UI rendering issue.
+
+---
+
+DO NOT START BY REWRITING THE UI
+
+Do not redesign:
+
+ChatsScreen
+ChatBubble
+Followers screen
+Profile screen
+offline UI
+
+First determine exactly where the live data disappears.
+
+Trace the complete path:
+
+Mobile
+↓
+afuchatApi.ts
+↓
+api.afuchat.com
+↓
+afuchat-api
+↓
+session verification
+↓
+Supabase/PostgREST/RPC
+↓
+RLS/schema
+↓
+database
+
+Then fix the actual broken layer.
+
+---
+
+FIRST — ESTABLISH THE REAL FAILURE
+
+Before modifying code, test the following with the SAME authenticated user/session.
+
+TEST 1 — SESSION IDENTITY
+
+Verify that:
+
+Supabase client session user.id
+
+matches:
+
+afuauth-api verified session user.id
+
+and matches:
+
+afuchat-api verified session.user.id
+
+Do not assume they match.
+
+Log only safe diagnostic information:
+
+request_id
+endpoint
+HTTP status
+verified user ID
+
+Never log:
+
+access token
+refresh token
+Authorization header
+message contents
+private profile data
+
+The Worker must prove that the identity used for database queries is the same identity used by the mobile app.
+
+---
+
+TEST 2 — DIRECT MESSAGE READ
+
+Using a real authenticated request, test:
+
+GET /v1/chat/messages?chat_id=<REAL_CHAT_ID>&limit=50
+
+Do not send:
+
+sender=me
+
+and do not send:
+
+sender=others
+
+The default request must return BOTH:
+
+messages sent by me
+messages sent by other people
+
+for the authenticated user's permitted chat.
+
+Then test separately:
+
+GET /v1/chat/messages?chat_id=<REAL_CHAT_ID>&sender=me&limit=50
+
+and:
+
+GET /v1/chat/messages?chat_id=<REAL_CHAT_ID>&sender=others&limit=50
+
+Expected:
+
+all       → both sides
+me        → only current user's messages
+others    → only other users' messages
+
+If:
+
+others works
+me fails
+
+then inspect:
+
+session.user.id
+messages.sender_id
+RLS policy
+PostgREST Authorization token
+
+Do NOT change the UI.
+
+---
+
+TEST 3 — VERIFY MESSAGE OWNERSHIP
+
+Inspect real database records for a known conversation.
+
+For the user's own message verify:
+
+messages.sender_id = authenticated_user_id
+
+Do not assume the message was inserted with the correct sender.
+
+The message creation API already intends to derive:
+
+sender_id = session.user.id
+
+Verify that this is actually what reaches Supabase.
+
+If the inserted message has another sender ID, fix the message creation path.
+
+Do NOT repair old data blindly.
+
+If old messages have incorrect sender IDs, report the affected records and proposed safe repair separately.
+
+---
+
+TEST 4 — VERIFY MESSAGE READ RLS
+
+Inspect the actual RLS policy on:
+
+messages
+
+and determine why:
+
+sender_id = current user
+
+is or is not visible.
+
+The expected rule is:
+
+A member of a chat can read permitted messages in that chat,
+regardless of whether the sender is the current user or another user.
+
+There must NOT be a policy equivalent to:
+
+sender_id <> auth.uid()
+
+for normal message reads.
+
+Do not weaken RLS globally.
+
+Do not disable RLS.
+
+Do not replace security policies with service-role access from the mobile app.
+
+---
+
+TEST 5 — VERIFY CHAT MEMBERSHIP
+
+For the same chat, verify:
+
+chat_members.chat_id
+chat_members.user_id
+
+The authenticated user must actually be a member.
+
+Verify both participants.
+
+This is especially important because the Chat list RPC is based on membership.
+
+---
+
+TEST 6 — VERIFY GET_CHAT_LIST
+
+The Chats screen calls:
+
+GET /v1/chat/conversations
+
+which eventually invokes:
+
+public.get_chat_list(...)
+
+Test this RPC directly through the same authenticated path.
+
+Verify that it returns:
+
+chat_id
+other_id
+other_display_name
+last_message
+last_message_at
+last_message_is_mine
+unread_count
+
+for a known existing conversation.
+
+Do not accept:
+
+[]
+
+as proof that the user has no chats.
+
+If the database contains a valid membership but the RPC returns zero rows, fix the RPC/query/auth/RLS problem.
+
+---
+
+TEST 7 — VERIFY NEW CHAT CREATION
+
+The current New Chat screen still uses:
+
+supabase.rpc("get_or_create_direct_chat", {
+  other_user_id: contactId
+})
+
+This is critical.
+
+A new conversation currently depends on a direct client-side Supabase RPC while the chat list has moved behind:
+
+/v1/chat/conversations
+
+Determine whether this creates the exact membership state expected by:
+
+get_chat_list
+
+Test:
+
+User A starts chat with User B
+↓
+get_or_create_direct_chat
+↓
+chat created
+↓
+chat_members created for A
+↓
+chat_members created for B
+↓
+A sends message
+↓
+messages row created
+↓
+GET /v1/chat/conversations
+↓
+chat appears
+
+If any step fails, identify the exact step.
+
+Do NOT simply force the UI to insert a fake conversation locally.
+
+---
+
+TEST 8 — NEW CHAT MUST NOT DEPEND ON CACHE
+
+The Chats screen currently has a fallback behavior where an empty server response can preserve cached conversations.
+
+That is useful for resilience but dangerous during this failure because it can hide the real problem.
+
+Do NOT remove offline support.
+
+Instead:
+
+When the server request succeeds:
+
+HTTP 200
+valid response
+
+the server result is authoritative.
+
+When the server request fails:
+
+401
+403
+502
+network failure
+invalid response
+
+the UI may use cache.
+
+But distinguish:
+
+SERVER EMPTY
+
+from:
+
+SERVER FAILED
+
+Do not silently turn a backend failure into:
+
+No chats
+
+Add safe development diagnostics showing:
+
+API status
+response row count
+error code
+request ID
+online state
+verified session state
+
+---
+
+TEST 9 — ONLINE/OFFLINE STATE
+
+The user is online but the app behaves as if offline.
+
+Audit:
+
+artifacts/mobile/lib/offlineStore.ts
+artifacts/mobile/lib/offlineSync.ts
+
+and every use of:
+
+isOnline()
+onConnectivityChange()
+checkIsOffline()
+
+Determine whether:
+
+isOnline()
+
+can incorrectly return false while:
+
+fetch("https://api.afuchat.com/...")
+
+works.
+
+Do not assume Android network connectivity means API reachability.
+
+The application must distinguish:
+
+device has network
+API reachable
+authenticated session valid
+
+These are different states.
+
+Do not make the entire application "online" merely because the API URL exists.
+
+---
+
+TEST 10 — API REQUEST AUTHENTICATION
+
+Inspect:
+
+artifacts/mobile/lib/afuchatApi.ts
+
+especially:
+
+getAfuChatAccessToken()
+afuChatApiFetch()
+
+Verify:
+
+Authorization: Bearer <current valid Supabase access token>
+
+is sent.
+
+Verify that token refresh cannot leave the app with:
+
+stale access token
+stale user ID
+cached synthetic user
+
+The existing code intentionally supports a cached/synthetic user during startup.
+
+Make sure that behavior does not prevent live API requests after the real session is already available.
+
+---
+
+TEST 11 — FOLLOW SUMMARY
+
+Test:
+
+GET /v1/chat/follows/summary?profile_id=<USER_ID>
+
+using the logged-in user.
+
+Expected:
+
+{
+  "followers_count": 123,
+  "following_count": 456,
+  "follows_you": true,
+  "is_following": true
+}
+
+Use actual values.
+
+Do not hardcode.
+
+If the endpoint returns 0 when the database has relationships, inspect:
+
+follows.follower_id
+follows.following_id
+session.user.id
+PostgREST schema
+RLS
+
+---
+
+TEST 12 — FOLLOW LIST
+
+Test:
+
+GET /v1/chat/follows/list
+  ?profile_id=<USER_ID>
+  &direction=followers
+  &limit=30
+  &offset=0
+
+and:
+
+GET /v1/chat/follows/list
+  ?profile_id=<USER_ID>
+  &direction=following
+  &limit=30
+  &offset=0
+
+Expected:
+
+items.length > 0
+
+when relationships exist.
+
+Each item must contain:
+
+follower_id
+following_id
+created_at
+profile
+
+---
+
+CRITICAL FOLLOW BUG CHECK
+
+Inspect:
+
+backend/afu-chat-api/src/follows.ts
+
+The follow list performs:
+
+follows query
+↓
+extract profile IDs
+↓
+profiles hydration
+
+The profile hydration uses:
+
+Accept-Profile: accounts
+Content-Profile: accounts
+
+Verify that the deployed Supabase project actually exposes:
+
+accounts.profiles
+
+through PostgREST and that the authenticated request can read the required public profile fields.
+
+If:
+
+follows query succeeds
+
+but:
+
+accounts.profiles query fails
+
+the API currently turns that into:
+
+Follow profiles could not be loaded.
+
+This would explain why relationships appear empty even though the "follows" table contains rows.
+
+Fix the schema/access issue rather than changing the UI to hide the error.
+
+---
+
+TEST 13 — FOLLOW LIST CLIENT MAPPING
+
+Inspect:
+
+artifacts/mobile/app/followers.tsx
+
+The client currently expects:
+
+followPage.items[].profile
+
+Verify the API response exactly matches that shape.
+
+Do not allow:
+
+undefined profile
+
+to silently turn a populated relationship list into an empty UI.
+
+If the API response is valid but the client mapping is wrong, fix the mapping.
+
+---
+
+TEST 14 — BLOCK FILTER MUST NOT ERASE VALID RESULTS
+
+"followers.tsx" still performs a direct:
+
+blocked_users
+
+query after receiving follow records.
+
+Inspect this carefully.
+
+A failure in the blocked-user query must NOT cause all followers to disappear.
+
+Current behavior must be audited for:
+
+blocked query error
+blocked query returns null
+blocked query returns empty
+blocked query returns valid IDs
+
+Do not treat a failed block query as:
+
+everyone is blocked
+
+The relationship list should remain visible unless there is confirmed blocking/privacy data requiring filtering.
+
+---
+
+TEST 15 — FOLLOW IDs
+
+Test:
+
+GET /v1/chat/follows/ids
+
+for:
+
+followers
+following
+
+The existing client uses this in:
+
+New Chat
+Contacts
+Suggested Users
+Discover
+Groups
+
+If this endpoint is returning an empty array for a user with follows, many seemingly unrelated features will fail simultaneously.
+
+This is therefore a HIGH PRIORITY diagnostic.
+
+---
+
+TEST 16 — FOLLOW STATUS
+
+Test:
+
+GET /v1/chat/follows/status?user_ids=<id1>,<id2>
+
+Expected:
+
+is_following
+follows_you
+
+for each requested user.
+
+This is used by:
+
+Chat message gating
+Followers
+Discover
+New Chat
+Profile
+
+A broken status endpoint can make the app behave as if relationships do not exist.
+
+---
+
+DO NOT CONFUSE THESE TWO FAILURES
+
+There are potentially two independent problems:
+
+Problem A
+
+live chat/messages unavailable
+
+Problem B
+
+follow relationships unavailable
+
+Do not fix one and declare the migration complete.
+
+Test them independently.
+
+---
+
+CHAT MESSAGE DISPLAY
+
+The chat UI must render:
+
+message.sender_id === user.id
+
+as the user's outgoing message.
+
+Verify the transformation from API response:
+
+AfuChatMessage
+↓
+Message
+↓
+MessageBubble
+
+For every message verify:
+
+id
+chat_id
+sender_id
+encrypted_content
+sent_at
+
+No transformation may drop messages where:
+
+sender_id === currentUserId
+
+Do not filter the user's own messages accidentally.
+
+---
+
+VERY IMPORTANT — DO NOT USE "sender=me" FOR NORMAL CHAT HISTORY
+
+Normal chat history must use:
+
+GET /v1/chat/messages?chat_id=<ID>&limit=50
+
+not:
+
+sender=others
+
+The "sender=me" and "sender=others" parameters are special-purpose filters.
+
+The normal conversation UI must receive BOTH sides.
+
+Only use:
+
+sender=me
+
+for operations specifically asking for outgoing-message history/counts.
+
+Only use:
+
+sender=others
+
+for operations specifically asking for incoming messages.
+
+---
+
+CHAT REALTIME
+
+Audit:
+
+artifacts/mobile/components/GlobalInboxListener.tsx
+
+and the chat-specific realtime subscription.
+
+The current global inbox listener intentionally ignores messages where:
+
+msg.sender_id === currentUserId
+
+That is correct for an incoming notification listener.
+
+It must NOT be used as the source of truth for displaying the user's own messages.
+
+Outgoing messages must appear from:
+
+postAfuChatMessage()
+
+and/or:
+
+GET /v1/chat/messages
+
+before realtime is involved.
+
+Do not depend on realtime to make the sender see their own message.
+
+---
+
+OUTGOING MESSAGE FLOW
+
+Verify:
+
+composer
+↓
+postAfuChatMessage()
+↓
+server derives sender_id from verified session
+↓
+messages INSERT
+↓
+API returns inserted message
+↓
+client immediately adds returned message
+↓
+message appears as isMe=true
+↓
+server history later reconciles it
+
+If the API successfully inserts the message but the returned message is not inserted into local state, fix that.
+
+If the API does not return the inserted message, fix the API response.
+
+If the message is inserted but GET history cannot see it, fix RLS/schema/query.
+
+---
+
+NEW CHAT FLOW
+
+Do not leave this inconsistent:
+
+New Chat
+→ direct Supabase RPC
+
+while:
+
+Chat history
+→ afuchat-api
+
+Determine whether "get_or_create_direct_chat" must be exposed through:
+
+/v1/chat/*
+
+and, if so, create a proper authenticated AfuChat API operation.
+
+Do not create:
+
+/v1/new-chat
+
+Use the AfuChat namespace.
+
+Identity must come from the verified session.
+
+---
+
+API ERROR HANDLING
+
+The mobile app must never interpret:
+
+HTTP 401
+HTTP 403
+HTTP 502
+HTTP 503
+network error
+invalid response
+
+as:
+
+empty follows
+empty messages
+no chats
+offline
+
+Show/log the actual failure in development.
+
+Production UI may remain user-friendly, but the state must remain distinguishable internally.
+
+---
+
+DO NOT HIDE THE ROOT CAUSE
+
+Do NOT add code such as:
+
+if (!data) return [];
+
+everywhere.
+
+Do NOT add:
+
+catch(() => [])
+
+to relationship APIs.
+
+Do NOT make failures look like empty lists.
+
+Do NOT make a failed chat API request fall back to only cached chats without preserving the error state.
+
+The current symptoms strongly suggest that errors are being converted into empty/cached UI states.
+
+Fix the source.
+
+---
+
+REQUIRED DIAGNOSTIC LOGGING
+
+In development builds only, add temporary diagnostics around:
+
+getAfuChatConversations()
+getAfuChatFollowRecords()
+getAfuChatFollowIds()
+getAfuChatFollowSummary()
+getAfuChatFollowStatuses()
+getAfuChatMessages()
+postAfuChatMessage()
+
+Log:
+
+endpoint
+HTTP status
+request ID
+verified/current user ID where safe
+response item count
+error code/message
+online state
+
+Never log:
+
+access tokens
+refresh tokens
+message bodies
+private profile fields
+
+Remove noisy temporary logging after the root cause is fixed, or convert useful diagnostics to controlled development logging.
+
+---
+
+REQUIRED PRODUCTION TEST ACCOUNT
+
+Use a real account that has:
+
+at least one follower
+at least one following
+at least one existing direct chat
+at least one incoming message
+at least one outgoing message
+
+Test all of the following.
+
+---
+
+ACCEPTANCE TEST — FOLLOW
+
+Open profile
+↓
+followers count appears
+↓
+following count appears
+↓
+open followers
+↓
+users appear
+↓
+open following
+↓
+users appear
+↓
+follow status appears correctly
+↓
+follow/unfollow works
+↓
+refresh
+↓
+state remains correct
+
+---
+
+ACCEPTANCE TEST — CHAT
+
+Open Chats
+↓
+existing server chats appear
+↓
+open an existing chat
+↓
+incoming messages appear
+↓
+my outgoing messages appear
+↓
+send a new message
+↓
+my message appears immediately
+↓
+close chat
+↓
+return to Chats
+↓
+conversation remains visible
+↓
+latest message preview is correct
+↓
+start a NEW conversation
+↓
+new chat appears
+↓
+send message
+↓
+recipient sees it
+↓
+sender sees it
+↓
+refresh
+↓
+both messages remain
+
+---
+
+ACCEPTANCE TEST — ONLINE STATE
+
+While connected to a working network:
+
+isOnline() === true
+
+must not be required to be inferred solely from stale cached state.
+
+Verify:
+
+device network
+API reachability
+session validity
+
+separately.
+
+A valid logged-in user with a reachable API must not be treated as offline.
+
+---
+
+DATABASE SAFETY
+
+Do NOT:
+
+delete messages
+delete follows
+delete chats
+reset memberships
+disable RLS
+make tables public
+switch the mobile app to service-role credentials
+
+Do NOT migrate or rewrite existing data just to make the UI display.
+
+First fix the query/auth/schema path.
+
+---
+
+NO UNNECESSARY MIGRATION
+
+Do not create duplicate:
+
+messages
+follows
+chat_members
+profiles
+chats
+
+tables.
+
+Use the existing shared database.
+
+If a schema migration is genuinely required:
+
+STOP.
+
+Report:
+
+exact schema problem
+why current schema cannot support the API
+migration required
+affected objects
+data safety
+rollback
+
+and wait for approval.
+
+---
+
+WORKER SCOPE
+
+The primary Worker for this fix is:
+
+afuchat-api
+
+Do not modify:
+
+afuauth-api
+afucloud-api
+afumail-api
+afuai-api
+afuads-api
+
+unless the investigation proves that "afuauth-api" session verification itself is the root cause.
+
+If the auth Worker is the problem, prove it first.
+
+---
+
+IMPORTANT: DO NOT CLAIM SUCCESS FROM CODE REVIEW ALONE
+
+A code change is NOT complete until the developer verifies:
+
+real authenticated session
+real chat
+real incoming message
+real outgoing message
+real follower
+real following
+real new conversation
+
+against the deployed API.
+
+---
+
+REQUIRED FINAL REPORT
+
+Return exactly:
+
+AFUCHAT LIVE DATA DIAGNOSTIC
+
+CURRENT COMMIT:
+<sha>
+
+ROOT CAUSE:
+<exact root cause>
+
+SECONDARY ROOT CAUSES:
+<list>
+
+SESSION VERIFICATION:
+PASS/FAIL
+
+USER ID CONSISTENCY:
+PASS/FAIL
+
+CHAT LIST API:
+PASS/FAIL
+
+GET_CHAT_LIST RPC:
+PASS/FAIL
+
+CHAT MEMBERSHIP:
+PASS/FAIL
+
+MESSAGE READ:
+PASS/FAIL
+
+OWN MESSAGE READ:
+PASS/FAIL
+
+OTHER MESSAGE READ:
+PASS/FAIL
+
+MESSAGE INSERT:
+PASS/FAIL
+
+OUTGOING MESSAGE DISPLAY:
+PASS/FAIL
+
+NEW CHAT CREATION:
+PASS/FAIL
+
+FOLLOW SUMMARY:
+PASS/FAIL
+
+FOLLOWERS LIST:
+PASS/FAIL
+
+FOLLOWING LIST:
+PASS/FAIL
+
+FOLLOW IDS:
+PASS/FAIL
+
+FOLLOW STATUS:
+PASS/FAIL
+
+PROFILE HYDRATION:
+PASS/FAIL
+
+ONLINE STATE:
+PASS/FAIL
+
+REALTIME:
+PASS/FAIL
+
+CACHE FALLBACK:
+PASS/FAIL
+
+FILES CHANGED:
+<list>
+
+DATABASE MIGRATIONS:
+YES/NO
+
+DATA CHANGED:
+YES/NO
+
+WORKER CHANGED:
+<worker>
+
+TESTED PRODUCTION:
+YES/NO
+
+PRODUCTION RESULTS:
+<actual results>
+
+REMAINING ISSUE:
+<if any>
+
+FINAL RULE
+
+Do not treat:
+
+empty array
+cached chats
+offline fallback
+
+as evidence that the user has no relationships or no conversations.
+
+The user's database already contains relationships and messages.
+
+Find exactly where the authenticated live data is being lost.
+
+Fix that layer.
+
+Then verify the complete path end-to-end.

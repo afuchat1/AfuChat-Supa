@@ -750,21 +750,16 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       setRefreshing(false);
       return;
     }
-    if (!chatRows?.length) {
-      // An empty response is not proof that the account has no chats. During
-      // token refresh, a stale auth context or a transient RLS/network issue
-      // can make the RPC return zero rows. Never erase a list already hydrated
-      // from SQLite; keep it visible and let the next refresh reconcile it.
-      if (localNotes) {
-        setChats((prev) => {
-          const withoutNotes = prev.filter((item) => !isLocalNotesId(item.id));
-          return withoutNotes.length > 0
-            ? [...withoutNotes, localNotesToChatItem(localNotes)]
-            : [localNotesToChatItem(localNotes)];
-        });
-      } else if (chatsRef.current.length === 0) {
-        setChats([]);
-      }
+    if (!chatRows) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    if (chatRows.length === 0) {
+      // A successful server response is authoritative. Preserve only the
+      // device-only My Notes conversation; cached server chats must not make a
+      // successful empty result look like current production data.
+      setChats(localNotes ? [localNotesToChatItem(localNotes)] : []);
       setLoading(false);
       setRefreshing(false);
       return;

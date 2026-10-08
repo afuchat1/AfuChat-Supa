@@ -108,7 +108,7 @@ import {
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageRead } from "@/lib/storage/localMessages";
+import { getLocalMessages, saveMessages, savePendingMessage, deleteAllLocalMessages, markMessageRead } from "@/lib/storage/localMessages";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
 import {
@@ -3079,19 +3079,14 @@ function ChatScreen() {
       }
     }
 
-    // Delta sync: only fetch messages NEWER than what's already stored on device.
-    // On web: always fetch fresh from the server (no local cache).
-    const newestStored = await getNewestMessageDate(chatId);
+    // Reconcile the latest server page on every open. A local newest-message
+    // cursor can skip server rows if the device cache is incomplete.
     const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
     if (!isCurrentLoad()) return;
-    const afterCursor = [newestStored, clearedAtServer]
-      .filter((value): value is string => !!value)
-      .sort((a, b) => Date.parse(a) - Date.parse(b))
-      .at(-1);
     const { data: rawData, error: messageLoadError } = await getAfuChatMessages({
       chatId,
       limit: 100,
-      ...(afterCursor ? { after: afterCursor } : {}),
+      ...(clearedAtServer ? { after: clearedAtServer } : {}),
     });
       if (!isCurrentLoad()) return;
       if (messageLoadError || !rawData) {
@@ -3185,9 +3180,9 @@ function ChatScreen() {
       });
       clearUnread(chatId).catch(() => {});
 
-      if (!newestStored) {
+      if (!oldestCursorRef.current) {
         oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
-        setHasMore(data.length >= 50);
+        setHasMore(data.length >= 100);
       }
       if (chatId) {
         markChatVisited(chatId);
