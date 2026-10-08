@@ -31,8 +31,10 @@ import { showAlert } from "@/lib/alert";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import {
+  getAfuChatDiscoverPeople,
   getAfuChatFollowIds,
   getAfuChatFollowStatuses,
+  getAfuChatNearbyPeople,
   setAfuChatFollow,
 } from "@/lib/afuchatApi";
 
@@ -268,6 +270,7 @@ export default function UserDiscoveryScreen() {
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   const [radiusKm, setRadiusKm] = useState(5);
+  const [discoverLoadError, setDiscoverLoadError] = useState<string | null>(null);
   const [nearbyLoadError, setNearbyLoadError] = useState<string | null>(null);
   const [myLocationUpdatedAt, setMyLocationUpdatedAt] = useState<string | null>(null);
   const {
@@ -329,33 +332,24 @@ export default function UserDiscoveryScreen() {
   const loadDiscoverUsers = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setDiscoverLoadError(null);
     try {
-      let query = supabase
-        .from("profiles")
-        .select(
-          "id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, country, interests, follower_count, following_count, last_seen"
-        )
-        .neq("id", user.id)
-        .eq("onboarding_completed", true)
-        .eq("is_banned", false)
-        .eq("account_deleted", false)
-        .not("avatar_url", "is", null)
-        .not("bio", "is", null)
-        .not("display_name", "is", null)
-        .order("follower_count", { ascending: false })
-        .limit(60);
-
-      if (selectedInterest !== "All") {
-        query = query.contains("interests", [selectedInterest.toLowerCase()]);
+      const [peopleResult, followSet] = await Promise.all([
+        getAfuChatDiscoverPeople({
+          mode: "directory",
+          expectedUserId: user.id,
+          interest: selectedInterest,
+        }),
+        loadFollowSet(),
+      ]);
+      if (peopleResult.error || !peopleResult.data) {
+        throw peopleResult.error ?? new Error("People could not be loaded.");
       }
-
-      const [{ data }, followSet] = await Promise.all([query, loadFollowSet()]);
-
-      setFollowing(followSet);
+      const people = peopleResult.data as Array<Record<string, any> & { id: string }>;
 
       const mutualIds = new Set<string>();
-      if (data && data.length > 0) {
-        const ids = (data as any[]).map((u) => u.id);
+      if (people.length > 0) {
+        const ids = people.map((u) => u.id);
         const statusResult = await getAfuChatFollowStatuses(ids);
         if (statusResult.error || !statusResult.data) {
           throw statusResult.error ?? new Error("Follow statuses could not be loaded.");
@@ -365,8 +359,9 @@ export default function UserDiscoveryScreen() {
         }
       }
 
+      setFollowing(followSet);
       setUsers(
-        ((data || []) as any[]).map((u) => ({
+        people.map((u) => ({
           id: u.id,
           display_name: u.display_name || `@${u.handle}`,
           handle: u.handle,
@@ -384,14 +379,24 @@ export default function UserDiscoveryScreen() {
           is_online: isRecentlyActive(u.last_seen),
         }))
       );
-    } catch (_) {} finally {
+    } catch (error) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? error.message
+          : null;
+      setDiscoverLoadError(
+        typeof message === "string" && message
+          ? message
+          : "People could not be loaded. Please try again."
+      );
+    } finally {
       setLoading(false);
     }
   }, [user, selectedInterest]);
 
   // requestLocation comes from useNearbyLocation hook above.
   // After getting coords, save them to the user's profile only when location
-  // sharing is enabled, so the nearby_users RPC can compute distances.
+  // sharing is enabled, so the nearby search can compute distances.
   const saveCoordsToDB = useCallback(
     async (coords: { lat: number; lng: number }) => {
       if (!user) return;
@@ -429,22 +434,22 @@ export default function UserDiscoveryScreen() {
       setLoading(true);
       setNearbyLoadError(null);
 
-      const [{ data, error }, followSet] = await Promise.all([
-        supabase.rpc("nearby_users", {
-          user_lat: c.lat,
-          user_lng: c.lng,
-          radius_km: radiusKm,
-          exclude_id: user.id,
-        }),
-        loadFollowSet(),
-      ]);
-
-      if (error) {
-        setNearbyLoadError("Failed to load nearby users.");
-      } else {
+      try {
+        const [peopleResult, followSet] = await Promise.all([
+          getAfuChatNearbyPeople({
+            latitude: c.lat,
+            longitude: c.lng,
+            radiusKm,
+            expectedUserId: user.id,
+          }),
+          loadFollowSet(),
+        ]);
+        if (peopleResult.error || !peopleResult.data) {
+          throw peopleResult.error ?? new Error("Nearby people could not be loaded.");
+        }
         setFollowing(followSet);
         setUsers(
-          ((data || []) as any[]).map((u) => ({
+          (peopleResult.data as Array<Record<string, any> & { id: string }>).map((u) => ({
             id: u.id,
             display_name: u.display_name || `@${u.handle}`,
             handle: u.handle,
@@ -463,8 +468,19 @@ export default function UserDiscoveryScreen() {
             is_online: isRecentlyActive(u.location_updated_at),
           }))
         );
+      } catch (error) {
+        const message =
+          error && typeof error === "object" && "message" in error
+            ? error.message
+            : null;
+        setNearbyLoadError(
+          typeof message === "string" && message
+            ? message
+            : "Nearby people could not be loaded. Please try again."
+        );
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     },
     [user, userCoords, radiusKm]
   );
@@ -596,17 +612,34 @@ export default function UserDiscoveryScreen() {
   const renderDiscoverEmpty = () => (
     <View style={styles.emptyWrap}>
       <View style={[styles.emptyIconWrap, { backgroundColor: accent + "15" }]}>
-        <Ionicons name="people" size={44} color={accent} />
+        <Ionicons
+          name={discoverLoadError ? "alert-circle" : "people"}
+          size={44}
+          color={discoverLoadError ? "#FF3B30" : accent}
+        />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.text }]}>
-        {searchQuery ? "No results found" : "No users found"}
+        {discoverLoadError
+          ? "People could not be loaded"
+          : searchQuery
+            ? "No results found"
+            : "No users found"}
       </Text>
       <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-        {searchQuery
+        {discoverLoadError
+          ? discoverLoadError
+          : searchQuery
           ? `Try a different search term`
           : `Try a different interest filter`}
       </Text>
-      {searchQuery ? (
+      {discoverLoadError ? (
+        <TouchableOpacity
+          style={[styles.emptyBtn, { backgroundColor: accent }]}
+          onPress={loadDiscoverUsers}
+        >
+          <Text style={styles.emptyBtnText}>Try Again</Text>
+        </TouchableOpacity>
+      ) : searchQuery ? (
         <TouchableOpacity
           style={[styles.emptyBtn, { backgroundColor: accent }]}
           onPress={() => setSearchQuery("")}
@@ -640,7 +673,9 @@ export default function UserDiscoveryScreen() {
           <Text style={[styles.emptyTitle, { color: colors.text }]}>{nearbyError}</Text>
           <TouchableOpacity
             style={[styles.emptyBtn, { backgroundColor: accent }]}
-            onPress={handleRequestLocation}
+            onPress={() =>
+              userCoords ? loadNearbyUsers(userCoords) : handleRequestLocation()
+            }
           >
             <Ionicons name="refresh" size={16} color="#fff" />
             <Text style={styles.emptyBtnText}>Try Again</Text>
@@ -663,6 +698,8 @@ export default function UserDiscoveryScreen() {
 
   const tabW = useRef(0);
   const currentSort = SORT_OPTIONS.find((s) => s.value === sortBy)!;
+  const listLoadError =
+    tab === "nearby" ? nearbyLoadError : discoverLoadError;
 
   return (
     <View
@@ -997,6 +1034,23 @@ export default function UserDiscoveryScreen() {
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          ListHeaderComponent={
+            filtered.length > 0 && listLoadError ? (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ color: colors.textMuted, flex: 1, marginRight: 12 }}>
+                  {listLoadError}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (tab === "nearby") void loadNearbyUsers();
+                    else void loadDiscoverUsers();
+                  }}
+                >
+                  <Text style={{ color: accent, fontWeight: "600" }}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null
+          }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={

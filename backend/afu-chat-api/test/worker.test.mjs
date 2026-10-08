@@ -3294,6 +3294,123 @@ test("Discover suggested people excludes self and followed accounts with privacy
   );
 });
 
+test("Discover directory returns relationship counts through the authenticated people API", async () => {
+  const token = "discover-directory-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174023";
+  const personId = "123e4567-e89b-42d3-a456-426614174024";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+
+  let candidateQuery;
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    if (request.headers.get("Accept-Profile") === "public") {
+      candidateQuery = url;
+      return Response.json([{
+        id: personId,
+        display_name: "Directory person",
+        handle: "directory-person",
+        avatar_url: "https://cdn.example.test/directory.jpg",
+        bio: "A directory profile",
+        follower_count: 12,
+        following_count: 7,
+        is_verified: false,
+        is_organization_verified: false,
+        country: "Uganda",
+        interests: ["tech"],
+        last_seen: null,
+      }]);
+    }
+    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    return Response.json([{
+      id: personId,
+      display_name: "Directory person",
+      handle: "directory-person",
+      avatar_url: "https://cdn.example.test/directory.jpg",
+      bio: "A directory profile",
+      is_verified: false,
+      is_organization_verified: false,
+    }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/discover/people?mode=directory&interest=tech&expected_user_id=${viewerId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(candidateQuery.searchParams.get("id"), `neq.${viewerId}`);
+  assert.equal(candidateQuery.searchParams.get("interests"), "cs.{tech}");
+  assert.equal(candidateQuery.searchParams.get("order"), "follower_count.desc");
+  const payload = await response.json();
+  assert.equal(payload.items[0].id, personId);
+  assert.equal(payload.items[0].follower_count, 12);
+  assert.equal(payload.items[0].following_count, 7);
+});
+
+test("Discover nearby derives the excluded account from AfuAuth and returns server results", async () => {
+  const token = "discover-nearby-token";
+  const viewerId = "123e4567-e89b-42d3-a456-426614174025";
+  const personId = "123e4567-e89b-42d3-a456-426614174026";
+  const env = makeEnv();
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: viewerId }, accessToken: token });
+
+  let databaseCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    databaseCalls += 1;
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    assert.equal(url.pathname, "/rest/v1/rpc/nearby_users");
+    assert.equal(request.method, "POST");
+    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    assert.deepEqual(await request.json(), {
+      user_lat: 0.3,
+      user_lng: 32.6,
+      radius_km: 10,
+      exclude_id: viewerId,
+    });
+    return Response.json([{
+      id: personId,
+      display_name: "Nearby person",
+      handle: "nearby-person",
+      follower_count: 4,
+      following_count: 9,
+      distance_km: 2.1,
+      location_updated_at: "2026-10-08T07:00:00.000Z",
+    }]);
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      `https://api.afuchat.com/v1/chat/discover/nearby?latitude=0.3&longitude=32.6&radius_km=10&expected_user_id=${viewerId}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.items[0].id, personId);
+  assert.equal(payload.items[0].follower_count, 4);
+  assert.equal(payload.items[0].following_count, 9);
+  assert.equal(databaseCalls, 1);
+
+  const staleAccountResponse = await worker.fetch(
+    new Request(
+      "https://api.afuchat.com/v1/chat/discover/nearby?latitude=0.3&longitude=32.6&radius_km=10&expected_user_id=123e4567-e89b-42d3-a456-426614174027",
+      { headers: { Authorization: `Bearer ${token}` } },
+    ),
+    env,
+  );
+  assert.equal(staleAccountResponse.status, 409);
+  assert.equal(databaseCalls, 1);
+});
+
 test("Discover presence heartbeat verifies the shared identity and only updates that account", async () => {
   const token = "discover-presence-token";
   const viewerId = "123e4567-e89b-42d3-a456-426614174030";

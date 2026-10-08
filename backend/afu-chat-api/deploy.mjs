@@ -343,6 +343,8 @@ async function assertProductionPostflight() {
     { method: "GET", path: "/v1/chat/feed/following" },
     { method: "POST", path: "/v1/chat/feed/views", body: { post_ids: [] } },
     { method: "GET", path: "/v1/chat/discover/people?mode=active" },
+    { method: "GET", path: "/v1/chat/discover/people?mode=directory" },
+    { method: "GET", path: "/v1/chat/discover/nearby?latitude=0&longitude=0&radius_km=5&expected_user_id=123e4567-e89b-42d3-a456-426614174123" },
     { method: "POST", path: "/v1/chat/discover/presence", body: {} },
   ];
   for (const probe of socialRouteProbes) {
@@ -618,7 +620,8 @@ if (!APPLY) {
       "GET /v1/chat/feed/for-you",
       "GET /v1/chat/feed/following",
       "POST /v1/chat/feed/views",
-      "GET /v1/chat/discover/people?mode=active|suggested",
+      "GET /v1/chat/discover/people?mode=active|suggested|directory|search|trending|mentions",
+      "GET /v1/chat/discover/nearby",
       "POST /v1/chat/discover/presence",
       "POST /v1/chat/support/ai-reply",
       "POST /v1/chat/push/register",
