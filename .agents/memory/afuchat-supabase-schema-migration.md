@@ -25,8 +25,8 @@ The live AfuChat API had split paths: several `public` RPCs used `chat.*`, while
 
 **How to apply:** Do not copy or re-key legacy rows. Redirect explicit routine references to AfuChat, retarget and validate the 30 external FKs whose parents exist there, preserve external notification rows while explicitly removing their invalid FK, and use `DROP SCHEMA ... RESTRICT` after Worker deployment so overlooked external dependencies abort rather than cascade. Do not expand PostgREST schema exposure; existing public compatibility views already point to AfuChat.
 
-For mobile data access, route every PostgREST relation and RPC call through the AfuChat Worker API. Keep each shared or cross-product dataset under its existing owner (for example, account profiles and shop orders); do not move, duplicate, or broadly expose those records as part of AfuChat routing.
+For AfuChat-owned chat, social, and content data, `afuchat.*` is the canonical runtime source. The `/v1/chat/*` API namespace must not leave runtime requests dependent on legacy `chat.*` or hide that dependency behind `public` compatibility objects. Shared identity and other cross-product data remain with their existing owners; do not move or duplicate them.
 
-**Why:** The user explicitly requires one AfuChat API for mobile database calls while keeping shared data with other products intact.
+**Why:** The user explicitly requires AfuChat runtime data to use `afuchat.*`, while preserving shared data with other products and retaining `/v1/chat/*` as the API namespace.
 
-**How to apply:** Use the existing public AfuChat compatibility surface for AfuChat-owned data and narrowly allow explicit owner schemas for shared data. Keep RLS and the caller's session in force; make no schema or data migration unless separately authorized.
+**How to apply:** Route AfuChat-owned requests to `afuchat.*`; use narrow owner-specific paths for shared data. Preserve the caller's identity and RLS. Do not expose the `afuchat` schema through PostgREST until grants and policies have been audited for cross-product access.
