@@ -691,7 +691,7 @@ console.log(JSON.stringify({
     "AfuAuth shared-session rejection",
     "current-profile unauthenticated rejection",
     "follow and feed routes require a shared session",
-    "Discover active people and presence routes require a shared session",
+    "Discover active, directory, nearby, and presence routes require a shared session",
     "support and direct-FCM routes require a shared session",
     "support and direct-FCM Supabase functions are present",
     "storage handler route",

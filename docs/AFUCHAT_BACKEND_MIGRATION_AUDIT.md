@@ -23,29 +23,55 @@ rows, schemas, buckets, or CDN routes were changed.
 
 The `afuchat-api` source currently owns health/status, current-account profile
 read, conversation list, saved-post/bookmark operations, post create/detail/my
-posts/owner delete/likes/replies, follows, discover feeds and post-view batches,
-support AI reply, push registration/send, account export, Pesapal payments, and
-the existing storage handler. Video processing paths remain explicit `501`
-stubs. AfuAuth and AfuAI calls remain separate product APIs.
+posts/owner delete/likes/replies, follows, discover feeds, people directory and
+nearby search, post-view batches, support AI reply, push registration/send,
+account export, Pesapal payments, and the existing storage handler. Video
+processing paths remain explicit `501` stubs. AfuAuth and AfuAI calls remain
+separate product APIs.
 
 The bookmark, post, follow, feed, and view routes use fixed projections and
 derive acting-user identity from the AfuAuth-verified shared session. The
 original Supabase bearer token is forwarded where row-level policies apply.
-Account profile hydration uses the `accounts.profiles` schema. The production
-deployment and its postflight verification are recorded below after rollout.
+Account profile hydration uses the `accounts.profiles` schema.
+
+## Relationship batch 1 rollout
+
+Before deployment, production health/status returned `200`, but the protected
+follow operations and the directory/nearby routes returned the generic `501`
+endpoint-unavailable response. The active `afuchat-api` bundle did not contain
+the current follow/discover handlers. This was a stale Worker deployment, not a
+missing mobile token or a separate login problem.
+
+Deployed only the existing `afuchat-api` Worker. Its canonical
+`api.afuchat.com/v1/chat/*` route remained in place, the existing legacy media
+handler was preserved, and the `afuchat-media` bucket binding was unchanged.
+No database rows, schema, other product Worker, or CDN route was changed.
+
+Post-deployment verification passed: production health/status returned `200`;
+unauthenticated follow summary/list/IDs/status, follow create/delete, people
+directory, and nearby requests returned `401`; directory and nearby CORS
+preflights returned `204`. The Worker postflight also passed its existing chat,
+AfuAuth, storage, and media-routing checks. The authenticated response shapes
+were verified with local Worker tests using a mocked shared session; no live
+signed-in account was used for this batch.
 
 ## Mobile source inventory
 
 The current source scan covered JavaScript and TypeScript files under
 `artifacts/mobile`. It found:
 
-- 585 literal `.from("relation")` call sites over 84 relation names in 110 files.
-- 91 direct RPC call sites over 36 function names.
+- 550 literal `.from("relation")` call sites over 81 relation names in 106 files.
+- 87 direct RPC call sites over 35 function names in 35 files.
 - No remaining direct `.from("bookmarks")`, `.from("saved_posts")`, or
   `.from("post_bookmarks")` calls in the mobile source.
 - No remaining direct `.from("follows")` calls in mobile `app`, `components`,
-  or `modules`; profile, discovery, contact, chat setup, sharing, video follow
-  status, and suggested-user paths now use the named Worker routes.
+  or `modules`; follow states/counts and profile, discovery, contact, chat
+  setup, sharing, video follow status, and suggested-user paths use named
+  Worker routes.
+- The user-discovery directory and nearby lists use
+  `/v1/chat/discover/people` and `/v1/chat/discover/nearby`; the client no
+  longer reads relationship counts from `profiles` or invokes `nearby_users`
+  directly. The existing RPC is called server-side by the nearby API.
 - Discover For You/Following feed reads and batched post-view writes use
   `/v1/chat/feed/*`.
 
@@ -92,15 +118,15 @@ completion claim.
 `delist_username_listing`, `feature_username_listing`,
 `get_channel_access_context`, `get_my_channels`, `get_or_create_direct_chat`,
 `increment_channel_subscriber`, `insert_afuai_message`,
-`lookup_profile_by_afu_id`, `nearby_users`, `place_username_bid`,
+`lookup_profile_by_afu_id`, `place_username_bid`,
 `purchase_music_track`, `purchase_status_good`, `purchase_username`,
 `reward_activity_xp`, `send_afu_ai_welcome`, `update_last_seen`,
 `upsert_watch_history`.
 
-All 36 called functions exist in `public` and are `SECURITY DEFINER`. Their
-arguments and authorization behavior must be reviewed one by one before adding
-Worker routes; forwarding arbitrary function names or caller-supplied user IDs
-would cross the shared product boundary.
+All 35 functions still called directly by the mobile client exist in `public`
+and are `SECURITY DEFINER`. Their arguments and authorization behavior must be
+reviewed one by one before adding Worker routes; forwarding arbitrary function
+names or caller-supplied user IDs would cross the shared product boundary.
 
 ## Previous live catalog cross-check
 
@@ -119,7 +145,8 @@ relation names, not the refreshed 84-name set above. It confirmed:
   `app_banners`, `app_settings`, and `collections` references were not part of
   that catalog cross-check.
 - All 36 RPC names in the previous source inventory existed in `public` and
-  were `SECURITY DEFINER`; the current source still calls those 36 names.
+  were `SECURITY DEFINER`; `nearby_users` is now invoked server-side by
+  `/v1/chat/discover/nearby` instead of from the mobile client.
 
 Do not add tables to make the stale names work. Map them to the current product
 relations/API only after inspecting their existing use and data semantics.
