@@ -1,0 +1,915 @@
+AfuChat — Diagnose and Fix Production Database Read Layer
+
+Repository: "afuchat1/AfuChat-Supa"
+
+Problem
+
+We are seeing a system-wide data retrieval problem in the AfuChat mobile app.
+
+The application UI looks fine and the newer data actions appear to work. Users can authenticate successfully, and new data actions can appear to create/update data correctly.
+
+However, the app is not reliably fetching the existing data that is already stored in the production database.
+
+This is NOT only a messaging problem.
+
+It affects multiple database-backed areas, including:
+
+- Profiles
+- Posts/feed
+- Chats/conversations
+- Messages
+- Followers/following
+- Follow counts
+- Notifications
+- Other existing user-related data
+
+The important observation is:
+
+«The database contains the data, authentication works, and newer data actions work, but the API is not correctly retrieving existing production records.»
+
+The application therefore looks functional on the surface while behaving as though it is connected to an empty or incomplete dataset.
+
+Critical clarification
+
+Authentication is working.
+
+Do not treat login, signup, or the basic authentication flow as the primary problem unless the investigation produces concrete evidence otherwise.
+
+Users can authenticate and obtain a valid session.
+
+The investigation should therefore focus primarily on:
+
+Authenticated request → "afuchat-api" → database query/RPC → production database → returned rows
+
+The main question is:
+
+«Why is "afuchat-api" not correctly retrieving existing production records from the database for an authenticated user?»
+
+---
+
+1. Investigate the actual READ path
+
+Trace real production requests from beginning to end:
+
+Mobile app
+    ↓
+artifacts/mobile/lib/afuchatApi.ts
+    ↓
+https://api.afuchat.com
+    ↓
+afuchat-api
+    ↓
+verified authenticated request
+    ↓
+database query / RPC / PostgREST
+    ↓
+production Supabase database
+    ↓
+database result
+    ↓
+API response
+    ↓
+mobile application
+
+For every affected endpoint, identify the exact database operation being executed.
+
+Do not stop at the API route.
+
+I want to know:
+
+Endpoint
+→ handler
+→ query/RPC
+→ schema
+→ table/view/function
+→ parameters
+→ authenticated user ID
+→ database result
+→ API response
+
+---
+
+2. Verify the database being queried
+
+First prove that "afuchat-api" is querying the same production Supabase database that contains the real AfuChat data.
+
+Inspect the actual Worker configuration and environment variables.
+
+Verify:
+
+- Supabase project URL
+- Supabase project reference
+- database/API endpoint
+- server credentials
+- schema configuration
+- RPC target
+- environment-specific variables
+- production vs development configuration
+- any legacy Supabase URLs
+- any old project references
+- any hardcoded database endpoints
+
+Do not assume the configuration is correct simply because requests return HTTP responses.
+
+A Worker can be reachable and authenticated while its database queries are pointed at the wrong project, schema, or data source.
+
+Do not expose secrets in logs or in the final report.
+
+Report only safe identifiers such as project reference where appropriate.
+
+---
+
+3. Verify authenticated identity at the query layer
+
+Authentication itself is working, but we still need to verify that the authenticated identity reaches the database query correctly.
+
+For one real production account, compare:
+
+Mobile Supabase session user.id
+        ↓
+JWT sub
+        ↓
+afuchat-api verified user ID
+        ↓
+database auth.uid()
+        ↓
+user-owned query/filter
+
+These must refer to the same user.
+
+Do not accept a client-provided user ID as the source of truth for authorization.
+
+The server must derive the authenticated identity from the verified bearer token.
+
+Client IDs may only be used as optional consistency checks.
+
+---
+
+4. Inspect every affected API query
+
+Audit the actual database queries behind the affected endpoints.
+
+At minimum inspect:
+
+Profile data
+
+- "/v1/chat/me"
+- profile reads
+- profile lookups
+- profile hydration
+- contact profile reads
+
+Verify that existing profiles are actually retrieved.
+
+---
+
+Chats/conversations
+
+- "/v1/chat/conversations"
+- chat list queries
+- direct chat lookup
+- chat membership queries
+- "get_chat_list"
+- "get_or_create_direct_chat"
+
+Verify:
+
+- existing chats
+- "chat_members"
+- current user's membership
+- latest message
+- participant information
+- direct conversations
+
+The database already contains existing chats, so an empty API response must be investigated rather than treated as "no chats."
+
+---
+
+Messages
+
+Inspect:
+
+- "/v1/chat/messages"
+- message history
+- message counts
+- message status
+- message reactions
+- starred messages
+- edited/deleted messages
+- sender filtering
+
+Test separately:
+
+GET /v1/chat/messages
+GET /v1/chat/messages?sender=me
+GET /v1/chat/messages?sender=others
+
+Verify that the authenticated user's own messages are returned correctly.
+
+Also verify incoming messages.
+
+Do not assume realtime is responsible for historical message loading.
+
+Existing messages must come from the database/API read path.
+
+---
+
+Posts/feed
+
+Inspect:
+
+- "/v1/chat/posts"
+- "/v1/chat/posts/mine"
+- "/v1/chat/posts/{postId}"
+- "/v1/chat/posts/{postId}/like"
+- "/v1/chat/posts/{postId}/replies"
+- "/v1/chat/feed/for-you"
+- "/v1/chat/feed/following"
+- "/v1/chat/feed/views"
+
+Verify that existing production posts and feed records are being retrieved.
+
+---
+
+Follows
+
+Inspect:
+
+- "/v1/chat/follows/list"
+- "/v1/chat/follows/ids"
+- "/v1/chat/follows/summary"
+- "/v1/chat/follows/status"
+- "/v1/chat/follows"
+
+Verify:
+
+- existing following relationships
+- existing followers
+- follower/following counts
+- follow status
+- profile hydration for relationship records
+
+Do not return an empty follower/following list merely because profile hydration failed.
+
+A failed database query must remain an error.
+
+---
+
+Notifications
+
+Inspect notification queries and verify that existing notifications are retrieved from production data.
+
+---
+
+Other database-backed data
+
+Search the repository for additional API/database reads and identify any data domains still bypassing the intended API layer.
+
+Do not assume the currently reported symptoms are the complete scope.
+
+---
+
+5. Investigate RPC functions
+
+Audit every RPC used by the affected API routes.
+
+In particular inspect:
+
+get_chat_list
+get_or_create_direct_chat
+
+and all other relevant functions used by:
+
+- chats
+- messages
+- profiles
+- follows
+- feeds
+- notifications
+- relationships
+
+For every RPC verify:
+
+1. It exists in the production database.
+2. The API calls the correct function.
+3. The function is in the correct schema.
+4. The function receives the correct parameters.
+5. "auth.uid()" resolves to the authenticated production user.
+6. The function queries the correct production tables.
+7. The function does not accidentally filter out valid records.
+8. Security-definer functions have the expected "search_path".
+9. Joins do not unintentionally eliminate rows.
+10. The returned shape matches what the API expects.
+
+If an RPC returns no rows through the API while the underlying tables contain the records, identify exactly why.
+
+---
+
+6. Compare the database directly with the API
+
+Use one real production account and known real records.
+
+Establish a small test dataset that definitely exists in production:
+
+User A
+├── profile
+├── existing post
+├── existing chat
+├── outgoing message
+├── incoming message
+├── follower relationship
+├── following relationship
+└── notifications
+
+Then compare:
+
+DATABASE
+vs
+API RESPONSE
+vs
+MOBILE APP
+
+For each record determine where it disappears.
+
+Example:
+
+Database: record exists
+        ↓
+API query: ?
+        ↓
+API response: ?
+        ↓
+Mobile state: ?
+        ↓
+UI: ?
+
+This is much more useful than simply testing whether an endpoint returns HTTP 200.
+
+---
+
+7. Investigate query filters carefully
+
+Look for accidental filters involving:
+
+- "user_id"
+- "sender_id"
+- "receiver_id"
+- "profile_id"
+- "owner_id"
+- "chat_id"
+- "conversation_id"
+- "post_id"
+- "created_by"
+- "status"
+- "deleted_at"
+- "blocked"
+- "visibility"
+- "is_active"
+- pagination
+- date ranges
+- search terms
+- schema-qualified table names
+
+Verify that IDs are being passed correctly.
+
+Pay particular attention to queries where a valid record can be eliminated because of an incorrect "INNER JOIN".
+
+Where appropriate, determine whether the intended relationship should be an outer join instead.
+
+---
+
+8. Verify schema usage
+
+A major part of this investigation is determining whether the API is querying the correct schema.
+
+Audit references to:
+
+public
+accounts
+afucloud
+other product schemas
+
+Where "accounts" or another schema is expected, verify that the API is actually querying that schema rather than defaulting to "public".
+
+For PostgREST/schema-specific requests, verify the correct profile/schema headers and configuration.
+
+Do not silently fall back to another schema if the expected schema fails.
+
+---
+
+9. Check for empty-data error masking
+
+Search the mobile application and API for patterns such as:
+
+catch(() => [])
+
+if (!data) return []
+
+return []
+
+after failed requests.
+
+Also look for:
+
+- silent catch blocks
+- default empty arrays
+- fake fallback objects
+- stale cached data being preferred over live data
+- old Supabase direct reads
+- API errors converted into successful empty responses
+
+An API/database failure must not be presented to the UI as:
+
+[]
+
+when the correct state is:
+
+database/API request failed
+
+The client must be able to distinguish:
+
+No records exist
+
+from:
+
+Records exist but the request failed
+
+---
+
+10. Check cache behavior
+
+The application currently has local/cache behavior that can make the app look functional even when live reads are failing.
+
+Inspect:
+
+- MMKV cache
+- profile cache
+- conversation cache
+- message cache
+- feed cache
+- relationship cache
+- offline state
+- stale state hydration
+
+Determine whether cached data is masking the API/database failure.
+
+The desired behavior is:
+
+Live API/database data
+        ↓
+update application state
+        ↓
+optionally update cache
+
+not:
+
+Cache
+        ↓
+make app look populated
+        ↓
+silently fail live database request
+
+Cache may be used as a temporary offline fallback, but it must never hide a broken production data path while the user is online.
+
+---
+
+11. Verify online state separately
+
+Do not confuse:
+
+Device has internet
+
+with:
+
+API can reach database
+
+And do not confuse:
+
+API returned HTTP 200
+
+with:
+
+API successfully retrieved production data
+
+The diagnostics should distinguish:
+
+- device online
+- API reachable
+- authentication valid
+- database reachable
+- database query successful
+- records found
+- records returned to client
+
+---
+
+12. Verify WRITE vs READ divergence
+
+This is extremely important.
+
+The newer data actions appear to work, so compare their implementation with the broken existing-data reads.
+
+For a representative record:
+
+CREATE/UPDATE
+→ database
+→ successful response
+
+then immediately:
+
+READ
+→ same database
+→ same record
+→ returned?
+
+If a write succeeds but a subsequent read cannot retrieve the record, identify exactly where the paths diverge.
+
+Possible causes include:
+
+- different Supabase project
+- different schema
+- different table
+- different API Worker
+- different database client
+- incorrect query filter
+- incorrect user identity
+- incorrect RPC
+- RLS/auth context
+- stale cache
+- client calling an old endpoint
+
+Do not assume that because the write works, the read must be correct.
+
+---
+
+13. Check for old direct Supabase reads
+
+Audit the mobile repository for remaining direct database calls such as:
+
+supabase.from(...)
+supabase.rpc(...)
+
+Identify which data domains still read directly from Supabase and which are expected to use "afuchat-api".
+
+For every remaining direct read determine whether it is intentional.
+
+Do not blindly migrate everything during this investigation.
+
+The goal is to identify whether some screens are reading from:
+
+old/direct Supabase
+
+while others read from:
+
+afuchat-api
+
+and therefore see different datasets or query behavior.
+
+---
+
+14. New chat creation
+
+Inspect the current new-chat flow.
+
+Verify:
+
+new chat action
+→ get_or_create_direct_chat
+→ chat created/found
+→ chat_members created/verified
+→ conversation appears in API
+→ conversation appears after app restart
+
+There must not be a situation where a new chat exists in the database but "/v1/chat/conversations" cannot see it.
+
+Pay particular attention to:
+
+get_or_create_direct_chat(other_user_id)
+
+and the authenticated user's membership.
+
+---
+
+15. Realtime is not the primary source of historical data
+
+Realtime should not be required to display existing database records.
+
+For example:
+
+- Existing messages must load from the messages API.
+- Existing chats must load from the conversations API.
+- Existing follows must load from the follow API.
+- Existing posts must load from the feed/posts API.
+
+Realtime can update already-loaded state, but it cannot be the mechanism that makes old database records appear.
+
+---
+
+16. Production diagnostics
+
+Add temporary safe diagnostics where necessary to prove the data path.
+
+Diagnostics may include:
+
+requestId
+endpoint
+authenticated user ID
+database/project identifier (safe non-secret identifier)
+schema
+query/RPC name
+HTTP status
+database error code
+returned row count
+
+Never log:
+
+- access tokens
+- refresh tokens
+- service-role keys
+- database passwords
+- private credentials
+
+The purpose is to establish whether:
+
+API request
+
+actually reaches:
+
+correct production database
+
+and whether the database returns:
+
+expected records
+
+---
+
+17. Do NOT apply these workarounds
+
+Do NOT:
+
+- disable RLS
+- remove security policies
+- expose service-role keys to the mobile app
+- create fake data
+- hardcode users
+- hardcode database records
+- return empty arrays on errors
+- make the UI assume data exists
+- reset the database
+- delete records
+- recreate production tables unnecessarily
+- perform destructive migrations
+- switch the app to a different database just to make the UI populate
+- hide database errors
+- make authentication changes without evidence that auth is the problem
+
+---
+
+18. No unnecessary migration
+
+This is primarily a diagnosis and data-access/query problem.
+
+Do not perform database migrations unless you discover a genuine schema mismatch that requires one.
+
+If a migration is technically required:
+
+1. Stop before executing it.
+2. Explain exactly why it is required.
+3. Identify the affected production resources.
+4. Explain the expected impact.
+5. Provide a rollback plan.
+6. Get approval before executing it.
+
+Existing production data must be preserved.
+
+---
+
+19. Worker scope
+
+The primary Worker to investigate is:
+
+afuchat-api
+
+Do not modify:
+
+afuauth-api
+afucloud-api
+afumail-api
+afuai-api
+afuads-api
+
+unless the investigation proves another Worker is directly responsible for the problem.
+
+Authentication is already working, so do not modify "afuauth-api" merely as a guess.
+
+Do not introduce another API gateway Worker as a workaround.
+
+---
+
+20. Expected API ownership
+
+The AfuChat API namespace is:
+
+/v1/chat/*
+
+Relevant routes should remain under that namespace.
+
+Examples:
+
+/v1/chat/me
+/v1/chat/conversations
+/v1/chat/messages
+/v1/chat/posts
+/v1/chat/feed/for-you
+/v1/chat/feed/following
+/v1/chat/follows/list
+/v1/chat/follows/ids
+/v1/chat/follows/summary
+/v1/chat/follows/status
+
+Do not create unrelated top-level routes such as:
+
+/v1/posts
+/v1/messages
+/v1/follows
+/v1/profile
+
+for the purpose of fixing this problem.
+
+---
+
+21. Required end-to-end verification
+
+After identifying and fixing the root cause, use a real authenticated production account and verify all of the following.
+
+Authentication
+
+Login
+→ valid session
+→ valid JWT
+→ API accepts authenticated request
+
+Profile
+
+GET /v1/chat/me
+→ existing production profile returned
+
+Chats
+
+GET /v1/chat/conversations
+→ existing production conversations returned
+
+Messages
+
+GET /v1/chat/messages
+→ existing messages returned
+
+sender=me
+→ user's own messages returned
+
+sender=others
+→ other users' messages returned
+
+Posts
+
+Existing posts
+→ returned from production database
+
+Feed
+
+For You
+→ real production data
+
+Following
+→ real production data
+
+Follows
+
+Follow summary
+→ correct counts
+
+Follow IDs
+→ correct IDs
+
+Follow list
+→ correct users
+
+Follow status
+→ correct relationship state
+
+New chat
+
+Create/open new chat
+→ database record exists
+→ membership exists
+→ conversation appears
+→ remains visible after app restart
+
+Persistence
+
+After closing/reopening the app:
+
+Database data
+→ API
+→ app
+
+must still work.
+
+Also test after:
+
+- cache clear
+- app restart
+- logout/login
+- fresh API request
+- device reconnect
+- cold start
+
+The application must not depend on stale local cache to appear functional.
+
+---
+
+22. Root-cause report required
+
+When finished, provide a concise technical report containing:
+
+Root cause
+
+Exactly what prevented the API from retrieving the real production data.
+
+Database connection
+
+Which production database/project the API was querying.
+
+Authentication context
+
+Confirm the authenticated user identity reached the database correctly.
+
+Query/RPC issue
+
+Identify the exact query, RPC, schema, filter, join, or data-access problem.
+
+Affected data domains
+
+List every affected area.
+
+Fix
+
+Explain exactly what was changed.
+
+Files changed
+
+List every modified file.
+
+Database changes
+
+State clearly:
+
+No database changes
+
+if none were required.
+
+If changes were required, list them precisely.
+
+Worker changes
+
+List exactly what changed in "afuchat-api".
+
+Cache changes
+
+State whether cache behavior was changed.
+
+Production verification
+
+Report the actual tests performed and their results.
+
+Do not claim an endpoint, query, database connection, migration, or deployment was fixed unless it was actually verified.
+
+---
+
+Final objective
+
+The objective is NOT simply to make the screens display something.
+
+The objective is to restore the correct production data path:
+
+Authenticated AfuChat user
+        ↓
+afuchat-api
+        ↓
+correct production Supabase database
+        ↓
+correct schema/table/RPC
+        ↓
+correct authenticated query
+        ↓
+real existing production records
+        ↓
+API response
+        ↓
+mobile application
+
+The app currently looks functional because authentication works and newer data actions appear to work.
+
+But the existing production data is not being reliably retrieved.
+
+Find the exact point where the real database data is being lost and fix that root cause.

@@ -18,3 +18,9 @@ PostgREST cannot infer some relationships used through the `public` compatibilit
 **Why:** Live probes on 2026-10-07 returned `400 PGRST200` for post/profile, follow/profile, post/image, and message/sender embeds; the corresponding flat reads returned `200`.
 
 **How to apply:** For affected client reads, query the product view and child rows by ID, then batch-load only the needed display fields from `accounts.profiles` using the same authenticated Supabase client. Keep privacy checks fail-closed. Do not create duplicate profile data, widen PostgREST schema exposure, or add a migration solely to restore implicit embeds.
+
+The live AfuChat API currently has a split chat read path: `public.get_chat_list` and `public.get_or_create_direct_chat` use `chat.*`, while public REST views for messages and memberships map to `afuchat.*`. On 2026-10-08, the two schemas had the same 337 chat IDs, but membership totals differed (622 vs 629); 3,080 message IDs overlapped and 1,956 had different sender IDs. `afuchat.chat_members` and `afuchat.messages` reference `chat.chats` / `chat.messages`, so the legacy chat parent remains part of the live FK graph.
+
+**Why:** Switching all reads to either schema, or merging by ID without conflict rules, can hide or misattribute existing chat history. A real-account comparison is still needed before selecting source precedence.
+
+**How to apply:** Keep reads and writes scoped to their verified domain. Before changing chat RPCs or reconciling rows, establish which source is authoritative per field and preserve the current function definitions for rollback. Never infer that matching IDs mean matching records.
