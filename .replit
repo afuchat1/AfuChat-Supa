@@ -17,7 +17,7 @@ SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
 EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
 CLOUDFLARE_ACCOUNT_ID = "42e79186125e8ff83e51f15816e074de"
 R2_BUCKET = "afucloud-images"
-R2_PUBLIC_BASE_URL = "https://img.afuchat.com"
+R2_PUBLIC_BASE_URL = "https://cdn.afuchat.com/chat"
 R2_S3_ENDPOINT = "https://42e79186125e8ff83e51f15816e074de.r2.cloudflarestorage.com"
 PESAPAL_ENV = "production"
 
