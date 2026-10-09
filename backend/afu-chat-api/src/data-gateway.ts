@@ -7,6 +7,7 @@ import {
 } from "./shared.ts";
 
 const PREFIX = "/v1/chat/data";
+const AFUCHAT_SCHEMA = "afuchat";
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PATCH", "DELETE"]);
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
@@ -182,24 +183,14 @@ function requestedSchema(request: Request): string | null {
   return acceptSchema || contentSchema || "";
 }
 
-function fixedSchema(
-  request: Request,
-  target: { kind: "relation" | "function"; name: string },
-): string | null {
-  const requested = requestedSchema(request);
-  if (requested === null) return null;
-
+function fixedSchema(target: { kind: "relation" | "function"; name: string }): string | null {
   if (target.kind === "function") {
-    if (
-      !AFUCHAT_RPC_FUNCTIONS.has(target.name) ||
-      (requested && requested !== "afuchat")
-    ) return null;
-    return "afuchat";
+    if (!AFUCHAT_RPC_FUNCTIONS.has(target.name)) return null;
+    return AFUCHAT_SCHEMA;
   }
 
   if (!AFUCHAT_RELATIONS.has(target.name)) return null;
-  if (requested && requested !== "afuchat") return null;
-  return "afuchat";
+  return AFUCHAT_SCHEMA;
 }
 
 function bearerToken(request: Request, anonKey: string): string | null {
@@ -222,7 +213,15 @@ export async function handleDataGateway(request: Request, env: Env): Promise<Res
     return new Response(response.body, { status: response.status, headers });
   }
 
-  const schema = fixedSchema(request, target);
+  const requested = requestedSchema(request);
+  if (requested === null) {
+    return errorResponse(request, requestId, "Conflicting data schema headers.", 400);
+  }
+  if (requested && requested !== AFUCHAT_SCHEMA) {
+    return errorResponse(request, requestId, "Only AfuChat schema requests are supported.", 400);
+  }
+
+  const schema = fixedSchema(target);
   if (!schema) {
     return errorResponse(request, requestId, "The requested data resource is not available.", 404);
   }

@@ -186,7 +186,11 @@ test("legacy public schema requests are rejected instead of redirected", async (
     makeEnv(),
   );
 
-  assert.equal(response.status, 404);
+  assert.equal(response.status, 400);
+  assert.equal(
+    (await response.json()).error,
+    "Only AfuChat schema requests are supported.",
+  );
   assert.equal(forwarded, false);
 });
 
@@ -237,7 +241,7 @@ test("data gateway forwards only registered RPCs with the original request body"
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { success: true });
   assert.equal(new URL(forwarded.url).pathname, "/rest/v1/rpc/credit_acoin");
-  assert.equal(forwarded.headers.get("Accept-Profile"), "public");
+  assert.equal(forwarded.headers.get("Accept-Profile"), "afuchat");
   assert.equal(await forwarded.text(), body);
 });
 
@@ -295,7 +299,7 @@ test("data gateway rejects arbitrary relations and legacy schemas before databas
   );
 
   assert.equal(unknownRelation.status, 404);
-  assert.equal(legacySchema.status, 404);
+  assert.equal(legacySchema.status, 400);
   assert.equal(databaseCalls, 0);
 });
 
@@ -1414,13 +1418,41 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
   assert.equal(authRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(new URL(rpcRequest.url).pathname, "/rest/v1/rpc/get_chat_list");
   assert.equal(rpcRequest.headers.get("Authorization"), `Bearer ${token}`);
-  assert.equal(rpcRequest.headers.get("Accept-Profile"), "public");
+  assert.equal(rpcRequest.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(rpcRequest.headers.get("Content-Profile"), "afuchat");
   assert.deepEqual(await rpcRequest.json(), {
     p_unread_excluded_ids: [excludedChatId],
   });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), "https://afuchat.com");
   assert.deepEqual(await response.json(), [{ chat_id: "chat-1" }]);
+});
+
+test("data gateway rejects non-AfuChat schemas without querying another schema", async () => {
+  const env = makeEnv();
+  const originalFetch = globalThis.fetch;
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => {
+    upstreamCalls += 1;
+    return Response.json([]);
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://api.afuchat.com/v1/chat/data/chats?select=id", {
+        headers: { "Accept-Profile": "public" },
+      }),
+      env,
+    );
+
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.equal(body.error, "Only AfuChat schema requests are supported.");
+    assert.equal(typeof body.request_id, "string");
+    assert.equal(upstreamCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("direct conversation creation uses the authenticated afuchat RPC and returns its chat ID", async () => {
@@ -3637,7 +3669,9 @@ test("Discover active people requires the verified account and redacts hidden pr
     const url = new URL(request.url);
     seenRequests.push({ request, url });
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    if (request.headers.get("Accept-Profile") === "afuchat") {
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    if (url.searchParams.get("select")?.includes("show_online_status")) {
       assert.equal(url.searchParams.get("id"), `neq.${viewerId}`);
       assert.equal(url.searchParams.get("hide_from_search"), null);
       assert.equal(
@@ -3659,7 +3693,6 @@ test("Discover active people requires the verified account and redacts hidden pr
         show_online_status: false,
       }]);
     }
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: personId,
       display_name: "Visible person",
@@ -3702,12 +3735,14 @@ test("Discover suggested people excludes self and followed accounts with privacy
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+    assert.equal(request.headers.get("Content-Profile"), "afuchat");
     if (url.pathname.endsWith("/follows")) {
       followQuery = url;
       return Response.json([{ following_id: followedId }]);
     }
     assert.ok(url.pathname.endsWith("/profiles"));
-    if (request.headers.get("Accept-Profile") === "afuchat") {
+    if (url.searchParams.has("onboarding_completed")) {
       candidateQuery = url;
       return Response.json([
         { id: viewerId, display_name: "Viewer", handle: "viewer" },
@@ -3715,7 +3750,6 @@ test("Discover suggested people excludes self and followed accounts with privacy
         { id: suggestedId, display_name: "Suggestion", handle: "suggestion" },
       ]);
     }
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: suggestedId,
       display_name: "Suggestion",
@@ -3760,7 +3794,9 @@ test("Discover directory returns relationship counts through the authenticated p
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    if (request.headers.get("Accept-Profile") === "afuchat") {
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    if (url.searchParams.has("interests")) {
       candidateQuery = url;
       return Response.json([{
         id: personId,
@@ -3777,7 +3813,6 @@ test("Discover directory returns relationship counts through the authenticated p
         last_seen: null,
       }]);
     }
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: personId,
       display_name: "Directory person",
@@ -3952,7 +3987,9 @@ test("Discover follow-state reads return the signed-in user's followers and foll
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    if (request.headers.get("Accept-Profile") === "afuchat") {
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    if (url.pathname.endsWith("/profiles")) {
       assert.equal(url.searchParams.get("id"), `eq.${viewerId}`);
       return Response.json([{
         id: viewerId,

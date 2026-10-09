@@ -129,8 +129,11 @@ BEGIN
     RETURN false;
   END IF;
 
-  IF NOT v_is_channel
-     OR p_member_user_id = p_viewer_id
+  IF NOT v_is_channel THEN
+    RETURN afuchat.is_chat_participant(p_chat_id, p_viewer_id);
+  END IF;
+
+  IF p_member_user_id = p_viewer_id
      OR v_created_by = p_viewer_id THEN
     RETURN true;
   END IF;
@@ -249,6 +252,7 @@ RETURNS TABLE (
   chat_updated_at timestamptz,
   other_id uuid,
   other_display_name text,
+  other_handle text,
   other_avatar text,
   is_verified boolean,
   is_organization_verified boolean,
@@ -304,6 +308,7 @@ BEGIN
     c.updated_at,
     CASE WHEN c.is_channel THEN NULL ELSE other_member.id END,
     CASE WHEN c.is_channel THEN NULL ELSE other_member.display_name::text END,
+    CASE WHEN c.is_channel THEN NULL ELSE other_member.handle::text END,
     CASE WHEN c.is_channel THEN NULL ELSE other_member.avatar_url::text END,
     CASE WHEN c.is_channel THEN false ELSE COALESCE(other_member.is_verified, false) END,
     CASE WHEN c.is_channel THEN false ELSE COALESCE(other_member.is_organization_verified, false) END,
@@ -354,6 +359,7 @@ BEGIN
     SELECT
       p.id,
       p.display_name,
+      p.handle,
       p.avatar_url,
       p.is_verified,
       p.is_organization_verified,
@@ -396,17 +402,35 @@ GRANT EXECUTE ON FUNCTION afuchat.can_send_chat_message(uuid, uuid) TO authentic
 GRANT EXECUTE ON FUNCTION afuchat.get_or_create_direct_chat(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION afuchat.get_chat_list(uuid[]) TO authenticated;
 
--- These policies previously called public helper functions that read the
--- empty chat schema. Bind the policies to helpers that query afuchat only.
+-- Bind each chat policy to helpers that query AfuChat tables only.
 DROP POLICY IF EXISTS chat_members_delete_self_or_manager ON afuchat.chat_members;
 CREATE POLICY chat_members_delete_self_or_manager
-  ON afuchat.chat_members FOR DELETE TO public
-  USING (auth.uid() = user_id OR afuchat.is_channel_owner_or_admin(chat_id, auth.uid()));
+  ON afuchat.chat_members FOR DELETE TO authenticated
+  USING (
+    auth.uid() = user_id
+    OR afuchat.is_channel_owner_or_admin(chat_id, auth.uid())
+    OR afuchat.is_chat_admin(auth.uid(), chat_id)
+    OR afuchat.is_chat_owner(chat_id, auth.uid())
+  );
 
 DROP POLICY IF EXISTS chat_members_insert_self_or_manager ON afuchat.chat_members;
 CREATE POLICY chat_members_insert_self_or_manager
-  ON afuchat.chat_members FOR INSERT TO public
-  WITH CHECK (auth.uid() = user_id OR afuchat.is_channel_owner_or_admin(chat_id, auth.uid()));
+  ON afuchat.chat_members FOR INSERT TO authenticated
+  WITH CHECK (
+    afuchat.is_channel_owner_or_admin(chat_id, auth.uid())
+    OR afuchat.is_chat_admin(auth.uid(), chat_id)
+    OR afuchat.is_chat_owner(chat_id, auth.uid())
+    OR (
+      auth.uid() = user_id
+      AND EXISTS (
+        SELECT 1
+        FROM afuchat.chats c
+        WHERE c.id = chat_id
+          AND (COALESCE(c.is_group, false) OR COALESCE(c.is_channel, false))
+          AND NOT COALESCE(c.is_private, false)
+      )
+    )
+  );
 
 DROP POLICY IF EXISTS chat_members_select_privacy ON afuchat.chat_members;
 CREATE POLICY chat_members_select_privacy
@@ -415,21 +439,31 @@ CREATE POLICY chat_members_select_privacy
 
 DROP POLICY IF EXISTS chat_members_update_manager ON afuchat.chat_members;
 CREATE POLICY chat_members_update_manager
-  ON afuchat.chat_members FOR UPDATE TO public
-  USING (afuchat.is_channel_owner_or_admin(chat_id, auth.uid()))
-  WITH CHECK (afuchat.is_channel_owner_or_admin(chat_id, auth.uid()));
+  ON afuchat.chat_members FOR UPDATE TO authenticated
+  USING (
+    afuchat.is_channel_owner_or_admin(chat_id, auth.uid())
+    OR afuchat.is_chat_admin(auth.uid(), chat_id)
+    OR afuchat.is_chat_owner(chat_id, auth.uid())
+  )
+  WITH CHECK (
+    afuchat.is_channel_owner_or_admin(chat_id, auth.uid())
+    OR afuchat.is_chat_admin(auth.uid(), chat_id)
+    OR afuchat.is_chat_owner(chat_id, auth.uid())
+  );
 
 DROP POLICY IF EXISTS "Admins can update group chats" ON afuchat.chats;
 CREATE POLICY "Admins can update group chats"
-  ON afuchat.chats FOR UPDATE TO public
+  ON afuchat.chats FOR UPDATE TO authenticated
   USING (afuchat.is_chat_admin(auth.uid(), id));
 
 DROP POLICY IF EXISTS chats_select_public_or_member ON afuchat.chats;
 CREATE POLICY chats_select_public_or_member
   ON afuchat.chats FOR SELECT TO authenticated
   USING (
-    COALESCE(is_group, false)
-    OR COALESCE(is_channel, false)
+    (
+      (COALESCE(is_group, false) OR COALESCE(is_channel, false))
+      AND NOT COALESCE(is_private, false)
+    )
     OR afuchat.is_chat_participant(id, auth.uid())
   );
 
@@ -477,11 +511,5 @@ ALTER TABLE afuchat.message_status
 ALTER TABLE afuchat.message_status
   ADD CONSTRAINT message_status_user_id_fkey
   FOREIGN KEY (user_id) REFERENCES afuchat.profiles(id) ON DELETE CASCADE NOT VALID;
-
--- Disable the two obsolete public RPC entry points. They remain present only
--- so existing dependent routines are not dropped; clients can no longer call
--- them, and the AfuChat API calls the functions in afuchat instead.
-REVOKE ALL ON FUNCTION public.get_chat_list(uuid[]) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.get_or_create_direct_chat(uuid) FROM PUBLIC, anon, authenticated;
 
 COMMIT;

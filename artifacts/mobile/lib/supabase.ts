@@ -90,6 +90,8 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
   }
 };
 
+const AFUCHAT_SCHEMA = "afuchat" as const;
+
 const fetchThroughAfuChatApi: typeof fetch = async (input, init) => {
   const sourceUrl =
     input instanceof Request
@@ -117,6 +119,8 @@ const fetchThroughAfuChatApi: typeof fetch = async (input, init) => {
   );
   const sourceRequest = new Request(input, init);
   const routedRequest = new Request(gatewayUrl, sourceRequest);
+  routedRequest.headers.set("Accept-Profile", AFUCHAT_SCHEMA);
+  routedRequest.headers.set("Content-Profile", AFUCHAT_SCHEMA);
   return fetchWithTimeout(routedRequest, { signal: sourceRequest.signal });
 };
 
@@ -140,7 +144,7 @@ const supabaseClientUrl = SUPABASE_URL;
 
 export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
   db: {
-    schema: "afuchat",
+    schema: AFUCHAT_SCHEMA,
   },
   auth: {
     storage: isWeb ? webStorage : AsyncStorage,

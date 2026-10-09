@@ -9,21 +9,19 @@
 - All AfuChat-owned product API operations, including storage, use `/v1/chat`.
 - AfuAuth owns `/v1/auth/*`; AfuAI owns `/v1/ai/*`. Those routes are not AfuChat endpoints and are not moved by this contract.
 
-Supabase Auth and Realtime remain on the shared Supabase project. All mobile
-PostgREST table and RPC calls now enter through the AfuChat Worker. The data
-gateway accepts only the exact relation and function names in
-`backend/afu-chat-api/src/data-gateway.ts`; it does not accept caller-selected
-schemas or arbitrary database resources. It forwards the user's bearer token
-so the existing grants and row-level security remain authoritative, and never
-uses a service-role key.
+Supabase Auth and Realtime remain on the shared Supabase project. All AfuChat
+PostgREST table and RPC requests use the existing `afuchat` schema and enter
+through the AfuChat Worker. The mobile client pins schema headers to `afuchat`;
+the Worker rejects other schemas and accepts only the exact relation and
+function names in `backend/afu-chat-api/src/data-gateway.ts`. It forwards the
+same user's bearer token so the existing grants and row-level security remain
+authoritative, and never uses a service-role key.
 
-This is one API boundary, not one physical schema. AfuChat-owned records use
-the existing `public` compatibility views over canonical `afuchat` tables
-because PostgREST does not expose `afuchat`. Shared account profiles and the
-shop-only `orders` relation retain their existing owners (`accounts` and
-`shop`). No rows or schemas are moved by this gateway. The current inventory
-and migration status are tracked in
-[`AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](./AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
+`afuchat.*` is the sole data source for AfuChat application records. Shared
+authentication verifies the account identity; it does not redirect AfuChat
+data reads to compatibility views or another product schema. The Worker and
+mobile app do not use `chat.*`, `social.*`, or `public` compatibility resources
+for AfuChat data.
 
 ## Mobile data gateway
 
@@ -46,7 +44,7 @@ and migration status are tracked in
 | Method and path | Purpose and inputs | Authentication | Response |
 |---|---|---|---|
 | `GET /v1/chat/conversations?unread_excluded_ids={uuid,...}` | Returns the signed-in user's chat list. The optional query can be repeated or comma-separated and accepts at most 100 UUIDs. | `Authorization: Bearer <Supabase access token>`; verified through shared authentication, then the same token is forwarded for row-level authorization. | Successful chat-list JSON is returned. Invalid IDs return `400`; missing/invalid session returns `401`; upstream failures return a generic `502` without upstream error details. |
-| `GET /v1/chat/profiles/{profileId}` | Returns only the read-only fields used on another user's contact/profile page. Reads the canonical shared `accounts.profiles` record; hidden profile details are omitted for a private profile unless the verified viewer follows it. Either-direction block relationships hide the profile, and `last_seen` is null when online status is disabled. | Shared-session bearer verified through AfuAuth; the same bearer is forwarded to Supabase for profile, follow, and block checks. | `200 { profile }` with an allowlisted contact profile; invalid IDs return `400`, missing/blocked profiles return `404`, missing/invalid sessions return `401`, and lookup failures return a generic `502`. |
+| `GET /v1/chat/profiles/{profileId}` | Returns only the read-only fields used on another user's contact/profile page. Reads `afuchat.profiles`; hidden profile details are omitted for a private profile unless the verified viewer follows it. Either-direction block relationships hide the profile, and `last_seen` is null when online status is disabled. | Shared-session bearer verified through AfuAuth; the same bearer is forwarded to Supabase for profile, follow, and block checks. | `200 { profile }` with an allowlisted contact profile; invalid IDs return `400`, missing/blocked profiles return `404`, missing/invalid sessions return `401`, and lookup failures return a generic `502`. |
 | `POST /v1/chat/account/export` | Requests an email export. JSON body: `{ "types": ["profile", "posts", "messages", "activity", "transactions"] }`. Omitted or unrecognized selections fall back to `profile`. | Bearer token verified through shared authentication; account email required. | `200 { ok: true, email }` after the JSON attachment is emailed. Missing email is `400`; unavailable delivery returns a generic `503` or `502`. |
 
 ### Saved posts and bookmarks
