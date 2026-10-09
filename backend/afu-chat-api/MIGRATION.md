@@ -32,15 +32,30 @@ The existing `api.afuchat.com/*` fallback remains owned by the separate
 legacy URL parsing for stored data separate from outgoing API requests, which
 must use canonical routes.
 
-## Database and compatibility inventory
+## Current authoritative AfuChat data flow (verified 2026-10-09)
 
-The detailed schema crosswalk below is historical and read-only; do not assume
-its counts describe the new shared Supabase project. On 2026-10-06, read-only
-PostgREST probes against the new project confirmed `accounts.profiles` and
-`public.get_chat_list` are present. No database migration is needed for this
-Worker integration.
+- AfuChat-owned application records use only the existing `afuchat` schema.
+  The mobile PostgREST client pins both schema headers to `afuchat`, and the
+  Worker rejects requests that select another schema.
+- AfuAuth verifies the shared account identity. The Worker forwards that same
+  user bearer to Supabase so AfuChat table RLS remains authoritative.
+- Read-only checks confirm AfuChat chat tables, required columns, schema usage,
+  and authenticated table grants exist. The chat-list/direct-chat RPCs and chat
+  read policies are missing from the live schema.
+- The Worker was deployed on 2026-10-09. Its health, CORS, authentication,
+  schema-probe, route, and binding checks passed. A signed-in account chat
+  read/write test has not been performed.
+- A schema-only migration and rollback are prepared for the missing AfuChat
+  RPCs and policies. They have not been applied; no records were copied, moved,
+  or deleted.
 
-### Mobile inventory refresh (2026-10-08)
+The detailed schema crosswalk below is a historical, read-only snapshot from
+2026-10-06 through 2026-10-08. Its conclusions recommending `public`
+compatibility views/RPCs or stating that no AfuChat migration is needed are
+superseded by the current contract above. Do not use that old inventory to
+choose a runtime schema.
+
+### Historical mobile inventory refresh (2026-10-08; superseded for schema routing)
 
 The current audit and exact source inventories are recorded in
 [`docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md`](../../docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md).
@@ -130,7 +145,7 @@ intended data model.
 - The repository source implements health, status, conversations, account
   export, Pesapal payments, and the existing media-storage operations under
   `/v1/chat/storage/*`. The updated `afuchat-api` Worker was deployed on
-  2026-10-06. Health and status return `200`; status reports both Supabase and
+  2026-10-09. Health and status return `200`; status reports both Supabase and
   Worker checks as healthy. CORS, invalid-session rejection, and unauthenticated
   canonical storage checks pass. The legacy `/v1/storage*` API alias is removed.
   This does not replace an authenticated upload/read test. Video processing
@@ -139,9 +154,9 @@ intended data model.
 
 ## Client contract inventory
 
-- Supabase Auth/PostgREST/Realtime calls use the same shared Supabase project
-  directly. App reads and writes continue to use `public` compatibility
-  relations/RPCs; changing PostgREST profiles requires a call-by-call audit.
+- Supabase Auth and Realtime use the shared Supabase project. AfuChat
+  PostgREST reads and writes use only `afuchat` through the AfuChat Worker;
+  there is no `public` or `chat` fallback for AfuChat application data.
 - Media session/container requests use AfuAuth `/v1/auth/session` and AfuChat
   `/v1/chat/storage/*`; chat-list requests use `/v1/chat/conversations`.
 - AfuChat app functions use `/v1/chat/*` (including status, payments,
@@ -153,8 +168,10 @@ intended data model.
 
 ## Storage and routing guardrails
 
-1. Keep the current shared Supabase project and its `public` compatibility
-   views/RPCs; do not add a schema migration for this Worker connection.
+1. Keep the shared Supabase identity, but route all AfuChat application data
+   through `afuchat`. Do not redirect AfuChat requests to `public` or `chat`.
+   Any required database change belongs only in `afuchat` and must preserve
+   existing records.
 2. Keep the legacy root CDN mapping for old keys. AfuChat and legacy media
    currently share `afuchat-media`; any future separation or object copy must be
    separately approved, prefix-scoped, count/byte verified, and reversible by

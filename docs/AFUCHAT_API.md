@@ -28,7 +28,7 @@ for AfuChat data.
 | Method and path | Purpose and inputs | Authentication | Response |
 |---|---|---|---|
 | `GET`, `HEAD`, `POST`, `PATCH`, `DELETE /v1/chat/data/{registeredRelation}` | Compatibility path for the mobile app's statically inventoried PostgREST relations. Query string, filters, ranges, and supported PostgREST headers are preserved. Unknown relation names and schemas are rejected before Supabase is called. | The configured public API key is required. User bearers are verified through AfuAuth and forwarded unchanged for database row-level security. Anonymous requests use only the public anon role and remain subject to existing grants and policies. | Preserves the PostgREST status, body, and response metadata while adding AfuChat request headers. |
-| `GET`, `POST /v1/chat/data/rpc/{registeredFunction}` | Compatibility path for the mobile app's statically inventoried public RPC functions. | Same bearer and row-level security behavior as table requests. | Preserves the PostgREST response; unknown functions are rejected before Supabase is called. |
+| `GET`, `POST /v1/chat/data/rpc/{registeredFunction}` | Compatibility path for the mobile app's statically inventoried RPC functions in `afuchat`. | Same bearer and row-level security behavior as table requests. | Preserves the PostgREST response; unknown functions are rejected before Supabase is called. |
 
 ## AfuChat endpoints
 
@@ -179,10 +179,10 @@ object URLs use `LEGACY_MEDIA`, which points to that same bucket. The separate
 URL paths remain intact; no objects were moved or copied.
 
 The data gateway is deliberately limited to the current mobile call inventory:
-no arbitrary schema, relation, or function can be selected. Existing
-bookmark, follow, feed, post, message, payment, and storage APIs continue to use
-their named AfuChat operations. This allowlist keeps shared product data in its
-owner schema instead of copying it into `afuchat`.
+no arbitrary schema, relation, or function can be selected. AfuChat-owned
+application records, including profiles, bookmarks, follows, feeds, posts,
+messages, payments, and storage metadata, use only `afuchat`. AfuAuth verifies
+identity separately; it is not a data fallback.
 
 ## Deployment verification
 
@@ -192,10 +192,10 @@ resource rejection, authentication rejection, the canonical storage route,
 AfuAuth service binding, and the shared AfuChat/legacy media binding. CDN routing and delivery are managed separately by
 `backend/afu-cdn/` and `backend/route-management/reconcile.mjs`.
 
-The updated Worker was deployed on 2026-10-06. Its postflight checks passed for
-health, status, CORS, session rejection, media routing, and the existing
-bindings. Unauthenticated `GET /v1/chat/storage/usage` returns `401`, confirming
-that the canonical route reaches its authentication-guarded handler. This
-verifies routing and unauthenticated behavior; it does not replace an
-authenticated upload/read test. Already-published mobile builds still need
+The Worker was deployed on 2026-10-09 to the existing `afuchat-api` script. Its
+postflight checks passed for health, status, CORS, session rejection, an
+AfuChat schema probe, media routing, and the existing bindings. These checks do
+not verify signed-in chat reads/writes. Production still needs the prepared
+AfuChat RPC/RLS schema migration and an existing-account chat smoke test before
+the release can be called complete. Already-published mobile builds still need
 their own release to use updated client paths.
