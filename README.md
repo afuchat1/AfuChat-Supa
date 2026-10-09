@@ -39,7 +39,7 @@ artifacts/mobile/
   hooks/        React hooks
   lib/          Native services and Supabase client
   modules/      Native mini-apps
-  supabase/     Existing Supabase migrations kept for schema reference
+  supabase/     Supabase client configuration
 backend/
   afu-api/      Shared api.afuchat.com namespace gateway
   afuauth-api/  Shared account and session Worker
@@ -51,7 +51,7 @@ artifacts/afuchat-worker/src/
                 source module only, not a separately deployed Worker
 ```
 
-The Supabase directory is preserved for schema history. The mobile app continues to use the shared Supabase Auth, PostgREST, and Realtime services; AfuChat-owned media uses the AfuChat Worker and CDN routes.
+The mobile app uses the existing shared Supabase Auth, PostgREST, and Realtime services without repository-managed database schema changes. AfuChat-owned media uses the AfuChat Worker and CDN routes.
 
 ## Verification
 
