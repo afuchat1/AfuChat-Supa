@@ -1,0 +1,86 @@
+Critical Production Fix: AfuChat Must Use One Authoritative Production Data Path
+
+The app has a serious data-source issue. When an existing user logs in, they cannot access older data. The system must use one authoritative production account, authentication flow, API, and database schema with no legacy paths, fallbacks, replacement data, or parallel storage.
+
+Core requirement
+
+The existing production "afuchat" schema is the sole source of truth for all AfuChat application data. Wire the existing data into the production API and app. Do not create replacement data, mock data, parallel storage, alternate schemas, fallback queries, or a new data model to work around the issue.
+
+1. Trace the complete login-to-data flow
+
+Inspect the actual production request path:
+
+"Mobile app → api.afuchat.com/v1/chat/* → afuchat-api → AfuAuth session verification → Supabase/PostgreSQL → afuchat.*"
+
+Trace what happens immediately after login and when the app loads:
+
+- The authenticated user's profile and account identity.
+- Existing chat lists and direct conversations.
+- Chat memberships and participants.
+- Message history, senders, timestamps, statuses, and attachments.
+- Existing posts, follows, notifications, and other AfuChat data the user is entitled to access.
+
+Find the exact point where existing records disappear, become inaccessible, or are loaded from any source other than "afuchat.*". Do not assume the problem is fixed because table requests contain "Accept-Profile: afuchat".
+
+2. Remove every non-authoritative data path
+
+Audit every API handler, RPC, view, join, foreign key, query, mobile repository, cache, seed, fixture, and configuration path.
+
+- All AfuChat-owned application data must be read from and written to the existing "afuchat" schema.
+- Remove all use of "chat.*", "social.*", "public" compatibility resources, legacy tables, alternate databases, and fallback data sources for AfuChat application data.
+- Remove legacy RPC dependencies and use only functions implemented against the actual existing "afuchat" tables.
+- Verify that chat-list and direct-chat creation functions do not retrieve or write records outside "afuchat.*".
+- Remove cross-schema foreign keys and joins that can cause existing "afuchat" records to disappear or resolve through another schema.
+- Keep AfuAuth session verification and authorization intact. Use one account identity and one authentication path. Shared identity infrastructure may verify sessions, but it must not redirect AfuChat data access to another schema or account system.
+- Remove fallback branches that retry another schema, return alternate records, substitute empty results, or conceal data-access failures.
+
+Do not merely change schema headers or configuration values. Correct the underlying data access paths and delete the obsolete paths.
+
+3. The app must render only authoritative database data
+
+The mobile app must render the real records returned by the production API from "afuchat.*".
+
+- Do not generate fake conversations, placeholder messages, fabricated profiles, invented counts, or replacement records.
+- Do not seed new records to make a screen appear populated.
+- Do not replace missing records with hardcoded values.
+- Do not silently swallow database errors or display an empty state as though the user has no data.
+- Show a genuine empty state only when the authorized query against "afuchat.*" successfully confirms that no records exist.
+- If a query fails, surface and report the error; never convert it into a successful empty result or invoke another data source.
+- Ensure the single authenticated account identity, chat membership, and access permissions determine which existing records are returned.
+
+4. Preserve existing production data
+
+Do not drop, reset, truncate, overwrite, migrate, duplicate, or blindly copy records between schemas or databases.
+
+Use the existing production "afuchat" tables and records as they are. If a missing relationship or broken query prevents access to an existing record, fix the query or relationship safely within the authoritative schema. Make a migration only if it is demonstrably necessary, reviewed, reversible, and limited to the existing "afuchat" data model. Do not retain legacy compatibility structures or fallback paths.
+
+5. Test with an existing account
+
+Use an existing test account that has older conversations and messages. Verify the following against production:
+
+1. Login resolves the one correct existing user identity through the single authentication flow.
+2. The chat list matches the conversations that user is authorized to access in "afuchat".
+3. Opening an older conversation loads its existing messages in the correct order.
+4. Sender identities, memberships, timestamps, statuses, and attachments are preserved.
+5. Sending a message writes only to the correct "afuchat" tables and it can be retrieved afterward through the same authoritative path.
+6. No request reads from or falls back to "chat.*", "social.*", "public", another database, another account system, or replacement data.
+7. Users cannot access another user's private records without authorization.
+8. Failed queries produce explicit errors rather than empty results or alternate responses.
+
+Compare actual database results with API responses and the mobile UI. Do not rely only on unit tests or a successful build.
+
+6. Production API and final report
+
+Keep "https://api.afuchat.com" as the only public AfuChat API host and preserve the established "/v1/chat/*" routes.
+
+Deploy only after the affected flows pass testing. Then report:
+
+- The precise cause of the missing historical data.
+- Which handlers, RPCs, queries, repositories, or configuration paths were using non-authoritative data.
+- The files changed and the deployment status.
+- Evidence that existing "afuchat" records now appear correctly for an existing account.
+- Confirmation that the app uses only real database responses from "afuchat.*".
+- Confirmation that no fake, replacement, duplicate, legacy, or fallback data path remains.
+- Confirmation that one authentication flow, one account identity, one public API host, and one database schema are used for AfuChat.
+
+Success means existing users can log in through the single authentication flow and access their actual historical AfuChat data through the production API from the existing "afuchat" schema. Do not declare this complete until it has been verified against production.
