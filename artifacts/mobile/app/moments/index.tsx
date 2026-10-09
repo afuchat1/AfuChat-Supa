@@ -170,7 +170,7 @@ export default function MomentsScreen() {
         .channel("moments-page-realtime")
         .on(
           "postgres_changes",
-          { event: "*", schema: "public", table: "stories" },
+          { event: "*", schema: "afuchat", table: "stories" },
           () => {
             loadStories();
           }

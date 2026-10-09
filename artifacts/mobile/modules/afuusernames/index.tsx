@@ -612,7 +612,7 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
   useEffect(() => {
     const channel = supabase
       .channel("username-market-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "username_listings" }, () => void load(true))
+      .on("postgres_changes", { event: "*", schema: "afuchat", table: "username_listings" }, () => void load(true))
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);

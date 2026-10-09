@@ -136,7 +136,7 @@ export default function TicketDetail() {
       .channel(`user-ticket-${id}`)
       .on("postgres_changes", {
         event: "INSERT",
-        schema: "public",
+        schema: "afuchat",
         table: "support_messages",
         filter: `ticket_id=eq.${id}`,
       }, (payload) => {
@@ -151,7 +151,7 @@ export default function TicketDetail() {
       })
       .on("postgres_changes", {
         event: "UPDATE",
-        schema: "public",
+        schema: "afuchat",
         table: "support_tickets",
         filter: `id=eq.${id}`,
       }, (payload) => {

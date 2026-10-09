@@ -147,7 +147,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         "postgres_changes",
         {
           event: "*",
-          schema: "public",
+          schema: "afuchat",
           table: "advanced_feature_settings",
           filter: `user_id=eq.${user.id}`,
         },

@@ -39,7 +39,7 @@ export function useGiftPrices() {
       .channel(channelName.current)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "gift_statistics" },
+        { event: "*", schema: "afuchat", table: "gift_statistics" },
         (payload: any) => {
           const row = payload.new;
           if (!row?.gift_id) return;

@@ -276,9 +276,9 @@ export default function AfuPayApp({
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel(`afupay:${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "money_requests", filter: `target_id=eq.${user.id}` }, () => loadPendingCount())
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "*", schema: "afuchat", table: "money_requests", filter: `target_id=eq.${user.id}` }, () => loadPendingCount())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, loadTransactions, loadPendingCount]);

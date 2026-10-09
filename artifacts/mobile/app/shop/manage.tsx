@@ -81,12 +81,12 @@ export default function ShopManage() {
       .channel(`seller-orders:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "shop_orders", filter: `seller_id=eq.${user.id}` },
+        { event: "INSERT", schema: "afuchat", table: "shop_orders", filter: `seller_id=eq.${user.id}` },
         () => load()
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "shop_orders", filter: `seller_id=eq.${user.id}` },
+        { event: "UPDATE", schema: "afuchat", table: "shop_orders", filter: `seller_id=eq.${user.id}` },
         (payload: any) => {
           // Optimistically update the specific order in state
           setOrders((prev) =>

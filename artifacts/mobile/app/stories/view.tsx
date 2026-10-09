@@ -240,7 +240,7 @@ export default function ViewStoryScreen() {
       // New story posted by this user while viewer is open → append it
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "stories", filter: `user_id=eq.${userId}` },
+        { event: "INSERT", schema: "afuchat", table: "stories", filter: `user_id=eq.${userId}` },
         (payload) => {
           const s = payload.new as any;
           const p = s.privacy || "everyone";
@@ -257,7 +257,7 @@ export default function ViewStoryScreen() {
       // view_count updated (another user viewed this story) → keep owner's counter live
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "stories" },
+        { event: "UPDATE", schema: "afuchat", table: "stories" },
         (payload) => {
           const updated = payload.new as any;
           setStories((prev) =>
@@ -272,7 +272,7 @@ export default function ViewStoryScreen() {
       // Like added
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "story_likes" },
+        { event: "INSERT", schema: "afuchat", table: "story_likes" },
         (payload) => {
           const { story_id, user_id: liker } = payload.new as any;
           if (!storyIds.includes(story_id)) return;
@@ -288,7 +288,7 @@ export default function ViewStoryScreen() {
       // Like removed (story_likes has REPLICA IDENTITY FULL so old row is included)
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "story_likes" },
+        { event: "DELETE", schema: "afuchat", table: "story_likes" },
         (payload) => {
           const { story_id, user_id: unliker } = (payload.old ?? {}) as any;
           if (!story_id || !storyIds.includes(story_id)) return;

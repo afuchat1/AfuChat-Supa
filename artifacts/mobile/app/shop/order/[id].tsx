@@ -147,7 +147,7 @@ export default function OrderDetailScreen() {
     if (!orderId) return;
     const channel = supabase
       .channel(`order_msgs_${orderId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "shop_order_messages", filter: `order_id=eq.${orderId}` },
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "shop_order_messages", filter: `order_id=eq.${orderId}` },
         (payload) => {
           setMessages(prev => {
             const exists = prev.find(m => m.id === (payload.new as OrderMessage).id);

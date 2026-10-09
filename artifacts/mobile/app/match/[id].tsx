@@ -150,7 +150,7 @@ export default function MatchConversationScreen() {
   useEffect(() => {
     if (!id) return;
     const channel = supabase.channel(`match-msgs-${id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "match_messages", filter: `match_id=eq.${id}` }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "match_messages", filter: `match_id=eq.${id}` }, (payload) => {
         setMessages((prev) => [...prev, payload.new as Message]);
         flatRef.current?.scrollToEnd({ animated: true });
       })

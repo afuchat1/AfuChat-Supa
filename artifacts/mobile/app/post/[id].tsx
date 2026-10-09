@@ -492,8 +492,8 @@ export default function PostDetailScreen() {
     if (!id) return;
     const ch = supabase
       .channel(`post-detail-comments:${id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${id}` }, loadReplies)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${id}` }, loadReplies)
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "post_replies", filter: `post_id=eq.${id}` }, loadReplies)
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "post_replies", filter: `post_id=eq.${id}` }, loadReplies)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [id, loadReplies]);

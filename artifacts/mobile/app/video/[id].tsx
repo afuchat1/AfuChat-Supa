@@ -1512,7 +1512,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     });
 
     const channel = supabase.channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
+      .on("postgres_changes", { event: "*", schema: "afuchat", table: "post_acknowledgments" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId || !loadedVideoIdsRef.current.has(postId)) return;
         getAfuChatPostMetrics(postId)
@@ -1527,7 +1527,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           })
           .catch((error) => console.warn("[VideoFeed] like count refresh failed:", error));
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
+      .on("postgres_changes", { event: "*", schema: "afuchat", table: "post_replies" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId || !loadedVideoIdsRef.current.has(postId)) return;
         getAfuChatPostMetrics(postId)

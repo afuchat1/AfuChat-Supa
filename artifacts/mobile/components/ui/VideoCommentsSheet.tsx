@@ -784,8 +784,8 @@ export function VideoCommentsSheet({
     if (!visible || !postId) return;
     const ch = supabase
       .channel(`video-comments:${postId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, scheduleRepliesReload)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, scheduleRepliesReload)
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "post_replies", filter: `post_id=eq.${postId}` }, scheduleRepliesReload)
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "post_replies", filter: `post_id=eq.${postId}` }, scheduleRepliesReload)
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
