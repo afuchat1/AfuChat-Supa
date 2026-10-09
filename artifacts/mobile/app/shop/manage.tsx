@@ -25,7 +25,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
-import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, formatShopAcoin, formatShopUSD, PLATFORM_FEE_PCT } from "@/lib/shop";
+import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, formatShopAcoin, formatShopUSD, PLATFORM_FEE_PCT, getSellerOrders } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 
@@ -56,20 +56,28 @@ export default function ShopManage() {
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [shopRes, productsRes, ordersRes] = await Promise.all([
-      supabase.from("shops").select("id, seller_id, name, description, banner_url, logo_url, category, address, is_active, pin_to_profile, total_sales, total_revenue_acoin, rating, review_count, created_at, updated_at").eq("seller_id", user.id).single(),
-      supabase.from("shop_products").select("id, shop_id, seller_id, name, description, price_acoin, images, category, stock, is_unlimited_stock, is_available, sales_count, created_at, updated_at").eq("seller_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("shop_orders").select("id, seller_id, buyer_id, status, total_acoin, created_at, delivery_address, notes, buyer_profile:profiles!shop_orders_buyer_id_fkey(display_name, handle, avatar_url), shop_order_items(id, order_id, quantity, price_acoin, shop_products(name, images))").eq("seller_id", user.id).order("created_at", { ascending: false }).limit(50),
-    ]);
-    setShop(shopRes.data as Shop);
-    if (shopRes.data) {
-      setShopForm({ name: shopRes.data.name, description: shopRes.data.description || "", category: shopRes.data.category || "", address: shopRes.data.address || "" });
-      setShopBanner(shopRes.data.banner_url || null);
-      setShopLogo(shopRes.data.logo_url || null);
+    try {
+      const [shopRes, productsRes, orderRows] = await Promise.all([
+        supabase.from("shops").select("id, seller_id, name, description, banner_url, logo_url, category, address, is_active, pin_to_profile, total_sales, total_revenue_acoin, rating, review_count, created_at, updated_at").eq("seller_id", user.id).maybeSingle(),
+        supabase.from("shop_products").select("id, shop_id, seller_id, name, description, price_acoin, images, category, stock, is_unlimited_stock, is_available, sales_count, created_at, updated_at").eq("seller_id", user.id).order("created_at", { ascending: false }),
+        getSellerOrders(user.id),
+      ]);
+      if (shopRes.error) throw shopRes.error;
+      if (productsRes.error) throw productsRes.error;
+      setShop(shopRes.data as Shop | null);
+      if (shopRes.data) {
+        setShopForm({ name: shopRes.data.name, description: shopRes.data.description || "", category: shopRes.data.category || "", address: shopRes.data.address || "" });
+        setShopBanner(shopRes.data.banner_url || null);
+        setShopLogo(shopRes.data.logo_url || null);
+      }
+      setProducts(productsRes.data || []);
+      setOrders(orderRows);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load shop data.";
+      showAlert("Shop unavailable", message);
+    } finally {
+      setLoading(false);
     }
-    setProducts(productsRes.data || []);
-    setOrders(ordersRes.data as any || []);
-    setLoading(false);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
@@ -467,9 +475,9 @@ export default function ShopManage() {
                 </View>
               </View>
 
-              {((order as any).shop_order_items || []).map((item: any) => (
+              {order.items.map((item) => (
                 <Text key={item.id} style={[styles.orderItemLine, { color: colors.textSecondary }]}>
-                  {item.quantity}× {item.shop_products?.name || item.snapshot_name || "Product"}: {formatShopAcoin(item.unit_price_acoin * item.quantity)}
+                  {item.quantity}× {item.snapshot_name || "Product"}: {formatShopAcoin(item.unit_price_acoin * item.quantity)}
                 </Text>
               ))}
 

@@ -110,6 +110,7 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
   const [products, setProducts] = useState<Product[]>([]);
   const [stores, setStores] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -142,21 +143,39 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
   const loadProducts = useCallback(async (offset = 0, isRefresh = false) => {
     if (offset === 0) isRefresh ? setRefreshing(true) : setLoading(true);
     else setLoadingMore(true);
+    if (offset === 0) setProductsError(null);
     try {
       let q = supabase
         .from("shop_products")
-        .select("id, name, description, price_acoin, images, category, stock, is_unlimited_stock, is_available, sales_count, shop_id, seller_id, shops!shop_products_shop_id_fkey(id, name, logo_url, category, rating, total_sales, seller_id, profiles!shops_seller_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified))")
+        .select("id, name, description, price_acoin, images, category, stock, is_unlimited_stock, is_available, sales_count, shop_id, seller_id")
         .eq("is_available", true)
         .order("sales_count", { ascending: false })
         .range(offset, offset + PAGE - 1);
       if (cat !== "All") q = q.eq("category", cat);
       if (debSearch.trim()) q = q.ilike("name", `%${debSearch.trim()}%`);
-      const { data } = await q;
-      const rows = (data || []) as unknown as Product[];
+      const { data, error } = await q;
+      if (error) throw error;
+      const baseRows = (data ?? []) as unknown as Omit<Product, "shops">[];
+      const shopIds = [...new Set(baseRows.map((product) => product.shop_id).filter(Boolean))];
+      const { data: shopRows, error: shopError } = shopIds.length
+        ? await supabase.from("shops")
+          .select("id,name,logo_url,category,rating,total_sales,seller_id,profiles!shops_seller_id_fkey(display_name,handle,avatar_url,is_verified,is_organization_verified)")
+          .in("id", shopIds)
+        : { data: [], error: null };
+      if (shopError) throw shopError;
+      const shopsById = new Map((shopRows ?? []).map((shop) => [shop.id, shop]));
+      const rows = baseRows.map((product) => ({
+        ...product,
+        shops: shopsById.get(product.shop_id) ?? null,
+      })) as Product[];
       if (offset === 0) setProducts(rows);
       else setProducts((prev) => [...prev, ...rows]);
       setHasMore(rows.length === PAGE);
-    } catch (_) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load AfuMarket products.";
+      setProductsError(message);
+      if (offset === 0) setProducts([]);
+      else showAlert("More products unavailable", message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -500,9 +519,9 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
           ) : (
             <View style={s.center}>
               <Ionicons name="storefront-outline" size={52} color={colors.textMuted} />
-              <Text style={[s.emptyTitle, { color: colors.text }]}>No products found</Text>
+              <Text style={[s.emptyTitle, { color: colors.text }]}>{productsError ? "Products could not be loaded" : "No products found"}</Text>
               <Text style={[s.emptyText, { color: colors.textMuted }]}>
-                {debSearch ? "Try a different search term" : "Check back soon"}
+                {productsError || (debSearch ? "Try a different search term" : "Check back soon")}
               </Text>
             </View>
           )

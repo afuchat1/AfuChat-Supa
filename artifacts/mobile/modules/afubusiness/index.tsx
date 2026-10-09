@@ -65,14 +65,24 @@ type Product = {
   sales_count: number;
 };
 
-type EscrowOrder = {
+type ShopOrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price_acoin: number;
+  snapshot_name: string | null;
+  snapshot_image: string | null;
+};
+
+type ShopOrder = {
   id: string;
   status: string;
   total_acoin: number;
-  quantity: number;
   created_at: string;
-  buyer: { display_name: string | null; handle: string | null; avatar_url: string | null } | null;
-  product: { name: string; images: string[] } | null;
+  escrow_status: string | null;
+  buyer_profile: { display_name: string | null; handle: string | null; avatar_url: string | null } | null;
+  items: ShopOrderItem[];
 };
 
 type Follower = {
@@ -99,16 +109,13 @@ const CATEGORIES = [
 ];
 
 const ESCROW_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
-  pending_payment:  { bg: "#FF950018", fg: "#FF9500", label: "Awaiting Payment" },
-  payment_held:     { bg: "#1018D818", fg: "#1018D8", label: "Payment Held" },
+  pending:          { bg: "#FF950018", fg: "#FF9500", label: "Pending" },
+  paid:             { bg: "#1018D818", fg: "#1018D8", label: "Paid" },
   processing:       { bg: "#AF52DE18", fg: "#AF52DE", label: "Processing" },
   shipped:          { bg: "#5856D618", fg: "#5856D6", label: "Shipped" },
   delivered:        { bg: "#34C75918", fg: "#34C759", label: "Delivered" },
-  completed:        { bg: "#34C75918", fg: "#34C759", label: "Completed" },
-  disputed:         { bg: "#FF3B3018", fg: "#FF3B30", label: "Disputed" },
   refunded:         { bg: "#FF950018", fg: "#FF9500", label: "Refunded" },
   cancelled:        { bg: "#8E8E9318", fg: "#8E8E93", label: "Cancelled" },
-  pending:          { bg: "#FF950018", fg: "#FF9500", label: "Pending" },
 };
 
 function statusInfo(status: string) {
@@ -139,9 +146,10 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
 
   const [followers, setFollowers] = useState<Follower[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [orders, setOrders] = useState<EscrowOrder[]>([]);
+  const [orders, setOrders] = useState<ShopOrder[]>([]);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<EscrowOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<ShopOrder | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -202,14 +210,43 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   const loadOrders = useCallback(async (isRefresh = false) => {
     if (!user) return;
     if (isRefresh) setRefreshing(true); else setListLoading(true);
-    const { data } = await supabase
-      .from("orders")
-      .select("id,status,total_acoin,quantity,created_at,buyer:profiles!orders_buyer_id_fkey(display_name,handle,avatar_url),product:shop_products!orders_product_id_fkey(name,images)")
-      .eq("seller_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setOrders((data as any) ?? []);
-    if (isRefresh) setRefreshing(false); else setListLoading(false);
+    setOrdersError(null);
+    try {
+      const { data, error } = await supabase
+        .from("shop_orders")
+        .select("*,buyer_profile:profiles!shop_orders_buyer_id_fkey(display_name,handle,avatar_url)")
+        .eq("seller_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+
+      const orderRows = (data ?? []) as unknown as Omit<ShopOrder, "items">[];
+      const orderIds = orderRows.map((order) => order.id);
+      let itemRows: ShopOrderItem[] = [];
+      if (orderIds.length > 0) {
+        const { data: items, error: itemsError } = await supabase
+          .from("shop_order_items")
+          .select("id,order_id,product_id,quantity,unit_price_acoin,snapshot_name,snapshot_image")
+          .in("order_id", orderIds);
+        if (itemsError) throw itemsError;
+        itemRows = (items ?? []) as ShopOrderItem[];
+      }
+
+      const itemsByOrder = new Map<string, ShopOrderItem[]>();
+      for (const item of itemRows) {
+        const items = itemsByOrder.get(item.order_id) ?? [];
+        items.push(item);
+        itemsByOrder.set(item.order_id, items);
+      }
+      setOrders(orderRows.map((order) => ({ ...order, items: itemsByOrder.get(order.id) ?? [] })));
+    } catch (error) {
+      setOrders([]);
+      const message = error instanceof Error ? error.message : "Could not load shop orders.";
+      setOrdersError(message);
+      showAlert("Orders unavailable", message);
+    } finally {
+      if (isRefresh) setRefreshing(false); else setListLoading(false);
+    }
   }, [user]);
 
   const loadAudience = useCallback(async (isRefresh = false) => {
@@ -235,28 +272,32 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   const loadAnalytics = useCallback(async () => {
     if (!user) return;
     setListLoading(true);
-    const [{ count: totalOrders }, { count: completed }, { count: pending }, { count: totalProducts }, { count: activeProducts }] = await Promise.all([
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("seller_id", user.id),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("seller_id", user.id).eq("status", "completed"),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("seller_id", user.id).in("status", ["pending", "pending_payment", "payment_held", "processing", "shipped"]),
-      supabase.from("shop_products").select("id", { count: "exact", head: true }).eq("seller_id", user.id),
-      supabase.from("shop_products").select("id", { count: "exact", head: true }).eq("seller_id", user.id).eq("is_available", true),
-    ]);
-    const { data: revData } = await supabase
-      .from("orders")
-      .select("total_acoin")
-      .eq("seller_id", user.id)
-      .eq("status", "completed");
-    const totalRevenue = (revData ?? []).reduce((sum: number, r: any) => sum + (r.total_acoin ?? 0), 0);
-    setAnalytics({
-      totalRevenue,
-      totalOrders: totalOrders ?? 0,
-      completedOrders: completed ?? 0,
-      pendingOrders: pending ?? 0,
-      activeProducts: activeProducts ?? 0,
-      totalProducts: totalProducts ?? 0,
-    });
-    setListLoading(false);
+    try {
+      const [totalOrders, delivered, pending, totalProducts, activeProducts, revenue] = await Promise.all([
+        supabase.from("shop_orders").select("id", { count: "exact", head: true }).eq("seller_id", user.id),
+        supabase.from("shop_orders").select("id", { count: "exact", head: true }).eq("seller_id", user.id).eq("status", "delivered"),
+        supabase.from("shop_orders").select("id", { count: "exact", head: true }).eq("seller_id", user.id).in("status", ["pending", "paid", "processing", "shipped"]),
+        supabase.from("shop_products").select("id", { count: "exact", head: true }).eq("seller_id", user.id),
+        supabase.from("shop_products").select("id", { count: "exact", head: true }).eq("seller_id", user.id).eq("is_available", true),
+        supabase.from("shop_orders").select("total_acoin").eq("seller_id", user.id).eq("status", "delivered"),
+      ]);
+      const failed = [totalOrders, delivered, pending, totalProducts, activeProducts, revenue].find((result) => result.error);
+      if (failed?.error) throw failed.error;
+      const totalRevenue = (revenue.data ?? []).reduce((sum, row) => sum + (row.total_acoin ?? 0), 0);
+      setAnalytics({
+        totalRevenue,
+        totalOrders: totalOrders.count ?? 0,
+        completedOrders: delivered.count ?? 0,
+        pendingOrders: pending.count ?? 0,
+        activeProducts: activeProducts.count ?? 0,
+        totalProducts: totalProducts.count ?? 0,
+      });
+    } catch (error) {
+      setAnalytics(null);
+      showAlert("Analytics unavailable", error instanceof Error ? error.message : "Could not load shop analytics.");
+    } finally {
+      setListLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -371,7 +412,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   }
 
   async function updateOrderStatus(orderId: string, newStatus: string) {
-    const { error } = await supabase.from("orders").update({ status: newStatus }).eq("id", orderId);
+    const { error } = await supabase.from("shop_orders").update({ status: newStatus }).eq("id", orderId);
     if (error) { showAlert("Error", error.message); return; }
     setOrders((prev) => prev.map((o) => o.id === orderId ? { ...o, status: newStatus } : o));
     if (selectedOrder?.id === orderId) setSelectedOrder((o) => o ? { ...o, status: newStatus } : null);
@@ -647,6 +688,11 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
           ListEmptyComponent={
             listLoading ? (
               <View>{[1,2,3,4].map(i => <ListRowSkeleton key={i} />)}</View>
+            ) : ordersError ? (
+              <View style={st.center}>
+                <Ionicons name="alert-circle-outline" size={42} color="#FF3B30" />
+                <Text style={[st.emptyText, { color: colors.textMuted }]}>Orders could not be loaded</Text>
+              </View>
             ) : (
               <View style={st.center}>
                 <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
@@ -659,16 +705,16 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
             return (
               <Pressable style={[st.orderRow, { backgroundColor: colors.surface }]} onPress={() => { setSelectedOrder(item); setScreen("order-detail"); }}>
                 <View style={[st.orderImg, { backgroundColor: colors.backgroundSecondary }]}>
-                  {item.product?.images?.[0] ? (
-                    <Image source={{ uri: item.product.images[0] }} style={st.productImgFill} resizeMode="cover" />
+                  {item.items[0]?.snapshot_image ? (
+                    <Image source={{ uri: item.items[0].snapshot_image }} style={st.productImgFill} resizeMode="cover" />
                   ) : (
                     <Ionicons name="cube-outline" size={18} color={colors.textMuted} />
                   )}
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={[st.productName, { color: colors.text }]} numberOfLines={1}>{item.product?.name ?? "Product"}</Text>
+                  <Text style={[st.productName, { color: colors.text }]} numberOfLines={1}>{item.items[0]?.snapshot_name ?? "Order"}</Text>
                   <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.textMuted }]}>
-                    {item.buyer?.display_name ?? (item.buyer?.handle ? `@${item.buyer.handle}` : "Customer")} • Qty {item.quantity ?? 1}
+                    {item.buyer_profile?.display_name ?? (item.buyer_profile?.handle ? `@${item.buyer_profile.handle}` : "Customer")} • {item.items.reduce((count, line) => count + line.quantity, 0)} item(s)
                   </Text>
                   <Text style={[{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.textMuted }]}>
                     {new Date(item.created_at).toLocaleDateString()}
@@ -690,7 +736,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
 
   if (screen === "order-detail" && selectedOrder) {
     const s = statusInfo(selectedOrder.status);
-    const canProcess = selectedOrder.status === "payment_held";
+    const canProcess = selectedOrder.status === "paid";
     const canShip = selectedOrder.status === "processing";
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -707,18 +753,32 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
             <View style={[st.statusBadge, { backgroundColor: s.bg, alignSelf: "flex-start", paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 }]}>
               <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: s.fg }}>{s.label}</Text>
             </View>
-            {selectedOrder.product && (
-              <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+            {selectedOrder.items.map((item) => (
+              <View key={item.id} style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
                 <View style={[st.productImg, { backgroundColor: colors.backgroundSecondary }]}>
-                  {selectedOrder.product.images?.[0] ? (
-                    <Image source={{ uri: selectedOrder.product.images[0] }} style={st.productImgFill} resizeMode="cover" />
+                  {item.snapshot_image ? (
+                    <Image source={{ uri: item.snapshot_image }} style={st.productImgFill} resizeMode="cover" />
                   ) : (
                     <Ionicons name="cube-outline" size={22} color={colors.textMuted} />
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[st.productName, { color: colors.text }]}>{selectedOrder.product.name}</Text>
-                  <Text style={[{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 14 }]}>{fmtAcoin(selectedOrder.total_acoin ?? 0)}</Text>
+                  <Text style={[st.productName, { color: colors.text }]}>{item.snapshot_name ?? "Order item"}</Text>
+                  <Text style={{ color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 12 }}>
+                    Qty {item.quantity} · {fmtAcoin(item.unit_price_acoin)} each
+                  </Text>
+                </View>
+              </View>
+            ))}
+            {selectedOrder.items.length === 0 && (
+              <Text style={{ color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 13 }}>
+                No item details are available for this order.
+              </Text>
+            )}
+            {selectedOrder.items.length > 0 && (
+              <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 14 }]}>Order total: {fmtAcoin(selectedOrder.total_acoin ?? 0)}</Text>
                 </View>
               </View>
             )}
@@ -727,24 +787,24 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
             <Text style={[st.sectionLabel, { color: colors.textSecondary }]}>CUSTOMER</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View style={[st.personAvatar, { backgroundColor: accent + "22" }]}>
-                {selectedOrder.buyer?.avatar_url ? (
-                  <Image source={{ uri: selectedOrder.buyer.avatar_url }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                {selectedOrder.buyer_profile?.avatar_url ? (
+                  <Image source={{ uri: selectedOrder.buyer_profile.avatar_url }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                 ) : (
                   <Ionicons name="person" size={18} color={accent} />
                 )}
               </View>
               <View>
                 <Text style={[{ color: colors.text, fontFamily: "Inter_500Medium", fontSize: 14 }]}>
-                  {selectedOrder.buyer?.display_name ?? "Customer"}
+                  {selectedOrder.buyer_profile?.display_name ?? "Customer"}
                 </Text>
                 <Text style={[{ color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 12 }]}>
-                  @{selectedOrder.buyer?.handle ?? "N/A"}
+                  @{selectedOrder.buyer_profile?.handle ?? "N/A"}
                 </Text>
               </View>
             </View>
             <View style={st.shopStatRow}>
               <Text style={[st.shopStatLabel, { color: colors.textMuted }]}>Quantity</Text>
-              <Text style={[st.shopStatVal, { color: colors.text }]}>{selectedOrder.quantity ?? 1}</Text>
+              <Text style={[st.shopStatVal, { color: colors.text }]}>{selectedOrder.items.reduce((count, item) => count + item.quantity, 0)}</Text>
             </View>
             <View style={st.shopStatRow}>
               <Text style={[st.shopStatLabel, { color: colors.textMuted }]}>Date</Text>

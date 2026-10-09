@@ -93,7 +93,7 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
 const AFUCHAT_SCHEMA = "afuchat" as const;
 const POSTGREST_SCHEMA_OVERRIDES: Readonly<Record<string, string>> = {
   profiles: "accounts",
-  orders: "shop",
+  verification_requests: "accounts",
 };
 
 const fetchThroughAfuChatApi: typeof fetch = async (input, init) => {

@@ -26,7 +26,6 @@ const PROFILE_FOREIGN_KEYS: Readonly<Record<string, ForeignKeyRule>> = Object.fr
   freelance_listings_seller_id_fkey: { column: "seller_id", schema: "accounts" },
   freelance_reviews_reviewer_id_fkey: { column: "reviewer_id", schema: "accounts" },
   gift_transactions_sender_id_fkey: { column: "sender_id", schema: "accounts" },
-  orders_buyer_id_fkey: { column: "buyer_id", schema: "accounts" },
   paid_communities_creator_id_fkey: { column: "creator_id", schema: "accounts" },
   red_envelope_claims_claimer_id_fkey: { column: "claimer_id", schema: "accounts" },
   red_envelopes_sender_id_fkey: { column: "sender_id", schema: "accounts" },

@@ -44,14 +44,14 @@ const INDUSTRIES = [
 
 const TOTAL_STEPS = 4;
 
-type PageStatus = "loading" | "idle" | "pending" | "approved" | "rejected";
+type PageStatus = "loading" | "idle" | "pending" | "approved" | "rejected" | "error";
 
 type VerifApp = {
   id: string;
   status: "pending" | "approved" | "rejected";
-  admin_note: string | null;
+  rejection_reason: string | null;
   created_at: string;
-  org_name: string;
+  full_name: string;
 };
 
 export default function BusinessVerificationScreen() {
@@ -60,6 +60,7 @@ export default function BusinessVerificationScreen() {
   const insets = useSafeAreaInsets();
 
   const [pageStatus, setPageStatus] = useState<PageStatus>("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [existingApp, setExistingApp] = useState<VerifApp | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(1);
@@ -95,18 +96,27 @@ export default function BusinessVerificationScreen() {
   }, [user]);
 
   async function checkExisting() {
-    const { data } = await supabase
-      .from("business_verification_requests")
-      .select("id, status, admin_note, created_at, org_name")
-      .eq("user_id", user!.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) {
-      setExistingApp(data as VerifApp);
-      setPageStatus((data as any).status as PageStatus);
-    } else {
-      setPageStatus("idle");
+    setPageStatus("loading");
+    setLoadError(null);
+    try {
+      const { data, error } = await supabase
+        .from("verification_requests")
+        .select("id,status,rejection_reason,created_at,full_name")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        setExistingApp(data as VerifApp);
+        setPageStatus(data.status as PageStatus);
+      } else {
+        setExistingApp(null);
+        setPageStatus("idle");
+      }
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not load your verification request.");
+      setPageStatus("error");
     }
   }
 
@@ -167,35 +177,53 @@ export default function BusinessVerificationScreen() {
   async function handleSubmit() {
     if (!validateStep(1) || !validateStep(2) || !validateStep(3) || !validateStep(4)) return;
     if (!user) return;
+    const email = user.email?.trim();
+    const applicantName = form.contact_name.trim() || profile?.display_name?.trim() || "";
+    if (!applicantName) {
+      showAlert("Required", "Enter a contact person's name or add a display name to your profile.");
+      return;
+    }
+    if (!email) {
+      showAlert("Email required", "Add an email address to your account before applying.");
+      return;
+    }
     setSubmitting(true);
     const social_links: Record<string, string> = {};
     if (form.ig.trim()) social_links.instagram = form.ig.trim();
     if (form.x_twitter.trim()) social_links.x_twitter = form.x_twitter.trim();
     if (form.linkedin.trim()) social_links.linkedin = form.linkedin.trim();
-    const { error } = await supabase.from("business_verification_requests").insert({
-      user_id: user.id,
-      org_name: form.org_name.trim(),
-      legal_name: form.legal_name.trim() || null,
-      org_type: form.org_type,
-      industry: form.industry.trim() || null,
-      registration_number: form.registration_number.trim() || null,
-      registration_country: form.registration_country.trim(),
-      phone: getInternationalPhone(),
-      business_address: form.business_address.trim() || null,
-      website_url: form.website_url.trim() || null,
-      contact_name: form.contact_name.trim() || null,
-      contact_title: form.contact_title.trim() || null,
-      description: form.description.trim(),
-      notable_links: form.notable_links.trim() || null,
-      social_links,
-      status: "pending",
-    });
-    setSubmitting(false);
-    if (error) {
-      showAlert("Submission Error", "Unable to submit at this time. Please try again or contact support.");
-      return;
+    const verification_reason = [
+      `Organization name: ${form.org_name.trim()}`,
+      `Legal name: ${form.legal_name.trim() || "Not provided"}`,
+      `Organization type: ${form.org_type}`,
+      `Industry: ${form.industry.trim() || "Not provided"}`,
+      `Registration country: ${form.registration_country}`,
+      `Business address: ${form.business_address.trim() || "Not provided"}`,
+      `Contact person: ${applicantName}`,
+      `Contact title: ${form.contact_title.trim() || "Not provided"}`,
+      `Reason for verification: ${form.description.trim()}`,
+      `Supporting links: ${form.notable_links.trim() || "Not provided"}`,
+    ].join("\n");
+    try {
+      const { error } = await supabase.from("verification_requests").insert({
+        user_id: user.id,
+        account_type: "business",
+        full_name: applicantName,
+        email,
+        phone: getInternationalPhone() || null,
+        website_url: form.website_url.trim() || null,
+        social_links,
+        verification_reason,
+        business_registration: form.registration_number.trim() || null,
+        status: "pending",
+      });
+      if (error) throw error;
+      await checkExisting();
+    } catch (error) {
+      showAlert("Submission Error", error instanceof Error ? error.message : "Unable to submit at this time. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
-    await checkExisting();
   }
 
   const selectedOrgType = ORG_TYPES.find((t) => t.label === form.org_type);
@@ -229,6 +257,22 @@ export default function BusinessVerificationScreen() {
     );
   }
 
+  if (pageStatus === "error") {
+    return (
+      <View style={[st.root, { backgroundColor: colors.background }]}>
+        <NavBar />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+          <Ionicons name="alert-circle-outline" size={44} color="#FF3B30" />
+          <Text style={[st.bigTitle, { color: colors.text }]}>Verification unavailable</Text>
+          <Text style={[st.bigSub, { color: colors.textMuted }]}>{loadError}</Text>
+          <TouchableOpacity style={[st.submitBtn, { backgroundColor: GOLD }]} onPress={checkExisting} activeOpacity={0.85}>
+            <Text style={st.submitBtnText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   if (profile?.is_organization_verified) {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
@@ -256,7 +300,7 @@ export default function BusinessVerificationScreen() {
           </View>
           <Text style={[st.bigTitle, { color: colors.text }]}>Under Review</Text>
           <Text style={[st.bigSub, { color: colors.textMuted }]}>
-            Your application for <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{existingApp?.org_name}</Text> is being reviewed. We typically respond within 3 to 5 business days.
+            Your business verification application is being reviewed. We typically respond within 3 to 5 business days.
           </Text>
           {existingApp?.created_at ? (
             <View style={[st.dateBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -280,13 +324,13 @@ export default function BusinessVerificationScreen() {
             <Ionicons name="close-circle" size={44} color="#FF3B30" />
           </View>
           <Text style={[st.bigTitle, { color: colors.text }]}>Not Approved</Text>
-          {existingApp?.admin_note ? (
+          {existingApp?.rejection_reason ? (
             <View style={[st.noteBox, { backgroundColor: colors.surface, borderColor: GOLD + "40" }]}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <Ionicons name="chatbox" size={14} color={GOLD} />
                 <Text style={[st.noteLabel, { color: GOLD }]}>Reviewer Note</Text>
               </View>
-              <Text style={[st.noteText, { color: colors.text }]}>{existingApp.admin_note}</Text>
+              <Text style={[st.noteText, { color: colors.text }]}>{existingApp.rejection_reason}</Text>
             </View>
           ) : (
             <Text style={[st.bigSub, { color: colors.textMuted }]}>

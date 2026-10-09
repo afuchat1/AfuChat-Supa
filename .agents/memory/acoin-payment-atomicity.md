@@ -8,6 +8,14 @@ ALL ACoin balance changes must go through Supabase RPCs, never direct `.update({
 - **Deduct**: `supabase.rpc("deduct_acoin", { p_user_id, p_amount }).maybeSingle()`
 - **Credit** (reward / refund): `supabase.rpc("credit_acoin", { p_user_id, p_amount }).catch(() => {})`
 
+## Multi-record purchase and escrow flows
+
+A balance RPC followed by separate order, item, inventory, or escrow writes is still not one atomic transaction. If the live database has no single server-side operation for the complete purchase/release/refund, fail closed before changing any row. Do not use sequential direct balance updates or compensating writes as a substitute.
+
+**Why:** a later order or escrow write can fail after money has moved, leaving balances and business records inconsistent.
+
+**How to apply:** Before enabling a multi-record ACoin flow, verify that one existing server-side transaction covers every required write. If it does not, keep the action unavailable and explain that no balance or order state changed.
+
 ## Nexa (xp) exception
 There is NO `deduct_nexa` RPC. Nexa deductions still use:
 ```ts

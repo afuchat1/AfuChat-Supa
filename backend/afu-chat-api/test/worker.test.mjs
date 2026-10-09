@@ -130,7 +130,7 @@ test("mobile PostgREST reads use the fixed AfuChat data gateway and keep user RL
   assert.equal(requests[0].headers.get("apikey"), "test-anon-key");
 });
 
-test("data gateway routes AfuChat profiles and orders to afuchat only", async () => {
+test("data gateway routes shared account records and AfuChat shop orders to their live schemas", async () => {
   const requests = [];
   globalThis.fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -148,7 +148,17 @@ test("data gateway routes AfuChat profiles and orders to afuchat only", async ()
     }),
     makeEnv(),
   );
-  const shopResponse = await worker.fetch(
+  const shopOrdersResponse = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/shop_orders?select=id", {
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+        "Accept-Profile": "afuchat",
+      },
+    }),
+    makeEnv(),
+  );
+  const missingLegacyResponse = await worker.fetch(
     new Request("https://api.afuchat.com/v1/chat/data/orders?select=id", {
       headers: {
         Authorization: "Bearer user-session",
@@ -160,12 +170,14 @@ test("data gateway routes AfuChat profiles and orders to afuchat only", async ()
   );
 
   assert.equal(profileResponse.status, 200);
-  assert.equal(shopResponse.status, 200);
-  assert.equal(requests[0].headers.get("Accept-Profile"), "afuchat");
-  assert.equal(requests[0].headers.get("Content-Profile"), "afuchat");
+  assert.equal(shopOrdersResponse.status, 200);
+  assert.equal(missingLegacyResponse.status, 404);
+  assert.equal(requests[0].headers.get("Accept-Profile"), "accounts");
+  assert.equal(requests[0].headers.get("Content-Profile"), "accounts");
   assert.equal(requests[1].headers.get("Accept-Profile"), "afuchat");
   assert.equal(requests[1].headers.get("Content-Profile"), "afuchat");
-  assert.equal(new URL(requests[1].url).pathname, "/rest/v1/orders");
+  assert.equal(new URL(requests[1].url).pathname, "/rest/v1/shop_orders");
+  assert.equal(requests.length, 2);
 });
 
 test("legacy public schema requests are rejected instead of redirected", async () => {
@@ -189,7 +201,7 @@ test("legacy public schema requests are rejected instead of redirected", async (
   assert.equal(response.status, 400);
   assert.equal(
     (await response.json()).error,
-    "Only AfuChat schema requests are supported.",
+    "The requested data schema is not supported.",
   );
   assert.equal(forwarded, false);
 });
@@ -559,7 +571,7 @@ test("current profile uses the verified AfuAuth identity and returns the mobile 
   assert.match(query.get("select"), /platinum_until/);
   assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
-  assert.equal(profileRequest.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "accounts");
   assert.match(response.headers.get("Cache-Control"), /private, no-store/);
 });
 
@@ -709,7 +721,7 @@ test("other-user profile uses verified identity and returns only contact-page fi
   assert.doesNotMatch(query.get("select"), /phone_number|is_admin|date_of_birth/);
   assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
-  assert.equal(profileRequest.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "accounts");
   assert.equal(blockRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.match(response.headers.get("Cache-Control"), /private, no-store/);
 });
@@ -1445,7 +1457,7 @@ test("data gateway rejects non-AfuChat schemas without querying another schema",
 
     assert.equal(response.status, 400);
     const body = await response.json();
-    assert.equal(body.error, "Only AfuChat schema requests are supported.");
+    assert.equal(body.error, "The requested data schema is not supported.");
     assert.equal(typeof body.request_id, "string");
     assert.equal(upstreamCalls, 0);
   } finally {
@@ -2589,7 +2601,7 @@ test("post detail preserves post, image, and shared account profile response sha
   assert.equal(payload.post.id, postId);
   assert.equal(payload.post.profiles.id, authorId);
   assert.equal(payload.post.post_images[0].image_url, "https://example.test/a.jpg");
-  assert.equal(requests[2].headers.get("Accept-Profile"), "afuchat");
+  assert.equal(requests[2].headers.get("Accept-Profile"), "accounts");
   assert.equal(requests[2].headers.get("Authorization"), `Bearer ${token}`);
 });
 
@@ -2807,7 +2819,7 @@ test("post replies return shared profiles, like counts, and the signed-in user's
     handle: "reply-author",
     avatar_url: "https://example.test/avatar.jpg",
   });
-  assert.equal(requests[1].headers.get("Accept-Profile"), "afuchat");
+  assert.equal(requests[1].headers.get("Accept-Profile"), "accounts");
   assert.equal(new URL(requests[2].url).searchParams.get("reply_id"), `in.(${replyId})`);
   assert.equal(new URL(requests[3].url).searchParams.get("user_id"), `eq.${userId}`);
 });
@@ -3052,7 +3064,7 @@ test("follow lists honor account-profile privacy before reading relationships", 
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     requests.push(request);
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+    assert.equal(request.headers.get("Accept-Profile"), "accounts");
     return Response.json([{
       id: profileId,
       hide_followers_list: true,
@@ -3086,7 +3098,7 @@ test("follow lists hydrate relationship rows from afuchat profiles", async () =>
     const request = new Request(input, init);
     requests.push(request);
     const url = new URL(request.url);
-    if (url.pathname.endsWith("/profiles") && request.headers.get("Accept-Profile") === "afuchat") {
+    if (url.pathname.endsWith("/profiles") && request.headers.get("Accept-Profile") === "accounts") {
       if (url.searchParams.get("select")?.includes("hide_followers_list")) {
         return Response.json([{
           id: profileId,
@@ -3161,7 +3173,7 @@ test("follow lists fail explicitly when a relationship profile cannot be hydrate
     const url = new URL(request.url);
     if (
       url.pathname.endsWith("/profiles") &&
-      request.headers.get("Accept-Profile") === "afuchat"
+      request.headers.get("Accept-Profile") === "accounts"
     ) {
       if (url.searchParams.get("select")?.includes("hide_followers_list")) {
         return Response.json([{
@@ -3268,7 +3280,7 @@ test("for-you feed keeps its server-backed streams and hydrates the original ran
       return Response.json([]);
     }
     if (url.pathname.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
       return Response.json([{
         id: authorId,
         display_name: "Author",
@@ -3451,7 +3463,7 @@ test("post search only returns public results and hydrates account profiles and 
       }]);
     }
     if (url.pathname.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
       return Response.json([{
         id: authorId,
         display_name: "Clip author",
@@ -3558,7 +3570,7 @@ test("video following feed enforces visibility and hydrates counts from the shar
       }]);
     }
     if (url.pathname.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
+      assert.equal(request.headers.get("Accept-Profile"), "accounts");
       return Response.json([{
         id: authorId,
         display_name: "Following creator",
@@ -3667,8 +3679,9 @@ test("Discover active people requires the verified account and redacts hidden pr
     const url = new URL(request.url);
     seenRequests.push({ request, url });
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
-    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    const expectedSchema = url.pathname.endsWith("/profiles") ? "accounts" : "afuchat";
+    assert.equal(request.headers.get("Accept-Profile"), expectedSchema);
+    assert.equal(request.headers.get("Content-Profile"), expectedSchema);
     if (url.searchParams.get("select")?.includes("show_online_status")) {
       assert.equal(url.searchParams.get("id"), `neq.${viewerId}`);
       assert.equal(url.searchParams.get("hide_from_search"), null);
@@ -3733,8 +3746,9 @@ test("Discover suggested people excludes self and followed accounts with privacy
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
-    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    const expectedSchema = url.pathname.endsWith("/profiles") ? "accounts" : "afuchat";
+    assert.equal(request.headers.get("Accept-Profile"), expectedSchema);
+    assert.equal(request.headers.get("Content-Profile"), expectedSchema);
     if (url.pathname.endsWith("/follows")) {
       followQuery = url;
       return Response.json([{ following_id: followedId }]);
@@ -3792,8 +3806,9 @@ test("Discover directory returns relationship counts through the authenticated p
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
-    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    const expectedSchema = url.pathname.endsWith("/profiles") ? "accounts" : "afuchat";
+    assert.equal(request.headers.get("Accept-Profile"), expectedSchema);
+    assert.equal(request.headers.get("Content-Profile"), expectedSchema);
     if (url.searchParams.has("interests")) {
       candidateQuery = url;
       return Response.json([{
@@ -3839,7 +3854,7 @@ test("Discover directory returns relationship counts through the authenticated p
   assert.equal(payload.items[0].following_count, 7);
 });
 
-test("Discover nearby derives the excluded account from AfuAuth and returns server results", async () => {
+test("Discover nearby fails closed when its database RPC is unavailable", async () => {
   const token = "discover-nearby-token";
   const viewerId = "123e4567-e89b-42d3-a456-426614174025";
   const personId = "123e4567-e89b-42d3-a456-426614174026";
@@ -3850,26 +3865,7 @@ test("Discover nearby derives the excluded account from AfuAuth and returns serv
   let databaseCalls = 0;
   globalThis.fetch = async (input, init) => {
     databaseCalls += 1;
-    const request = new Request(input, init);
-    const url = new URL(request.url);
-    assert.equal(url.pathname, "/rest/v1/rpc/nearby_users");
-    assert.equal(request.method, "POST");
-    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.deepEqual(await request.json(), {
-      user_lat: 0.3,
-      user_lng: 32.6,
-      radius_km: 10,
-      exclude_id: viewerId,
-    });
-    return Response.json([{
-      id: personId,
-      display_name: "Nearby person",
-      handle: "nearby-person",
-      follower_count: 4,
-      following_count: 9,
-      distance_km: 2.1,
-      location_updated_at: "2026-10-08T07:00:00.000Z",
-    }]);
+    return Response.json({ error: "Unexpected database request" }, { status: 500 });
   };
 
   const response = await worker.fetch(
@@ -3879,12 +3875,8 @@ test("Discover nearby derives the excluded account from AfuAuth and returns serv
     ),
     env,
   );
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.equal(payload.items[0].id, personId);
-  assert.equal(payload.items[0].follower_count, 4);
-  assert.equal(payload.items[0].following_count, 9);
-  assert.equal(databaseCalls, 1);
+  assert.equal(response.status, 502);
+  assert.equal(databaseCalls, 0);
 
   const staleAccountResponse = await worker.fetch(
     new Request(
@@ -3894,10 +3886,10 @@ test("Discover nearby derives the excluded account from AfuAuth and returns serv
     env,
   );
   assert.equal(staleAccountResponse.status, 409);
-  assert.equal(databaseCalls, 1);
+  assert.equal(databaseCalls, 0);
 });
 
-test("Discover presence heartbeat verifies the shared identity and only updates that account", async () => {
+test("Discover presence heartbeat fails closed when its database RPC is unavailable", async () => {
   const token = "discover-presence-token";
   const viewerId = "123e4567-e89b-42d3-a456-426614174030";
   const env = makeEnv();
@@ -3907,12 +3899,7 @@ test("Discover presence heartbeat verifies the shared identity and only updates 
   let databaseCalls = 0;
   globalThis.fetch = async (input, init) => {
     databaseCalls += 1;
-    const request = new Request(input, init);
-    assert.equal(request.method, "POST");
-    assert.equal(new URL(request.url).pathname, "/rest/v1/rpc/update_last_seen");
-    assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.deepEqual(await request.json(), {});
-    return Response.json(null);
+    return Response.json({ error: "Unexpected database request" }, { status: 500 });
   };
 
   const response = await worker.fetch(
@@ -3926,9 +3913,8 @@ test("Discover presence heartbeat verifies the shared identity and only updates 
     }),
     env,
   );
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { updated: true });
-  assert.equal(databaseCalls, 1);
+  assert.equal(response.status, 502);
+  assert.equal(databaseCalls, 0);
 
   const staleAccountResponse = await worker.fetch(
     new Request("https://api.afuchat.com/v1/chat/discover/presence", {
@@ -3944,7 +3930,7 @@ test("Discover presence heartbeat verifies the shared identity and only updates 
     env,
   );
   assert.equal(staleAccountResponse.status, 400);
-  assert.equal(databaseCalls, 1);
+  assert.equal(databaseCalls, 0);
 });
 
 test("Discover people reports sanitized API errors instead of returning an empty list", async () => {
@@ -3985,8 +3971,9 @@ test("Discover follow-state reads return the signed-in user's followers and foll
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
-    assert.equal(request.headers.get("Content-Profile"), "afuchat");
+    const expectedSchema = url.pathname.endsWith("/profiles") ? "accounts" : "afuchat";
+    assert.equal(request.headers.get("Accept-Profile"), expectedSchema);
+    assert.equal(request.headers.get("Content-Profile"), expectedSchema);
     if (url.pathname.endsWith("/profiles")) {
       assert.equal(url.searchParams.get("id"), `eq.${viewerId}`);
       return Response.json([{

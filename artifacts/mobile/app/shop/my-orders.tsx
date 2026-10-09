@@ -46,7 +46,7 @@ function OrderCard({ order, onPress }: { order: ShopOrder; onPress: () => void }
   const shopLogo = order.shop?.logo_url;
   const shopName = order.shop?.name || "Unknown Shop";
   const firstItem = order.items?.[0];
-  const img = firstItem?.product?.images?.[0] || firstItem?.snapshot_image;
+  const img = firstItem?.snapshot_image;
   const extraItems = (order.items?.length || 0) - 1;
 
   return (
@@ -83,7 +83,7 @@ function OrderCard({ order, onPress }: { order: ShopOrder; onPress: () => void }
           )}
         <View style={{ flex: 1, gap: 3 }}>
           <Text style={[st.itemName, { color: colors.text }]} numberOfLines={1}>
-            {firstItem?.snapshot_name || firstItem?.product?.name || "Item"}
+            {firstItem?.snapshot_name || "Item"}
           </Text>
           {extraItems > 0 && (
             <Text style={[st.extraItems, { color: colors.textMuted }]}>+{extraItems} more item{extraItems > 1 ? "s" : ""}</Text>

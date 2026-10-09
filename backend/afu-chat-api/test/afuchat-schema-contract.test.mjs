@@ -21,8 +21,10 @@ const mobileClient = await readFile(
 test("only explicit AfuChat resources and referenced external resources are routable", () => {
   assert.equal(schemaForRelation("chats"), "afuchat");
   assert.equal(schemaForRelation("shop_orders"), "afuchat");
+  assert.equal(schemaForRelation("shop_order_items"), "afuchat");
   assert.equal(schemaForRelation("profiles"), "accounts");
-  assert.equal(schemaForRelation("orders"), "shop");
+  assert.equal(schemaForRelation("verification_requests"), "accounts");
+  assert.equal(schemaForRelation("orders"), null);
   assert.equal(schemaForRelation("posts"), "afuchat");
 
   for (const absent of ["app_banners", "business_verification_requests", "org_page_jobs"]) {
@@ -46,7 +48,7 @@ test("the RPC registry contains only production-confirmed AfuChat functions", ()
 
 test("mobile routes only explicit external references outside the AfuChat schema", () => {
   assert.match(mobileClient, /profiles:\s*"accounts"/);
-  assert.match(mobileClient, /orders:\s*"shop"/);
+  assert.match(mobileClient, /verification_requests:\s*"accounts"/);
   assert.doesNotMatch(mobileClient, /posts:\s*"social"/);
   assert.match(mobileClient, /routedRequest\.headers\.set\("Accept-Profile", schema\)/);
   assert.match(mobileClient, /routedRequest\.headers\.set\("Content-Profile", schema\)/);
@@ -73,14 +75,14 @@ test("cross-schema account profile embeds are split into an RLS-preserving profi
 
   const nested = rewriteCrossSchemaProfileSelect(
     "afuchat",
-    "id,shops!shop_products_shop_id_fkey(id,seller_id,profiles!shops_seller_id_fkey(display_name,handle))",
+    "id,buyer:profiles!shop_orders_buyer_id_fkey(display_name,handle)",
   );
   assert.equal(
     nested?.selector,
-    "id,shops!shop_products_shop_id_fkey(id,seller_id)",
+    "id,buyer_id",
   );
-  assert.deepEqual(nested?.plans[0]?.parentPath, ["shops"]);
-  assert.equal(nested?.plans[0]?.foreignKeyColumn, "seller_id");
+  assert.deepEqual(nested?.plans[0]?.parentPath, []);
+  assert.equal(nested?.plans[0]?.foreignKeyColumn, "buyer_id");
 });
 
 test("same-schema chat profile embeds remain untouched and unsupported inner joins fail closed", () => {
@@ -91,7 +93,7 @@ test("same-schema chat profile embeds remain untouched and unsupported inner joi
 
   const inner = rewriteCrossSchemaProfileSelect(
     "afuchat",
-    "id,buyer:profiles!orders_buyer_id_fkey!inner(display_name)",
+    "id,buyer:profiles!shop_orders_buyer_id_fkey!inner(display_name)",
   );
   assert.equal(inner?.unsupported, true);
 });
@@ -99,15 +101,12 @@ test("same-schema chat profile embeds remain untouched and unsupported inner joi
 test("hydrated profiles preserve the requested projection and nested relationship shape", () => {
   const rewritten = rewriteCrossSchemaProfileSelect(
     "afuchat",
-    "id,shops!shop_products_shop_id_fkey(id,seller_id,seller:profiles!shops_seller_id_fkey(display_name,handle))",
+    "id,buyer_id,buyer:profiles!shop_orders_buyer_id_fkey(display_name,handle)",
   );
   assert.ok(rewritten);
   const payload = [{
-    id: "product-1",
-    shops: {
-      id: "shop-1",
-      seller_id: "11111111-1111-4111-8111-111111111111",
-    },
+    id: "order-1",
+    buyer_id: "11111111-1111-4111-8111-111111111111",
   }];
   applyProfileJoinPlans(payload, rewritten.plans, new Map([[
     "11111111-1111-4111-8111-111111111111",
@@ -118,5 +117,5 @@ test("hydrated profiles preserve the requested projection and nested relationshi
       email: "not-selected@example.test",
     },
   ]]));
-  assert.deepEqual(payload[0].shops.seller, { display_name: "Ada", handle: "ada" });
+  assert.deepEqual(payload[0].buyer, { display_name: "Ada", handle: "ada" });
 });

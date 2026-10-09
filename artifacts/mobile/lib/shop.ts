@@ -63,7 +63,7 @@ export type ShopOrder = {
   buyer_profile?: { display_name: string; handle: string; avatar_url?: string };
   seller_profile?: { display_name: string; handle: string; avatar_url?: string };
   shop?: { name: string; logo_url?: string };
-  items?: ShopOrderItem[];
+  items: ShopOrderItem[];
 };
 
 export type ShopOrderItem = {
@@ -74,7 +74,6 @@ export type ShopOrderItem = {
   unit_price_acoin: number;
   snapshot_name?: string;
   snapshot_image?: string;
-  product?: ShopProduct;
 };
 
 export type CartItem = {
@@ -155,11 +154,37 @@ export function formatShopUSD(acoin: number): string {
 export const formatShopUGX = formatShopUSD;
 
 export async function getOrCreateCart(userId: string): Promise<CartItem[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("shopping_cart")
-    .select("id, user_id, product_id, quantity, shop_products!shopping_cart_product_id_fkey(id, name, price_acoin, images, stock, is_unlimited_stock, is_available, seller_id, shop_id, shops!shop_products_shop_id_fkey(name, seller_id, logo_url))")
+    .select("id, user_id, product_id, quantity")
     .eq("user_id", userId);
-  return (data || []) as CartItem[];
+  if (error) throw error;
+  const cartRows = (data ?? []) as CartItem[];
+  const productIds = [...new Set(cartRows.map((item) => item.product_id))];
+  if (productIds.length === 0) return [];
+
+  const { data: productRows, error: productError } = await supabase
+    .from("shop_products")
+    .select("id,shop_id,seller_id,name,description,price_acoin,images,category,stock,is_unlimited_stock,is_available,sales_count,created_at,updated_at")
+    .in("id", productIds);
+  if (productError) throw productError;
+  const products = (productRows ?? []) as ShopProduct[];
+  const shopIds = [...new Set(products.map((product) => product.shop_id))];
+  const { data: shopRows, error: shopError } = shopIds.length
+    ? await supabase.from("shops").select("id,name,seller_id,logo_url").in("id", shopIds)
+    : { data: [], error: null };
+  if (shopError) throw shopError;
+
+  const shopsById = new Map((shopRows ?? []).map((shop) => [shop.id, shop]));
+  const productsById = new Map(products.map((product) => {
+    const shop = shopsById.get(product.shop_id);
+    return [product.id, { ...product, shop: shop ? {
+      name: shop.name,
+      seller_id: shop.seller_id,
+      logo_url: shop.logo_url,
+    } : undefined }] as const;
+  }));
+  return cartRows.map((item) => ({ ...item, product: productsById.get(item.product_id) }));
 }
 
 export async function addToCart(userId: string, productId: string, qty = 1): Promise<void> {
@@ -186,7 +211,10 @@ export async function updateCartQty(userId: string, productId: string, qty: numb
   await supabase.from("shopping_cart").update({ quantity: qty }).eq("user_id", userId).eq("product_id", productId);
 }
 
-export async function placeOrder(params: {
+export const SHOP_PAYMENTS_UNAVAILABLE_ERROR =
+  "Shop payments are temporarily unavailable because a secure ACoin transaction service is not available. No balance or order status was changed.";
+
+export async function placeOrder(_params: {
   buyerId: string;
   buyerAcoin: number;
   shopId: string;
@@ -194,155 +222,14 @@ export async function placeOrder(params: {
   items: { productId: string; qty: number; unitPrice: number; name: string; image?: string }[];
   deliveryNote?: string;
 }): Promise<{ success: boolean; orderId?: string; error?: string }> {
-  const { buyerId, buyerAcoin, shopId, sellerId, items, deliveryNote } = params;
-  const totalAcoin = items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
-  const fee = Math.ceil(totalAcoin * PLATFORM_FEE_PCT / 100);
-  const sellerReceives = totalAcoin - fee;
-
-  if (buyerAcoin < totalAcoin) return { success: false, error: "Insufficient AfuPay balance" };
-  if (totalAcoin <= 0) return { success: false, error: "Cart is empty" };
-
-  const { error: deductErr, data: deductData } = await supabase
-    .from("profiles")
-    .update({ acoin: buyerAcoin - totalAcoin })
-    .eq("id", buyerId)
-    .eq("acoin", buyerAcoin)
-    .select("acoin")
-    .single();
-
-  if (deductErr || !deductData) {
-    return { success: false, error: "Payment failed. Your balance may have changed. Please try again." };
-  }
-
-  const { data: order, error: orderErr } = await supabase
-    .from("shop_orders")
-    .insert({
-      buyer_id: buyerId,
-      seller_id: sellerId,
-      shop_id: shopId,
-      total_acoin: totalAcoin,
-      escrowed_acoin: sellerReceives,
-      status: "paid",
-      escrow_status: "held",
-      delivery_note: deliveryNote || null,
-    })
-    .select("id")
-    .single();
-
-  if (orderErr || !order) {
-    await supabase.from("profiles").update({ acoin: buyerAcoin }).eq("id", buyerId);
-    return { success: false, error: "Failed to create order. Your balance has been restored." };
-  }
-
-  await supabase.from("shop_order_items").insert(
-    items.map((i) => ({
-      order_id: order.id,
-      product_id: i.productId,
-      quantity: i.qty,
-      unit_price_acoin: i.unitPrice,
-      snapshot_name: i.name,
-      snapshot_image: i.image || null,
-    }))
-  );
-
-  for (const i of items) {
-    const { data: prod } = await supabase.from("shop_products").select("sales_count, stock, is_unlimited_stock").eq("id", i.productId).single();
-    if (prod) {
-      const updates: any = { sales_count: (prod.sales_count || 0) + i.qty };
-      if (!prod.is_unlimited_stock) updates.stock = Math.max(0, (prod.stock || 0) - i.qty);
-      await supabase.from("shop_products").update(updates).eq("id", i.productId);
-    }
-  }
-
-  await supabase.from("acoin_transactions").insert([
-    {
-      user_id: buyerId,
-      amount: -totalAcoin,
-      transaction_type: "shop_purchase_escrow",
-      metadata: { order_id: order.id, shop_id: shopId, note: "Held in escrow until delivery confirmed" },
-    },
-  ]);
-
-  await supabase.from("shopping_cart").delete().eq("user_id", buyerId).in("product_id", items.map((i) => i.productId));
-
-  await supabase.from("shop_order_messages").insert({
-    order_id: order.id,
-    sender_id: buyerId,
-    message: `Order placed for ${items.length} item${items.length > 1 ? "s" : ""}. Payment of ${totalAcoin} AC is held in escrow. Seller will receive ${sellerReceives} AC upon delivery confirmation.`,
-  });
-
-  return { success: true, orderId: order.id };
+  return { success: false, error: SHOP_PAYMENTS_UNAVAILABLE_ERROR };
 }
 
-export async function confirmDelivery(params: {
+export async function confirmDelivery(_params: {
   orderId: string;
   buyerId: string;
 }): Promise<{ success: boolean; error?: string }> {
-  const { orderId, buyerId } = params;
-
-  const { data: order, error: fetchErr } = await supabase
-    .from("shop_orders")
-    .select("id, buyer_id, seller_id, shop_id, total_acoin, escrowed_acoin, status, escrow_status")
-    .eq("id", orderId)
-    .eq("buyer_id", buyerId)
-    .single();
-
-  if (fetchErr || !order) return { success: false, error: "Order not found" };
-  if (order.buyer_id !== buyerId) return { success: false, error: "Unauthorized" };
-  if (order.escrow_status === "released") return { success: false, error: "Funds already released" };
-  if (order.escrow_status === "refunded") return { success: false, error: "Order was refunded" };
-  if (order.escrow_status === "disputed") return { success: false, error: "Order is under dispute review" };
-
-  const sellerReceives = order.escrowed_acoin || 0;
-  if (sellerReceives <= 0) return { success: false, error: "Invalid escrow amount" };
-
-  const { data: sellerProfile, error: sellerErr } = await supabase
-    .from("profiles")
-    .select("acoin")
-    .eq("id", order.seller_id)
-    .single();
-
-  if (sellerErr || !sellerProfile) return { success: false, error: "Seller profile not found" };
-
-  const { error: creditErr } = await supabase
-    .from("profiles")
-    .update({ acoin: (sellerProfile.acoin || 0) + sellerReceives })
-    .eq("id", order.seller_id);
-
-  if (creditErr) return { success: false, error: "Failed to credit seller. Please contact support" };
-
-  const now = new Date().toISOString();
-  await supabase.from("shop_orders").update({
-    status: "delivered",
-    escrow_status: "released",
-    buyer_confirmed_at: now,
-    updated_at: now,
-  }).eq("id", orderId);
-
-  const { data: shop } = await supabase.from("shops").select("total_sales, total_revenue_acoin").eq("id", order.shop_id).single();
-  if (shop) {
-    await supabase.from("shops").update({
-      total_revenue_acoin: (shop.total_revenue_acoin || 0) + sellerReceives,
-      updated_at: now,
-    }).eq("id", order.shop_id);
-  }
-
-  await supabase.from("acoin_transactions").insert([
-    {
-      user_id: order.seller_id,
-      amount: sellerReceives,
-      transaction_type: "shop_sale_released",
-      metadata: { order_id: orderId, shop_id: order.shop_id, note: "Escrow released after buyer confirmed delivery" },
-    },
-  ]);
-
-  await supabase.from("shop_order_messages").insert({
-    order_id: orderId,
-    sender_id: buyerId,
-    message: "✅ Delivery confirmed. Funds have been released to the seller. Thank you for your purchase!",
-  });
-
-  return { success: true };
+  return { success: false, error: SHOP_PAYMENTS_UNAVAILABLE_ERROR };
 }
 
 export async function raiseDispute(params: {
@@ -380,40 +267,12 @@ export async function raiseDispute(params: {
   return { success: true };
 }
 
-export async function refundOrder(params: {
+export async function refundOrder(_params: {
   orderId: string;
   buyerId: string;
   totalAcoin: number;
 }): Promise<{ success: boolean; error?: string }> {
-  const { orderId, buyerId, totalAcoin } = params;
-
-  const { data: buyerProfile } = await supabase.from("profiles").select("acoin").eq("id", buyerId).single();
-  if (!buyerProfile) return { success: false, error: "Buyer not found" };
-
-  await supabase.from("profiles").update({ acoin: (buyerProfile.acoin || 0) + totalAcoin }).eq("id", buyerId);
-
-  await supabase.from("shop_orders").update({
-    status: "refunded",
-    escrow_status: "refunded",
-    updated_at: new Date().toISOString(),
-  }).eq("id", orderId);
-
-  await supabase.from("acoin_transactions").insert([
-    {
-      user_id: buyerId,
-      amount: totalAcoin,
-      transaction_type: "shop_refund",
-      metadata: { order_id: orderId, note: "Order refunded" },
-    },
-  ]);
-
-  await supabase.from("shop_order_messages").insert({
-    order_id: orderId,
-    sender_id: buyerId,
-    message: `💰 Refund of ${totalAcoin} AC has been processed to your account.`,
-  });
-
-  return { success: true };
+  return { success: false, error: SHOP_PAYMENTS_UNAVAILABLE_ERROR };
 }
 
 export async function sendOrderMessage(params: {
@@ -508,21 +367,86 @@ export async function getProductReviews(productId: string, limit = 20): Promise<
   return (data || []) as ShopReview[];
 }
 
+export async function getShopProductWithDetails(productId: string): Promise<(ShopProduct & { shops: (Shop & { profiles?: Shop["profiles"] }) | null }) | null> {
+  const { data: product, error: productError } = await supabase
+    .from("shop_products")
+    .select("*")
+    .eq("id", productId)
+    .maybeSingle();
+  if (productError) throw productError;
+  if (!product) return null;
+
+  const { data: shop, error: shopError } = await supabase
+    .from("shops")
+    .select("*, profiles!shops_seller_id_fkey(id,display_name,handle,avatar_url,is_verified,is_organization_verified)")
+    .eq("id", product.shop_id)
+    .maybeSingle();
+  if (shopError) throw shopError;
+  return { ...product, shops: shop } as unknown as ShopProduct & {
+    shops: (Shop & { profiles?: Shop["profiles"] }) | null;
+  };
+}
+
+async function hydrateShopOrders(rows: Record<string, any>[]): Promise<ShopOrder[]> {
+  if (rows.length === 0) return [];
+  const orderIds = rows.map((order) => order.id as string);
+  const shopIds = [...new Set(rows.map((order) => order.shop_id as string).filter(Boolean))];
+  const [itemsResult, shopsResult] = await Promise.all([
+    supabase
+      .from("shop_order_items")
+      .select("id,order_id,product_id,quantity,unit_price_acoin,snapshot_name,snapshot_image")
+      .in("order_id", orderIds),
+    shopIds.length
+      ? supabase.from("shops").select("id,name,logo_url").in("id", shopIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (itemsResult.error) throw itemsResult.error;
+  if (shopsResult.error) throw shopsResult.error;
+
+  const itemsByOrder = new Map<string, ShopOrderItem[]>();
+  for (const item of (itemsResult.data ?? []) as ShopOrderItem[]) {
+    const current = itemsByOrder.get(item.order_id) ?? [];
+    current.push(item);
+    itemsByOrder.set(item.order_id, current);
+  }
+  const shopsById = new Map((shopsResult.data ?? []).map((shop) => [shop.id, shop]));
+  return rows.map((order) => ({
+    ...order,
+    shop: shopsById.get(order.shop_id),
+    items: itemsByOrder.get(order.id) ?? [],
+  })) as ShopOrder[];
+}
+
 export async function getBuyerOrders(buyerId: string): Promise<ShopOrder[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("shop_orders")
-    .select("*, seller_profile:profiles!shop_orders_seller_id_fkey(display_name, handle, avatar_url), shop:shops!shop_orders_shop_id_fkey(name, logo_url), items:shop_order_items(*, product:shop_products(name, images, price_acoin))")
+    .select("*, seller_profile:profiles!shop_orders_seller_id_fkey(display_name, handle, avatar_url)")
     .eq("buyer_id", buyerId)
     .order("created_at", { ascending: false })
     .limit(50);
-  return (data || []) as ShopOrder[];
+  if (error) throw error;
+  return hydrateShopOrders((data ?? []) as unknown as Record<string, any>[]);
+}
+
+export async function getSellerOrders(sellerId: string): Promise<ShopOrder[]> {
+  const { data, error } = await supabase
+    .from("shop_orders")
+    .select("*, buyer_profile:profiles!shop_orders_buyer_id_fkey(display_name, handle, avatar_url)")
+    .eq("seller_id", sellerId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return hydrateShopOrders((data ?? []) as unknown as Record<string, any>[]);
 }
 
 export async function getOrderById(orderId: string): Promise<ShopOrder | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("shop_orders")
-    .select("*, buyer_profile:profiles!shop_orders_buyer_id_fkey(display_name, handle, avatar_url), seller_profile:profiles!shop_orders_seller_id_fkey(display_name, handle, avatar_url), shop:shops!shop_orders_shop_id_fkey(name, logo_url), items:shop_order_items(*, product:shop_products(name, images, price_acoin, description))")
+    .select("*, buyer_profile:profiles!shop_orders_buyer_id_fkey(display_name, handle, avatar_url), seller_profile:profiles!shop_orders_seller_id_fkey(display_name, handle, avatar_url)")
     .eq("id", orderId)
-    .single();
-  return data as ShopOrder | null;
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const [order] = await hydrateShopOrders([data as unknown as Record<string, any>]);
+  return order ?? null;
 }

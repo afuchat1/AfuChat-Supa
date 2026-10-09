@@ -30,7 +30,7 @@ const SCREEN_H = Dimensions.get("window").height;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type BannerType = "red_envelope" | "promo" | "holiday";
+type BannerType = "red_envelope" | "holiday";
 
 type BannerItem = {
   id: string;
@@ -476,35 +476,7 @@ export function HomeBanner() {
       } catch {}
     }
 
-    // ── 2. Active promotions ───────────────────────────────────────────────
-    try {
-      const now = new Date().toISOString();
-      const { data: promos } = await supabase
-        .from("app_banners")
-        .select("id, title, subtitle, icon, action_route, color")
-        .eq("is_active", true)
-        .lte("starts_at", now)
-        .gte("ends_at", now)
-        .order("priority", { ascending: false })
-        .limit(3);
-
-      for (const p of promos || []) {
-        const bKey = `promo:${p.id}`;
-        if (await isDismissed(bKey)) continue;
-        const c = p.color || accent;
-        result.push({
-          id: bKey,
-          type: "promo",
-          icon: (p.icon as any) || "megaphone",
-          title: p.title,
-          subtitle: p.subtitle ?? undefined,
-          gradient: [c, c + "BB"] as const,
-          action: p.action_route ? () => router.push(p.action_route as any) : undefined,
-        });
-      }
-    } catch {}
-
-    // ── 3. Calendar events ────────────────────────────────────────────────
+    // ── 2. Calendar events ────────────────────────────────────────────────
     const dateStr      = new Date().toDateString();
     const activeEvents = getActiveEvents();
     for (const ev of activeEvents) {

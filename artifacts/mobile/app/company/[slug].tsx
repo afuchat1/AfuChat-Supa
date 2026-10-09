@@ -187,23 +187,16 @@ export default function CompanyPageScreen() {
             .eq("admin_id", user.id)
             .neq("slug", slug)
         : Promise.resolve({ data: [] }),
-      supabase
-        .from("org_page_jobs")
-        .select("id, title, job_type, location, description, apply_url, created_at")
-        .eq("page_id", pageData.id)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(50),
     ];
 
-    const [{ data: postsData }, followCheck, { data: followersData }, { data: myPagesData }, { data: jobsData }] =
+    const [{ data: postsData }, followCheck, { data: followersData }, { data: myPagesData }] =
       await Promise.all(queries);
 
     setPosts((postsData ?? []) as PagePost[]);
     setFollowers((followersData ?? []) as unknown as Follower[]);
     setFollowing(!!followCheck.data);
     setMyPages((myPagesData ?? []) as any[]);
-    setJobs((jobsData ?? []) as any[]);
+    setJobs([]);
 
     if (myPagesData && myPagesData.length > 0) {
       const myPageIds = myPagesData.map((p: any) => p.id);
@@ -346,23 +339,7 @@ export default function CompanyPageScreen() {
   }
 
   async function submitJob() {
-    if (!jobForm.title.trim() || !jobForm.description.trim() || !page || !user) return;
-    if (jobForm.description.trim().length < 20) { showAlert("Too short", "Job description must be at least 20 characters."); return; }
-    setPostingJob(true);
-    const { error } = await supabase.from("org_page_jobs").insert({
-      page_id: page.id,
-      title: jobForm.title.trim(),
-      job_type: jobForm.job_type,
-      location: jobForm.location.trim() || null,
-      description: jobForm.description.trim(),
-      apply_url: jobForm.apply_url.trim() || null,
-      is_active: true,
-    });
-    setPostingJob(false);
-    if (error) { showAlert("Error", "Could not post job listing."); return; }
-    setJobForm({ title: "", job_type: "Full-time", location: "", description: "", apply_url: "" });
-    setShowJobModal(false);
-    load();
+    showAlert("Jobs unavailable", "Job listings are not supported by the current production schema.");
   }
 
   async function deletePost(postId: string) {
@@ -712,7 +689,7 @@ export default function CompanyPageScreen() {
           </TouchableOpacity>
         )}
         {isAdmin && activeTab === "jobs" && (
-          <TouchableOpacity style={styles.tabAction} onPress={() => setShowJobModal(true)} hitSlop={8}>
+          <TouchableOpacity style={styles.tabAction} onPress={() => showAlert("Jobs unavailable", "Job listings are not supported by the current production schema.")} hitSlop={8}>
             <Ionicons name="add-circle" size={22} color={colors.accent} />
           </TouchableOpacity>
         )}
@@ -916,17 +893,8 @@ export default function CompanyPageScreen() {
               </View>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No open positions</Text>
               <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-                {isAdmin ? "Post your first job listing to attract talent." : "Check back later for opportunities."}
+                "Job listings are unavailable because the current production schema has no compatible job-listing table."
               </Text>
-              {isAdmin && (
-                <TouchableOpacity
-                  onPress={() => setShowJobModal(true)}
-                  style={[styles.emptyBtn, { backgroundColor: colors.accent }]}
-                  activeOpacity={0.8}
-                >
-                  <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Post a Job</Text>
-                </TouchableOpacity>
-              )}
             </View>
           }
           renderItem={({ item: job }) => {

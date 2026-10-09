@@ -20,8 +20,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { supabase } from "@/lib/supabase";
-import { ShopProduct, Shop, addToCart, getOrCreateCart, placeOrder, formatShopAcoin, PLATFORM_FEE_PCT } from "@/lib/shop";
+import { ShopProduct, Shop, addToCart, getOrCreateCart, getShopProductWithDetails, placeOrder, formatShopAcoin, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { MarketplaceCardSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
@@ -49,6 +48,7 @@ export default function ProductDetailScreen() {
   const { width } = useWindowDimensions();
 
   const [product, setProduct] = useState<ProductFull | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [imgIndex, setImgIndex] = useState(0);
   const [qty, setQty] = useState(1);
@@ -65,12 +65,15 @@ export default function ProductDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const { data } = await supabase
-      .from("shop_products")
-      .select("*, shops!shop_products_shop_id_fkey(*, profiles!shops_seller_id_fkey(id, display_name, handle, avatar_url, is_verified, is_organization_verified))")
-      .eq("id", id).single();
-    setProduct(data as ProductFull);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const data = await getShopProductWithDetails(id);
+      setProduct(data as ProductFull | null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not load this product.");
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   const loadCart = useCallback(async () => {
@@ -139,7 +142,7 @@ export default function ProductDetailScreen() {
   if (!product) {
     return (
       <View style={[st.loadingWrap, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <Text style={[st.notFoundText, { color: colors.textMuted }]}>Product not found.</Text>
+        <Text style={[st.notFoundText, { color: colors.textMuted }]}>{loadError ? "Product could not be loaded." : "Product not found."}</Text>
         <TouchableOpacity style={[st.backBtnCenter, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
           <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
         </TouchableOpacity>

@@ -529,12 +529,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             : Promise.resolve({ data: [] }),
 
           wantsJobs
-            ? supabase.from("org_page_jobs")
-                .select("id, title, job_type, location, description, apply_url, created_at, organization_pages!org_page_jobs_page_id_fkey(name, logo_url, slug)")
-                .eq("is_active", true)
-                .or(trimmed.length > 0 ? `title.ilike.${pat},description.ilike.${pat}` : "id.neq.00000000-0000-0000-0000-000000000000")
-                .order("created_at", { ascending: false })
-                .limit(all ? 4 : 25)
+            ? Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
         ]);
 
@@ -1225,12 +1220,12 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             </LinearGradient>
           </View>
           <Text style={{ fontSize: 21, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center", marginBottom: 8 }}>
-            No results found
+            {tab === "jobs" ? "Jobs unavailable" : "No results found"}
           </Text>
           <Text style={{ fontSize: 14, color: colors.textSecondary, textAlign: "center", lineHeight: 21, marginBottom: 24 }}>
-            Nothing matched{" "}
-            <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>"{query.trim()}"</Text>
-            {"\n"}Try different keywords or explore below.
+            {tab === "jobs"
+              ? "The current production schema does not contain a compatible job-listing table. Try another search category."
+              : `Nothing matched "${query.trim()}".\nTry different keywords or explore below.`}
           </Text>
 
           <View style={{ width: "100%", marginBottom: 16 }}>

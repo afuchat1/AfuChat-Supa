@@ -32,11 +32,11 @@ import {
   getOrderMessages,
   markMessagesRead,
   sendOrderMessage,
-  confirmDelivery,
   raiseDispute,
   submitReview,
   formatShopAcoin,
   PLATFORM_FEE_PCT,
+  SHOP_PAYMENTS_UNAVAILABLE_ERROR,
 } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -108,7 +108,6 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "chat">("details");
 
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -181,40 +180,8 @@ export default function OrderDetailScreen() {
     setSending(false);
   }
 
-  async function handleConfirmDelivery() {
-    if (!user || !order) return;
-    showAlert(
-      "Confirm Delivery?",
-      `By confirming, you're saying you received your order. ${formatShopAcoin(order.escrowed_acoin)} will be released to the seller immediately. This action cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm & Release", style: "destructive",
-          onPress: async () => {
-            setConfirming(true);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              const result = await confirmDelivery({ orderId: order.id, buyerId: user.id });
-              if (result.success) {
-                await load();
-                await refreshProfile();
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                showAlert("Payment Released", "Thank you! The seller has been paid. Would you like to leave a review?", [
-                  { text: "Later", style: "cancel" },
-                  { text: "Leave Review", onPress: () => setShowReviewModal(true) },
-                ]);
-              } else {
-                showAlert("Error", result.error || "Failed to confirm delivery. Please contact support.");
-              }
-            } catch (_) {
-              showAlert("Error", "Something went wrong. Please try again.");
-            } finally {
-              setConfirming(false);
-            }
-          },
-        },
-      ]
-    );
+  function handleConfirmDelivery() {
+    showAlert("Payments unavailable", SHOP_PAYMENTS_UNAVAILABLE_ERROR);
   }
 
   async function handleSubmitDispute() {
@@ -344,13 +311,10 @@ export default function OrderDetailScreen() {
                 <TouchableOpacity
                   style={[st.actionBtn, { backgroundColor: SUCCESS }]}
                   onPress={handleConfirmDelivery}
-                  disabled={confirming}
                   activeOpacity={0.85}
                 >
-                  {confirming
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Ionicons name="checkmark-done" size={18} color="#fff" />}
-                  <Text style={st.actionBtnText}>Confirm Delivery</Text>
+                  <Ionicons name="lock-closed" size={18} color="#fff" />
+                  <Text style={st.actionBtnText}>Payment Release Unavailable</Text>
                 </TouchableOpacity>
               )}
               {canDispute && (
@@ -381,8 +345,8 @@ export default function OrderDetailScreen() {
             <Text style={[st.sectionTitle, { color: colors.text }]}>Order Summary</Text>
             {(order.items || []).map(item => (
               <View key={item.id} style={st.itemRow}>
-                {(item.product?.images?.[0] || item.snapshot_image)
-                  ? <Image source={{ uri: item.product?.images?.[0] || item.snapshot_image! }} style={st.itemImg} />
+                {item.snapshot_image
+                  ? <Image source={{ uri: item.snapshot_image }} style={st.itemImg} />
                   : (
                     <View style={[st.itemImg, { backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }]}>
                       <Ionicons name="cube" size={18} color={colors.textMuted} />
@@ -390,7 +354,7 @@ export default function OrderDetailScreen() {
                   )}
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={[st.itemName, { color: colors.text }]} numberOfLines={2}>
-                    {item.product?.name || item.snapshot_name || "Item"}
+                    {item.snapshot_name || "Item"}
                   </Text>
                   <Text style={[st.itemQty, { color: colors.textMuted }]}>Qty: {item.quantity}</Text>
                 </View>

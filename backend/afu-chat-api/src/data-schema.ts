@@ -148,9 +148,9 @@ const AFUCHAT_RELATIONS = [
 
 export const RELATION_SCHEMA_BY_NAME: Readonly<Record<string, string>> = Object.freeze({
   ...Object.fromEntries(AFUCHAT_RELATIONS.map((name) => [name, "afuchat"])),
-  // These resources are explicit AfuChat contract references outside afuchat.
+  // Account identity and account-level verification live in the shared accounts schema.
   profiles: "accounts",
-  orders: "shop",
+  verification_requests: "accounts",
 });
 
 export const RPC_SCHEMA_BY_NAME: Readonly<Record<string, string>> = Object.freeze({
