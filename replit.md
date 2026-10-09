@@ -68,7 +68,7 @@ artifacts/mobile/
   lib/          Supabase client, native services, storage, call engine
   modules/      Native mini-app modules
   web/          Legacy public web surface retained during the Expo web migration
-  supabase/     Existing Supabase migrations kept as database reference
+  supabase/     Supabase client configuration
   scripts/      postinstall.sh — patches native modules for New Arch
 
 backend/
@@ -81,7 +81,7 @@ artifacts/afuchat-worker/src/
                 AfuChat media module bundled into afuchat-api
 ```
 
-The `supabase/` directory is retained for schema history. The mobile app uses the shared Supabase Auth, PostgREST, and Realtime APIs; AfuChat-owned media uses AfuChat Worker/CDN routes.
+The mobile app uses the existing shared Supabase Auth, PostgREST, and Realtime APIs without repository-managed database schema changes; AfuChat-owned media uses AfuChat Worker/CDN routes.
 
 ## Key features implemented
 
@@ -151,8 +151,8 @@ pnpm run typecheck
   live catalog audit is in `docs/AFUCHAT_BACKEND_MIGRATION_AUDIT.md`.
 - Read-only catalog queries through the Supabase Management API are available
   in this workspace; direct PostgreSQL connections remain blocked from Replit.
-  Treat older table/RPC counts as historical and refresh them before using
-  them to guide a migration.
+  Treat older table/RPC counts as historical and refresh them before making
+  implementation decisions.
 - Old API aliases were explicitly retired; do not restore redirects or proxy
   fallbacks for them. Keep parsing of old stored media URLs separate from new
   API calls, and preserve the existing R2 custom domains and objects.
