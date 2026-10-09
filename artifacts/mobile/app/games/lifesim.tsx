@@ -1,7 +1,7 @@
 /**
  * KAMPALA HUSTLE: Pro Edition
  * Fully native React Native life-sim set in Kampala, Uganda.
- * Saves to `life_earth_saves` · Leaderboard via `life_earth_leaderboard`
+ * Saves and leaderboard use `life_earth_saves`.
  * Awards ACoin on education, milestones, and retirement.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -311,8 +311,9 @@ async function persistSave(userId: string, s: KHState, displayName: string, hand
 
 async function loadLeaderboard() {
   const { data } = await supabase
-    .from("life_earth_leaderboard")
+    .from("life_earth_saves")
     .select("handle, display_name, avatar_url, legacy_score, current_age, career, country")
+    .eq("is_active", true)
     .order("legacy_score", { ascending: false })
     .limit(30);
   return data ?? [];

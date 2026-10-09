@@ -48,7 +48,7 @@ export default function ChatDangerScreen() {
   const checkBlock = useCallback(async () => {
     if (!user || !otherId) return;
     const res = await supabase
-      .from("blocks").select("id")
+      .from("blocked_users").select("id")
       .eq("blocker_id", user.id).eq("blocked_id", otherId)
       .maybeSingle();
     setIsBlocked(!!res.data);
@@ -67,7 +67,7 @@ export default function ChatDangerScreen() {
           {
             text: "Unblock",
             onPress: async () => {
-              const { error } = await supabase.from("blocks").delete()
+              const { error } = await supabase.from("blocked_users").delete()
                 .eq("blocker_id", user.id).eq("blocked_id", otherId);
               if (error) {
                 showAlert("Could not unblock", error.message || "Please try again.");
@@ -89,7 +89,7 @@ export default function ChatDangerScreen() {
             style: "destructive",
             onPress: async () => {
               const { error } = await supabase
-                .from("blocks")
+                .from("blocked_users")
                 .insert({ blocker_id: user.id, blocked_id: otherId });
               if (error) {
                 showAlert("Could not block", error.message || "Please try again.");

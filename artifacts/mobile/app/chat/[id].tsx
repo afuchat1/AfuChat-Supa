@@ -4622,7 +4622,7 @@ function ChatScreen() {
     AsyncStorage.getItem(`afu_disappearing_${chatId}`).then((v) => setDisappearingEnabled(v === "1")).catch(() => {});
     AsyncStorage.getItem(`afu_disappearing_timer_${chatId}`).then((v) => { if (v) setDisappearingTimer(parseInt(v, 10)); }).catch(() => {});
     if (chatInfo?.other_id && !chatInfo.is_group && !chatInfo.is_channel) {
-      supabase.from("blocks").select("id").eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id).maybeSingle()
+      supabase.from("blocked_users").select("id").eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id).maybeSingle()
         .then(({ data }: any) => setIsBlocked(!!data), () => {});
     }
   }, [id, realChatId, isDraft, user?.id, chatInfo?.other_id]);
@@ -4711,7 +4711,7 @@ function ChatScreen() {
         {
           text: "Unblock",
           onPress: async () => {
-            await supabase.from("blocks").delete().eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id!);
+            await supabase.from("blocked_users").delete().eq("blocker_id", user.id).eq("blocked_id", chatInfo.other_id!);
             setIsBlocked(false);
             setShowChatOptions(false);
           },
@@ -4724,7 +4724,7 @@ function ChatScreen() {
           text: "Block",
           style: "destructive",
           onPress: async () => {
-            await supabase.from("blocks").insert({ blocker_id: user.id, blocked_id: chatInfo.other_id });
+            await supabase.from("blocked_users").insert({ blocker_id: user.id, blocked_id: chatInfo.other_id });
             setIsBlocked(true);
             setShowChatOptions(false);
           },
