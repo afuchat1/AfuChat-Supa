@@ -46,4 +46,5 @@ DROP FUNCTION IF EXISTS afuchat.is_chat_owner(uuid, uuid);
 DROP FUNCTION IF EXISTS afuchat.is_chat_admin(uuid, uuid);
 DROP FUNCTION IF EXISTS afuchat.is_chat_participant(uuid, uuid);
 
+NOTIFY pgrst, 'reload schema';
 COMMIT;

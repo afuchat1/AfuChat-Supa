@@ -33,6 +33,7 @@ test("chat migration reads and writes only AfuChat-owned relations", () => {
   assert.match(migration, /CREATE OR REPLACE FUNCTION afuchat\.get_or_create_direct_chat/);
   assert.match(migration, /other_handle text/);
   assert.match(migration, /other_member\.handle::text/);
+  assert.match(migration, /NOTIFY pgrst, 'reload schema'/);
   assert.doesNotMatch(
     migration,
     /\b(?:FROM|JOIN|UPDATE|INTO)\s+(?:public|chat|social)\./i,

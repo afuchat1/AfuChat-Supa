@@ -512,4 +512,5 @@ ALTER TABLE afuchat.message_status
   ADD CONSTRAINT message_status_user_id_fkey
   FOREIGN KEY (user_id) REFERENCES afuchat.profiles(id) ON DELETE CASCADE NOT VALID;
 
+NOTIFY pgrst, 'reload schema';
 COMMIT;
