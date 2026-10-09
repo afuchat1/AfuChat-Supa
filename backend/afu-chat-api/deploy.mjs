@@ -313,6 +313,22 @@ async function assertProductionPostflight() {
     );
   }
 
+  const afuchatSchemaProbe = await fetch(
+    "https://api.afuchat.com/v1/chat/data/profiles?select=id&limit=0",
+    {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Accept-Profile": "afuchat",
+      },
+    },
+  );
+  if (afuchatSchemaProbe.status !== 200) {
+    throw new Error(
+      `AfuChat data-schema probe failed (HTTP ${afuchatSchemaProbe.status}).`,
+    );
+  }
+
   const unknownDataResource = await fetch(
     "https://api.afuchat.com/v1/chat/data/not_a_mobile_resource",
     { headers: { apikey: SUPABASE_ANON_KEY } },
@@ -735,6 +751,7 @@ console.log(JSON.stringify({
     "chat health",
     "CORS preflight",
     "unauthenticated rejection",
+    "AfuChat schema-backed data probe",
     "AfuAuth shared-session rejection",
     "current-profile unauthenticated rejection",
     "follow and feed routes require a shared session",

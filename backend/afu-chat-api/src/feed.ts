@@ -40,7 +40,7 @@ function makeUrl(base: string, relation: string, filters: Record<string, FilterV
   return url;
 }
 
-function restHeaders(session: VerifiedSession, anonKey: string, schema = "public"): Headers {
+function restHeaders(session: VerifiedSession, anonKey: string, schema = "afuchat"): Headers {
   return new Headers({
     apikey: anonKey,
     Authorization: `Bearer ${session.token}`,
@@ -54,7 +54,7 @@ async function restRows(
   url: URL,
   session: VerifiedSession,
   anonKey: string,
-  schema = "public",
+  schema = "afuchat",
 ): Promise<RestResult<Record<string, unknown>[]>> {
   try {
     const response = await fetch(url, {

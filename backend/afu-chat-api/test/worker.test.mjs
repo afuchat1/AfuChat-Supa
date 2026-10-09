@@ -125,8 +125,8 @@ test("mobile PostgREST reads use the fixed AfuChat data gateway and keep user RL
     new URL(requests[0].url).href,
     "https://supabase.example.test/rest/v1/messages?select=id&limit=1",
   );
-  assert.equal(requests[0].headers.get("Accept-Profile"), "public");
-  assert.equal(requests[0].headers.get("Content-Profile"), "public");
+  assert.equal(requests[0].headers.get("Accept-Profile"), "afuchat");
+  assert.equal(requests[0].headers.get("Content-Profile"), "afuchat");
   assert.equal(requests[0].headers.get("Authorization"), "Bearer user-session");
   assert.equal(requests[0].headers.get("apikey"), "test-anon-key");
 });
@@ -154,6 +154,7 @@ test("data gateway keeps explicit shared-account and shop schema ownership", asy
       headers: {
         Authorization: "Bearer user-session",
         apikey: "test-anon-key",
+        "Accept-Profile": "afuchat",
       },
     }),
     makeEnv(),
@@ -166,6 +167,50 @@ test("data gateway keeps explicit shared-account and shop schema ownership", asy
   assert.equal(requests[1].headers.get("Accept-Profile"), "shop");
   assert.equal(requests[1].headers.get("Content-Profile"), "shop");
   assert.equal(new URL(requests[1].url).pathname, "/rest/v1/orders");
+});
+
+test("legacy public table headers are routed to AfuChat, not PostgREST public", async () => {
+  let forwarded;
+  globalThis.fetch = async (input, init) => {
+    forwarded = input instanceof Request ? input : new Request(input, init);
+    return Response.json([]);
+  };
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/messages?select=id&limit=0", {
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+        "Accept-Profile": "public",
+        "Content-Profile": "public",
+      },
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(forwarded.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(forwarded.headers.get("Content-Profile"), "afuchat");
+});
+
+test("data gateway sanitizes PostgREST errors", async () => {
+  globalThis.fetch = async () => Response.json(
+    { code: "PGRST_INTERNAL", details: "private schema detail", hint: "internal hint" },
+    { status: 500 },
+  );
+  const response = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat/data/messages?select=id", {
+      headers: {
+        Authorization: "Bearer user-session",
+        apikey: "test-anon-key",
+      },
+    }),
+    makeEnv(),
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.text();
+  assert.match(body, /The data request could not be completed/);
+  assert.doesNotMatch(body, /PGRST_INTERNAL|private schema detail|internal hint/);
 });
 
 test("data gateway forwards only registered RPCs with the original request body", async () => {
@@ -183,6 +228,8 @@ test("data gateway forwards only registered RPCs with the original request body"
         Authorization: "Bearer user-session",
         apikey: "test-anon-key",
         "Content-Type": "application/json",
+        "Accept-Profile": "afuchat",
+        "Content-Profile": "afuchat",
       },
       body,
     }),
@@ -827,7 +874,7 @@ test("bookmark batch lookup scopes results to the verified account", async () =>
     `in.(${postA},${postB})`,
   );
   assert.equal(databaseRequest.headers.get("Authorization"), `Bearer ${token}`);
-  assert.equal(databaseRequest.headers.get("Accept-Profile"), "public");
+  assert.equal(databaseRequest.headers.get("Accept-Profile"), "afuchat");
 });
 
 test("bookmark list hydrates the existing post and author without relying on saved_posts", async () => {
@@ -1603,7 +1650,7 @@ test("message endpoint derives sender identity and makes offline retries idempot
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    assert.equal(request.headers.get("Accept-Profile"), "public");
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     const url = new URL(request.url);
     assert.equal(url.pathname, "/rest/v1/messages");
 
@@ -1778,8 +1825,8 @@ test("message history uses the verified session, a fixed projection, and bounded
   assert.equal(databaseRequests.length, 1);
   const databaseRequest = databaseRequests[0];
   const databaseUrl = new URL(databaseRequest.url);
-  assert.equal(databaseRequest.headers.get("Accept-Profile"), "public");
-  assert.equal(databaseRequest.headers.get("Content-Profile"), "public");
+  assert.equal(databaseRequest.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(databaseRequest.headers.get("Content-Profile"), "afuchat");
   assert.equal(databaseUrl.pathname, "/rest/v1/messages");
   assert.equal(databaseUrl.searchParams.get("chat_id"), `eq.${chatId}`);
   assert.equal(databaseUrl.searchParams.has("sender_id"), false);
@@ -1818,7 +1865,7 @@ test("message history rejects arbitrary projections, malformed IDs, and missing 
   assert.equal(databaseCalls, 0);
 });
 
-test("chat member reads use only the AfuChat-backed public relation", async () => {
+test("chat member reads use only the AfuChat-backed relation", async () => {
   const token = "chat-members-session";
   const userId = "123e4567-e89b-42d3-a456-426614174099";
   const chatId = "123e4567-e89b-42d3-a456-426614174000";
@@ -1852,12 +1899,12 @@ test("chat member reads use only the AfuChat-backed public relation", async () =
   });
   assert.equal(requests.length, 1);
   assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
-  assert.equal(requests[0].headers.get("Accept-Profile"), "public");
-  assert.equal(requests[0].headers.get("Content-Profile"), "public");
+  assert.equal(requests[0].headers.get("Accept-Profile"), "afuchat");
+  assert.equal(requests[0].headers.get("Content-Profile"), "afuchat");
   assert.equal(new URL(requests[0].url).searchParams.get("chat_id"), `eq.${chatId}`);
 });
 
-test("message count reads only the AfuChat-backed public relation", async () => {
+test("message count reads only the AfuChat-backed relation", async () => {
   const token = "message-count-session";
   const userId = "123e4567-e89b-42d3-a456-426614174099";
   const chatId = "123e4567-e89b-42d3-a456-426614174000";
@@ -1896,7 +1943,7 @@ test("message count reads only the AfuChat-backed public relation", async () => 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { count: 1 });
   assert.equal(databaseRequests.length, 1);
-  assert.equal(databaseRequests[0].headers.get("Accept-Profile"), "public");
+  assert.equal(databaseRequests[0].headers.get("Accept-Profile"), "afuchat");
   assert.equal(databaseRequests[0].headers.get("Authorization"), `Bearer ${token}`);
   const databaseUrl = new URL(databaseRequests[0].url);
   assert.equal(databaseUrl.pathname, "/rest/v1/messages");
@@ -2448,7 +2495,7 @@ test("post creation derives the author from AfuAuth and saves uploaded image row
   });
   assert.equal(requests.length, 2);
   assert.equal(requests[0].headers.get("Authorization"), `Bearer ${token}`);
-  assert.equal(requests[0].headers.get("Content-Profile"), "public");
+  assert.equal(requests[0].headers.get("Content-Profile"), "afuchat");
   const insertBody = await requests[0].json();
   assert.equal(insertBody.author_id, userId);
   assert.notEqual(insertBody.author_id, "123e4567-e89b-42d3-a456-426614174000");
@@ -3588,7 +3635,7 @@ test("Discover active people requires the verified account and redacts hidden pr
     const url = new URL(request.url);
     seenRequests.push({ request, url });
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    if (request.headers.get("Accept-Profile") === "public") {
+    if (request.headers.get("Accept-Profile") === "afuchat") {
       assert.equal(url.searchParams.get("id"), `neq.${viewerId}`);
       assert.equal(url.searchParams.get("hide_from_search"), null);
       assert.equal(
@@ -3658,7 +3705,7 @@ test("Discover suggested people excludes self and followed accounts with privacy
       return Response.json([{ following_id: followedId }]);
     }
     assert.ok(url.pathname.endsWith("/profiles"));
-    if (request.headers.get("Accept-Profile") === "public") {
+    if (request.headers.get("Accept-Profile") === "afuchat") {
       candidateQuery = url;
       return Response.json([
         { id: viewerId, display_name: "Viewer", handle: "viewer" },
@@ -3711,7 +3758,7 @@ test("Discover directory returns relationship counts through the authenticated p
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    if (request.headers.get("Accept-Profile") === "public") {
+    if (request.headers.get("Accept-Profile") === "afuchat") {
       candidateQuery = url;
       return Response.json([{
         id: personId,

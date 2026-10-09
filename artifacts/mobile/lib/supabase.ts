@@ -139,6 +139,9 @@ const webStorage = {
 const supabaseClientUrl = SUPABASE_URL;
 
 export const supabase = createClient(supabaseClientUrl, supabaseAnonKey, {
+  db: {
+    schema: "afuchat",
+  },
   auth: {
     storage: isWeb ? webStorage : AsyncStorage,
     autoRefreshToken: true,

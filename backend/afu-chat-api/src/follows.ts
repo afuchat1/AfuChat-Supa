@@ -44,7 +44,7 @@ function makeUrl(base: string, relation: string, filters: Record<string, string>
   return url;
 }
 
-function restHeaders(context: FollowContext, schema = "public"): Headers {
+function restHeaders(context: FollowContext, schema = "afuchat"): Headers {
   return new Headers({
     apikey: context.anonKey,
     Authorization: `Bearer ${context.session.token}`,

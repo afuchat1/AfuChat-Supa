@@ -41,7 +41,7 @@ function makeUrl(base: string, relation: string, filters: Record<string, string>
   return url;
 }
 
-function restHeaders(context: SessionContext, schema = "public"): Headers {
+function restHeaders(context: SessionContext, schema = "afuchat"): Headers {
   return new Headers({
     apikey: context.anonKey,
     Authorization: `Bearer ${context.session.token}`,
@@ -54,7 +54,7 @@ function restHeaders(context: SessionContext, schema = "public"): Headers {
 async function restRows(
   context: SessionContext,
   url: URL,
-  schema = "public",
+  schema = "afuchat",
 ): Promise<RestResult<Record<string, unknown>[]>> {
   try {
     const response = await fetch(url, {

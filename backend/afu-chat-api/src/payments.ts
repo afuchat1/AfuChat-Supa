@@ -142,8 +142,8 @@ function serviceHeaders(env: Env): Headers {
     Authorization: `Bearer ${serviceKey}`,
     "Content-Type": "application/json",
     Accept: "application/json",
-    "Accept-Profile": "public",
-    "Content-Profile": "public",
+    "Accept-Profile": "afuchat",
+    "Content-Profile": "afuchat",
   });
 }
 

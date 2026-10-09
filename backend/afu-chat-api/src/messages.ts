@@ -59,8 +59,8 @@ async function restFetch(
     apikey: anonKey,
     Authorization: `Bearer ${session.token}`,
     Accept: "application/json",
-    "Accept-Profile": "public",
-    "Content-Profile": "public",
+    "Accept-Profile": "afuchat",
+    "Content-Profile": "afuchat",
   });
   if (body !== undefined) headers.set("Content-Type", "application/json");
   if (method === "POST") headers.set("Prefer", "return=representation");

@@ -10,10 +10,9 @@ const PREFIX = "/v1/chat/data";
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PATCH", "DELETE"]);
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
-// These are the relation names used by the current mobile app. Keeping this
-// list explicit prevents the Worker from becoming an arbitrary schema/table
-// proxy. Public compatibility views continue to enforce their base-table RLS.
-const PUBLIC_RELATIONS = new Set([
+// Keep this list explicit: the Worker may access only AfuChat's registered
+// relations, and the user's bearer continues to enforce the relation's RLS.
+const AFUCHAT_RELATIONS = new Set([
   "acoin_transactions",
   "advanced_feature_settings",
   "app_banners",
@@ -97,7 +96,9 @@ const PUBLIC_RELATIONS = new Set([
   "xp_transfers",
 ]);
 
-const PUBLIC_FUNCTIONS = new Set([
+// These RPCs remain registered in public in the current Supabase project.
+// They are individually allowlisted; relation reads and writes use afuchat.
+const EXISTING_RPC_FUNCTIONS = new Set([
   "add_group_members",
   "award_xp",
   "cancel_my_subscription",
@@ -190,17 +191,22 @@ function fixedSchema(
   if (requested === null) return null;
 
   if (target.kind === "function") {
-    if (!PUBLIC_FUNCTIONS.has(target.name) || (requested && requested !== "public")) return null;
+    if (
+      !EXISTING_RPC_FUNCTIONS.has(target.name) ||
+      (requested && requested !== "afuchat" && requested !== "public")
+    ) return null;
     return "public";
   }
 
-  if (!PUBLIC_RELATIONS.has(target.name)) return null;
+  if (!AFUCHAT_RELATIONS.has(target.name)) return null;
   if (target.name === "orders") {
-    return requested && requested !== "shop" ? null : "shop";
+    return requested && !["afuchat", "public", "shop"].includes(requested) ? null : "shop";
   }
   if (requested === "accounts" && target.name === "profiles") return "accounts";
-  if (requested && requested !== "public") return null;
-  return "public";
+  // Older installed clients still send public profile headers. Never forward
+  // those to PostgREST: route the known AfuChat relation to its canonical schema.
+  if (requested && requested !== "afuchat" && requested !== "public") return null;
+  return "afuchat";
 }
 
 function bearerToken(request: Request, anonKey: string): string | null {
@@ -286,6 +292,15 @@ export async function handleDataGateway(request: Request, env: Env): Promise<Res
       ...(body ? { body } : {}),
       redirect: "manual",
     });
+    if (!upstream.ok) {
+      const status = upstream.status >= 500 ? 502 : upstream.status;
+      return errorResponse(
+        request,
+        requestId,
+        "The data request could not be completed.",
+        status,
+      );
+    }
     const headers = responseHeaders(request, requestId);
     for (const name of RESPONSE_HEADERS) {
       const value = upstream.headers.get(name);

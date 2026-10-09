@@ -58,8 +58,8 @@ async function readMemberRows(
           apikey: anonKey,
           Authorization: `Bearer ${session.token}`,
           Accept: "application/json",
-          "Accept-Profile": "public",
-          "Content-Profile": "public",
+          "Accept-Profile": "afuchat",
+          "Content-Profile": "afuchat",
         },
         redirect: "manual",
       });

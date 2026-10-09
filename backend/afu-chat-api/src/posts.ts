@@ -40,7 +40,7 @@ function makeUrl(base: string, relation: string, filters: Record<string, string>
   return url;
 }
 
-function restHeaders(session: VerifiedSession, anonKey: string, schema = "public"): Headers {
+function restHeaders(session: VerifiedSession, anonKey: string, schema = "afuchat"): Headers {
   return new Headers({
     apikey: anonKey,
     Authorization: `Bearer ${session.token}`,
@@ -56,7 +56,7 @@ async function restRequest<T>(
   session: VerifiedSession,
   anonKey: string,
   body?: unknown,
-  schema = "public",
+  schema = "afuchat",
   prefer?: string,
 ): Promise<RestResult<T>> {
   const headers = restHeaders(session, anonKey, schema);
@@ -764,7 +764,7 @@ export async function handleGetPostMetrics(
       auth.session,
       auth.anonKey,
       undefined,
-      "public",
+      "afuchat",
       "count=exact",
     );
     if (!result.ok || !Array.isArray(result.data)) {
@@ -854,7 +854,7 @@ export async function handlePostSubroute(
         auth.session,
         auth.anonKey,
         undefined,
-        "public",
+        "afuchat",
         "count=exact",
       );
       if (!countResult.ok || !Array.isArray(countResult.data)) {
@@ -899,7 +899,7 @@ export async function handlePostSubroute(
         auth.session,
         auth.anonKey,
         { post_id: postId, user_id: auth.session.user.id },
-        "public",
+        "afuchat",
         "resolution=merge-duplicates,return=representation",
       );
       if (!result.ok) {
@@ -961,7 +961,7 @@ export async function handlePostSubroute(
         auth.session,
         auth.anonKey,
         { reply_id: replyId, user_id: auth.session.user.id },
-        "public",
+        "afuchat",
         "resolution=merge-duplicates,return=representation",
       );
       if (!result.ok) {

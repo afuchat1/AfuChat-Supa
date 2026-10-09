@@ -41,7 +41,7 @@ async function selectRows(
       apikey: supabase.anonKey,
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
-      "Accept-Profile": "public",
+      "Accept-Profile": "afuchat",
     },
   });
   if (!response.ok) {

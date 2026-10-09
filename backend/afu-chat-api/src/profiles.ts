@@ -70,7 +70,7 @@ function makeUrl(
 async function readRows<T>(
   context: ContactProfileContext,
   url: URL,
-  schema = "public",
+  schema = "afuchat",
 ): Promise<RestResult<T>> {
   try {
     const response = await fetch(url, {

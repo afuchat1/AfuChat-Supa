@@ -46,7 +46,7 @@ async function restRequest<T>(
   url: URL,
   method: "GET" | "POST" | "PATCH",
   body?: unknown,
-  schema = "public",
+  schema = "afuchat",
 ): Promise<RestResult<T>> {
   const headers = new Headers({
     apikey: context.anonKey,

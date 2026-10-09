@@ -40,7 +40,7 @@ async function restRequest<T>(
   context: FeedContext,
   url: URL,
   method: "GET",
-  schema = "public",
+  schema = "afuchat",
   countExact = false,
 ): Promise<RestResult<T>> {
   const headers = new Headers({
@@ -207,7 +207,7 @@ export async function handleOrganizationPostsFeed(
         post_id: `eq.${postId}`,
       }),
       "GET",
-      "public",
+      "afuchat",
       true,
     );
     if (!result.ok || !Array.isArray(result.data)) {

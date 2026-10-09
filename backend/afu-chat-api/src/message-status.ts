@@ -31,8 +31,8 @@ function restHeaders(session: VerifiedSession, anonKey: string): Headers {
     apikey: anonKey,
     Authorization: `Bearer ${session.token}`,
     Accept: "application/json",
-    "Accept-Profile": "public",
-    "Content-Profile": "public",
+    "Accept-Profile": "afuchat",
+    "Content-Profile": "afuchat",
   });
 }
 

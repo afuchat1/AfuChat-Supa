@@ -19,7 +19,7 @@ service = "afuauth-api"
 
 [vars]
 AFUCHAT_SUPABASE_URL = "https://poijhidfekwfthyksatp.supabase.co"
-# PostgREST exposes public but not afuchat; public compatibility routines now use afuchat.*.
+# Chat-list/direct-chat RPCs are still registered in public; table data uses afuchat.
 AFUCHAT_DATABASE_SCHEMA = "public"
 AFUCHAT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBvaWpoaWRmZWt3ZnRoeWtzYXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MDcwNDksImV4cCI6MjEwNTQ4MzA0OX0.sEcHL19jvnPkFDUmYRazp5ntwFyJd_mE4Nh--lbaVNE"
 MAX_UPLOAD_BYTES = "104857600"
