@@ -3977,7 +3977,7 @@ function ChatScreen() {
       .channel(`presence-watch:${id}:${otherId}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "afuchat", table: "profiles", filter: `id=eq.${otherId}` },
+        { event: "UPDATE", schema: "accounts", table: "profiles", filter: `id=eq.${otherId}` },
         (payload) => {
           const updated = payload.new as any;
           if (updated?.last_seen) {

@@ -5,6 +5,7 @@ import {
   type Env,
   type VerifiedSession,
 } from "./shared.ts";
+import { schemaForPostgrestPath } from "./data-schema.ts";
 
 const PREFIX = "/v1/chat/posts";
 const UUID_PATTERN =
@@ -56,10 +57,14 @@ async function restRequest<T>(
   session: VerifiedSession,
   anonKey: string,
   body?: unknown,
-  schema = "afuchat",
+  _schema = "afuchat",
   prefer?: string,
 ): Promise<RestResult<T>> {
-  const headers = restHeaders(session, anonKey, schema);
+  const resolvedSchema = schemaForPostgrestPath(url.pathname);
+  if (!resolvedSchema) {
+    return { ok: false, response: new Response(null, { status: 404 }), code: "UNAVAILABLE_RESOURCE" };
+  }
+  const headers = restHeaders(session, anonKey, resolvedSchema);
   if (body !== undefined) {
     headers.set("Content-Type", "application/json");
   }

@@ -5,136 +5,18 @@ import {
   verifySharedSession,
   type Env,
 } from "./shared.ts";
+import { schemaForRelation, schemaForRpc } from "./data-schema.ts";
+import {
+  applyProfileJoinPlans,
+  collectRowsAtPath,
+  rewriteCrossSchemaProfileSelect,
+  type ProfileJoinPlan,
+} from "./profile-join-bridge.ts";
 
 const PREFIX = "/v1/chat/data";
 const AFUCHAT_SCHEMA = "afuchat";
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PATCH", "DELETE"]);
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
-
-// Keep this list explicit: the Worker may access only AfuChat's registered
-// relations, and the user's bearer continues to enforce the relation's RLS.
-const AFUCHAT_RELATIONS = new Set([
-  "acoin_transactions",
-  "advanced_feature_settings",
-  "app_banners",
-  "app_settings",
-  "blocked_users",
-  "blocks",
-  "business_verification_requests",
-  "channel_subscriptions",
-  "channels",
-  "chat_drafts",
-  "chat_members",
-  "chat_mutes",
-  "chat_preferences",
-  "chats",
-  "collections",
-  "community_members",
-  "conversations",
-  "crash_logs",
-  "currency_settings",
-  "device_sessions",
-  "digital_events",
-  "freelance_listings",
-  "freelance_orders",
-  "freelance_reviews",
-  "gift_marketplace",
-  "gift_statistics",
-  "gift_transactions",
-  "gifts",
-  "life_earth_leaderboard",
-  "life_earth_saves",
-  "match_matches",
-  "match_messages",
-  "match_photos",
-  "match_preferences",
-  "match_profiles",
-  "match_reports",
-  "match_swipes",
-  "messages",
-  "money_requests",
-  "music_purchases",
-  "music_tracks",
-  "notification_events",
-  "orders",
-  "org_page_jobs",
-  "org_verification_requests",
-  "organization_page_connections",
-  "organization_page_followers",
-  "organization_page_posts",
-  "organization_pages",
-  "owned_usernames",
-  "paid_communities",
-  "post_acknowledgments",
-  "post_replies",
-  "profiles",
-  "red_envelope_claims",
-  "red_envelopes",
-  "security_preferences",
-  "seller_applications",
-  "shop_order_items",
-  "shop_order_messages",
-  "shop_orders",
-  "shop_products",
-  "shop_reviews",
-  "shopping_cart",
-  "shops",
-  "status_goods_purchases",
-  "stories",
-  "story_likes",
-  "story_replies",
-  "story_views",
-  "subscription_plans",
-  "support_messages",
-  "support_tickets",
-  "user_activity_events",
-  "user_gifts",
-  "user_reports",
-  "user_subscriptions",
-  "username_featured_listings",
-  "username_listings",
-  "video_watch_history",
-  "xp_transfers",
-]);
-
-// Only route known AfuChat RPC names, and always to the authoritative schema.
-const AFUCHAT_RPC_FUNCTIONS = new Set([
-  "add_group_members",
-  "award_xp",
-  "cancel_my_subscription",
-  "chat_has_screenshot_protection",
-  "check_mutual_match",
-  "check_public_chat_username",
-  "check_username_availability",
-  "claim_red_envelope",
-  "claim_username",
-  "clear_afuai_chat",
-  "convert_gift_to_acoin",
-  "count_my_channels",
-  "count_my_groups",
-  "create_channel_chat",
-  "create_group_chat",
-  "create_red_envelope",
-  "create_username_listing",
-  "credit_acoin",
-  "deduct_acoin",
-  "delist_username_listing",
-  "feature_username_listing",
-  "get_channel_access_context",
-  "get_my_channels",
-  "get_or_create_direct_chat",
-  "increment_channel_subscriber",
-  "insert_afuai_message",
-  "lookup_profile_by_afu_id",
-  "place_username_bid",
-  "purchase_music_track",
-  "purchase_status_good",
-  "purchase_username",
-  "reward_activity_xp",
-  "send_afu_ai_welcome",
-  "update_last_seen",
-  "upsert_watch_history",
-]);
 
 const REQUEST_HEADERS = [
   "Accept",
@@ -184,13 +66,9 @@ function requestedSchema(request: Request): string | null {
 }
 
 function fixedSchema(target: { kind: "relation" | "function"; name: string }): string | null {
-  if (target.kind === "function") {
-    if (!AFUCHAT_RPC_FUNCTIONS.has(target.name)) return null;
-    return AFUCHAT_SCHEMA;
-  }
-
-  if (!AFUCHAT_RELATIONS.has(target.name)) return null;
-  return AFUCHAT_SCHEMA;
+  return target.kind === "function"
+    ? schemaForRpc(target.name)
+    : schemaForRelation(target.name);
 }
 
 function bearerToken(request: Request, anonKey: string): string | null {
@@ -198,6 +76,90 @@ function bearerToken(request: Request, anonKey: string): string | null {
   if (!authorization) return anonKey;
   const match = authorization.match(/^Bearer\s+(\S+)$/i);
   return match?.[1] ?? null;
+}
+
+function profileSelectFields(plans: ProfileJoinPlan[]): string {
+  const fields = new Set<string>();
+  for (const plan of plans) {
+    if (plan.outputKeys === null || plan.fields.split(",").some((field) => field.trim() === "*")) {
+      return "*";
+    }
+    for (const field of plan.fields.split(",")) {
+      const value = field.trim();
+      if (value) fields.add(value);
+    }
+  }
+  return [...fields].join(",");
+}
+
+async function fetchAccountProfiles(
+  config: { url: string; anonKey: string },
+  token: string,
+  requestId: string,
+  plans: ProfileJoinPlan[],
+  payload: unknown,
+): Promise<Map<string, Record<string, unknown>> | null> {
+  const ids = new Set<string>();
+  for (const plan of plans) {
+    for (const row of collectRowsAtPath(payload, plan.parentPath)) {
+      const value = row[plan.foreignKeyColumn];
+      if (typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value)) ids.add(value);
+    }
+  }
+  const profiles = new Map<string, Record<string, unknown>>();
+  if (ids.size === 0) return profiles;
+
+  const selectedFields = profileSelectFields(plans);
+  const select = selectedFields === "*"
+    ? "*"
+    : ["id", ...selectedFields.split(",").map((field) => field.trim()).filter(Boolean)]
+        .filter((field, index, all) => all.indexOf(field) === index)
+        .join(",");
+  const values = [...ids];
+  for (let offset = 0; offset < values.length; offset += 100) {
+    const url = new URL("/rest/v1/profiles", config.url);
+    url.searchParams.set("select", select);
+    url.searchParams.set("id", `in.(${values.slice(offset, offset + 100).join(",")})`);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Accept-Profile": "accounts",
+          "Content-Profile": "accounts",
+        },
+        redirect: "manual",
+      });
+      if (!response.ok) {
+        console.error("[afuchat-api] related profile lookup failed", {
+          requestId,
+          status: response.status,
+        });
+        return null;
+      }
+      const rows: unknown = await response.json().catch(() => null);
+      if (!Array.isArray(rows)) return null;
+      for (const row of rows) {
+        if (
+          row !== null &&
+          typeof row === "object" &&
+          !Array.isArray(row) &&
+          typeof (row as Record<string, unknown>).id === "string"
+        ) {
+          profiles.set(
+            String((row as Record<string, unknown>).id),
+            row as Record<string, unknown>,
+          );
+        }
+      }
+    } catch {
+      console.error("[afuchat-api] related profile lookup failed", { requestId });
+      return null;
+    }
+  }
+  return profiles;
 }
 
 export async function handleDataGateway(request: Request, env: Env): Promise<Response> {
@@ -217,13 +179,12 @@ export async function handleDataGateway(request: Request, env: Env): Promise<Res
   if (requested === null) {
     return errorResponse(request, requestId, "Conflicting data schema headers.", 400);
   }
-  if (requested && requested !== AFUCHAT_SCHEMA) {
-    return errorResponse(request, requestId, "Only AfuChat schema requests are supported.", 400);
-  }
-
   const schema = fixedSchema(target);
   if (!schema) {
     return errorResponse(request, requestId, "The requested data resource is not available.", 404);
+  }
+  if (requested && requested !== schema && requested !== AFUCHAT_SCHEMA) {
+    return errorResponse(request, requestId, "The requested data schema is not supported.", 400);
   }
 
   const config = supabaseConfig(env);
@@ -265,6 +226,20 @@ export async function handleDataGateway(request: Request, env: Env): Promise<Res
   const operation = target.kind === "function" ? `rpc/${target.name}` : target.name;
   upstreamUrl.pathname = `/rest/v1/${operation}`;
   upstreamUrl.search = new URL(request.url).search;
+  let profileJoinPlans: ProfileJoinPlan[] = [];
+  if (request.method === "GET" && target.kind === "relation") {
+    const selector = upstreamUrl.searchParams.get("select");
+    if (selector) {
+      const rewritten = rewriteCrossSchemaProfileSelect(schema, selector);
+      if (rewritten?.unsupported) {
+        return errorResponse(request, requestId, "The requested data selection is not supported.", 400);
+      }
+      if (rewritten?.plans.length) {
+        profileJoinPlans = rewritten.plans;
+        upstreamUrl.searchParams.set("select", rewritten.selector);
+      }
+    }
+  }
 
   const upstreamHeaders = new Headers({
     apikey: config.anonKey,
@@ -292,6 +267,39 @@ export async function handleDataGateway(request: Request, env: Env): Promise<Res
         "The data request could not be completed.",
         status,
       );
+    }
+    if (profileJoinPlans.length > 0) {
+      const payload: unknown = await upstream.json().catch(() => null);
+      if (payload === null || typeof payload !== "object") {
+        return errorResponse(request, requestId, "The data request could not be completed.", 502);
+      }
+      const profiles = await fetchAccountProfiles(
+        config,
+        token,
+        requestId,
+        profileJoinPlans,
+        payload,
+      );
+      if (!profiles) {
+        return errorResponse(request, requestId, "The data request could not be completed.", 502);
+      }
+      applyProfileJoinPlans(payload, profileJoinPlans, profiles);
+      const headers = responseHeaders(request, requestId);
+      for (const name of RESPONSE_HEADERS) {
+        const value = upstream.headers.get(name);
+        if (value !== null) headers.set(name, value);
+      }
+      headers.delete("ETag");
+      headers.delete("Content-Location");
+      headers.set("Cache-Control", "private, no-store");
+      headers.set("Vary", "Origin, Authorization");
+      headers.set("X-AfuChat-Request-Id", requestId);
+      headers.set("X-AfuChat-Version", "v1");
+      return new Response(JSON.stringify(payload), {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers,
+      });
     }
     const headers = responseHeaders(request, requestId);
     for (const name of RESPONSE_HEADERS) {

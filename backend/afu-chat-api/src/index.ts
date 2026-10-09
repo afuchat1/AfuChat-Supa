@@ -196,7 +196,7 @@ async function handleCurrentUser(request: Request, env: Env): Promise<Response> 
         apikey: supabase.anonKey,
         Authorization: `Bearer ${verification.session.token}`,
         Accept: "application/json",
-        "Accept-Profile": AFUCHAT_SCHEMA,
+        "Accept-Profile": "accounts",
       },
       redirect: "manual",
     }));
@@ -528,7 +528,7 @@ async function handleStatus(request: Request, env: Env): Promise<Response> {
           headers: {
             apikey: supabase.anonKey,
             Accept: "application/json",
-            "Accept-Profile": AFUCHAT_SCHEMA,
+            "Accept-Profile": "accounts",
           },
         },
       );

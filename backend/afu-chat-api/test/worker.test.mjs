@@ -215,10 +215,10 @@ test("data gateway sanitizes PostgREST errors", async () => {
   assert.doesNotMatch(body, /PGRST_INTERNAL|private schema detail|internal hint/);
 });
 
-test("data gateway forwards only registered RPCs with the original request body", async () => {
-  let forwarded;
-  globalThis.fetch = async (input, init) => {
-    forwarded = input instanceof Request ? input : new Request(input, init);
+test("data gateway refuses an RPC not confirmed in the AfuChat production schema", async () => {
+  let databaseCalls = 0;
+  globalThis.fetch = async () => {
+    databaseCalls += 1;
     return Response.json({ success: true });
   };
 
@@ -238,11 +238,9 @@ test("data gateway forwards only registered RPCs with the original request body"
     makeEnv(),
   );
 
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { success: true });
-  assert.equal(new URL(forwarded.url).pathname, "/rest/v1/rpc/credit_acoin");
-  assert.equal(forwarded.headers.get("Accept-Profile"), "afuchat");
-  assert.equal(await forwarded.text(), body);
+  assert.equal(response.status, 404);
+  assert.match(await response.text(), /not available/i);
+  assert.equal(databaseCalls, 0);
 });
 
 test("anonymous gateway reads keep the public anon role without bypassing the allowlist", async () => {

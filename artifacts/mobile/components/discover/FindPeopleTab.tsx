@@ -239,7 +239,7 @@ export default function FindPeopleTab() {
     };
     const channel = supabase
       .channel(`find-presence-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "afuchat", table: "profiles" }, refreshPeopleFromProfileChange)
+      .on("postgres_changes", { event: "*", schema: "accounts", table: "profiles" }, refreshPeopleFromProfileChange)
       .on("postgres_changes", { event: "*", schema: "afuchat", table: "chats" }, () => void loadPeople(true))
       .on("postgres_changes", { event: "*", schema: "afuchat", table: "channels" }, () => void loadPeople(true))
       .on("postgres_changes", { event: "*", schema: "afuchat", table: "chat_members" }, () => void loadPeople(true))

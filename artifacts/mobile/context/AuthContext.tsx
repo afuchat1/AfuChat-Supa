@@ -1095,7 +1095,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .channel(`profile-rt:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "afuchat", table: "profiles", filter: `id=eq.${user.id}` },
+        { event: "UPDATE", schema: "accounts", table: "profiles", filter: `id=eq.${user.id}` },
         (payload) => {
           const incoming = payload.new as Partial<Profile>;
           setProfile((prev) => {

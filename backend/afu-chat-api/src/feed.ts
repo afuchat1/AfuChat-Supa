@@ -5,6 +5,7 @@ import {
   type Env,
   type VerifiedSession,
 } from "./shared.ts";
+import { schemaForPostgrestPath } from "./data-schema.ts";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -54,12 +55,20 @@ async function restRows(
   url: URL,
   session: VerifiedSession,
   anonKey: string,
-  schema = "afuchat",
+  _schema = "afuchat",
 ): Promise<RestResult<Record<string, unknown>[]>> {
+  const resolvedSchema = schemaForPostgrestPath(url.pathname);
+  if (!resolvedSchema) {
+    return {
+      ok: false,
+      response: new Response(null, { status: 404 }),
+      code: "UNAVAILABLE_RESOURCE",
+    };
+  }
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: restHeaders(session, anonKey, schema),
+      headers: restHeaders(session, anonKey, resolvedSchema),
       redirect: "manual",
     });
     const payload: unknown = await response.json().catch(() => null);

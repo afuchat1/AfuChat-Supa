@@ -91,6 +91,10 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
 };
 
 const AFUCHAT_SCHEMA = "afuchat" as const;
+const POSTGREST_SCHEMA_OVERRIDES: Readonly<Record<string, string>> = {
+  profiles: "accounts",
+  orders: "shop",
+};
 
 const fetchThroughAfuChatApi: typeof fetch = async (input, init) => {
   const sourceUrl =
@@ -113,14 +117,18 @@ const fetchThroughAfuChatApi: typeof fetch = async (input, init) => {
   }
 
   const restPath = requestUrl.pathname.slice("/rest/v1".length);
+  const resource = restPath.split("/").filter(Boolean)[0];
+  const schema = resource
+    ? POSTGREST_SCHEMA_OVERRIDES[resource] ?? AFUCHAT_SCHEMA
+    : AFUCHAT_SCHEMA;
   const gatewayUrl = new URL(
     `/v1/chat/data${restPath}${requestUrl.search}`,
     AFUCHAT_API_URL,
   );
   const sourceRequest = new Request(input, init);
   const routedRequest = new Request(gatewayUrl, sourceRequest);
-  routedRequest.headers.set("Accept-Profile", AFUCHAT_SCHEMA);
-  routedRequest.headers.set("Content-Profile", AFUCHAT_SCHEMA);
+  routedRequest.headers.set("Accept-Profile", schema);
+  routedRequest.headers.set("Content-Profile", schema);
   return fetchWithTimeout(routedRequest, { signal: sourceRequest.signal });
 };
 
