@@ -94,7 +94,7 @@ function useTotalUnread(userId: string | undefined): number {
           "postgres_changes",
           {
             event: "INSERT",
-            schema: "public",
+            schema: "afuchat",
             table: "message_status",
             filter: `user_id=eq.${userId}`,
           },
@@ -104,7 +104,7 @@ function useTotalUnread(userId: string | undefined): number {
           "postgres_changes",
           {
             event: "UPDATE",
-            schema: "public",
+            schema: "afuchat",
             table: "message_status",
             filter: `user_id=eq.${userId}`,
           },

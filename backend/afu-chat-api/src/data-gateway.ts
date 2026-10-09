@@ -96,9 +96,8 @@ const AFUCHAT_RELATIONS = new Set([
   "xp_transfers",
 ]);
 
-// These RPCs remain registered in public in the current Supabase project.
-// They are individually allowlisted; relation reads and writes use afuchat.
-const EXISTING_RPC_FUNCTIONS = new Set([
+// Only route known AfuChat RPC names, and always to the authoritative schema.
+const AFUCHAT_RPC_FUNCTIONS = new Set([
   "add_group_members",
   "award_xp",
   "cancel_my_subscription",
@@ -192,20 +191,14 @@ function fixedSchema(
 
   if (target.kind === "function") {
     if (
-      !EXISTING_RPC_FUNCTIONS.has(target.name) ||
-      (requested && requested !== "afuchat" && requested !== "public")
+      !AFUCHAT_RPC_FUNCTIONS.has(target.name) ||
+      (requested && requested !== "afuchat")
     ) return null;
-    return "public";
+    return "afuchat";
   }
 
   if (!AFUCHAT_RELATIONS.has(target.name)) return null;
-  if (target.name === "orders") {
-    return requested && !["afuchat", "public", "shop"].includes(requested) ? null : "shop";
-  }
-  if (requested === "accounts" && target.name === "profiles") return "accounts";
-  // Older installed clients still send public profile headers. Never forward
-  // those to PostgREST: route the known AfuChat relation to its canonical schema.
-  if (requested && requested !== "afuchat" && requested !== "public") return null;
+  if (requested && requested !== "afuchat") return null;
   return "afuchat";
 }
 

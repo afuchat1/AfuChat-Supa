@@ -53,15 +53,11 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { HomeBanner } from "@/components/ui/HomeBanner";
 import { isOnline, onConnectivityChange, getCachedUserId } from "@/lib/offlineStore";
-import { getLocalConversations, saveConversations, deleteLocalConversation, pruneConversations, clearUnread, updateConversationFlags } from "@/lib/storage/localConversations";
 import {
-  getLocalNotesConversation,
   isLocalNotesId,
   removeLocalNotesConversation,
   updateLocalNotesFlags,
-  LOCAL_NOTES_NAME,
 } from "@/lib/storage/localNotes";
-import { getPreloadedConversations, hasPreloadedConversations, invalidateConversationsPreload } from "@/lib/conversationsPreload";
 import { AFUAI_CONV_ID, AFUAI_BOT_ID, getAIChatSnapshot } from "@/lib/aiChatStore";
 import { useSuperApp } from "@/lib/superapp/MiniAppRuntime";
 import { addOnlineListener } from "@/lib/offlineSync";
@@ -173,31 +169,6 @@ let chatListMemberChannelSequence = 0;
 function isNotificationsChatItem(item: ChatItem): boolean {
   return [item.other_handle, item.other_display_name, item.name]
     .some((value) => value?.trim().toLowerCase() === "notifications");
-}
-
-function localNotesToChatItem(local: any): ChatItem {
-  return {
-    id: local.id,
-    kind: "notes",
-    name: LOCAL_NOTES_NAME,
-    is_group: false,
-    is_channel: false,
-    other_display_name: LOCAL_NOTES_NAME,
-    other_avatar: null,
-    other_id: local.other_id || "",
-    last_message: local.last_message || "",
-    last_message_at: local.last_message_at || "",
-    last_message_is_mine: !!local.last_message_is_mine,
-    last_message_status: (local.last_message_status || "sent") as ChatItem["last_message_status"],
-    is_pinned: !!local.is_pinned,
-    is_archived: !!local.is_archived,
-    avatar_url: null,
-    unread_count: 0,
-    is_verified: false,
-    is_organization_verified: false,
-    other_last_seen: null,
-    other_show_online: false,
-  };
 }
 
 function TypingDots({ color }: { color: string }) {
@@ -488,7 +459,6 @@ const uploadBannerStyles = StyleSheet.create({
 
 type ChatTabKey = "all" | "unread" | "personal" | "groups" | "channels";
 
-const LOCAL_CHAT_HYDRATION_TIMEOUT_MS = 1500;
 const CHAT_REQUEST_TIMEOUT_MS = 15000;
 
 function waitForRequest<T>(
@@ -550,19 +520,14 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   // inside chat rows instead of the registered display_name.
   const phonebookNames = usePhonebookNames();
 
-  // Initialize from the in-memory preload cache if available (populated by _layout.tsx
-  // before this component ever mounts). This makes the chat list appear instantly
-  // for returning users — no skeleton, no SQLite wait on first render.
-  const [chats, setChats] = useState<ChatItem[]>(() =>
-    getPreloadedConversations()
-      .filter((item: any) => !isLocalNotesId(item.id))
-      .map((item: any) => item as ChatItem),
-  );
+  // Only a successful AfuChat API response can populate the server chat list.
+  const [chats, setChats] = useState<ChatItem[]>([]);
   const chatsRef = useRef<ChatItem[]>([]);
   chatsRef.current = chats;
-  const [loading, setLoading] = useState(() => !hasPreloadedConversations());
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatLoadError, setChatLoadError] = useState(false);
+  const [chatLoadErrorMessage, setChatLoadErrorMessage] = useState("");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchAnim = useRef(new Animated.Value(0)).current;
@@ -652,55 +617,18 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     if (!user) return;
     const offline = !isOnline();
 
-    // Offline users must be able to open the durable chat cache even when the
-    // auth token has not yet been restored. Session verification is only
-    // required before a server request, never before local hydration.
-    // Native SQLite can be delayed by migrations on a release first launch.
-    // Cache hydration is an enhancement, never a reason to block Supabase.
-    const localNotes = await waitForRequest(
-      getLocalNotesConversation(user.id),
-      LOCAL_CHAT_HYDRATION_TIMEOUT_MS,
-      () => {},
-    );
-
-    if (!background) {
-      const cacheStartedAt = Date.now();
-      const cached = hasPreloadedConversations()
-        ? getPreloadedConversations()
-        : await waitForRequest(getLocalConversations(), LOCAL_CHAT_HYDRATION_TIMEOUT_MS, () => {}) ?? [];
-      const cachedItems = cached
-        .filter((item: any) =>
-          (localNotes || !isLocalNotesId(item.id)) &&
-          !(item.other_id === user.id && !isLocalNotesId(item.id))
-        )
-        .map((item: any) => isLocalNotesId(item.id) ? { ...item, kind: "notes" as const } : item);
-      if (localNotes && !cachedItems.some((item: any) => item.id === localNotes.id)) {
-        cachedItems.push(localNotesToChatItem(localNotes));
-      }
-      if (cachedItems.length > 0) {
-        setChats(cachedItems as any);
-        setLoading(false);
-      }
-      if (__DEV__) {
-        console.log("[ChatPerf] cache render", Date.now() - cacheStartedAt, "ms", "chats", cachedItems.length);
-      }
-    }
-
     if (offline) {
-      setChatLoadError(false);
-      setChats((prev) => {
-        const withoutNotes = prev.filter((item) => !isLocalNotesId(item.id));
-        return localNotes ? [...withoutNotes, localNotesToChatItem(localNotes)] : withoutNotes;
-      });
+      setChats([]);
+      setChatLoadError(true);
+      setChatLoadErrorMessage("Connect to the internet to load chats from AfuChat.");
       setLoading(false);
       setRefreshing(false);
       return;
     }
 
-    // AuthContext can briefly lag behind Supabase's native session storage
-    // after a sign-in or a cold start on a new device. Check the authoritative
-    // session directly before the server query, but only after local hydration
-    // has already made cached chats visible.
+    if (!background) setLoading(true);
+
+    // Verify the shared AfuAuth session before querying authoritative chat data.
     if (!hasVerifiedSession) {
       let liveSessionUserId: string | null = null;
       try {
@@ -710,6 +638,9 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         liveSessionUserId = null;
       }
       if (liveSessionUserId !== user.id) {
+        setChats([]);
+        setChatLoadError(true);
+        setChatLoadErrorMessage("Your AfuAuth session is not ready. Sign in again and retry.");
         setLoading(false);
         setRefreshing(false);
         return;
@@ -742,29 +673,25 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       );
     }
     if (chatError) {
+      setChats([]);
       setChatLoadError(true);
-      if (localNotes) {
-        setChats((prev) => [
-          ...prev.filter((item) => !isLocalNotesId(item.id)),
-          localNotesToChatItem(localNotes),
-        ]);
-      }
+      setChatLoadErrorMessage(chatError.message || "The AfuChat chat query failed.");
       setLoading(false);
       setRefreshing(false);
       return;
     }
     if (!chatRows) {
+      setChats([]);
       setChatLoadError(true);
+      setChatLoadErrorMessage("The AfuChat API returned no chat result.");
       setLoading(false);
       setRefreshing(false);
       return;
     }
     setChatLoadError(false);
+    setChatLoadErrorMessage("");
     if (chatRows.length === 0) {
-      // A successful server response is authoritative. Preserve only the
-      // device-only My Notes conversation; cached server chats must not make a
-      // successful empty result look like current production data.
-      setChats(localNotes ? [localNotesToChatItem(localNotes)] : []);
+      setChats([]);
       setLoading(false);
       setRefreshing(false);
       return;
@@ -772,18 +699,16 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
     // The RPC includes chat membership, profile metadata, latest message,
     // delivery/read state, unread count, and mute state in one server query.
-    const items: ChatItem[] = (chatRows as any[]).map((row: any): ChatItem => {
-      const isSelfChat = !row.is_group && !row.is_channel && row.other_id === user.id;
-      return {
+    const items: ChatItem[] = (chatRows as any[]).map((row: any): ChatItem => ({
         id: row.chat_id,
         name: row.chat_name ?? null,
         is_group: !!row.is_group,
         is_channel: !!row.is_channel,
-         created_by: row.created_by || null,
-        other_display_name: isSelfChat ? "My Notes" : (row.other_display_name || "Unknown"),
-        other_handle: isSelfChat ? null : (row.other_handle || null),
-        other_avatar: isSelfChat ? null : (row.other_avatar || null),
-        other_id: isSelfChat ? user.id : (row.other_id || ""),
+        created_by: row.created_by ?? null,
+        other_display_name: row.other_display_name ?? "",
+        other_handle: row.other_handle ?? null,
+        other_avatar: row.other_avatar ?? null,
+        other_id: row.other_id ?? "",
         last_message: row.last_message
           ? buildMsgPreview(row.last_message, row.last_message_attachment_type)
           : "",
@@ -798,24 +723,13 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         is_archived: !!row.is_archived,
         avatar_url: row.avatar_url || null,
         unread_count: Number(row.unread_count) || 0,
-        is_verified: isSelfChat ? false : !!row.is_verified,
-        is_organization_verified: isSelfChat ? false : !!row.is_organization_verified,
-        other_last_seen: isSelfChat ? null : (row.other_last_seen || null),
-        other_show_online: isSelfChat ? false : row.other_show_online !== false,
+        is_verified: !!row.is_verified,
+        is_organization_verified: !!row.is_organization_verified,
+        other_last_seen: row.other_last_seen ?? null,
+        other_show_online: !!row.other_show_online,
         muted_until: row.is_muted ? (row.muted_until || null) : undefined,
-      };
-    }).filter((item) =>
-      item.is_group ||
-      item.is_channel ||
-      Boolean(item.other_id)
-    );
-
-    // My Notes is a local-only conversation. Hide any legacy server self-chat
-    // instead of resurfacing the old auto-created version.
-    const regularItems = items.filter(
-      (item) =>
-        !((!item.is_group && !item.is_channel && item.other_id === user.id))
-    );
+    }));
+    const regularItems = items;
 
     regularItems.sort((a, b) => {
       // Pinned floats to top; archived sinks to bottom; otherwise newest-first
@@ -826,77 +740,17 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
 
-    // ── Deduplicate DMs: one chat per other_id ────────────────────────────────
-    // The list is already newest-first, so the FIRST occurrence of each other_id
-    // is the canonical (most recent) chat. Stale duplicates are filtered out and
-    // the user is silently removed from their chat_members so they never resurface.
-    {
-      const seenOtherIds = new Set<string>();
-      const staleIds: string[] = [];
-      const dedupedItems: ChatItem[] = [];
-      for (const item of regularItems) {
-        // Groups, channels, and self-chat are never duplicated — pass through.
-        if (item.is_group || item.is_channel || !item.other_id || item.other_id === user.id) {
-          dedupedItems.push(item);
-          continue;
-        }
-        if (seenOtherIds.has(item.other_id)) {
-          staleIds.push(item.id);
-        } else {
-          seenOtherIds.add(item.other_id);
-          dedupedItems.push(item);
-        }
-      }
-      regularItems.length = 0;
-      regularItems.push(...dedupedItems);
-
-      // Silently leave stale duplicate chats so they can't come back
-      if (staleIds.length > 0) {
-        Promise.all(
-          staleIds.map((chatId) =>
-            supabase.from("chat_members").delete().eq("chat_id", chatId).eq("user_id", user.id)
-          )
-        ).catch(() => {});
-      }
-    }
-
-    // ── Load local unsent drafts ──────────────────────────────────────────────
-    // Read all draft keys at once so we can (a) show "Draft:" labels and
-    // (b) sort drafted chats above non-drafted ones.
-    const notesItem = localNotes ? localNotesToChatItem(localNotes) : null;
-    const combined = [
-      ...regularItems,
-      ...(notesItem ? [notesItem] : []),
-    ];
-    const allCombinedIds = combined.map((c) => c.id).filter(Boolean);
-    let draftMap: Record<string, string> = {};
-    try {
-      const draftPairs = await AsyncStorage.multiGet(
-        allCombinedIds.map((cid) => `chat_draft_${cid}`)
-      );
-      for (const [key, val] of draftPairs) {
-        if (val && val.trim()) {
-          draftMap[key.replace("chat_draft_", "")] = val;
-        }
-      }
-    } catch {}
-
-    // Sort: pinned → drafted (non-pinned, non-archived) → normal → archived
-    combined.sort((a, b) => {
+    regularItems.sort((a, b) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
       if (a.is_archived && !b.is_archived) return 1;
       if (!a.is_archived && b.is_archived) return -1;
-      const aD = !a.is_pinned && !a.is_archived && !!draftMap[a.id];
-      const bD = !b.is_pinned && !b.is_archived && !!draftMap[b.id];
-      if (aD && !bD) return -1;
-      if (!aD && bD) return 1;
       if (!a.last_message_at && b.last_message_at) return 1;
       if (a.last_message_at && !b.last_message_at) return -1;
       return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime();
     });
 
-    const finalItems: ChatItem[] = combined.map((item) => ({ ...item, draft: draftMap[item.id] || "" }));
+    const finalItems = regularItems;
 
     // Keep Android's native Direct Share targets in lockstep with the same
     // recent conversations rendered in this list. Groups use their chat
@@ -907,8 +761,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         .map((item) => ({
           chatId: item.id,
           label: item.is_group || item.is_channel
-            ? (item.name || "Group chat")
-            : (item.other_display_name || "Chat"),
+            ? (item.name || "")
+            : (item.other_display_name || ""),
           avatarUrl: item.is_group || item.is_channel ? item.avatar_url : item.other_avatar,
           lastMessageAt: item.last_message_at,
           isGroup: item.is_group,
@@ -930,10 +784,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     // these tasks can wait until the current gesture/transition is finished.
     InteractionManager.runAfterInteractions(() => {
       prefetchListImages(finalItems, { avatarFields: ["avatar_url", "other_avatar"] });
-      invalidateConversationsPreload();
-      const regularIds = [...regularItems.map((c) => c.id), ...(notesItem ? [notesItem.id] : [])];
-      saveConversations(notesItem ? [...regularItems, notesItem] : regularItems).catch(() => {});
-      pruneConversations(regularIds).catch(() => {});
     });
     setLoading(false);
     setRefreshing(false);
@@ -957,9 +807,11 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       loadChatsImpl(background),
       CHAT_REQUEST_TIMEOUT_MS,
       () => {
+        setChats([]);
         setLoading(false);
         setRefreshing(false);
         setChatLoadError(true);
+        setChatLoadErrorMessage("The AfuChat chat query timed out.");
       },
     ).finally(() => {
       if (__DEV__) {
@@ -1099,7 +951,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           await removeLocalNotesConversation(user!.id);
           return;
         }
-        deleteLocalConversation(item.id).catch(() => {});
         if (isGroup) {
           // Leave the group — remove only this user's membership
           const { error } = await supabase
@@ -1171,7 +1022,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     if (item.unread_count > 0) {
       markChatVisited(item.id);
       setChats((prev) => prev.map((c) => c.id === item.id ? { ...c, unread_count: 0 } : c));
-      clearUnread(item.id).catch(() => {});
     }
     if (onOpenChat) { onOpenChat(item, item.id); return; }
     safeRouter.push({
@@ -1246,7 +1096,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         }
         return supabase.from("chats").delete().eq("id", id);
       }),
-      ...ids.map((id) => deleteLocalConversation(id)),
     ]);
   }, [selectedIds, exitSelectMode, chats, user]);
 
@@ -1277,7 +1126,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       .channel(channelName)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_members", filter: `user_id=eq.${userId}` },
+        { event: "INSERT", schema: "afuchat", table: "chat_members", filter: `user_id=eq.${userId}` },
         () => { void loadChatsRef.current(true); },
       )
       .subscribe();
@@ -1315,7 +1164,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         "postgres_changes",
         {
           event: "INSERT",
-          schema: "public",
+          schema: "afuchat",
           table: "messages",
           filter: `chat_id=in.(${realtimeChatIds.join(",")})`,
         },
@@ -1392,7 +1241,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       .channel(`chatlist-chats:${user.id}:${Date.now()}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "chats" },
+        { event: "UPDATE", schema: "afuchat", table: "chats" },
         (payload: any) => {
           if (chatIds.includes(payload.new?.id)) {
             loadChats(true);
@@ -1749,10 +1598,10 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           <Ionicons name="cloud-offline-outline" size={17} color={colors.error} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.text, fontSize: 12, fontWeight: "600" }}>
-              Couldn't refresh chats
+              Couldn't load chats
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>
-              Showing saved chats. Tap to retry.
+              {chatLoadErrorMessage || "Chat data is unavailable. Tap to retry."}
             </Text>
           </View>
           <Ionicons name="refresh" size={17} color={colors.error} />
@@ -1842,6 +1691,12 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   <View key={pageKey} style={{ flex: 1, paddingTop: 0 }}>
                     {loading ? (
                       <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
+                    ) : chatLoadError ? (
+                      <View style={styles.center}>
+                        <Ionicons name="cloud-offline-outline" size={42} color={colors.error} />
+                        <Text style={[styles.emptyTitle, { color: colors.text, marginTop: 12 }]}>Chats unavailable</Text>
+                        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{chatLoadErrorMessage}</Text>
+                      </View>
                     ) : pageChats.length === 0 ? (
                       <View style={styles.center}>
                         <AfuLogo size={80} />
@@ -1919,6 +1774,12 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   <View style={{ width: windowWidth, flex: 1, paddingTop: 0 }}>
                     {loading ? (
                       <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
+                    ) : chatLoadError ? (
+                      <View style={styles.center}>
+                        <Ionicons name="cloud-offline-outline" size={42} color={colors.error} />
+                        <Text style={[styles.emptyTitle, { color: colors.text, marginTop: 12 }]}>Chats unavailable</Text>
+                        <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{chatLoadErrorMessage}</Text>
+                      </View>
                     ) : pageChats.length === 0 ? (
                       <View style={styles.center}>
                         <AfuLogo size={80} />
@@ -1979,6 +1840,12 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           <View style={{ flex: 1, paddingTop: 0 }}>
             {loading ? (
               <View style={{ padding: 8 }}>{[1,2,3,4,5,6].map(i => <ChatRowSkeleton key={i} />)}</View>
+                    ) : chatLoadError ? (
+              <View style={styles.center}>
+                <Ionicons name="cloud-offline-outline" size={42} color={colors.error} />
+                <Text style={[styles.emptyTitle, { color: colors.text, marginTop: 12 }]}>Chats unavailable</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>{chatLoadErrorMessage}</Text>
+              </View>
                     ) : filtered.length === 0 ? (
               <View style={styles.center}>
                 <AfuLogo size={80} />

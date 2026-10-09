@@ -44,7 +44,7 @@ import {
 } from "./shared.ts";
 
 const PREFIX = "/v1/chat";
-const CURRENT_PROFILE_SCHEMA = "accounts";
+const AFUCHAT_SCHEMA = "afuchat";
 const ALLOWED_METHODS = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS";
 const ALLOWED_HEADERS =
   "Accept-Profile, Authorization, Content-Profile, Content-Type, If-Match, If-Modified-Since, If-None-Match, apikey, Prefer, Range, Range-Unit, X-Client-Info";
@@ -171,11 +171,8 @@ async function handleCurrentUser(request: Request, env: Env): Promise<Response> 
   const verification = await verifySharedSession(request, env, requestId);
   if (!verification.session) return verification.response;
 
-  // AfuAuth owns the shared account profile; this read must not target the
-  // AfuChat compatibility view, which can be absent for valid shared users.
-  const schema = CURRENT_PROFILE_SCHEMA;
   const supabase = supabaseConfig(env);
-  if (!supabase || !/^[a-z][a-z0-9_]*$/i.test(schema)) {
+  if (!supabase) {
     return privateJsonResponse(
       request,
       requestId,
@@ -199,7 +196,7 @@ async function handleCurrentUser(request: Request, env: Env): Promise<Response> 
         apikey: supabase.anonKey,
         Authorization: `Bearer ${verification.session.token}`,
         Accept: "application/json",
-        "Accept-Profile": schema,
+        "Accept-Profile": AFUCHAT_SCHEMA,
       },
       redirect: "manual",
     }));
@@ -305,18 +302,6 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
       401,
     );
   }
-  // Production PostgREST exposes public, not afuchat. Public compatibility
-  // views/RPCs are the supported API surface and now resolve only to afuchat.
-  const schema = env.AFUCHAT_DATABASE_SCHEMA?.trim() || "public";
-  if (schema !== "public") {
-    return privateJsonResponse(
-      request,
-      requestId,
-      { error: "This request is temporarily unavailable.", request_id: requestId },
-      503,
-    );
-  }
-
   const incoming = new URL(request.url);
   const excludedIds = incoming.searchParams
     .getAll("unread_excluded_ids")
@@ -428,8 +413,8 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
           Authorization: authorization,
           Accept: "application/json",
           "Content-Type": "application/json",
-          "Accept-Profile": schema,
-          "Content-Profile": schema,
+          "Accept-Profile": AFUCHAT_SCHEMA,
+          "Content-Profile": AFUCHAT_SCHEMA,
         }),
         body: JSON.stringify({ other_user_id: otherUserId }),
         redirect: "manual",
@@ -476,8 +461,8 @@ async function handleChatConversations(request: Request, env: Env): Promise<Resp
     Authorization: authorization,
     Accept: "application/json",
     "Content-Type": "application/json",
-    "Accept-Profile": schema,
-    "Content-Profile": schema,
+    "Accept-Profile": AFUCHAT_SCHEMA,
+    "Content-Profile": AFUCHAT_SCHEMA,
   });
 
   try {
@@ -543,6 +528,7 @@ async function handleStatus(request: Request, env: Env): Promise<Response> {
           headers: {
             apikey: supabase.anonKey,
             Accept: "application/json",
+            "Accept-Profile": AFUCHAT_SCHEMA,
           },
         },
       );

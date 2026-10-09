@@ -165,7 +165,7 @@ async function hydratePosts(
       makeUrl(base, "profiles", { select: PROFILE_FIELDS, id: authorFilter }),
       session,
       anonKey,
-      "accounts",
+      "afuchat",
     ),
     restRows(
       makeUrl(base, "post_images", {

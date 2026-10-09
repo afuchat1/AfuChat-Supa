@@ -208,10 +208,10 @@ export default function CommunitiesScreen() {
     if (!user) return;
     const ch = supabase
       .channel("communities-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_members", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "chat_members", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "channel_subscriptions", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "channel_subscriptions", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "chat_members", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "chat_members", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "channel_subscriptions", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "channel_subscriptions", filter: `user_id=eq.${user.id}` }, () => fetchFromNetwork(true))
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [user, fetchFromNetwork]);

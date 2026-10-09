@@ -216,7 +216,7 @@ export async function handleVideoFeed(request: Request, env: Env): Promise<Respo
         select: PROFILE_FIELDS,
         id: `in.(${authorIds.join(",")})`,
       }),
-      "accounts",
+      "afuchat",
     ),
     restRows(context, makeUrl(context.base, "post_acknowledgments", {
       select: "post_id",

@@ -20,7 +20,6 @@ function makeEnv(authStatus = 200) {
   return {
     SUPABASE_URL: "https://supabase.example.test",
     SUPABASE_ANON_KEY: "test-anon-key",
-    AFUCHAT_DATABASE_SCHEMA: "public",
     AFUAUTH_API: {
       async fetch(input) {
         const request = input instanceof Request ? input : new Request(input);
@@ -131,7 +130,7 @@ test("mobile PostgREST reads use the fixed AfuChat data gateway and keep user RL
   assert.equal(requests[0].headers.get("apikey"), "test-anon-key");
 });
 
-test("data gateway keeps explicit shared-account and shop schema ownership", async () => {
+test("data gateway routes AfuChat profiles and orders to afuchat only", async () => {
   const requests = [];
   globalThis.fetch = async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -139,12 +138,12 @@ test("data gateway keeps explicit shared-account and shop schema ownership", asy
     return Response.json([]);
   };
 
-  const accountResponse = await worker.fetch(
+  const profileResponse = await worker.fetch(
     new Request("https://api.afuchat.com/v1/chat/data/profiles?select=id", {
       headers: {
         Authorization: "Bearer user-session",
         apikey: "test-anon-key",
-        "Accept-Profile": "accounts",
+        "Accept-Profile": "afuchat",
       },
     }),
     makeEnv(),
@@ -160,19 +159,19 @@ test("data gateway keeps explicit shared-account and shop schema ownership", asy
     makeEnv(),
   );
 
-  assert.equal(accountResponse.status, 200);
+  assert.equal(profileResponse.status, 200);
   assert.equal(shopResponse.status, 200);
-  assert.equal(requests[0].headers.get("Accept-Profile"), "accounts");
-  assert.equal(requests[0].headers.get("Content-Profile"), "accounts");
-  assert.equal(requests[1].headers.get("Accept-Profile"), "shop");
-  assert.equal(requests[1].headers.get("Content-Profile"), "shop");
+  assert.equal(requests[0].headers.get("Accept-Profile"), "afuchat");
+  assert.equal(requests[0].headers.get("Content-Profile"), "afuchat");
+  assert.equal(requests[1].headers.get("Accept-Profile"), "afuchat");
+  assert.equal(requests[1].headers.get("Content-Profile"), "afuchat");
   assert.equal(new URL(requests[1].url).pathname, "/rest/v1/orders");
 });
 
-test("legacy public table headers are routed to AfuChat, not PostgREST public", async () => {
-  let forwarded;
+test("legacy public schema requests are rejected instead of redirected", async () => {
+  let forwarded = false;
   globalThis.fetch = async (input, init) => {
-    forwarded = input instanceof Request ? input : new Request(input, init);
+    forwarded = true;
     return Response.json([]);
   };
   const response = await worker.fetch(
@@ -187,9 +186,8 @@ test("legacy public table headers are routed to AfuChat, not PostgREST public", 
     makeEnv(),
   );
 
-  assert.equal(response.status, 200);
-  assert.equal(forwarded.headers.get("Accept-Profile"), "afuchat");
-  assert.equal(forwarded.headers.get("Content-Profile"), "afuchat");
+  assert.equal(response.status, 404);
+  assert.equal(forwarded, false);
 });
 
 test("data gateway sanitizes PostgREST errors", async () => {
@@ -559,7 +557,7 @@ test("current profile uses the verified AfuAuth identity and returns the mobile 
   assert.match(query.get("select"), /platinum_until/);
   assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
-  assert.equal(profileRequest.headers.get("Accept-Profile"), "accounts");
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "afuchat");
   assert.match(response.headers.get("Cache-Control"), /private, no-store/);
 });
 
@@ -709,7 +707,7 @@ test("other-user profile uses verified identity and returns only contact-page fi
   assert.doesNotMatch(query.get("select"), /phone_number|is_admin|date_of_birth/);
   assert.equal(profileRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.equal(profileRequest.headers.get("apikey"), env.SUPABASE_ANON_KEY);
-  assert.equal(profileRequest.headers.get("Accept-Profile"), "accounts");
+  assert.equal(profileRequest.headers.get("Accept-Profile"), "afuchat");
   assert.equal(blockRequest.headers.get("Authorization"), `Bearer ${token}`);
   assert.match(response.headers.get("Cache-Control"), /private, no-store/);
 });
@@ -1425,7 +1423,7 @@ test("conversation endpoint verifies identity and forwards the same Supabase tok
   assert.deepEqual(await response.json(), [{ chat_id: "chat-1" }]);
 });
 
-test("direct conversation creation uses the authenticated public RPC and returns its chat ID", async () => {
+test("direct conversation creation uses the authenticated afuchat RPC and returns its chat ID", async () => {
   const token = "same-supabase-session";
   const otherUserId = "123e4567-e89b-42d3-a456-426614174123";
   const chatId = "123e4567-e89b-42d3-a456-426614174124";
@@ -1452,8 +1450,8 @@ test("direct conversation creation uses the authenticated public RPC and returns
 
   assert.equal(new URL(rpcRequest.url).pathname, "/rest/v1/rpc/get_or_create_direct_chat");
   assert.equal(rpcRequest.headers.get("Authorization"), `Bearer ${token}`);
-  assert.equal(rpcRequest.headers.get("Accept-Profile"), "public");
-  assert.equal(rpcRequest.headers.get("Content-Profile"), "public");
+  assert.equal(rpcRequest.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(rpcRequest.headers.get("Content-Profile"), "afuchat");
   assert.deepEqual(await rpcRequest.json(), { other_user_id: otherUserId });
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { chat_id: chatId });
@@ -1486,24 +1484,28 @@ test("direct conversation creation rejects an invalid contact ID without queryin
   assert.equal(databaseCalls, 0);
 });
 
-test("conversation endpoint fails closed for an unexposed database schema", async () => {
+test("conversation endpoint ignores obsolete schema configuration and stays on afuchat", async () => {
   const env = makeEnv();
-  env.AFUCHAT_DATABASE_SCHEMA = "afuchat";
-  let authCalls = 0;
-  env.AFUAUTH_API.fetch = async () => {
-    authCalls += 1;
-    return Response.json({});
+  env.AFUCHAT_DATABASE_SCHEMA = "public";
+  const token = "same-supabase-session";
+  env.AFUAUTH_API.fetch = async () =>
+    Response.json({ user: { id: "user-123" }, accessToken: token });
+  let rpcRequest;
+  globalThis.fetch = async (input, init) => {
+    rpcRequest = input instanceof Request ? input : new Request(input, init);
+    return Response.json([]);
   };
 
   const response = await worker.fetch(
     new Request("https://api.afuchat.com/v1/chat/conversations", {
-      headers: { Authorization: "Bearer valid-session" },
+      headers: { Authorization: `Bearer ${token}` },
     }),
     env,
   );
 
-  assert.equal(response.status, 503);
-  assert.equal(authCalls, 0);
+  assert.equal(response.status, 200);
+  assert.equal(rpcRequest.headers.get("Accept-Profile"), "afuchat");
+  assert.equal(rpcRequest.headers.get("Content-Profile"), "afuchat");
 });
 
 test("conversation endpoint sanitizes upstream database errors", async () => {
@@ -2361,7 +2363,7 @@ test("saving a starred message derives the saved owner and message fields server
       }]);
     }
     if (path.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
       return Response.json([{ id: senderId, display_name: "Sender", avatar_url: null }]);
     }
     if (path.endsWith("/starred_messages")) return new Response(null, { status: 201 });
@@ -2557,7 +2559,7 @@ test("post detail preserves post, image, and shared account profile response sha
   assert.equal(payload.post.id, postId);
   assert.equal(payload.post.profiles.id, authorId);
   assert.equal(payload.post.post_images[0].image_url, "https://example.test/a.jpg");
-  assert.equal(requests[2].headers.get("Accept-Profile"), "accounts");
+  assert.equal(requests[2].headers.get("Accept-Profile"), "afuchat");
   assert.equal(requests[2].headers.get("Authorization"), `Bearer ${token}`);
 });
 
@@ -2775,7 +2777,7 @@ test("post replies return shared profiles, like counts, and the signed-in user's
     handle: "reply-author",
     avatar_url: "https://example.test/avatar.jpg",
   });
-  assert.equal(requests[1].headers.get("Accept-Profile"), "accounts");
+  assert.equal(requests[1].headers.get("Accept-Profile"), "afuchat");
   assert.equal(new URL(requests[2].url).searchParams.get("reply_id"), `in.(${replyId})`);
   assert.equal(new URL(requests[3].url).searchParams.get("user_id"), `eq.${userId}`);
 });
@@ -3020,7 +3022,7 @@ test("follow lists honor account-profile privacy before reading relationships", 
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     requests.push(request);
-    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: profileId,
       hide_followers_list: true,
@@ -3041,7 +3043,7 @@ test("follow lists honor account-profile privacy before reading relationships", 
   assert.equal(requests.length, 1);
 });
 
-test("follow lists hydrate relationship rows from the shared accounts profile source", async () => {
+test("follow lists hydrate relationship rows from afuchat profiles", async () => {
   const token = "follow-list-session";
   const userId = "123e4567-e89b-42d3-a456-426614174099";
   const profileId = "123e4567-e89b-42d3-a456-426614174123";
@@ -3054,7 +3056,7 @@ test("follow lists hydrate relationship rows from the shared accounts profile so
     const request = new Request(input, init);
     requests.push(request);
     const url = new URL(request.url);
-    if (url.pathname.endsWith("/profiles") && request.headers.get("Accept-Profile") === "accounts") {
+    if (url.pathname.endsWith("/profiles") && request.headers.get("Accept-Profile") === "afuchat") {
       if (url.searchParams.get("select")?.includes("hide_followers_list")) {
         return Response.json([{
           id: profileId,
@@ -3129,7 +3131,7 @@ test("follow lists fail explicitly when a relationship profile cannot be hydrate
     const url = new URL(request.url);
     if (
       url.pathname.endsWith("/profiles") &&
-      request.headers.get("Accept-Profile") === "accounts"
+      request.headers.get("Accept-Profile") === "afuchat"
     ) {
       if (url.searchParams.get("select")?.includes("hide_followers_list")) {
         return Response.json([{
@@ -3236,7 +3238,7 @@ test("for-you feed keeps its server-backed streams and hydrates the original ran
       return Response.json([]);
     }
     if (url.pathname.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
       return Response.json([{
         id: authorId,
         display_name: "Author",
@@ -3419,7 +3421,7 @@ test("post search only returns public results and hydrates account profiles and 
       }]);
     }
     if (url.pathname.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
       return Response.json([{
         id: authorId,
         display_name: "Clip author",
@@ -3526,7 +3528,7 @@ test("video following feed enforces visibility and hydrates counts from the shar
       }]);
     }
     if (url.pathname.endsWith("/profiles")) {
-      assert.equal(request.headers.get("Accept-Profile"), "accounts");
+      assert.equal(request.headers.get("Accept-Profile"), "afuchat");
       return Response.json([{
         id: authorId,
         display_name: "Following creator",
@@ -3657,7 +3659,7 @@ test("Discover active people requires the verified account and redacts hidden pr
         show_online_status: false,
       }]);
     }
-    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: personId,
       display_name: "Visible person",
@@ -3713,7 +3715,7 @@ test("Discover suggested people excludes self and followed accounts with privacy
         { id: suggestedId, display_name: "Suggestion", handle: "suggestion" },
       ]);
     }
-    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: suggestedId,
       display_name: "Suggestion",
@@ -3775,7 +3777,7 @@ test("Discover directory returns relationship counts through the authenticated p
         last_seen: null,
       }]);
     }
-    assert.equal(request.headers.get("Accept-Profile"), "accounts");
+    assert.equal(request.headers.get("Accept-Profile"), "afuchat");
     return Response.json([{
       id: personId,
       display_name: "Directory person",
@@ -3950,7 +3952,7 @@ test("Discover follow-state reads return the signed-in user's followers and foll
     const request = new Request(input, init);
     const url = new URL(request.url);
     assert.equal(request.headers.get("Authorization"), `Bearer ${token}`);
-    if (request.headers.get("Accept-Profile") === "accounts") {
+    if (request.headers.get("Accept-Profile") === "afuchat") {
       assert.equal(url.searchParams.get("id"), `eq.${viewerId}`);
       return Response.json([{
         id: viewerId,

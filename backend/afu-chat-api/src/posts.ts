@@ -538,7 +538,7 @@ export async function handleSearchPosts(request: Request, env: Env): Promise<Res
           auth.session,
           auth.anonKey,
           undefined,
-          "accounts",
+          "afuchat",
         )
       : Promise.resolve({ ok: true as const, data: [] as Record<string, unknown>[] }),
     assetIds.length
@@ -696,7 +696,7 @@ export async function handleGetPost(request: Request, env: Env, postId: string):
       auth.session,
       auth.anonKey,
       undefined,
-      "accounts",
+      "afuchat",
     ),
     restRequest<Record<string, unknown>[]>(
       makeUrl(auth.base, "post_acknowledgments", {
@@ -1092,7 +1092,7 @@ export async function handlePostSubroute(
       auth.session,
       auth.anonKey,
       undefined,
-      "accounts",
+      "afuchat",
     ),
     restRequest<Record<string, unknown>[]>(
       makeUrl(auth.base, "post_reply_likes", {

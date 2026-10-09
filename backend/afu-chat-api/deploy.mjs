@@ -610,7 +610,9 @@ if (
 ) {
   throw new Error("The existing AFUAUTH_API binding points to an unexpected Worker.");
 }
-const chatBindings = bindings.map((binding) => ({ ...binding }));
+const chatBindings = bindings
+  .filter((binding) => binding.name !== "AFUCHAT_DATABASE_SCHEMA")
+  .map((binding) => ({ ...binding }));
 const assetsBinding = chatBindings.find((binding) => binding.name === "AFUCHAT_ASSETS");
 if (!assetsBinding || assetsBinding.type !== "r2_bucket") {
   throw new Error("The AfuChat assets bucket binding is missing or invalid.");
@@ -627,7 +629,6 @@ if (!authServiceBinding) {
 for (const [name, text] of [
   ["SUPABASE_URL", SUPABASE_URL],
   ["SUPABASE_ANON_KEY", SUPABASE_ANON_KEY],
-  ["AFUCHAT_DATABASE_SCHEMA", "public"],
 ]) {
   const binding = chatBindings.find((item) => item.name === name);
   if (binding && binding.type !== "plain_text") {
@@ -635,10 +636,6 @@ for (const [name, text] of [
   }
   if (binding) binding.text = text;
   else chatBindings.push({ type: "plain_text", name, text });
-}
-const databaseSchemaBinding = chatBindings.find((binding) => binding.name === "AFUCHAT_DATABASE_SCHEMA");
-if (databaseSchemaBinding?.text !== "public") {
-  throw new Error("The AfuChat database schema binding could not be set to public.");
 }
 const apiSettings = {
   ...settings,

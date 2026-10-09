@@ -195,7 +195,7 @@ export async function handleGetContactProfile(
       id: `eq.${profileId}`,
       limit: "2",
     }),
-    "accounts",
+    "afuchat",
   );
   if (!profileResult.ok || !Array.isArray(profileResult.data)) {
     logFailure("contact profile lookup", context, profileResult);

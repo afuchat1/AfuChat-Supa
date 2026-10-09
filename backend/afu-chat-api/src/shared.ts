@@ -1,7 +1,6 @@
 export interface Env {
   AFUCHAT_SUPABASE_URL?: string;
   AFUCHAT_SUPABASE_ANON_KEY?: string;
-  AFUCHAT_DATABASE_SCHEMA?: string;
   SUPABASE_URL?: string;
   SUPABASE_ANON_KEY?: string;
   SUPABASE_SERVICE_KEY?: string;

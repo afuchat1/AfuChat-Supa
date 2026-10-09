@@ -289,7 +289,7 @@ export async function handleStarredMessage(
       limit: "2",
     });
     const profileHeaders = new Headers(authHeaders);
-    profileHeaders.set("Accept-Profile", "accounts");
+    profileHeaders.set("Accept-Profile", "afuchat");
     const profileResponse = await fetch(profileUrl, {
       method: "GET",
       headers: profileHeaders,

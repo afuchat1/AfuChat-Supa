@@ -178,7 +178,7 @@ export default function ContactsScreen() {
       .channel(`contacts-realtime:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "follows", filter: `follower_id=eq.${user.id}` },
+        { event: "*", schema: "afuchat", table: "follows", filter: `follower_id=eq.${user.id}` },
         () => loadContacts(true)
       )
       .subscribe();

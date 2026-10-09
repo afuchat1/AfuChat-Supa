@@ -414,10 +414,10 @@ const DISCOVER_STORY_CACHE_KEY = "@afuchat:discover_story_list";
 
     const rt = supabase
       .channel("stories-discover-row")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stories" }, () => {
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "stories" }, () => {
         loadDiscoverStories();
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "stories" }, () => {
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "stories" }, () => {
         loadDiscoverStories();
       })
       .subscribe();
@@ -2323,11 +2323,11 @@ export default function DiscoverScreen() {
 
     const channel = supabase
       .channel("discover-posts-realtime")
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" }, (payload: any) => {
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "posts" }, (payload: any) => {
         const deletedId = payload.old?.id;
         if (deletedId) queueRealtimePatch(deletedId, { deleted: true });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
+      .on("postgres_changes", { event: "*", schema: "afuchat", table: "post_acknowledgments" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId) return;
         const evType = payload.eventType;
@@ -2337,7 +2337,7 @@ export default function DiscoverScreen() {
         const delta = evType === "INSERT" ? 1 : -1;
         queueRealtimePatch(postId, { likeDelta: delta });
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
+      .on("postgres_changes", { event: "*", schema: "afuchat", table: "post_replies" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId) return;
         const evType = payload.eventType;
@@ -2346,14 +2346,14 @@ export default function DiscoverScreen() {
           queueRealtimePatch(postId, { replyDelta: delta });
         }
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows" }, (payload: any) => {
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "follows" }, (payload: any) => {
         const followerId = payload.new?.follower_id;
         const followingId = payload.new?.following_id;
         if (followerId === user?.id && followingId) {
           queueRealtimePatch(`author:${followingId}`, { authorId: followingId, following: true });
         }
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "follows" }, (payload: any) => {
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "follows" }, (payload: any) => {
         const followerId = payload.old?.follower_id;
         const followingId = payload.old?.following_id;
         if (followerId === user?.id && followingId) {

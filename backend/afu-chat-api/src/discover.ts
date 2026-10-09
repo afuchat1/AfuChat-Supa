@@ -196,7 +196,7 @@ async function hydrateSharedProfiles(
     }),
     "GET",
     undefined,
-    "accounts",
+    "afuchat",
   );
   if (!result.ok || !Array.isArray(result.data)) {
     logFailure(label, context, result);
@@ -496,7 +496,7 @@ export async function handleDiscoverLocation(request: Request, env: Env): Promis
     profileUrl,
     "GET",
     undefined,
-    "accounts",
+    "afuchat",
   );
   if (!profile.ok || !Array.isArray(profile.data)) {
     logFailure("Discover location preference", context, profile);
@@ -522,7 +522,7 @@ export async function handleDiscoverLocation(request: Request, env: Env): Promis
       longitude: payload.longitude,
       location_updated_at: now,
     },
-    "accounts",
+    "afuchat",
   );
   if (!update.ok || !Array.isArray(update.data) || update.data.length !== 1) {
     logFailure("Discover location update", context, update);

@@ -325,7 +325,7 @@ export default function MeScreen() {
       if (cancelled || channel || !isOnline()) return;
       channel = supabase
         .channel(`me-stats:${user.id}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "follows", filter: `following_id=eq.${user.id}` }, () =>
+        .on("postgres_changes", { event: "*", schema: "afuchat", table: "follows", filter: `following_id=eq.${user.id}` }, () =>
           void (async () => {
             try {
               const { data, error } = await getAfuChatFollowSummary(user.id);
@@ -335,7 +335,7 @@ export default function MeScreen() {
             } catch {}
           })()
         )
-        .on("postgres_changes", { event: "*", schema: "public", table: "follows", filter: `follower_id=eq.${user.id}` }, () =>
+        .on("postgres_changes", { event: "*", schema: "afuchat", table: "follows", filter: `follower_id=eq.${user.id}` }, () =>
           void (async () => {
             try {
               const { data, error } = await getAfuChatFollowSummary(user.id);
@@ -345,7 +345,7 @@ export default function MeScreen() {
             } catch {}
           })()
         )
-        .on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `author_id=eq.${user.id}` }, () =>
+        .on("postgres_changes", { event: "*", schema: "afuchat", table: "posts", filter: `author_id=eq.${user.id}` }, () =>
           void (async () => {
             try {
               const { totalCount, error } = await getAfuChatMyPosts();

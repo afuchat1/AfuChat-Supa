@@ -39,7 +39,6 @@ export async function fetchAccountProfileMap<T extends { id: string } = SharedPr
   }
 
   const { data, error } = await supabase
-    .schema("accounts")
     .from("profiles")
     .select(columns)
     .in("id", uniqueIds);

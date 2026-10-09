@@ -515,7 +515,7 @@ export default function UserDiscoveryScreen() {
         .channel("nearby-location-updates")
         .on(
           "postgres_changes",
-          { event: "UPDATE", schema: "public", table: "profiles" },
+          { event: "UPDATE", schema: "afuchat", table: "profiles" },
           (payload: any) => {
             // Only reload when a user's coordinates or sharing flag changed.
             const n = payload.new as any;

@@ -205,7 +205,7 @@ async function hydrateProfiles(
       id: `in.(${ids.join(",")})`,
     }),
     "GET",
-    { schema: "accounts" },
+    { schema: "afuchat" },
   );
   if (!result.ok || !Array.isArray(result.data)) {
     logFailure("follow profile lookup", context, result);
@@ -232,7 +232,7 @@ async function canListProfileFollowData(
       limit: "2",
     }),
     "GET",
-    { schema: "accounts" },
+    { schema: "afuchat" },
   );
   if (!profileResult.ok || !Array.isArray(profileResult.data)) {
     logFailure("follow list privacy lookup", context, profileResult);

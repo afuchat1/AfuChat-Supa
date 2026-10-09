@@ -110,7 +110,7 @@ import {
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { getLocalMessages, saveMessages, savePendingMessage, deleteAllLocalMessages, markMessageRead } from "@/lib/storage/localMessages";
+import { savePendingMessage, deleteAllLocalMessages, markMessageRead } from "@/lib/storage/localMessages";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
 import {
@@ -125,7 +125,6 @@ import {
 } from "@/lib/storage/localNotes";
 import { LinkPreview } from "@/components/ui/LinkPreview";
 import { getPhonebookName } from "@/lib/storage/localContacts";
-import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
 import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
@@ -194,7 +193,6 @@ async function markSystemChatRead(
   userId: string,
   options: { notifications: boolean; afuAi: boolean },
 ): Promise<void> {
-  await clearUnread(chatId);
   if (options.afuAi) {
     // Older installs may still have the synthetic local AfuAI conversation.
     await clearAIUnread();
@@ -2322,7 +2320,7 @@ function ChatScreen() {
       .channel(policyChannelName)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "chat_preferences" },
+        { event: "UPDATE", schema: "afuchat", table: "chat_preferences" },
         refreshPolicy,
       )
       .subscribe();
@@ -2336,6 +2334,7 @@ function ChatScreen() {
 
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messageLoadError, setMessageLoadError] = useState<string | null>(null);
   const [senderRingMap, setSenderRingMap] = useState<Map<string, 'crown'|'void'|'diamond'>>(new Map());
 
   useEffect(() => {
@@ -2537,8 +2536,8 @@ function ChatScreen() {
   const [addMemberAdding, setAddMemberAdding] = useState(false);
   const [existingMemberIds, setExistingMemberIds] = useState<Set<string>>(new Set());
 
-  // Load chatInfo from local SQLite cache immediately so the header renders
-  // without any network delay, even if nav params weren't passed.
+  // My Notes is the only conversation with device-local metadata. Server chat
+  // headers are resolved from the authenticated AfuChat route/API data.
   useEffect(() => {
     if (isDraft || chatInfo) return;
     if (isLocalNotesId(id)) {
@@ -2558,28 +2557,7 @@ function ChatScreen() {
           other_show_online_status: false,
         });
       }).catch(() => {});
-      return;
     }
-    getLocalConversation(id).then((local) => {
-      if (!local) return;
-      setChatInfo((prev) => prev ?? {
-        is_group: local.is_group,
-        is_channel: local.is_channel,
-        name: local.name,
-        other_name: local.other_display_name || "Unknown",
-        other_avatar: local.other_avatar,
-        other_id: local.other_id || "",
-        member_ids: local.other_id ? [local.other_id] : [],
-        avatar_url: local.avatar_url,
-        channel_owner_id: local.is_channel && local.created_by === user?.id ? (user?.id ?? null) : null,
-        channel_role: local.is_channel
-          ? (local.created_by === user?.id ? "owner" : "member")
-          : undefined,
-        channel_is_member: local.is_channel ? true : undefined,
-        other_last_seen: local.other_last_seen,
-        other_show_online_status: local.other_show_online,
-      });
-    }).catch(() => {});
   }, [id, isDraft, chatInfo, user?.id]);
 
   const [floatingInputHeight, setFloatingInputHeight] = useState(80);
@@ -3019,97 +2997,44 @@ function ChatScreen() {
       return;
     }
 
-    // ── Load from local SQLite cache first (instant render, no network) ──
-    let cachedMessageCount = 0;
-    {
-      // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
-      // must be the NEWEST message. Reverse to get newest-first.
-      const clearedAt = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
-      const allCached = await getLocalMessages(chatId, 5000);
-      if (!isCurrentLoad()) return;
-      const cached = clearedAt ? allCached.filter((m) => m.sent_at > clearedAt) : allCached;
-      cachedMessageCount = cached.length;
-      if (cached.length > 0) {
-        const newestFirst = [...cached].reverse();
-        setMessages(newestFirst.map((m) => ({
-          id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
-          encrypted_content: m.content ?? "", sent_at: m.sent_at,
-          reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
-          attachment_type: m.attachment_type, edited_at: m.edited_at,
-          status: m.status as any, reactions: [], _pending: m.is_pending,
-        })));
-        setLoading(false);
-        // Seed the pagination cursor from the OLDEST cached message.
-        if (!oldestCursorRef.current) {
-          oldestCursorRef.current = cached[0].sent_at;
-          setHasMore(true);
-        }
-        // Only pre-download recent attachments. Downloading the entire local
-        // history on every chat open can create a large background burst.
-        autoDownloadChatAttachments(cached.slice(-100).map((m) => ({
-          attachment_url: m.attachment_url,
-          attachment_type: m.attachment_type,
-          encrypted_content: m.content ?? "",
-        })), {
-          autoDownloadPref: chatPrefs.auto_download ? "wifi_only" : "never",
-          saveToGallery: chatPrefs.save_to_gallery,
-        });
-        // Background: refresh reactions for cached messages so they reappear after navigation.
-        const cachedIds = cached.map((m) => m.id).filter((cid) => !cid.startsWith("pending"));
-        if (cachedIds.length > 0) {
-          void getAfuChatMessageReactions(cachedIds).then(({ data: cacheReactions }) => {
-             if (!isCurrentLoad()) return;
-            if (!cacheReactions || cacheReactions.length === 0) return;
-            const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
-            for (const r of cacheReactions as any[]) {
-              if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
-              const existing = reactionMap[r.message_id].find((x) => x.emoji === r.reaction);
-              if (existing) { existing.count++; if (r.user_id === user.id) existing.myReaction = true; }
-              else reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
-            }
-            const cachedIdSet = new Set(cachedIds);
-            setMessages((prev) => prev.map((m) => {
-              if (!cachedIdSet.has(m.id) || !reactionMap[m.id]) return m;
-              return { ...m, reactions: reactionMap[m.id] };
-            }));
-          });
-        }
-      }
-
-      // If offline on native: show cached messages only, do not attempt network.
-      if (!isOnline()) {
-        if (cached.length === 0) setLoading(false);
-        return;
-      }
+    setMessageLoadError(null);
+    setLoading(true);
+    if (!isOnline()) {
+      setMessages([]);
+      setMessageLoadError("Connect to the internet to load this conversation from AfuChat.");
+      setLoading(false);
+      return;
     }
 
-    // Reconcile the latest server page on every open. A local newest-message
-    // cursor can skip server rows if the device cache is incomplete.
-    const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
-    if (!isCurrentLoad()) return;
-    const { data: rawData, error: messageLoadError } = await getAfuChatMessages({
-      chatId,
-      limit: 100,
-      ...(clearedAtServer ? { after: clearedAtServer } : {}),
-    });
-      if (!isCurrentLoad()) return;
-      if (messageLoadError || !rawData) {
-        console.warn("[Chat] message history request failed", messageLoadError?.message);
-        if (cachedMessageCount === 0) setLoading(false);
-        return;
+    let data: any[] = [];
+    try {
+      const result = await getAfuChatMessages({ chatId, limit: 100 });
+      if (result.error) throw result.error;
+      if (!Array.isArray(result.data)) {
+        throw new Error("The AfuChat API returned no message result.");
       }
-      let data = rawData;
-      if (rawData && rawData.length > 0) {
-        const { profiles } = await fetchAccountProfileMap(
-          rawData.map((message: any) => message.sender_id),
+      data = result.data;
+      if (data.length > 0) {
+        const profileResult = await fetchAccountProfileMap(
+          data.map((message: any) => message.sender_id),
           ACCOUNT_PROFILE_CHAT_COLUMNS,
         );
-        if (!isCurrentLoad()) return;
-        data = rawData.map((message: any) => ({
+        if (profileResult.error) throw profileResult.error;
+        data = data.map((message: any) => ({
           ...message,
-          profiles: profiles.get(message.sender_id) || null,
+          profiles: profileResult.profiles.get(message.sender_id) ?? null,
         }));
       }
+    } catch (error) {
+      if (!isCurrentLoad()) return;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[Chat] authoritative message load failed", message);
+      setMessages([]);
+      setMessageLoadError(message || "The AfuChat message query failed.");
+      setLoading(false);
+      return;
+    }
+    if (!isCurrentLoad()) return;
 
     if (data) {
       const msgIds = data.map((m: any) => m.id);
@@ -3150,39 +3075,14 @@ function ChatScreen() {
       });
 
       // Display new messages the instant we have them — reactions paint after.
-      setMessages((prev) => {
-        if (mapped.length === 0) return prev;
-        const serverIds = new Set(mapped.map((m: any) => m.id));
-        const notInServer = prev.filter((m) =>
-          !serverIds.has(m.id) &&
-          !mapped.some((serverMessage: Message) => isOptimisticMatch(m, serverMessage))
-        );
-        const previousById = new Map(prev.map((m) => [m.id, m]));
-        // A status write can be in flight while this refresh is running. Keep
-        // the locally visible receipt until the server response catches up;
-        // otherwise the fast server payload briefly downgrades read → sent.
-        const merged = mapped.map((m: any) => {
-          const previous = previousById.get(m.id);
-          return previous
-            ? {
-                ...m,
-                status: previous.status ?? m.status,
-                read_at: previous.read_at ?? m.read_at,
-                delivered_at: previous.delivered_at ?? m.delivered_at,
-              }
-            : m;
-        });
-        return [...merged, ...notInServer].sort(
-          (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
-        );
-      });
+      setMessages([...mapped].sort(
+        (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+      ));
 
-      saveMessages(chatId, mapped).catch(() => {});
       autoDownloadChatAttachments(mapped.slice(0, 50), {
         autoDownloadPref: chatPrefs.auto_download ? "wifi_only" : "never",
         saveToGallery: chatPrefs.save_to_gallery,
       });
-      clearUnread(chatId).catch(() => {});
 
       if (!oldestCursorRef.current) {
         oldestCursorRef.current = data.length > 0 ? data[data.length - 1].sent_at : null;
@@ -3666,7 +3566,7 @@ function ChatScreen() {
 
     const msgSub = supabase
       .channel(`chat:${activeChatId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `chat_id=eq.${activeChatId}` },
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "messages", filter: `chat_id=eq.${activeChatId}` },
         async (payload) => {
           if (!isCurrentSubscription()) return;
           const newMsg = payload.new as any;
@@ -3788,7 +3688,7 @@ function ChatScreen() {
         }
       )
       // Real-time reaction sync — someone added a reaction
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_reactions" },
+      .on("postgres_changes", { event: "INSERT", schema: "afuchat", table: "message_reactions" },
         (payload) => {
           if (!isCurrentSubscription()) return;
           const r = payload.new as any;
@@ -3809,7 +3709,7 @@ function ChatScreen() {
         }
       )
       // Real-time reaction sync — someone removed a reaction
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "message_reactions" },
+      .on("postgres_changes", { event: "DELETE", schema: "afuchat", table: "message_reactions" },
         (payload) => {
           if (!isCurrentSubscription()) return;
           const r = payload.old as any;
@@ -3863,7 +3763,7 @@ function ChatScreen() {
       .channel(topic)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "channel_subscriptions", filter: `channel_id=eq.${id}` },
+        { event: "INSERT", schema: "afuchat", table: "channel_subscriptions", filter: `channel_id=eq.${id}` },
         (payload: any) => {
           if (payload.new?.user_id !== user.id) return;
           setChatInfo((prev) => prev ? {
@@ -3878,7 +3778,7 @@ function ChatScreen() {
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "channel_subscriptions", filter: `channel_id=eq.${id}` },
+        { event: "DELETE", schema: "afuchat", table: "channel_subscriptions", filter: `channel_id=eq.${id}` },
         (payload: any) => {
           if (payload.old?.user_id !== user.id) return;
           setChatInfo((prev) => {
@@ -4027,7 +3927,7 @@ function ChatScreen() {
       .channel(`msg-status-watch:${id}:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "message_status" },
+        { event: "INSERT", schema: "afuchat", table: "message_status" },
         (payload: any) => {
           const { message_id, user_id: actorId, delivered_at, read_at } = payload.new || {};
           if (!message_id || actorId === user.id) return; // ignore my own receipts
@@ -4044,7 +3944,7 @@ function ChatScreen() {
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "message_status" },
+        { event: "UPDATE", schema: "afuchat", table: "message_status" },
         (payload: any) => {
           const { message_id, user_id: actorId, delivered_at, read_at } = payload.new || {};
           if (!message_id || actorId === user.id) return;
@@ -4077,7 +3977,7 @@ function ChatScreen() {
       .channel(`presence-watch:${id}:${otherId}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${otherId}` },
+        { event: "UPDATE", schema: "afuchat", table: "profiles", filter: `id=eq.${otherId}` },
         (payload) => {
           const updated = payload.new as any;
           if (updated?.last_seen) {
@@ -4747,6 +4647,13 @@ function ChatScreen() {
   async function handleClearChatMessages() {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user) return;
+    if (!isLocalNotesId(chatId)) {
+      showAlert(
+        "Clear Chat Unavailable",
+        "Chat history is read from AfuChat. No server-side clear operation is configured, so no data was changed.",
+      );
+      return;
+    }
     const isGroupOrChannel = chatInfo?.is_group || chatInfo?.is_channel;
     const subtitle = isGroupOrChannel
           ? "This clears the chat for you only. Other members won't be affected. This cannot be undone."
@@ -4759,15 +4666,8 @@ function ChatScreen() {
         onPress: async () => {
           setShowChatOptions(false);
           try {
-            const clearedAt = new Date().toISOString();
-            await AsyncStorage.setItem(`chat_cleared_${user.id}_${chatId}`, clearedAt);
+            await clearLocalNotesMessages(user.id);
             await deleteAllLocalMessages(chatId);
-            if (isLocalNotesId(chatId)) {
-              await clearLocalNotesMessages(user.id);
-            }
-            if (chatInfo?.other_id === AFUAI_BOT_ID) {
-              try { await supabase.rpc("clear_afuai_chat", { p_chat_id: chatId }); } catch {}
-            }
             setMessages([]);
           } catch {
             showAlert("Error", "Could not clear chat. Please try again.");
@@ -7679,6 +7579,20 @@ STRICT RULES:
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {loading ? (
           <ChatLoadingSkeleton />
+        ) : messageLoadError ? (
+          <View style={[st.emptyState, { paddingBottom: floatingInputHeight + 16 }]}>
+            <Ionicons name="cloud-offline-outline" size={42} color={BRAND} />
+            <Text style={[st.emptyTitle, { color: colors.text, marginTop: 12 }]}>Couldn't load messages</Text>
+            <Text style={[st.emptySub, { color: colors.textMuted }]}>{messageLoadError}</Text>
+            <TouchableOpacity
+              onPress={() => void loadMessages()}
+              style={{ marginTop: 16, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, backgroundColor: BRAND }}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading messages"
+            >
+              <Text style={{ color: "#fff", fontWeight: "600" }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         ) : messages.length === 0 ? (
           <View style={[st.emptyState, { paddingBottom: floatingInputHeight + 16 }]}>
             {isSelfChat ? (
