@@ -1,0 +1,23 @@
+Update the AfuChat application to use the existing AfuChat API gateway at "https://api.afuchat.com".
+
+Strict requirements:
+
+1. Use the "afuchat" database schema for all AfuChat application tables, queries, mutations, and RPC calls. Do not use the "public" schema as a replacement or compatibility layer.
+2. Route all AfuChat API requests through the existing API gateway. Do not connect application features directly to Supabase REST endpoints to bypass the gateway.
+3. Keep all AfuChat API routes under "/v1/chat/...". Do not introduce alternative route structures such as "/v1/user/..." or duplicate existing endpoints.
+4. Ensure database requests are actually executed against the "afuchat" schema on the server side. Changing request headers alone is not sufficient if the database API does not expose or support that schema.
+5. Preserve existing authentication, authorization, user sessions, profile fetching, and application functionality.
+6. Use the existing shared Afu authentication system and follow the current API gateway architecture. Do not create duplicate authentication systems or unnecessary endpoints.
+7. Return clean, consistent API responses. Never expose internal Cloudflare Worker names, internal routing details, stack traces, implementation details, or infrastructure configuration in client-facing errors.
+8. Do not create duplicate Workers, APIs, database schemas, tables, or routes when an existing resource should be updated.
+9. Keep the changes focused on the actual issue. Do not break existing API paths or other Afu ecosystem products.
+
+Before completing the work:
+
+- Inspect the existing implementation and identify every AfuChat request that uses the wrong schema or bypasses the gateway.
+- Fix the server-side database routing so requests correctly target "afuchat".
+- Verify table queries, inserts, updates, deletes, RPC calls, and profile fetching.
+- Test authentication and the affected production API routes.
+- Report the files changed, the root cause, the fixes implemented, and the actual test results.
+
+Do not claim that the issue is fixed unless the relevant tests pass. Do not replace the existing architecture with a new one.
