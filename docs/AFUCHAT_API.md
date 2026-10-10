@@ -36,6 +36,7 @@ for AfuChat data.
 
 | Method and path | Purpose and inputs | Authentication | Response |
 |---|---|---|---|
+| `GET`, `HEAD /v1/chat` | Public AfuChat namespace root for base-URL checks. | Public. | `200 { product: "afuchat", status: "ok", version: "v1" }`; `OPTIONS` returns the normal CORS preflight. |
 | `GET /v1/chat/healthz` | Public API health check. | Public. | `200 { product: "afuchat", status: "ok", version: "v1" }`; no Worker or infrastructure identifiers are returned. |
 | `GET`, `POST /v1/chat/status` | Checks service health without returning provider or database details. The mobile status screen uses `GET`. | Public. | `200 { ok, timestamp }`; `ok` is false if the health check fails. |
 

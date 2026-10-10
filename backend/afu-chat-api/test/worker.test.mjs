@@ -84,6 +84,35 @@ test("chat health endpoint is public", async () => {
   assert.deepEqual(payload, { product: "afuchat", status: "ok", version: "v1" });
 });
 
+test("AfuChat namespace root returns public health instead of falling through", async () => {
+  for (const path of ["/v1/chat", "/v1/chat/"]) {
+    const response = await worker.fetch(
+      new Request(`https://api.afuchat.com${path}`),
+      makeEnv(),
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      product: "afuchat",
+      status: "ok",
+      version: "v1",
+    });
+  }
+
+  const head = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat", { method: "HEAD" }),
+    makeEnv(),
+  );
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+
+  const post = await worker.fetch(
+    new Request("https://api.afuchat.com/v1/chat", { method: "POST" }),
+    makeEnv(),
+  );
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.get("Allow"), "GET, HEAD, OPTIONS");
+});
+
 test("mobile PostgREST reads use the fixed AfuChat data gateway and keep user RLS", async () => {
   const requests = [];
   globalThis.fetch = async (input, init) => {
@@ -433,6 +462,8 @@ test("AfuChat API router serves only API namespaces, leaving CDN delivery to afu
   const router = createAfuChatWorkerRouter(chatApi, legacyApi);
 
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/storage/usage"), {}, {});
+  await router.fetch(new Request("https://api.afuchat.com/v1/chat"), {}, {});
+  await router.fetch(new Request("https://api.afuchat.com/v1/chat/"), {}, {});
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/conversations"), {}, {});
   await router.fetch(new Request("https://api.afuchat.com/v1/chat/me"), {}, {});
   const oldApiPath = await router.fetch(
@@ -458,6 +489,8 @@ test("AfuChat API router serves only API namespaces, leaving CDN delivery to afu
 
   assert.deepEqual(calls, [
     { handler: "media", path: "/chat/v1/storage/usage" },
+    { handler: "chat", path: "/v1/chat" },
+    { handler: "chat", path: "/v1/chat/" },
     { handler: "chat", path: "/v1/chat/conversations" },
     { handler: "chat", path: "/v1/chat/me" },
   ]);

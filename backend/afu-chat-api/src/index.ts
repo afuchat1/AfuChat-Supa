@@ -828,6 +828,36 @@ async function handleApiRequest(request: Request, env: Env): Promise<Response> {
     );
   }
 
+  if (incoming.pathname === PREFIX || incoming.pathname === `${PREFIX}/`) {
+    if (request.method === "GET") {
+      return jsonResponse(
+        request,
+        requestId,
+        { product: "afuchat", status: "ok", version: "v1" },
+        200,
+      );
+    }
+    if (request.method === "HEAD") {
+      return new Response(null, {
+        status: 200,
+        headers: responseHeaders(request, requestId),
+      });
+    }
+    const response = privateJsonResponse(
+      request,
+      requestId,
+      { error: "Method not allowed", request_id: requestId },
+      405,
+    );
+    const headers = new Headers(response.headers);
+    headers.set("Allow", "GET, HEAD, OPTIONS");
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+
   if (incoming.pathname === `${PREFIX}/status`) {
     if (request.method === "GET" || request.method === "POST") {
       return handleStatus(request, env);

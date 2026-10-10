@@ -11,6 +11,7 @@ const ZONE_NAME = "afuchat.com";
 const PREVIOUS_CHAT_ASSETS_BUCKET = "afu-chat-assets";
 const CHAT_ASSETS_BUCKET = "afuchat-media";
 const REQUIRED_ROUTES = [
+  "api.afuchat.com/v1/chat",
   "api.afuchat.com/v1/chat/*",
 ];
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
@@ -241,19 +242,29 @@ async function waitForChatHealth() {
       const appStatus = await fetch("https://api.afuchat.com/v1/chat/status");
       const appStatusBody = await appStatus.json().catch(() => null);
       if (appStatus.status === 200 && appStatusBody?.ok === true) {
+        const namespaceRoot = await fetch("https://api.afuchat.com/v1/chat");
+        const namespaceBody = await namespaceRoot.json().catch(() => null);
+        if (
+          namespaceRoot.status === 200 &&
+          namespaceBody?.product === "afuchat" &&
+          namespaceBody?.status === "ok"
+        ) {
         // Health, status, and /me are also served by older Worker versions.
         // Wait for this batch's protected Discover route so an old 401 cannot
         // make the smoke checks race ahead of route propagation.
-        const activePeople = await fetch(
-          "https://api.afuchat.com/v1/chat/discover/people?mode=active",
-        );
-        lastStatus = activePeople.status;
-        if (activePeople.status === 401) {
-          const dataGateway = await fetch(
-            "https://api.afuchat.com/v1/chat/data/profiles",
+          const activePeople = await fetch(
+            "https://api.afuchat.com/v1/chat/discover/people?mode=active",
           );
-          lastStatus = dataGateway.status;
-          if (dataGateway.status === 401) return;
+          lastStatus = activePeople.status;
+          if (activePeople.status === 401) {
+            const dataGateway = await fetch(
+              "https://api.afuchat.com/v1/chat/data/profiles",
+            );
+            lastStatus = dataGateway.status;
+            if (dataGateway.status === 401) return;
+          }
+        } else {
+          lastStatus = namespaceRoot.status;
         }
       } else {
         lastStatus = appStatus.status;
@@ -278,6 +289,16 @@ async function assertProductionPostflight() {
     appStatusBody?.ok !== true
   ) {
     throw new Error(`AfuChat status check failed (HTTP ${appStatus.status}).`);
+  }
+
+  const namespaceRoot = await fetch("https://api.afuchat.com/v1/chat");
+  const namespaceBody = await namespaceRoot.json().catch(() => null);
+  if (
+    namespaceRoot.status !== 200 ||
+    namespaceBody?.product !== "afuchat" ||
+    namespaceBody?.status !== "ok"
+  ) {
+    throw new Error(`AfuChat namespace root failed (HTTP ${namespaceRoot.status}).`);
   }
 
   const options = await fetch("https://api.afuchat.com/v1/chat/conversations", {
@@ -664,6 +685,7 @@ if (!APPLY) {
     ),
     endpoints: [
       "GET /v1/chat/healthz",
+      "GET|HEAD /v1/chat",
       "GET|HEAD|POST|PATCH|DELETE /v1/chat/data/{registered relation}",
       "GET|POST /v1/chat/data/rpc/{registered function}",
       "GET|POST /v1/chat/status",
@@ -746,6 +768,7 @@ console.log(JSON.stringify({
   routes: routeState.routePlan.map(({ pattern, action }) => ({ pattern, action })),
   smokeTests: [
     "chat health",
+    "canonical chat namespace root",
     "CORS preflight",
     "unauthenticated rejection",
     "AfuChat schema-backed data probe",

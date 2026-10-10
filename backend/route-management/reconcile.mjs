@@ -12,6 +12,7 @@ if (!token) throw new Error("CLOUDFLARE_API_TOKEN is required.");
 
 const routes = new Map([
   ["api.afuchat.com/v1/auth/*", "afuauth-api"],
+  ["api.afuchat.com/v1/chat", "afuchat-api"],
   ["api.afuchat.com/v1/chat/*", "afuchat-api"],
   ["api.afuchat.com/v1/mail/*", "afumail-api"],
   ["api.afuchat.com/v1/cloud/*", "afucloud-api"],
@@ -25,7 +26,7 @@ const requiredSiteRoute = {
   script: "afucloud-web",
 };
 const rootGatewayRoute = {
-  pattern: "api.afuchat.com/",
+  pattern: "api.afuchat.com/*",
   script: "afu-api",
 };
 const requiredWorkers = [

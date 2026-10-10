@@ -1,6 +1,6 @@
 # Production API and CDN routing
 
-**Live routing and binding baseline checked:** 2026-10-06, after the CDN cutover
+**Live routing and binding baseline checked:** 2026-10-10, after the AfuChat namespace-root route fix
 **CDN owner:** `afu-cdn` (deployed and active)
 **Scope:** Cloudflare Worker routes, product R2 bindings, and retained object
 domains. Product health is not implied by correct route ownership.
@@ -10,7 +10,7 @@ domains. Product health is not implied by correct route ownership.
 | Product | API namespace → Worker | CDN path → `afu-cdn` binding | R2 bucket |
 |---|---|---|---|
 | AfuAuth | `/v1/auth/*` → `afuauth-api` | None | None |
-| AfuChat | `/v1/chat/*` → `afuchat-api` | `/chat/{key}` → `CHAT_ASSETS` | `afuchat-media` (shared with legacy URLs) |
+| AfuChat | `/v1/chat` and `/v1/chat/*` → `afuchat-api` | `/chat/{key}` → `CHAT_ASSETS` | `afuchat-media` (shared with legacy URLs) |
 | AfuMail | `/v1/mail/*` → `afumail-api` | `/mail/{key}` → `MAIL_ASSETS` | `afu-mail-assets` |
 | AfuCloud | `/v1/cloud/*` → `afucloud-api` | `/cloud/{key}` → `CLOUD_ASSETS` | `afucloud-images` |
 | AfuAI | `/v1/ai/*` → `afuai-api` | `/ai/{key}` → `AI_ASSETS` | `afu-ai-assets` |
