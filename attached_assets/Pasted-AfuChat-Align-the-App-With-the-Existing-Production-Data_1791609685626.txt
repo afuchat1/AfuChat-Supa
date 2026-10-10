@@ -1,0 +1,191 @@
+AfuChat: Align the App With the Existing Production Database and Deploy the Production API Worker
+
+Work directly in the existing AfuChat repository:
+
+https://github.com/afuchat1/AfuChat-Supa
+
+Everything must be production-only, fully functional, and verified on every call. Do not claim completion for any feature, endpoint, deployment, or integration unless it has been tested successfully against the real production environment. If a required dependency, credential, permission, schema detail, route, binding, or external verification method is unavailable, report the exact blocker instead of guessing, mocking, fabricating data, or marking the operation successful.
+
+1. Primary Objective
+
+Update the AfuChat mobile application and its backend integration to match the actual existing production Supabase database schema, tables, columns, relationships, constraints, functions, and available data.
+
+Then deploy the updated "afuchat-api" Cloudflare Worker to production and verify that the application can use it successfully in real production conditions.
+
+The existing production database is the single source of truth. Do not assume that the app's current types, interfaces, queries, local schema definitions, documentation, or previous implementation accurately represent the live database.
+
+Every production API call must use verified routes, authentication, authorization, database objects, request formats, response formats, and error handling. No placeholder, mock, fallback, fabricated, preview-only, or nonfunctional implementation may remain in a production path.
+
+2. Mandatory Database Rules
+
+- Do not create, alter, rename, drop, truncate, or otherwise modify production database objects.
+- Do not create new SQL migrations, rollback scripts, seed files, or schema-change scripts.
+- Do not run database migration commands or apply SQL changes to production.
+- Do not create duplicate tables, profiles, authentication systems, or data stores.
+- Do not fabricate tables, columns, RPC functions, relationships, or sample production data.
+- Do not copy or merge records between schemas to make the application work.
+- Preserve all existing production records and user data.
+- Treat the database as read-only during discovery and integration work. Normal application operations may write data only through existing, verified application interfaces and authorized business logic.
+- Do not remove local SQLite initialization or schema-versioning code blindly. Identify which parts support device-local caching and offline functionality, and preserve or safely refactor them where necessary. They must not be mistaken for permission to modify the production database.
+- Do not use mocks, hardcoded production-like responses, fabricated fallback records, or silent success responses in production code.
+- Every database-backed operation must fail safely and visibly when the verified production dependency is unavailable.
+
+3. Inspect the Actual Production Schema
+
+Use the authorized Supabase Management API or another approved read-only catalog inspection method to inspect the existing production project.
+
+Verify:
+
+- Available schemas and their ownership.
+- Existing tables, views, columns, data types, defaults, and nullability.
+- Primary keys, foreign keys, unique constraints, and indexes.
+- Existing RPC functions and their actual signatures.
+- Row Level Security policies and relevant grants.
+- Relationships between "afuchat" and other existing schemas, including "accounts", "auth", "social", and any other schemas actually referenced by the live database.
+- Existing authentication and profile ownership.
+- The actual tables and functions available for chat, messages, conversations, groups, channels, posts, comments, reactions, stories, media, notifications, contacts, ACoin, rewards, verification, advertisements, marketplace, games, and other implemented features.
+
+Only include features and objects that are actually present and verified. Do not assume every feature has a corresponding table or RPC.
+
+If access to the production catalog is unavailable, report the exact access limitation. Do not guess the schema or claim that an inspection succeeded.
+
+Before changing any integration, verify the relevant production object and confirm that the intended request can execute successfully with an authorized production session. Do not leave any call path pointing to an unverified table, column, RPC, relationship, or route.
+
+4. Audit and Update the Application
+
+Inspect the entire codebase, not just the main API file.
+
+Review at least:
+
+- Mobile data access, repositories, hooks, services, and API clients.
+- TypeScript interfaces and generated or manually maintained database types.
+- Authentication and profile loading.
+- Chat, conversation, message, and realtime functionality.
+- Feed, stories, media, notifications, contacts, and offline synchronization.
+- ACoin and other balance-changing operations.
+- All existing feature-specific API routes and RPC calls.
+- Worker environment bindings, secrets, configuration, and deployment scripts.
+
+For every data operation, establish the real production object and its actual schema. Update incorrect table names, column names, types, joins, filters, RPC arguments, response parsing, and error handling.
+
+Use the correct schema for each operation. Do not route every request to "afuchat" merely because it is the product schema. Preserve legitimate references to shared identity, authentication, social, commerce, or other existing schemas.
+
+Do not expose the entire database through a generic PostgREST proxy. Keep product data access behind explicit, authorized API routes.
+
+Do not invent fallback data to hide failed database requests. Show appropriate loading, empty, offline, and error states.
+
+Every production-facing feature must have a complete working path from client request through authentication, authorization, Worker routing, database access, response parsing, and UI handling. Remove or disable only those features that cannot be verified against production, and report them explicitly rather than presenting them as functional.
+
+5. Authentication, Security, and Data Integrity
+
+- Keep the existing shared Afu authentication architecture.
+- Verify bearer tokens through the established AfuAuth integration.
+- Preserve the authenticated user identity and database RLS enforcement.
+- Do not trust user IDs, account roles, balances, or verification claims supplied by the client without server-side authorization.
+- Preserve existing ownership checks and access-control boundaries.
+- Ensure users cannot read or modify another user's private records.
+- Ensure balance-changing operations use the existing verified RPC or business logic, including the existing "deduct_acoin" RPC where applicable. Do not replace atomic financial operations with direct client-side balance updates.
+- Never expose secrets, service-role keys, internal bindings, stack traces, or internal Worker names in public API errors.
+- Keep error responses consistent and safe, with detailed diagnostics restricted to server logs.
+- Verify authentication and authorization behavior with missing, invalid, expired, and valid authorized credentials.
+- Do not bypass RLS, ownership checks, or authorization solely to make a test pass.
+- Do not report an authenticated or authorized result unless the production identity and access decision were actually verified.
+
+6. API Routing Requirements
+
+The production API hostname is:
+
+"https://api.afuchat.com"
+
+The AfuChat product Worker is:
+
+"afuchat-api"
+
+Use the canonical AfuChat route namespace:
+
+"/v1/chat/*"
+
+Keep all AfuChat business and storage endpoints within this namespace, including storage endpoints under "/v1/chat/storage/*" where appropriate.
+
+Preserve existing compatible production routes and shared authentication behavior. Do not introduce duplicate prefixes, undocumented aliases, generic schema exposure, or conflicting gateway routes.
+
+Verify the existing gateway and Worker routing configuration before making changes. Do not change DNS, shared gateway ownership, unrelated product Workers, R2 buckets, CDN routes, or other Afu ecosystem services unnecessarily.
+
+Do not expose internal Worker implementation names in API responses. For example, replace internal diagnostic messages such as "No API namespace is registered for this path" with a safe, consistent public error while preserving useful server-side diagnostics.
+
+Every documented production route must be implemented, reachable through the intended production hostname, authenticated as required, connected to verified production data, and tested with both successful and failure cases. Do not leave route stubs, placeholder handlers, unimplemented branches, or misleading success responses.
+
+7. Deploy the Production afuchat-api Worker
+
+After the implementation and checks are complete:
+
+1. Confirm the correct Worker source directory, production account, deployment environment, and "wrangler.toml" configuration.
+2. Check required production bindings and secrets without printing secret values.
+3. Confirm the Worker owns or receives the intended API routes without conflicting with the shared gateway or other product Workers.
+4. Run the available type checks, lint checks, and tests.
+5. Build and deploy the updated "afuchat-api" Worker to its intended production environment using the repository's established deployment process.
+6. Confirm the deployment command completed successfully and record the actual deployment result, version or deployment identifier, and deployed commit.
+7. Test the deployed production API externally using the approved verification method.
+8. Confirm that the deployed version, route configuration, bindings, and source commit correspond to the changes being reported.
+9. Do not treat a local build, preview deployment, dry run, successful command exit, or source commit as proof of production deployment.
+
+Do not stop after editing files, creating a commit, or deploying to a preview environment. The task requires a production deployment and production verification.
+
+If deployment access, credentials, permissions, or external verification are unavailable, state exactly what is blocked. Never report a successful production deployment without evidence.
+
+8. Required Production Verification
+
+Test the deployed API against real production behavior, without destructive operations.
+
+Verify as applicable:
+
+- Worker health or status endpoint.
+- Correct routing under "/v1/chat/*".
+- Authentication failure for missing or invalid credentials.
+- Successful authentication with a valid authorized test session.
+- Current-user profile retrieval.
+- Read access to representative chat and conversation data for an authorized user.
+- Correct handling of nonexistent routes.
+- CORS behavior for the real app origins.
+- Safe public errors with no internal Worker names, stack traces, or secrets.
+- Existing storage endpoint routing and authorized access.
+- Relevant existing RPCs and realtime integration, where applicable.
+- No regressions to existing API namespaces, gateway routing, or media delivery.
+- Request and response behavior for every changed production endpoint.
+- Correct empty, loading, offline, validation, authorization, database-error, and success behavior in the client where applicable.
+- Repeated calls to each changed endpoint to confirm they remain functional and do not rely on one-time state, cached mocks, or accidental local conditions.
+
+Use real existing records or authorized test accounts. Do not create fake production data just to pass tests. Do not perform real financial deductions, destructive writes, or irreversible operations as deployment tests.
+
+Record which tests passed, failed, or could not be executed, including the endpoint, authentication state, environment, observed result, and reason for any limitation. A test that was not executed must not be described as passed.
+
+9. Cleanup and Repository Hygiene
+
+Search the entire current repository for obsolete database migration files, migration scripts, rollback scripts, schema-creation instructions, and stale documentation references.
+
+Do not reintroduce deleted SQL migrations or rollback files. Do not create new database schema-change files.
+
+Keep necessary local SQLite cache initialization and compatibility behavior unless it can be safely refactored without breaking existing installations or offline data. Clearly distinguish local device storage from the production Supabase schema.
+
+Remove dead code and stale documentation only when safe. Avoid unrelated redesigns or unnecessary rewrites.
+
+Remove or update any production code that can return fabricated data, silently swallow errors, claim success without completing the operation, or route requests to unverified database objects. Ensure all remaining production paths either work against verified production dependencies or return an explicit, safe, actionable error.
+
+10. Final Deliverables
+
+When finished, provide a concise but evidence-based report containing:
+
+1. The actual production schemas and tables inspected.
+2. The key mismatches found between the app and the live database.
+3. The files and features updated.
+4. Confirmation that no production database schema changes were performed.
+5. Tests executed and their actual results.
+6. The production "afuchat-api" Worker deployment status and deployment identifier or version.
+7. The deployed commit and production environment used.
+8. Production endpoints tested and their results.
+9. Confirmation that changed production calls are functional and verified, or an explicit list of every call that remains blocked or unverified.
+10. Any remaining blockers, known issues, or features that still cannot be verified.
+
+Commit the completed source changes to the appropriate repository branch using a descriptive commit message. Do not claim that the task is complete if the production Worker has not actually been deployed and verified.
+
+Priority: Preserve existing production data, match the real database, maintain authentication and authorization, avoid unrelated services, ensure every production call is functional and verified, and deploy the correct AfuChat API Worker safely.
