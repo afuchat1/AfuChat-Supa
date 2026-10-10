@@ -1,7 +1,7 @@
 # AfuChat existing-schema integration audit
 
 **Audit date:** 2026-10-10  
-**Scope:** Integrate the mobile app and AfuChat API with the existing production database contract. No database schema changes or deployment were authorized.
+**Scope:** Align the mobile app and AfuChat API with the existing production database contract. No database schema changes, migrations, or application-row operations were authorized. The existing `afuchat-api` Worker was deployed separately under the attached request's production-deployment authorization; details are recorded below.
 
 ## Summary
 
@@ -14,9 +14,10 @@ The audit also found missing database routines and an unresolved ACoin transacti
 ## Method and safety
 
 - Inspected live relation, column, foreign-key, and routine metadata for the app’s configured production project.
-- Scanned 401 TypeScript/JavaScript source files for literal relation references, covering 76 distinct `.from(...)` relation names; checked the Worker’s 138-name AfuChat relation allowlist against the live catalog.
+- Scanned mobile TypeScript/JavaScript source for literal relation references, covering 76 distinct `.from(...)` relation names; checked the Worker’s 138-name AfuChat relation allowlist against the live catalog.
 - Scanned mobile `.rpc(...)` calls against live routines.
-- Did not read or modify application rows. No DDL, migration, data mutation, or deployment was performed.
+- Confirmed the canonical public AfuChat API prefix is `/v1/chat/*` (for example, `/v1/chat/conversations`); `chat` is the product namespace, not an app route.
+- Did not read or modify application rows. No DDL, migration, or data mutation was performed. The existing Worker was published with its current route and legacy media handler preserved.
 - Restored already-declared dependencies with `pnpm install --frozen-lockfile`; package manifests, lockfile, and `.replit` were unchanged.
 
 ## Confirmed schema routing
@@ -104,11 +105,12 @@ The Worker’s nearby-discovery route also expects `nearby_users`, which is abse
 
 ## Verification
 
-- `cd artifacts/mobile && pnpm run typecheck` — passed.
+- `NODE_OPTIONS=--max-old-space-size=4096 pnpm --dir artifacts/mobile run typecheck` — passed.
 - `cd artifacts/mobile && pnpm run build:web` — passed; generated the static web export.
 - `node --experimental-strip-types --test backend/afu-chat-api/test/*.test.mjs` — 105 passed, 0 failed. Missing nearby/presence database routines are tested as fail-closed.
 - `git diff --check` — passed.
 - Restarted the `Start application` workflow; static web preview served on port 5000 and the public language-selection screen rendered.
+- `node backend/afu-chat-api/deploy.mjs --apply` — deployed to the existing `afuchat-api` Worker; kept `api.afuchat.com/v1/chat/*`, created no new Worker or route, and preserved the legacy media handler and R2 binding. Post-deploy health, CORS, unauthenticated rejection, schema-backed probe, shared-session rejection, feature-auth, storage, and canonical routing smoke checks passed. Worker version `35775cc4-c866-44f4-ac57-50fbda9bea97` is active at 100%.
 - Signed-in mobile screens and live user-session queries were not verified in the preview.
 
 ## Recommended next decisions
