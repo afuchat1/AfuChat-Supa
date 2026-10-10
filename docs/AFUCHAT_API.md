@@ -9,19 +9,24 @@
 - All AfuChat-owned product API operations, including storage, use `/v1/chat`.
 - AfuAuth owns `/v1/auth/*`; AfuAI owns `/v1/ai/*`. Those routes are not AfuChat endpoints and are not moved by this contract.
 
-Supabase Auth and Realtime remain on the shared Supabase project. All AfuChat
-PostgREST table and RPC requests use the existing `afuchat` schema and enter
-through the AfuChat Worker. The mobile client pins schema headers to `afuchat`;
-the Worker rejects other schemas and accepts only the exact relation and
-function names in `backend/afu-chat-api/src/data-gateway.ts`. It forwards the
-same user's bearer token so the existing grants and row-level security remain
-authoritative, and never uses a service-role key.
+Supabase Auth and Realtime remain on the shared Supabase project. All mobile
+PostgREST table and RPC requests enter through the AfuChat Worker. The mobile
+client defaults requests to `afuchat`, with explicit `accounts` overrides for
+the root `profiles` and `verification_requests` resources. The Worker accepts
+only the exact relation and function names in
+`backend/afu-chat-api/src/data-gateway.ts`. It forwards the user's bearer token
+so the existing grants and row-level security remain authoritative, and never
+uses a service-role key.
 
-`afuchat.*` is the sole data source for AfuChat application records. Shared
-authentication verifies the account identity; it does not redirect AfuChat
-data reads to compatibility views or another product schema. The Worker and
-mobile app do not use `chat.*`, `social.*`, or `public` compatibility resources
-for AfuChat data.
+Profile ownership is relationship-specific; the two profile tables are not
+merged. `accounts.profiles` is the signed-in account profile source and is the
+root target for mobile `profiles` queries and `/v1/chat/me`. `afuchat.profiles`
+continues to serve chat relationships whose foreign keys point there, including
+same-schema profile embeds. Other product rows may reference
+`accounts.profiles`; the API's explicit profile-join bridge handles those
+cross-schema relationships. Account verification requests route to
+`accounts`; AfuChat-owned product records route to `afuchat`. No `chat.*`,
+`social.*`, or `public` compatibility schema is used as a fallback.
 
 ## Mobile data gateway
 
@@ -181,9 +186,12 @@ URL paths remain intact; no objects were moved or copied.
 
 The data gateway is deliberately limited to the current mobile call inventory:
 no arbitrary schema, relation, or function can be selected. AfuChat-owned
-application records, including profiles, bookmarks, follows, feeds, posts,
-messages, payments, and storage metadata, use only `afuchat`. AfuAuth verifies
-identity separately; it is not a data fallback.
+application records such as bookmarks, follows, feeds, posts, messages,
+payments, and storage metadata use `afuchat`. Profile reads follow the specific
+relationship described above: the signed-in account and root `profiles`
+resource use `accounts.profiles`, while chat relations whose foreign keys point
+to `afuchat.profiles` stay in `afuchat`. AfuAuth verifies identity separately;
+it is not a data fallback.
 
 ## Deployment verification
 

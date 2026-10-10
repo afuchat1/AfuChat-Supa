@@ -1,10 +1,11 @@
 # AfuChat post-login profile flow
 
-> **Current contract (2026-10-09):** This document contains an earlier
-> production investigation. AfuChat profile data now comes only from
-> `afuchat.profiles`; the historical `accounts`/`public` profile path below is
-> superseded and must not be restored as a fallback. AfuAuth verifies identity;
-> the Worker forwards the same bearer to the AfuChat schema.
+> **Current contract (2026-10-10):** `/v1/chat/me` reads the authenticated
+> account from `accounts.profiles`. AfuChat product data remains in
+> `afuchat`; some chat-specific profile relationships target `afuchat.profiles`,
+> while account-profile relationships target `accounts.profiles`. Preserve both
+> tables and their existing IDs; do not merge them or use one as a blanket
+> fallback for the other.
 
 ## Findings before the fix
 
@@ -18,10 +19,10 @@ The first production probe found that `/v1/chat/me` was not deployed and returne
 
 There were two deployment/data-source failures in sequence: initially the deployed Worker had no `/v1/chat/me` handler; after that handler was deployed, it queried `public.profiles`, which is a view over `afuchat.profiles`. That product profile view had no row for the valid shared account, even though the canonical profile already existed in `accounts.profiles`. The login token, AfuAuth identity verification, API hostname, and account ID mapping were valid. `AuthContext.fetchProfile` falls back to cached data (or `null`) when the profile request fails, which made a successful login appear to finish without fresh profile data.
 
-The interim correction described at the time read the verified user's row from
-the shared `accounts` schema. That routing was later superseded by the
-AfuChat-only contract above; do not send AfuChat profile or conversation data
-through `accounts` or `public`.
+The correction that reads the verified user's row from `accounts.profiles`
+remains current for `/v1/chat/me`. It does not move AfuChat conversations or
+all profile relationships into `accounts`; each relation continues to use its
+declared schema and the API's explicit cross-schema relationship handling.
 
 ## Implemented flow
 
@@ -29,7 +30,7 @@ through `accounts` or `public`.
 2. On profile hydration, the mobile app reads the current session token. If it is near expiry, the existing token helper attempts a refresh.
 3. The app sends `GET https://api.afuchat.com/v1/chat/me` with `Accept: application/json` and `Authorization: Bearer <shared Supabase access token>`. It does not send a user ID.
 4. The AfuChat Worker validates the bearer through its AfuAuth service binding by calling `POST /v1/auth/session`. It requires the returned access token to match the incoming bearer exactly and takes the user ID only from that verified result.
-5. The Worker queries `afuchat.profiles` for that verified ID, forwarding the same bearer token and using the existing anon key/RLS path. It selects only the fields used by the mobile `Profile` type and returns the row in the same object shape expected by `AuthContext`. It does not read email or accept a client-supplied identity.
+5. The Worker queries `accounts.profiles` for that verified ID, forwarding the same bearer token and using the existing anon key/RLS path. It selects only the fields used by the mobile `Profile` type and returns the row in the same object shape expected by `AuthContext`. It does not read email or accept a client-supplied identity.
 6. The mobile app checks that the returned profile ID matches the signed-in user's ID before caching and exposing it.
 7. Missing/invalid sessions are rejected before the profile query. Missing rows return a generic `404`; upstream/database errors return a generic `502`/`503`. Internal logs retain request ID and status/code only; public responses omit infrastructure details.
 

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   RELATION_SCHEMA_BY_NAME,
@@ -17,6 +19,23 @@ const mobileClient = await readFile(
   new URL("../../../artifacts/mobile/lib/supabase.ts", import.meta.url),
   "utf8",
 );
+const mobileRoot = fileURLToPath(new URL("../../../artifacts/mobile/", import.meta.url));
+
+async function collectMobileSourceFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (["node_modules", ".expo", "dist", "build", "android", "ios"].includes(entry.name)) {
+        continue;
+      }
+      files.push(...await collectMobileSourceFiles(join(directory, entry.name)));
+    } else if (/\.(?:ts|tsx|js|jsx)$/.test(entry.name)) {
+      files.push(join(directory, entry.name));
+    }
+  }
+  return files;
+}
 
 test("only explicit AfuChat resources and referenced external resources are routable", () => {
   assert.equal(schemaForRelation("chats"), "afuchat");
@@ -52,6 +71,33 @@ test("mobile routes only explicit external references outside the AfuChat schema
   assert.doesNotMatch(mobileClient, /posts:\s*"social"/);
   assert.match(mobileClient, /routedRequest\.headers\.set\("Accept-Profile", schema\)/);
   assert.match(mobileClient, /routedRequest\.headers\.set\("Content-Profile", schema\)/);
+});
+
+test("all literal mobile PostgREST resources are registered with the API gateway", async () => {
+  const resources = new Map();
+  const fromCall = /\.from\(\s*["']([a-z][a-z0-9_]*)["']\s*\)/g;
+  for (const file of await collectMobileSourceFiles(mobileRoot)) {
+    const source = await readFile(file, "utf8");
+    for (const match of source.matchAll(fromCall)) {
+      const prefix = source.slice(Math.max(0, match.index - 40), match.index);
+      if (/\.storage\.$/.test(prefix)) continue;
+      const paths = resources.get(match[1]) ?? [];
+      paths.push(file);
+      resources.set(match[1], paths);
+    }
+  }
+
+  assert.ok(resources.size > 0, "expected to find literal mobile table references");
+  const unregistered = [...resources.entries()]
+    .filter(([relation]) => schemaForRelation(relation) === null)
+    .map(([relation, files]) => `${relation}: ${files.join(", ")}`);
+  assert.deepEqual(unregistered, []);
+});
+
+test("mobile PostgREST traffic uses the AfuChat API while auth and realtime keep the shared client", () => {
+  assert.match(mobileClient, /const gatewayUrl = new URL\(\s*`\/v1\/chat\/data/);
+  assert.match(mobileClient, /global:\s*\{\s*fetch:\s*fetchThroughAfuChatApi/);
+  assert.match(mobileClient, /const supabaseClientUrl = SUPABASE_URL/);
 });
 
 test("cross-schema account profile embeds are split into an RLS-preserving profile lookup", () => {
