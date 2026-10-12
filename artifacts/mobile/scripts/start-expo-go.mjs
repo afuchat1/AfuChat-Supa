@@ -25,9 +25,12 @@ const expo = spawn(
   ["exec", "expo", "start", "--go", "--lan", "--port", String(port)],
   {
     env: process.env,
-    stdio: "inherit",
+    // Expo CLI treats a TTY as interactive and waits at its optional account
+    // prompt. A piped stdout keeps logs visible while allowing anonymous mode.
+    stdio: ["ignore", "pipe", "inherit"],
   },
 );
+expo.stdout?.pipe(process.stdout);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

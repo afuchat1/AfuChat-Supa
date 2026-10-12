@@ -21,3 +21,10 @@ Verify that the public HTTPS manifest and Android bundle both return HTTP 200. A
 
 **Do NOT use `CI=1`:** CI=1 breaks native bundle serving — every Expo Go connection produces a CommandError and the native bundle is never served.
 
+## Anonymous CLI startup
+When Expo CLI's stdout is a TTY, SDK 57 may pause on an optional "Log in / Proceed anonymously" prompt before Expo Go loads. Pipe the CLI's stdout and relay it to the workflow log so the CLI is non-interactive; it then follows its anonymous path without `EXPO_TOKEN` or an EAS login.
+
+**Why:** The default interactive selection starts on "Log in" and can leave Replit's phone preview waiting indefinitely.
+
+**How to apply:** Keep stdout visible through a pipe, with stdin non-interactive; do not set `CI=1`, which breaks native bundle serving.
+
