@@ -1,10 +1,24 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import http from "node:http";
 import QRCode from "qrcode";
 
 const port = 8000;
 const bundlePath =
   "/node_modules/expo-router/entry.bundle?platform=android&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.bytecode=1&transform.routerRoot=app&unstable_transformProfile=hermes-stable";
+
+const expoSession = process.env.REPLIT_EXPO_SESSION_SECRET;
+if (expoSession) {
+  const login = spawnSync(
+    "pnpm",
+    ["exec", "create-launch", "login", "--session", expoSession],
+    { env: process.env, stdio: "inherit" },
+  );
+  if (login.error || login.status !== 0) {
+    console.warn(
+      "Replit-managed Expo CLI sign-in did not complete; continuing to start Metro.",
+    );
+  }
+}
 
 const expo = spawn(
   "pnpm",

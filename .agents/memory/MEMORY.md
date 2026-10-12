@@ -71,6 +71,7 @@
 - [Production connectivity unknown state](production-connectivity-unknown.md) — standalone Android can mount before NetInfo; unknown must be network-usable, not offline/low-data, and noncritical services should start after first render.
 - [LTR interface direction](ltr-interface-direction.md) — Arabic translations must not mirror AfuChat's controls; disable native RTL and use global CSS for web because RN Web rejects inline View direction.
 - [Expo workflow port detection](expo-workflow-port-detection.md) — managed Expo web preview needs waitForPort 5000; without it Metro can run while the workflow remains unattached.
+- [Expo manifest proxy checks](expo-manifest-proxy-checks.md) — Android manifest checks need Expo headers; without them, Metro's root returns web HTML with HTTP 200.
 - [EAS prebuild asset and lockfile checks](eas-prebuild-assets-lockfile.md) — EAS validates notification assets during prebuild and uses frozen pnpm installs, so manifests and lockfile must be synchronized.
 - [Direct chat orphan cleanup](direct-chat-orphan-cleanup.md) — nameless non-group chats with fewer than two members cannot resolve an other profile and should be filtered and cleaned.
 - [Production FCM requires a new native build](production-fcm-native-build.md) — server-side sender fixes cannot repair tokens created by an older Play AAB; a completed new AAB must be installed before production delivery can recover.

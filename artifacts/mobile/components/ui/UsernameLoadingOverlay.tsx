@@ -61,11 +61,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 16,
     borderWidth: 1,
-    shadowColor: "#000",
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 5,
+    ...Platform.select({
+      web: { boxShadow: "0 5px 12px rgba(0,0,0,0.16)" } as any,
+      default: {
+        shadowColor: "#000",
+        shadowOpacity: 0.16,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 5 },
+        elevation: 5,
+      },
+    }),
   },
   icon: {
     width: 30,

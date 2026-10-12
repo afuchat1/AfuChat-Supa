@@ -37,6 +37,7 @@
     "@types/react-dom": "^19.2.7",
     "@ungap/structured-clone": "^1.3.0",
     "babel-plugin-transform-remove-console": "^6.9.4",
+    "create-launch": "^0.4.1",
     "expo": "~57.0.27",
     "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.21",
