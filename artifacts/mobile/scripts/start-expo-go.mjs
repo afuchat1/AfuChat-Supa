@@ -22,11 +22,11 @@ if (expoSession) {
 
 const expo = spawn(
   "pnpm",
-  ["exec", "expo", "start", "--go", "--lan", "--port", String(port)],
+  ["exec", "expo", "start", "--go", "--tunnel", "--port", String(port)],
   {
     env: process.env,
-    // Expo CLI treats a TTY as interactive and waits at its optional account
-    // prompt. A piped stdout keeps logs visible while allowing anonymous mode.
+    // A piped stdout keeps logs visible while Expo CLI uses its anonymous,
+    // non-interactive startup instead of waiting at the account prompt.
     stdio: ["ignore", "pipe", "inherit"],
   },
 );
@@ -56,23 +56,60 @@ function bundleIsReady() {
   });
 }
 
+function getExpoGoUrl() {
+  return new Promise((resolve) => {
+    const request = http.get(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: "/",
+        headers: {
+          accept: "application/expo+json",
+          "expo-platform": "android",
+          "expo-protocol-version": "1",
+        },
+      },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            resolve(null);
+            return;
+          }
+          try {
+            const manifest = JSON.parse(body);
+            const host = manifest.extra?.expoGo?.debuggerHost;
+            resolve(host ? `exp://${host}` : null);
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    );
+    request.setTimeout(5000, () => {
+      request.destroy();
+      resolve(null);
+    });
+    request.on("error", () => resolve(null));
+  });
+}
+
 async function warmAndroidBundle() {
   for (let attempt = 1; attempt <= 90; attempt += 1) {
     if (expo.exitCode !== null) return;
     if (await bundleIsReady()) {
-      console.log("Expo Android bundle warmed and ready for Expo Go.");
-      const domain = process.env.REPLIT_DEV_DOMAIN;
-      if (!domain) {
-        console.warn("Secure Expo Go QR unavailable: REPLIT_DEV_DOMAIN is not set.");
+      const expoGoUrl = await getExpoGoUrl();
+      if (!expoGoUrl) {
+        console.warn("Android bundle is ready, but the Expo Go tunnel URL is unavailable.");
         return;
       }
-
-      const secureUrl = `exps://${domain}:${port}`;
-      console.log(
-        "Use this HTTPS-backed Expo Go QR, not Metro's exp:// QR; Replit's forwarded port requires HTTPS.",
-      );
-      console.log(`Secure Expo Go URL: ${secureUrl}`);
-      console.log(await QRCode.toString(secureUrl, { type: "terminal", small: true }));
+      console.log("Expo Android bundle warmed and ready for Expo Go.");
+      console.log(`Expo Go tunnel URL: ${expoGoUrl}`);
+      console.log(await QRCode.toString(expoGoUrl, { type: "terminal", small: true }));
       return;
     }
     await sleep(2000);
