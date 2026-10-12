@@ -2,9 +2,13 @@ import "@/polyfills";
 import "react-native-gesture-handler";
 import "@/lib/navigationGuard";
 import * as SplashScreen from "expo-splash-screen";
+import { isExpoGo } from "@/lib/expoEnvironment";
 
-// Keep the native splash visible until we explicitly hide it
-SplashScreen.preventAutoHideAsync().catch(() => {});
+// Expo Go owns the host app's initial splash lifecycle. Do not hold it open
+// indefinitely if a native module fails before RootLayout mounts.
+if (!isExpoGo()) {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 import { enableScreens } from "react-native-screens";
 import { initCrashReporter, setCrashReporterUserId, setCrashNotificationHandler } from "@/lib/crashReporter";
 import { showAlert } from "@/lib/alert";
@@ -475,6 +479,10 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
   const [webFontTimeout, setWebFontTimeout] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
+
+  useEffect(() => {
+    console.info(`[AfuChat boot] RootLayout mounted (${Platform.OS})`);
+  }, []);
 
   const handleSplashDone = useCallback(() => {
     SplashScreen.hideAsync().catch(() => {});

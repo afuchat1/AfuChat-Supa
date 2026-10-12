@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import http from "node:http";
+import QRCode from "qrcode";
 
 const port = 8000;
 const bundlePath =
@@ -43,6 +44,18 @@ async function warmAndroidBundle() {
     if (expo.exitCode !== null) return;
     if (await bundleIsReady()) {
       console.log("Expo Android bundle warmed and ready for Expo Go.");
+      const domain = process.env.REPLIT_DEV_DOMAIN;
+      if (!domain) {
+        console.warn("Secure Expo Go QR unavailable: REPLIT_DEV_DOMAIN is not set.");
+        return;
+      }
+
+      const secureUrl = `exps://${domain}:${port}`;
+      console.log(
+        "Use this HTTPS-backed Expo Go QR, not Metro's exp:// QR; Replit's forwarded port requires HTTPS.",
+      );
+      console.log(`Secure Expo Go URL: ${secureUrl}`);
+      console.log(await QRCode.toString(secureUrl, { type: "terminal", small: true }));
       return;
     }
     await sleep(2000);

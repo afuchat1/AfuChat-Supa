@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Linking, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { getCachedUserId } from "@/lib/offlineStore";
@@ -20,23 +20,42 @@ export default function IndexScreen() {
 
   useEffect(() => {
     let mounted = true;
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!mounted || settled) return;
+      settled = true;
+      console.warn("[AfuChat boot] Initial URL check timed out; continuing without a deep link");
+      setInitialDeepLinkPending(false);
+      setInitialUrlChecked(true);
+    }, 4500);
+
     Linking.getInitialURL().catch(() => null).then(async (url) => {
-      if (!mounted) return;
+      if (!mounted || settled) return;
+      let hasPendingAction = false;
       if (isAfuChatDeepLink(url)) {
         // Resolve the action only to stop the ordinary boot redirect from
         // racing the root deep-link gate, which owns actual navigation.
-        const action = await handleIncomingUrl(url);
-        if (mounted) setInitialDeepLinkPending(!!action);
+        const action = await Promise.race([
+          handleIncomingUrl(url),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+        ]);
+        hasPendingAction = !!action;
       }
-      if (mounted) setInitialUrlChecked(true);
+      if (!mounted || settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      setInitialDeepLinkPending(hasPendingAction);
+      setInitialUrlChecked(true);
     }).catch(() => {
-      if (mounted) {
-        setInitialDeepLinkPending(false);
-        setInitialUrlChecked(true);
-      }
+      if (!mounted || settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      setInitialDeepLinkPending(false);
+      setInitialUrlChecked(true);
     });
     return () => {
       mounted = false;
+      clearTimeout(timeout);
     };
   }, []);
 
@@ -44,19 +63,33 @@ export default function IndexScreen() {
   // routing so a new user can understand the welcome experience.
   useEffect(() => {
     let mounted = true;
+    let settled = false;
+    const timeout = setTimeout(() => {
+      if (!mounted || settled) return;
+      settled = true;
+      console.warn("[AfuChat boot] Language preference check timed out; showing language setup");
+      setLanguageSelected(false);
+      setLanguageChecked(true);
+    }, 4500);
+
     AsyncStorage.getItem(LANGUAGE_PREFERENCE_KEY)
       .then((stored) => {
-        if (!mounted) return;
+        if (!mounted || settled) return;
+        settled = true;
+        clearTimeout(timeout);
         setLanguageSelected(!!stored && stored !== "none");
         setLanguageChecked(true);
       })
       .catch(() => {
-        if (!mounted) return;
+        if (!mounted || settled) return;
+        settled = true;
+        clearTimeout(timeout);
         setLanguageSelected(false);
         setLanguageChecked(true);
       });
     return () => {
       mounted = false;
+      clearTimeout(timeout);
     };
   }, []);
 
@@ -168,7 +201,12 @@ export default function IndexScreen() {
   // This route is only a navigation handoff. Returning users are routed from
   // the synchronous local identity cache, so never show an account-restoring
   // or loading message while background auth work continues.
-  return <View style={styles.boot} />;
+  return (
+    <View style={styles.boot}>
+      <ActivityIndicator size="large" color="#FFFFFF" />
+      <Text style={styles.bootText}>Starting AfuChat…</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -178,5 +216,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 14,
     backgroundColor: "#000000",
+  },
+  bootText: {
+    color: "#FFFFFF",
+    fontSize: 14,
   },
 });
