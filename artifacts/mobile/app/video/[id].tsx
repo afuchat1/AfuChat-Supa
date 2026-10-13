@@ -77,6 +77,7 @@ import { getPreferredVideoHeight, isOffline as checkIsOffline, subscribeToNetwor
 import { safePause, safePlay } from "@/lib/safeMedia";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
 import {
   computeFeedScore,
   detectTopicsInContent,
@@ -118,6 +119,10 @@ type VideoPost = {
   id: string; author_id: string; content: string; video_url: string;
   image_url: string | null; created_at: string; view_count: number;
   audio_name: string | null;
+  music_track_id?: string | null;
+  music_audio_mode?: "original" | "mix" | "replace";
+  music_volume?: number;
+  original_audio_volume?: number;
   profile: { display_name: string; handle: string; avatar_url: string | null; is_verified: boolean; is_organization_verified: boolean };
   liked: boolean; bookmarked: boolean; likeCount: number; replyCount: number;
 };
@@ -846,6 +851,15 @@ const VideoItem = React.memo(function VideoItem({
 
         {/* Caption overlay — flush above seek bar, 1-line default + read more */}
         <Animated.View style={[vStyles.captionOverlay, { opacity: overlayOpacity, pointerEvents: commentsOpen ? "none" : "box-none" } as any]}>
+          {item.music_track_id ? (
+            <MusicTrackCard
+              trackId={item.music_track_id}
+              mode="video"
+              isActive={isActive && tabFocused && !paused}
+              audioMode={item.music_audio_mode}
+              musicVolume={item.music_volume}
+            />
+          ) : null}
           {!!item.content && (
             <>
               {/* Hidden full-text measurement — determines if truncation occurs */}
@@ -1305,7 +1319,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     let query = supabase
       .from("posts")
-      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, music_track_id, music_audio_mode, music_volume, original_audio_volume, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
       .not("video_url", "is", null)
       .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false });
@@ -1363,6 +1377,10 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
         view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
+        music_track_id: p.music_track_id ?? null,
+        music_audio_mode: p.music_audio_mode ?? "original",
+        music_volume: Number(p.music_volume ?? 0.75),
+        original_audio_volume: Number(p.original_audio_volume ?? 1),
         profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified, is_organization_verified: !!p.profiles?.is_organization_verified },
         liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
@@ -1467,13 +1485,17 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           } else if (existingIdx === -1) {
             const { data: tRow } = await supabase
               .from("posts")
-              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, music_track_id, music_audio_mode, music_volume, original_audio_volume, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
               .eq("id", id).not("video_url", "is", null).maybeSingle();
             if (tRow) {
               newVideos = [{
                 id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
                 video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
                 view_count: 0, audio_name: tRow.audio_name || null,
+                music_track_id: tRow.music_track_id ?? null,
+                music_audio_mode: tRow.music_audio_mode ?? "original",
+                music_volume: Number(tRow.music_volume ?? 0.75),
+                original_audio_volume: Number(tRow.original_audio_volume ?? 1),
                 profile: { display_name: (tRow.profiles as any)?.display_name || "User", handle: (tRow.profiles as any)?.handle || "user", avatar_url: (tRow.profiles as any)?.avatar_url || null, is_verified: !!(tRow.profiles as any)?.is_verified, is_organization_verified: !!(tRow.profiles as any)?.is_organization_verified },
                 liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
               }, ...newVideos];

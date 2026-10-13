@@ -43,6 +43,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
+import MusicPickerSheet from "@/components/music/MusicPickerSheet";
+import type { AfuMusicTrack } from "@/modules/afumusic";
+import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -806,6 +809,7 @@ function EditPhase({
   videoUri, duration, fileSize, videoWidth, videoHeight, videoMime,
   onBack, onPost,
   soundName, soundAlbumArt,
+  musicTrack, onOpenMusicPicker, onClearMusic,
   capturedSpeed,
 }: {
   videoUri: string; duration: number; fileSize: number;
@@ -814,9 +818,13 @@ function EditPhase({
   onBack: () => void;
   onPost: (payload: PostPayload) => void;
   soundName?: string; soundAlbumArt?: string;
+  musicTrack: AfuMusicTrack | null;
+  onOpenMusicPicker: () => void;
+  onClearMusic: () => void;
   capturedSpeed?: number;
 }) {
   const { colors, accent } = useTheme();
+  const musicPlayer = useAfuMusicPlayer();
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
 
@@ -846,6 +854,28 @@ function EditPhase({
   const [audience, setAudience] = useState<"public" | "followers" | "private">("public");
   const [step, setStep] = useState<1 | 2>(1);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [musicAudioMode, setMusicAudioMode] = useState<"original" | "mix" | "replace">("mix");
+  const [musicVolume, setMusicVolume] = useState(0.75);
+  const [originalAudioVolume, setOriginalAudioVolume] = useState(0.75);
+
+  useEffect(() => {
+    if (!musicTrack || musicAudioMode === "original") {
+      if (musicTrack) musicPlayer.stopShot(musicTrack.id);
+      return;
+    }
+    musicPlayer.play(musicTrack, [musicTrack], "Video soundtrack preview", {
+      source: "shot",
+      showPlayer: false,
+      volume: musicVolume,
+    }).catch((error) => showAlert("Music preview unavailable", error));
+    return () => musicPlayer.stopShot(musicTrack.id);
+  }, [musicTrack?.id, musicAudioMode, musicPlayer.play, musicPlayer.stopShot]);
+
+  useEffect(() => {
+    if (musicTrack && musicAudioMode !== "original") {
+      musicPlayer.setVolume(musicVolume);
+    }
+  }, [musicAudioMode, musicPlayer.setVolume, musicTrack?.id, musicVolume]);
 
   // Thumbnail generation
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -925,6 +955,10 @@ function EditPhase({
       stickerOverlays: stickers,
       trimStart, trimEnd,
       soundName: soundDismissed ? null : soundName,
+      musicTrackId: musicTrack?.id ?? null,
+      musicAudioMode,
+      musicVolume,
+      originalAudioVolume,
       audience,
     });
   }
@@ -988,7 +1022,8 @@ function EditPhase({
             contentFit="cover"
             shouldPlay
             isLooping
-            isMuted={false}
+            isMuted={!!musicTrack && musicAudioMode === "replace"}
+            volume={musicTrack && musicAudioMode === "mix" ? originalAudioVolume : 1}
             playbackRate={playbackSpeed}
           />
           {filterOverlay && (
@@ -1458,10 +1493,10 @@ function EditPhase({
                   {audience === "public" ? "Everyone" : audience === "followers" ? "Followers" : "Only Me"}
                 </Text>
               </View>
-              {soundName && !soundDismissed && (
+              {(musicTrack || (soundName && !soundDismissed)) && (
                 <View style={[es.advPill, { backgroundColor: accent + "22" }]}>
                   <Ionicons name="musical-notes" size={11} color={accent} />
-                  <Text style={[es.advPillText, { color: accent }]} numberOfLines={1}>Sound</Text>
+                  <Text style={[es.advPillText, { color: accent }]} numberOfLines={1}>{musicTrack ? "Music" : "Sound"}</Text>
                 </View>
               )}
             </View>
@@ -1491,6 +1526,81 @@ function EditPhase({
                     </TouchableOpacity>
                   ))}
                 </View>
+              </View>
+
+              {/* Licensed soundtrack and explicit source-mix controls */}
+              <View style={{ gap: 9, marginTop: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={es.optionLabel}>Music and original audio</Text>
+                  {musicTrack ? (
+                    <TouchableOpacity onPress={onClearMusic} hitSlop={8} accessibilityLabel="Remove selected music">
+                      <Ionicons name="close-circle" size={19} color="#888" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                {musicTrack ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, backgroundColor: "#1A1A1A" }}>
+                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: musicTrack.coverColor || accent, alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="musical-notes" size={18} color="#fff" />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }} numberOfLines={1}>{musicTrack.title}</Text>
+                      <Text style={{ color: "#999", fontFamily: "Inter_400Regular", fontSize: 10, marginTop: 3 }} numberOfLines={1}>{musicTrack.artist} · Cleared for AfuChat videos</Text>
+                    </View>
+                    <TouchableOpacity onPress={onOpenMusicPicker} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: accent + "22" }}>
+                      <Text style={{ color: accent, fontFamily: "Inter_700Bold", fontSize: 10 }}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={onOpenMusicPicker} style={{ height: 43, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, borderWidth: 1, borderColor: "#333", backgroundColor: "#1A1A1A" }}>
+                    <Ionicons name="musical-notes" size={16} color={accent} />
+                    <Text style={{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Browse licensed AfuMusic</Text>
+                  </TouchableOpacity>
+                )}
+                {musicTrack ? (
+                  <>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {([
+                        ["original", "Original"],
+                        ["mix", "Mix"],
+                        ["replace", "Replace"],
+                      ] as const).map(([mode, label]) => (
+                        <TouchableOpacity
+                          key={mode}
+                          onPress={() => setMusicAudioMode(mode)}
+                          style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, backgroundColor: musicAudioMode === mode ? accent + "22" : "#1A1A1A", borderWidth: 1, borderColor: musicAudioMode === mode ? accent : "#292929" }}
+                        >
+                          <Text style={{ color: musicAudioMode === mode ? accent : "#888", fontFamily: "Inter_600SemiBold", fontSize: 10 }}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {musicAudioMode !== "original" ? (
+                      [
+                        { label: "Music volume", value: musicVolume, change: setMusicVolume },
+                        ...(musicAudioMode === "mix" ? [{ label: "Original audio", value: originalAudioVolume, change: setOriginalAudioVolume }] : []),
+                      ].map((control) => (
+                        <View key={control.label} style={{ gap: 5 }}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ color: "#999", fontFamily: "Inter_500Medium", fontSize: 10 }}>{control.label}</Text>
+                            <Text style={{ color: "#ddd", fontFamily: "Inter_600SemiBold", fontSize: 10 }}>{Math.round(control.value * 100)}%</Text>
+                          </View>
+                          <View style={{ flexDirection: "row", gap: 5 }}>
+                            {[0, 0.25, 0.5, 0.75, 1].map((value) => (
+                              <TouchableOpacity
+                                key={value}
+                                onPress={() => control.change(value)}
+                                accessibilityLabel={`${control.label} ${Math.round(value * 100)} percent`}
+                                style={{ flex: 1, height: 7, borderRadius: 4, backgroundColor: control.value >= value ? accent : "#333" }}
+                              />
+                            ))}
+                          </View>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={{ color: "#888", fontFamily: "Inter_400Regular", fontSize: 10 }}>The original video sound will be used without the selected music.</Text>
+                    )}
+                  </>
+                ) : null}
               </View>
 
               {/* Cover thumbnail */}
@@ -1642,6 +1752,10 @@ type PostPayload = {
   textOverlays: TextOverlay[]; stickerOverlays: StickerOverlay[];
   trimStart: number; trimEnd: number;
   soundName?: string | null;
+  musicTrackId: string | null;
+  musicAudioMode: "original" | "mix" | "replace";
+  musicVolume: number;
+  originalAudioVolume: number;
   audience: "public" | "followers" | "private";
 };
 
@@ -1652,6 +1766,8 @@ export default function CreateVideoScreen() {
   const { soundName, soundAlbumArt } = useLocalSearchParams<{ soundName?: string; soundAlbumArt?: string }>();
 
   const [phase, setPhase] = useState<Phase>("camera");
+  const [musicTrack, setMusicTrack] = useState<AfuMusicTrack | null>(null);
+  const [musicPickerOpen, setMusicPickerOpen] = useState(false);
 
   // Posting phase data
   const [postingThumb, setPostingThumb] = useState<string | null>(null);
@@ -1717,6 +1833,8 @@ export default function CreateVideoScreen() {
       textOverlays: _texts, stickerOverlays: _stickers,
       trimStart: _ts, trimEnd: _te,
       soundName: _sound, audience: _aud,
+      musicTrackId: _musicTrackId, musicAudioMode: _musicAudioMode,
+      musicVolume: _musicVolume, originalAudioVolume: _originalAudioVolume,
     } = payload;
 
     // Show inline posting phase — do NOT dismiss yet
@@ -1787,7 +1905,13 @@ export default function CreateVideoScreen() {
           post_type: "video",
           visibility: _aud,
           view_count: 0,
-          ...(_sound ? { audio_name: _sound } : {}),
+          ...(_musicTrackId ? {
+            music_track_id: _musicTrackId,
+            music_audio_mode: _musicAudioMode,
+            music_volume: _musicVolume,
+            original_audio_volume: _originalAudioVolume,
+            audio_name: musicTrack?.title || _sound || null,
+          } : (_sound ? { audio_name: _sound } : {})),
           ...(_filter ? { filter: _filter } : {}),
           ...(_frame ? { avatar_overlay: _frame } : {}),
           overlay_metadata: overlayMeta,
@@ -1830,6 +1954,9 @@ export default function CreateVideoScreen() {
           onBack={() => setPhase("camera")}
           onPost={handlePost}
           soundName={soundName} soundAlbumArt={soundAlbumArt}
+          musicTrack={musicTrack}
+          onOpenMusicPicker={() => setMusicPickerOpen(true)}
+          onClearMusic={() => setMusicTrack(null)}
           capturedSpeed={capturedSpeed}
         />
       ) : (
@@ -1849,6 +1976,15 @@ export default function CreateVideoScreen() {
           </View>
         </Modal>
       )}
+      <MusicPickerSheet
+        visible={musicPickerOpen}
+        onClose={() => setMusicPickerOpen(false)}
+        onSelect={(track) => {
+          setMusicTrack(track);
+          setMusicPickerOpen(false);
+        }}
+        selectedTrackId={musicTrack?.id}
+      />
     </>
   );
 }

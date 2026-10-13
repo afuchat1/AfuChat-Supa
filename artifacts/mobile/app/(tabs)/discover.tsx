@@ -79,6 +79,7 @@ import { getCachedStoryMedia } from "@/lib/storyMediaCache";
 import { prefetchAvatars, prefetchThumbnails, prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { useThrottledFocusEffect } from "@/lib/hooks/useThrottledFocusEffect";
 import FindPeopleTab from "@/components/discover/FindPeopleTab";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
 
 type PostItem = {
   id: string;
@@ -102,6 +103,10 @@ type PostItem = {
   article_body: string | null;
   video_url: string | null;
   duration_seconds: number | null;
+  music_track_id?: string | null;
+  music_audio_mode?: "original" | "mix" | "replace";
+  music_volume?: number;
+  original_audio_volume?: number;
   isFollowing: boolean;
   language_code?: string | null;
   org_page_id?: string;
@@ -876,6 +881,15 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               </Text>
             </View>
           )}
+
+          {item.music_track_id ? (
+            <MusicTrackCard
+              trackId={item.music_track_id}
+              mode={item.post_type === "video" ? "video" : "post"}
+              audioMode={item.music_audio_mode}
+              musicVolume={item.music_volume}
+            />
+          ) : null}
 
           {/* ── VIDEO: thumbnail preview card (caption shown above, thumbnail below) ── */}
           {item.post_type === "video" && item.video_url && (
@@ -1664,6 +1678,7 @@ export default function DiscoverScreen() {
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
+          music_track_id, music_audio_mode, music_volume, original_audio_volume,
           post_type, article_title, article_body, video_url,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, bio, is_verified, is_organization_verified),
           post_images(image_url, display_order),
@@ -1705,6 +1720,10 @@ export default function DiscoverScreen() {
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, bio: p.profiles?.bio || null },
           liked: myLikeSet.has(p.id), likeCount: p.like_count || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
+          music_track_id: p.music_track_id ?? null,
+          music_audio_mode: p.music_audio_mode ?? "original",
+          music_volume: Number(p.music_volume ?? 0.75),
+          original_audio_volume: Number(p.original_audio_volume ?? 1),
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: true,
           language_code: p.language_code || null,
@@ -1786,6 +1805,7 @@ export default function DiscoverScreen() {
 
     const fySelect = `
       id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
+      music_track_id, music_audio_mode, music_volume, original_audio_volume,
       post_type, article_title, article_body, video_url,
       profiles!posts_author_id_fkey(display_name, handle, avatar_url, bio, is_verified, is_organization_verified, country, interests, hide_posts_non_followers),
       post_images(image_url, display_order),
@@ -2036,6 +2056,10 @@ export default function DiscoverScreen() {
           article_title: p.article_title || null,
           article_body: p.article_body || null,
           video_url: p.video_url || null,
+          music_track_id: p.music_track_id ?? null,
+          music_audio_mode: p.music_audio_mode ?? "original",
+          music_volume: Number(p.music_volume ?? 0.75),
+          original_audio_volume: Number(p.original_audio_volume ?? 1),
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: followingSet.has(p.author_id),
           language_code: p.language_code || null,
@@ -2404,6 +2428,7 @@ export default function DiscoverScreen() {
       const activeTab = feedTabRef.current;
       const fySelect = `
         id, author_id, content, image_url, created_at, view_count, like_count, visibility,
+        music_track_id, music_audio_mode, music_volume, original_audio_volume,
         post_type, article_title, article_body, video_url,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
         post_images(image_url, display_order),
@@ -2471,6 +2496,10 @@ export default function DiscoverScreen() {
         bookmarked: false,
         post_type: p.post_type ?? "text",
         article_title: p.article_title ?? null,
+        music_track_id: p.music_track_id ?? null,
+        music_audio_mode: p.music_audio_mode ?? "original",
+        music_volume: Number(p.music_volume ?? 0.75),
+        original_audio_volume: Number(p.original_audio_volume ?? 1),
         article_body: p.article_body ?? null,
         video_url: p.video_url ?? null,
         duration_seconds: (() => {

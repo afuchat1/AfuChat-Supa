@@ -46,6 +46,8 @@ import {
   getMusicDownloadUri,
   getMusicPlaybackUri,
   listMusicTracks,
+  listMusicEarnings,
+  listMusicPurchases,
   listOfflineMusicTracks,
   publishMusicTrack,
   purchaseMusicTrack,
@@ -168,24 +170,28 @@ export default function FullAppRoute() {
 }
 
 function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
-  const { profile } = useAuth();
+  const { profile, isPremium } = useAuth();
   const router = useRouter();
   return (
     <AfuMusicApp
       initialSection={(initialSection as any) || "discover"}
       playlistOwnerId={profile?.id}
       acoinBalance={profile?.acoin}
+      canPublishPaid={isPremium}
       onBrowse={listMusicTracks}
       onSearch={searchMusicTracks}
       onPurchase={(track) => purchaseMusicTrack(track.id)}
       onCache={cacheMusicTrackOffline}
       onRemoveCache={removeMusicTrackOffline}
       onListOffline={listOfflineMusicTracks}
+      onListPurchases={listMusicPurchases}
+      onListEarnings={listMusicEarnings}
       onResolveAudio={getMusicPlaybackUri}
       onResolveDownload={getMusicDownloadUri}
       onUpload={publishMusicTrack}
       onDeleteUpload={removeMusicTrack}
       onOpenWallet={() => router.push("/app/afupay")}
+      onUpgradePremium={() => router.push("/premium")}
     />
   );
 }

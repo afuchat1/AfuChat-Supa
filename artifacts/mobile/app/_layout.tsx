@@ -88,6 +88,7 @@ import PushNotificationManager from "@/components/PushNotificationManager";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import { initActivityTracker } from "@/lib/activityTracker";
 import { MiniAppRuntimeProvider } from "@/lib/superapp/MiniAppRuntime";
+import { AfuMusicPlayerProvider } from "@/modules/afumusic/MusicPlayerContext";
 import { AnimationGuardInit } from "@/components/AnimationGuardInit";
 import { SplashScreenView } from "@/components/ui/SplashScreenView";
 import NativeShareShortcutSync from "@/components/NativeShareShortcutSync";
@@ -620,6 +621,7 @@ export default function RootLayout() {
                 <AnimationGuardInit />
                 <DataModeProvider>
                   <AuthProvider>
+                    <AfuMusicPlayerProvider>
                     <CallProvider>
                     <ActivityTrackerSync />
                       <CrashReporterUserSync />
@@ -648,6 +650,7 @@ export default function RootLayout() {
                         </LanguageDirectionShell>
                       </LanguageProvider>
                     </CallProvider>
+                    </AfuMusicPlayerProvider>
                   </AuthProvider>
                 </DataModeProvider>
                   </AppAccentProvider>

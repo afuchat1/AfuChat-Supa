@@ -12,6 +12,7 @@ interface VideoPreviewProps {
   shouldPlay?: boolean;
   isLooping?: boolean;
   isMuted?: boolean;
+  volume?: number;
   nativeControls?: boolean;
   /** Playback speed multiplier: 0.5 = slow-mo, 1 = normal, 2 = fast-forward */
   playbackRate?: number;
@@ -24,12 +25,14 @@ export default function VideoPreview({
   shouldPlay = true,
   isLooping = true,
   isMuted = false,
+  volume = 1,
   nativeControls = false,
   playbackRate = 1,
 }: VideoPreviewProps) {
   const player = useVideoPlayer(uri ? { uri } : null, (p) => {
     p.loop = isLooping;
     p.muted = isMuted;
+    p.volume = volume;
     p.playbackRate = playbackRate;
     if (shouldPlay) safePlay(p);
   });
@@ -42,6 +45,7 @@ export default function VideoPreview({
     // "The play() request was interrupted by a new load request."
     player.loop = isLooping;
     player.muted = isMuted;
+    player.volume = volume;
     player.playbackRate = playbackRate;
     if (shouldPlay) safePlay(player); else safePause(player);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,6 +56,7 @@ export default function VideoPreview({
   }, [shouldPlay]);
 
   useEffect(() => { player.muted = isMuted; }, [isMuted]);
+  useEffect(() => { player.volume = Math.max(0, Math.min(1, volume)); }, [volume]);
   useEffect(() => { player.loop = isLooping; }, [isLooping]);
   useEffect(() => {
     try { player.playbackRate = playbackRate; } catch {}

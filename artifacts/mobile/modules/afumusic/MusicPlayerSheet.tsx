@@ -31,6 +31,8 @@ type Props = {
   track: AfuMusicTrack;
   queue: AfuMusicTrack[];
   queueTitle: string;
+  visible?: boolean;
+  volume?: number;
   onSelectTrack: (track: AfuMusicTrack) => void;
   onClose: () => void;
   onDownload?: () => void;
@@ -63,6 +65,8 @@ export default function MusicPlayerSheet({
   track,
   queue,
   queueTitle,
+  visible = true,
+  volume = 0.75,
   onSelectTrack,
   onClose,
   onDownload,
@@ -168,6 +172,7 @@ export default function MusicPlayerSheet({
             return;
           }
           webAudio = new window.Audio(audioUri);
+          webAudio.volume = Math.max(0, Math.min(1, volume));
           webAudio.preload = "metadata";
           webAudioRef.current = webAudio;
           webAudio.onloadedmetadata = () => {
@@ -212,7 +217,7 @@ export default function MusicPlayerSheet({
         }
         const created = await NativeAudio.Sound.createAsync(
           { uri: audioUri },
-          { shouldPlay: true, progressUpdateIntervalMillis: 350 },
+          { shouldPlay: true, progressUpdateIntervalMillis: 350, volume: Math.max(0, Math.min(1, volume)) },
           (status: AVPlaybackStatus) => {
             if (!active) return;
             if (status.isLoaded) {
@@ -255,6 +260,12 @@ export default function MusicPlayerSheet({
       nativeSound?.unloadAsync().catch(() => {});
     };
   }, [audioUri, retryKey, track.id]);
+
+  useEffect(() => {
+    const nextVolume = Math.max(0, Math.min(1, volume));
+    if (webAudioRef.current) webAudioRef.current.volume = nextVolume;
+    soundRef.current?.setVolumeAsync(nextVolume).catch(() => {});
+  }, [volume]);
 
   const togglePlayback = useCallback(async () => {
     if (!isLoaded) return;
@@ -326,7 +337,7 @@ export default function MusicPlayerSheet({
   const progress = durationMs > 0 ? Math.min(1, positionMs / durationMs) : 0;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.sheet}>
         <View style={styles.handle} />
         <View style={styles.header}>

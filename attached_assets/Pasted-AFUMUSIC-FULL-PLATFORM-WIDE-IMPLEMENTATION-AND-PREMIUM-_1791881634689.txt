@@ -1,0 +1,629 @@
+AFUMUSIC — FULL PLATFORM-WIDE IMPLEMENTATION AND PREMIUM REDESIGN PROMPT
+
+Repository: https://github.com/afuchat1/AfuChat-Supa
+
+1. Mission and expected result
+
+Transform AfuMusic into a complete, premium-quality, platform-wide music ecosystem integrated throughout AfuChat.
+
+AfuMusic must not behave like an independent music application hidden inside AfuChat. Music must become a discoverable content type throughout the entire platform, connected to AfuChat Search, AfuChat Shots, feed posts, video creation, creator profiles, playlists, purchases, the global playback system, and the existing AfuPay wallet.
+
+The implementation must deliver real, working features using the existing production application and database. Do not deliver a visual mockup, a collection of nonfunctional buttons, fake tracks, or a frontend-only demonstration.
+
+Before making changes, inspect the current repository, application architecture, database tables and policies, music publishing and purchase functions, subscription entitlements, AfuPay wallet implementation, wallet transaction and earnings history, storage implementation, video uploader, post composer, Shots feed, search engine, navigation, and current playback components.
+
+Use the existing implementation wherever it is sound. Identify dependencies and integration points before editing. Preserve existing functionality, data, authentication, user accounts, wallet balances, wallet transactions, and working database relationships.
+
+Do not introduce a new API architecture, duplicate backend, unnecessary database schemas, or migrations merely to implement this work. Use the existing AfuChat backend, AfuPay wallet, and supported database/storage mechanisms. If a database or server-side change is genuinely necessary, explain why, keep it minimal, and provide a safe, reversible implementation.
+
+2. Required platform-wide architecture
+
+Implement one shared music system that can be accessed from every relevant part of AfuChat.
+
+Music discovery and playback must be connected across:
+
+- AfuChat Search.
+- AfuChat Shots and its vertical video feed.
+- The main feed and post composer.
+- Video creation and editing.
+- AfuMusic discovery, library, playlists, and creator studio.
+- Creator profiles and published music.
+- Music sharing, track detail pages, and links to music.
+- ACoin purchases, AfuPay wallet balance, wallet ownership, earnings, expenditure, and purchase history.
+- Global playback controls and the persistent mini-player.
+
+A track must have one canonical identity across all these surfaces. Opening the same track from Search, Shots, a post, a profile, or AfuMusic must resolve to the same music record, ownership status, creator, price, playback rules, AfuPay transaction records, and purchase history.
+
+All music purchases must use the existing AfuPay wallet that is already connected to the user's account. Do not create a separate music wallet, balance, ledger, or payment system.
+
+3. Premium UI/UX redesign
+
+Redesign AfuMusic to a high-end, recognizable, modern music experience. The current ordinary music-list appearance must not simply be recolored.
+
+Create a coherent visual language that feels native to AfuChat while giving music a distinctive identity.
+
+Required experiences:
+
+- An artwork-led discovery screen with featured releases, curated collections, trending music, new releases, and recently played tracks based on real data.
+- A polished track detail screen with cover art, creator information, pricing, ownership status, AfuPay wallet balance where relevant, and relevant actions.
+- An immersive full-screen music player with artwork, playback progress, play/pause, previous/next, shuffle, repeat, queue, and other supported controls.
+- A compact global mini-player that remains available while users navigate between sections.
+- A creator studio for uploading, publishing, editing, and managing tracks.
+- Consistent visual quality in search results, feed attachments, Shots overlays, playlists, and purchase screens.
+- A wallet-aware purchase experience showing the current AfuPay balance, exact ACoin price, confirmation details, and any insufficient-balance guidance supported by the existing wallet flow.
+- A purchase and earnings history experience showing the user's music purchases, expenditure, and creator earnings through the existing AfuPay wallet history.
+
+Use genuine cover art when available. Do not use fake seed tracks, invented listening statistics, placeholder artists, or decorative initials as substitutes for real artwork in production. If no content exists, show a well-designed empty state that invites the user to discover or publish music.
+
+Maintain AfuChat's established design conventions and existing platform-wide navigation. Avoid making music feel like a separate app with a different interaction model.
+
+4. Global music playback system
+
+Implement one shared playback controller and state accessible from all music entry points.
+
+Playback must continue when the user:
+
+- Leaves the AfuMusic screen.
+- Opens Search or a creator profile.
+- Scrolls the main feed.
+- Navigates between application sections.
+- Minimizes the full-screen player.
+- Opens other screens while music is playing.
+
+Use an appropriate background-capable playback implementation compatible with the repository's actual Expo and React Native versions. Inspect the current playback code and dependencies before selecting or changing a library. Verify foreground and background behavior on real supported devices; do not assume that a UI component alone provides background playback.
+
+The global mini-player must display the current track's artwork, title, creator, play/pause control, and a clear dismiss/stop control.
+
+When a user selects music outside automatic Shots playback, opening the full player is optional; playback should not require the user to remain on the track detail screen.
+
+Floating playback behavior
+
+When a user starts or selects a track and then navigates elsewhere, minimize it into a compact floating or persistent playback bar.
+
+The bar must:
+
+- Remain visible across applicable AfuChat screens.
+- Show the current track and playback status.
+- Provide play/pause.
+- Allow the user to reopen the full player.
+- Provide an obvious close/remove control.
+
+Tapping close must stop playback, clear the active track where appropriate, and remove the bar. Merely hiding the bar must not leave unexpected audio playing.
+
+Avoid obstructing the main navigation, video controls, post composer, accessibility elements, or system gestures. On devices where an in-app overlay is supported, keep it within AfuChat. If an overlay over other applications is considered, treat it as an optional platform-specific capability requiring appropriate Android permissions and user consent, not a guaranteed cross-platform feature.
+
+Audio session management
+
+Coordinate music playback with video playback, calls if applicable, voice recordings, notification sounds, and other audio sources.
+
+Define and test behavior for:
+
+- Switching tracks.
+- Pausing and resuming.
+- Audio interruptions and headphone disconnection.
+- App backgrounding and foregrounding.
+- Network loss and stream failures.
+- Moving from music playback into a video with its own audio.
+- Stopping playback when the user explicitly dismisses the player.
+
+Do not allow multiple music players to play simultaneously because the same track was opened from different screens.
+
+5. Free and Premium music access rules
+
+Implement the following access policy consistently throughout AfuChat.
+
+Free music
+
+Free music is available for listening without purchasing the track, subject to the application's normal access rules.
+
+Free tracks may be:
+
+- Discovered through Search.
+- Displayed in feed posts.
+- Attached to supported content.
+- Played from AfuMusic.
+- Used for automatic music playback in Shots.
+- Selected as background music in video creation, subject to rights and product rules.
+
+Premium music
+
+Premium tracks require a successful purchase through the user's existing AfuPay wallet before playback.
+
+Before purchase, users must be able to discover the track, see its cover art, creator, price, and other permitted metadata. They must not be able to stream or download the protected full track without authorization.
+
+When a user selects a Premium track without owning it, show a polished purchase experience with:
+
+- The price in ACoin.
+- The user's current AfuPay wallet balance.
+- A clear Buy track action.
+- A clear insufficient-balance state when the wallet balance is too low.
+- A link or action to the existing AfuPay wallet funding flow where supported.
+
+After a successful purchase:
+
+- Deduct the exact price from the authenticated user's existing AfuPay wallet through the trusted wallet transaction system.
+- Record the purchase against the authenticated user and canonical track.
+- Link the purchase to the corresponding AfuPay transaction or ledger entry.
+- Update the user's ownership status.
+- Make the track playable for that owner.
+- Refresh relevant screens and search/feed components.
+- Ensure ownership remains correct after restarting the application.
+- Prevent duplicate charges caused by repeated taps, retries, or network failures.
+- Ensure the expenditure appears in the user's AfuPay wallet transaction history.
+- Ensure the creator's earnings are recorded through the existing AfuPay earnings or wallet ledger and appear in the creator's earnings history where supported.
+
+Use the existing purchase function, AfuPay wallet transaction system, and transaction system where appropriate. Verify the purchase server-side or through trusted database logic; never trust a client-side ownership flag, displayed wallet balance, or purchase state as authorization.
+
+The purchase must be atomically connected to the existing AfuPay wallet. A successful music purchase must not be recorded as owned if the wallet deduction fails, and a wallet deduction must not occur without a corresponding valid purchase or safely reversible transaction state.
+
+Premium subscription and Premium track ownership are different things. Having an AfuChat Premium subscription must not automatically unlock every paid music track for listening. Premium subscription controls whether a creator may publish paid music. Purchasing a particular track controls whether a listener may play that track.
+
+6. ACoin pricing and publishing restrictions
+
+Every newly published music track must be assigned a price from 5 to 1,000 ACoin inclusive.
+
+Enforce the exact range:
+
+- Minimum: 5 ACoin.
+- Maximum: 1,000 ACoin.
+- No zero-priced uploads.
+- No prices below 5 ACoin.
+- No prices above 1,000 ACoin.
+- Reject invalid, negative, non-integer, malformed, or missing prices where a price is required.
+
+The publishing interface must not allow users to bypass the restriction. Enforce the same validation in trusted backend/database logic so modified clients cannot publish invalid prices.
+
+Upload options
+
+The creator must choose one of these options:
+
+Option A: Publish as Free
+
+- The track is available for free listening.
+- No purchase is required to play it.
+- The track is clearly labeled Free.
+- The creator cannot accidentally publish it as a paid track.
+
+Option B: Publish as Paid
+
+- Available only to eligible AfuChat Premium subscribers.
+- Requires a valid price between 5 and 1,000 ACoin.
+- The track is labeled Premium/Paid throughout AfuChat.
+- Listeners must purchase the track through AfuPay before playing it.
+- Each successful purchase must be reflected in the creator's earnings history through the existing AfuPay wallet and transaction system.
+
+Do not make a paid upload option available to non-Premium users as a functioning publishing option.
+
+When a non-Premium user selects Paid publishing, display this exact message:
+
+"Paid music publishing requires AfuChat Premium. Upgrade your subscription to publish music for sale."
+
+Provide an Upgrade to Premium action that opens the existing subscription upgrade screen. Preserve the user's selected file and entered metadata if feasible so that upgrading does not force them to start the upload again.
+
+Free publishing must remain available to eligible users who do not have Premium.
+
+Do not confuse the music's sale price with the Premium subscription price.
+
+7. Music publishing studio
+
+Make the creator studio fully functional and integrated with the existing music storage, database, and AfuPay earnings records.
+
+The upload flow must support the existing accepted audio formats and enforce the current file-size limits unless a documented technical reason requires a change.
+
+Required behavior:
+
+1. Select an audio file.
+2. Read its available metadata.
+3. Automatically extract the title from the file's embedded metadata where available.
+4. If embedded metadata is missing, derive a sensible default title from the filename.
+5. Allow the creator to edit the title.
+6. Capture or edit artist/creator display information and genre as supported by the existing schema.
+7. Select Free or Paid publishing.
+8. Validate Premium entitlement if Paid is selected.
+9. Validate the price if Paid is selected.
+10. Show file details and upload progress.
+11. Upload to the existing approved storage destination.
+12. Create the canonical music record using the existing data model.
+13. Configure the track's purchase and AfuPay earnings linkage using the existing trusted transaction model.
+14. Handle failures without creating broken or duplicate records.
+15. Confirm successful publishing and make the track discoverable after it is actually available.
+
+Extract embedded metadata when the chosen file parser supports it. If reliable metadata extraction is unavailable for a format, use the filename fallback instead of claiming metadata was extracted.
+
+Support cancel, retry, progress, validation errors, and safe recovery from network interruption.
+
+The creator must be able to see their published tracks, prices, publication status, and permitted listening/usage statistics, as well as purchase earnings and related AfuPay wallet history, and edit or delete tracks according to existing permissions and data integrity rules.
+
+Do not expose storage credentials, signed upload credentials, private bucket paths, or internal backend details to other users.
+
+8. AfuChat Search integration
+
+Music must be a first-class searchable content type within the existing AfuChat search engine.
+
+When a user searches for a song, creator, artist, genre, or relevant keyword, return matching music alongside the existing supported AfuChat content types.
+
+Search should support relevant fields such as:
+
+- Track title.
+- Artist or creator name.
+- Genre.
+- Associated descriptive metadata.
+- Creator profile.
+- Keywords that are actually stored or derived by supported indexing logic.
+
+Examples:
+
+- Searching for a song title returns the matching track.
+- Searching for a creator returns their discoverable music.
+- Searching for a genre returns relevant published tracks.
+- Searching for a keyword returns relevant music when its indexed metadata matches.
+
+Use the existing search infrastructure and ranking rules. Do not replace or break searches for people, posts, or other existing AfuChat content.
+
+Search results must distinguish Free tracks from paid tracks and display price, ownership status, and purchase availability where appropriate. Clicking a result opens the canonical music detail/player experience.
+
+Only published, discoverable tracks should appear publicly. Respect moderation, visibility, deletion, and access restrictions.
+
+9. Music discovery in AfuChat Shots
+
+Integrate music into the vertical Shots feed without breaking the existing video experience.
+
+Automatic music playback
+
+When a Shot becomes active and its attached background music is Free, automatically play that music in coordination with the active video.
+
+Avoid starting a separate music session every time a component rerenders. Playback must be tied to the active Shot and its lifecycle.
+
+When the user scrolls to another Shot:
+
+- Stop or transition away from the previous Shot's associated audio as appropriate.
+- Start the next Shot's permitted music.
+- Avoid overlapping music from two different Shots.
+- Pause or resume according to the app's established video visibility and playback rules.
+
+A Shot's own original sound must be handled according to the Shot's selected audio settings. Do not mix music and original sound unexpectedly when the creator intended to replace the original sound.
+
+Premium music in Shots
+
+If a Shot references Premium music that the current viewer has not purchased:
+
+- Do not play the protected music.
+- Display its available track information and price.
+- Show the user's relevant AfuPay wallet balance where appropriate.
+- Show a clear Buy track action.
+- Keep the Shot's visual video experience usable without unauthorized music playback.
+- After a successful purchase, update ownership and allow authorized playback where the Shot's playback rules permit.
+- Record the expenditure in the user's AfuPay wallet history and the creator's earnings in the existing earnings history.
+
+Do not automatically charge users, silently purchase a track, or unlock it merely because the creator of the Shot owns it.
+
+If the viewer already owns the track, use the normal authorized playback path.
+
+Discoverability
+
+Make music discovery feel natural while scrolling Shots. Show the track name and creator in a tasteful, unobtrusive music attribution area. Tapping it must open the canonical track detail experience.
+
+Where relevant, provide a way to explore other tracks by the same creator.
+
+10. Video creation and editing
+
+Integrate the music library into the existing AfuChat video upload and editing flow.
+
+When a user selects or uploads a video, provide an Add music action.
+
+The user must be able to:
+
+- Search or browse available music.
+- Preview permitted music.
+- Select a Free track.
+- Select a Premium track they already own.
+- See a purchase prompt for an unowned Premium track, including the AfuPay wallet balance and purchase price.
+- Add music to the video.
+- Adjust the music volume where supported.
+- Adjust the original video's sound where supported.
+- Preview the combined result before publishing.
+- Remove or replace the selected music.
+- Save and publish the video with the correct audio configuration.
+
+The creator must be able to choose whether to retain the original video sound, replace it with music, or mix both when supported.
+
+If the creator chooses to replace the original sound, the resulting video must actually use the selected music as its background soundtrack. Do not merely attach a track ID while leaving the original audio unchanged.
+
+Implement audio mixing, replacement, or rendering using a real, compatible media-processing workflow. Inspect the current video architecture before choosing a solution. Preserve video quality and account for processing time, memory, battery, upload size, and device compatibility.
+
+If the existing platform cannot yet render mixed audio reliably on-device, implement a clearly defined compatible processing path rather than pretending the operation succeeded.
+
+Rights and access
+
+A creator's ability to select a track for a video must respect track availability and usage permissions. Purchasing a track for personal listening does not automatically imply unlimited rights to redistribute its audio in published videos.
+
+Define and enforce the appropriate music-use permissions for video attachment and publishing. Do not allow a client-side flag to bypass them.
+
+11. Feed posts and the post composer
+
+Update the existing post composer so users can explicitly choose what they want to publish:
+
+- Text
+- Photo
+- Video
+- Music
+
+Use the existing posting architecture and preserve any current supported post types and features.
+
+Music posts
+
+A Music post should be a genuine, discoverable music attachment using the canonical track record. It should display the artwork, title, creator, and appropriate Free/Paid label.
+
+For Free music, users should be able to play the track from the post.
+
+For Premium music, unowned listeners should see the price, AfuPay wallet balance where relevant, and purchase action instead of unauthorized playback.
+
+Music posts should be discoverable in the normal feed, search, and relevant creator content areas. Do not create a disconnected music-only feed that prevents tracks from reaching the main AfuChat audience.
+
+Use existing post engagement features where compatible, such as likes, comments, sharing, and creator navigation. Avoid fabricating engagement counts.
+
+When a user taps the music attachment, open the canonical music experience. If playback is started and the user navigates away, preserve it through the global mini-player.
+
+A post containing a music attachment must remain valid even if its playback is unavailable temporarily. Display an appropriate unavailable/error state rather than crashing the feed.
+
+12. Global mini-player behavior across the app
+
+Make the player a shared part of AfuChat's application shell rather than an element rendered only inside the AfuMusic screen.
+
+It should appear on applicable screens when a user-initiated or otherwise permitted music session is active.
+
+Examples include:
+
+- Search results.
+- Feed posts.
+- Creator profiles.
+- AfuMusic.
+- Playlists.
+- Other screens reached after starting playback.
+
+The mini-player must not appear for unauthorized Premium tracks that have not been purchased. Do not leave a locked track playing in the background.
+
+When automatic Shots playback is active, coordinate its player presentation with the existing Shots controls so the global player does not duplicate the video’s own music attribution or create confusing playback controls.
+
+Define clearly how dismissing the global player affects a music session. A user pressing stop/close must not have the track unexpectedly resume when another screen rerenders.
+
+13. Playlists, library, ownership, and AfuPay history
+
+Ensure the music library is based on real user data.
+
+Support the existing features for:
+
+- Published tracks.
+- Owned/purchased tracks.
+- Offline tracks where supported.
+- Playlists and queue.
+- Recently played tracks.
+- Creator uploads.
+- Purchase history.
+- AfuPay expenditure history for music purchases.
+- Creator earnings history for paid music sales.
+- Links from each music purchase to its corresponding AfuPay wallet transaction where supported.
+
+A user must not see a paid track in their owned library unless the purchase or ownership entitlement is valid.
+
+Offline playback must respect access rights and the existing storage/cache policy. Do not expose private cached files to other accounts. Do not cache protected Premium audio for unauthorized users.
+
+Keep playlist and playback state consistent when navigating between screens.
+
+If playlists, recently played history, purchase history, or earnings history are not fully implemented, finish them using the existing data model, AfuPay wallet records, and storage approach without adding unnecessary parallel systems.
+
+The user's AfuPay wallet history must clearly distinguish music expenditure from other wallet activity where the existing transaction model supports categories or metadata. Creator earnings must be attributable to the relevant track and purchase without exposing private financial information to unauthorized users.
+
+14. Storage, data model, backend integrity, and AfuPay wallet integration
+
+Audit the current "music_tracks", purchase, AfuPay wallet, wallet transaction, earnings, storage, profile, subscription, and post/video relationships before changing them.
+
+Use existing canonical music fields and functions wherever possible. Existing implementations such as the music data module, cache module, purchase function, wallet transaction function, earnings function, and player components must be inspected rather than rewritten blindly.
+
+Use the existing AfuPay wallet already connected to each user. Do not create a separate music balance or payment ledger.
+
+Enforce critical rules at trusted backend/database boundaries:
+
+- Only eligible creators may publish Paid music.
+- Music prices must remain within 5–1,000 ACoin.
+- Only published tracks may be discovered publicly.
+- Only authorized listeners may play protected Premium tracks.
+- Purchases must be authenticated, atomic, and connected to the buyer's AfuPay wallet.
+- The exact ACoin price must be deducted from the buyer's wallet.
+- The creator's corresponding earnings must be recorded through the existing AfuPay earnings or wallet transaction system.
+- Repeated purchase requests must not double-charge.
+- A purchase must not be marked successful if the wallet deduction fails.
+- A wallet deduction must not occur without a valid corresponding purchase or safely reversible transaction state.
+- Track ownership must not be determined solely by client state.
+- Deleted, hidden, or moderated tracks must respect the platform's visibility rules.
+- Uploaded media must use safe, validated storage operations.
+- Wallet balances, expenditure, and earnings must be read from trusted records rather than client-provided values.
+
+Do not expose internal worker/service names or implementation details in user-facing error messages.
+
+Do not create a new music API or wallet system if existing AfuChat services already support the necessary operations. If a missing backend operation requires a change, document the exact gap and make the smallest compatible addition.
+
+Do not perform destructive database changes, erase existing music records, or modify unrelated tables without an explicit, reviewed reason.
+
+15. Performance and reliability
+
+The music experience must remain responsive on supported Android devices and less powerful phones.
+
+Optimize for:
+
+- Smooth vertical Shots scrolling.
+- No unnecessary music player reinitialization.
+- Efficient track metadata loading.
+- Paginated music search and discovery.
+- Artwork caching.
+- Safe audio buffering.
+- Minimal memory use.
+- Resilient playback when network connectivity changes.
+- Proper cancellation of obsolete search requests.
+- Correct loading and retry states.
+- Consistent synchronization of purchase status and AfuPay wallet balance.
+- Clean lifecycle handling during navigation and backgrounding.
+- Efficient loading of wallet expenditure and creator earnings history.
+
+Do not download full music files simply to display search results or discover music. Stream authorized tracks through the existing supported media path and use offline downloads only when requested and permitted.
+
+16. Security, moderation, rights, and financial integrity
+
+Respect the application's authentication, AfuPay wallet policies, database access policies, creator permissions, subscription status, and existing moderation rules.
+
+Validate uploads, playback authorization, wallet deductions, purchase ownership, and earnings beyond the UI.
+
+Do not leak private audio URLs or protected audio through public feed payloads, search results, logs, analytics, or unrestricted cache entries.
+
+Handle reported, removed, or moderated tracks according to existing platform policies. Do not assume every uploaded audio file is licensed for unrestricted redistribution or commercial use.
+
+Where music is used in published videos, make sure the applicable usage rights and attribution rules are respected.
+
+Protect wallet and earnings information so users can view only their own expenditure, purchases, and earnings, except for public track metadata and any intentionally public creator information.
+
+17. Required acceptance tests
+
+Do not declare the task complete until the following cases have been tested.
+
+Publishing
+
+1. A non-Premium user can publish Free music.
+2. A non-Premium user cannot publish Paid music.
+3. Selecting Paid publishing as a non-Premium user shows the exact required Premium message and working upgrade action.
+4. A Premium user can publish Paid music.
+5. A Premium user can publish Free music.
+6. Paid prices of 5 and 1,000 ACoin are accepted.
+7. Prices below 5 or above 1,000 ACoin are rejected.
+8. Invalid or missing prices cannot bypass validation through a modified client.
+9. The title is extracted from embedded metadata when supported and falls back to the filename when it is missing.
+10. Failed uploads can be retried without producing duplicate or broken music records.
+11. Paid music publishing creates the correct creator earnings configuration without exposing private wallet information.
+
+Listening and purchases
+
+12. Free music can be played from AfuMusic.
+13. Free music can be played from Search and feed posts.
+14. An unowned Premium track cannot be played before purchase.
+15. A Premium purchase uses the correct ACoin price and the existing AfuPay wallet.
+16. The purchase displays the correct wallet balance and handles insufficient funds safely.
+17. A successful purchase deducts the exact amount from the buyer's AfuPay wallet.
+18. A successful purchase updates ownership after success.
+19. The purchase appears in the buyer's AfuPay expenditure and purchase history.
+20. The corresponding creator earnings appear in the creator's earnings history through the existing AfuPay system.
+21. Duplicate taps or network retries do not double-charge.
+22. Premium subscription does not automatically unlock a specific paid track.
+23. A purchased track remains available to its owner after navigating away and reopening the app, subject to its publication status.
+24. A failed wallet deduction does not grant ownership.
+25. A successful wallet deduction cannot remain without a valid purchase or safely reversible transaction state.
+
+Global playback
+
+26. Music continues when the user leaves AfuMusic and navigates to other screens.
+27. The mini-player appears with the correct track information.
+28. The stop/remove action stops playback and removes the player.
+29. Navigating between screens does not create duplicate players.
+30. Playback handles interruptions, app backgrounding, network loss, and returning to the app correctly.
+
+Shots
+
+31. Free music attached to the active Shot autoplays according to the feed's playback rules.
+32. Scrolling to another Shot does not cause overlapping music.
+33. An unowned Premium track displays a purchase action and does not play.
+34. An owned Premium track follows the authorized playback path.
+35. Music attribution opens the correct canonical track.
+36. Shot purchases use the existing AfuPay wallet and update expenditure and earnings history correctly.
+
+Video creation
+
+37. A user can search and select permitted music while creating a video.
+38. The creator can preview the selected music with the video.
+39. The creator can replace the original sound, retain it, or mix it where supported.
+40. The final published video has the actual selected audio configuration, not just a decorative track attachment.
+41. Premium purchase and music-use permissions are enforced correctly.
+42. Video-related music purchases and earnings remain connected to the canonical AfuPay transaction records.
+
+Feed and Search
+
+43. The composer supports Text, Photo, Video, and Music.
+44. Music posts appear in the normal feed and are discoverable.
+45. Search returns relevant published tracks for matching titles, creators, genres, and indexed keywords.
+46. Existing people/post searches still work.
+47. Paid music is clearly labeled and protected throughout the discovery experience.
+48. Empty states and error states never show fake tracks as production content.
+49. Music purchase actions from Search and feed use the same canonical AfuPay wallet purchase flow.
+
+Wallet, expenditure, and earnings
+
+50. A user can view their music purchase history through the existing AfuPay wallet or purchase-history experience.
+51. Each music purchase shows the correct track, creator, price, date, and transaction status where supported.
+52. Music expenditure is included in the user's AfuPay wallet history.
+53. A creator can view earnings generated by their paid music through the existing earnings or AfuPay wallet history.
+54. Earnings are attributed to the correct track and completed purchase.
+55. Pending, failed, refunded, or reversed transactions are represented accurately and do not incorrectly grant ownership or earnings.
+56. Users cannot view another user's private wallet expenditure or earnings history.
+
+Regression and release
+
+57. Existing AfuChat authentication, navigation, feed, messaging, Shots, uploads, and subscriptions continue working.
+58. No new database migrations or backend services are introduced without a demonstrated need.
+59. Type checks, linting, relevant automated tests, and production builds pass.
+60. Test the most important flows on a real supported Android device, including navigation, Shots audio transitions, background playback, purchasing, AfuPay wallet deduction, expenditure history, creator earnings, and video audio replacement.
+
+18. Implementation workflow
+
+Work in the following order:
+
+Phase 1 — Audit
+
+- Inspect the current repository and identify the actual implementations of the music player, music data module, cache, storage upload, search, Shots, video creation, post composer, subscriptions, purchases, AfuPay wallet, wallet transactions, purchase history, and creator earnings.
+- Map the data flow and lifecycle across the app.
+- Identify existing bugs, missing integrations, and necessary dependencies.
+- Confirm how AfuPay wallet balances, expenditure, refunds, transaction status, and earnings are currently represented.
+- Report a short implementation plan before making risky architectural changes.
+
+Phase 2 — Shared music and wallet foundation
+
+- Establish the canonical track model, ownership checks, shared playback controller, audio session rules, global mini-player, and wallet-linked purchase flow.
+- Reuse existing infrastructure wherever possible.
+- Ensure every successful purchase creates a trusted connection between the canonical track, buyer, AfuPay wallet transaction, ownership entitlement, and creator earnings record.
+
+Phase 3 — Premium discovery and publishing
+
+- Complete the redesigned AfuMusic interface.
+- Implement publishing options, metadata extraction, Premium eligibility, and strict ACoin price validation.
+- Add creator-facing purchase earnings and AfuPay history views using existing data.
+
+Phase 4 — Platform-wide integration
+
+- Integrate music into Search, Shots, feed posts, creator profiles, and video creation.
+- Ensure consistent authorization, playback, wallet deduction, expenditure history, and earnings attribution across all entry points.
+
+Phase 5 — Validation
+
+- Run the acceptance tests, automated checks, production builds, and device testing.
+- Verify wallet balances, purchase records, expenditure history, ownership, refunds or failures where supported, and creator earnings.
+- Fix regressions before considering the work finished.
+
+Use focused, reviewable commits or pull requests. Do not reset the repository, discard unrelated work, rewrite working features unnecessarily, or make unrelated changes while implementing AfuMusic.
+
+19. Final delivery requirements
+
+When finished, provide:
+
+- A summary of what was implemented.
+- A list of modified files and the purpose of each important change.
+- Any database or backend changes and why they were necessary.
+- The playback approach and verified background behavior.
+- The Premium entitlement and purchase enforcement approach.
+- The AfuPay wallet integration approach.
+- Confirmation that purchases are connected to the existing AfuPay wallet.
+- Confirmation that user expenditure and purchase history are visible through the existing wallet or purchase-history experience.
+- Confirmation that creator earnings are recorded and visible through the existing earnings or AfuPay history experience.
+- Confirmation of the 5–1,000 ACoin restriction.
+- Test results, build results, and device coverage.
+- Any remaining limitations clearly identified.
+- Instructions for reviewing and deploying the changes safely.
+
+Do not claim a feature works merely because it compiles or its button appears. Confirm that the underlying behavior works.
+
+Definition of done: AfuMusic is a polished, integrated AfuChat music ecosystem. Music is discoverable in Search, Shots, and the main feed; users can attach music to posts and videos; Free music follows the free-listening rules; Premium music remains purchase-protected; eligible creators can publish paid music for 5–1,000 ACoin; every purchase uses the existing AfuPay wallet; buyers can see their music expenditure and purchase history; creators can see their music earnings; and playback follows users throughout AfuChat through one reliable global player without breaking existing application functionality.

@@ -17,7 +17,8 @@ import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "@/lib/alert";
-import MusicPlayerSheet from "./MusicPlayerSheet";
+import type { AfuMusicLedgerItem } from "@/lib/afuMusic";
+import { useAfuMusicPlayer } from "./MusicPlayerContext";
 import {
   loadMusicPlaylists,
   saveMusicPlaylists,
@@ -25,7 +26,7 @@ import {
 } from "./playlistStore";
 import { downloadMusicFile, getMusicDownloadFilename } from "./musicFileDownload";
 
-type MusicSection = "discover" | "library" | "offline" | "playlists" | "studio";
+type MusicSection = "discover" | "library" | "offline" | "playlists" | "studio" | "purchases" | "earnings";
 
 export type AfuMusicTrack = {
   id: string;
@@ -46,6 +47,7 @@ export type AfuMusicTrack = {
   storagePath?: string;
   mimeType?: string;
   fileSize?: number;
+  videoUseAllowed?: boolean;
   createdAt?: string;
 };
 
@@ -56,6 +58,8 @@ export type AfuMusicCallbacks = {
   onCache?: (track: AfuMusicTrack) => Promise<void>;
   onRemoveCache?: (track: AfuMusicTrack) => Promise<void>;
   onListOffline?: () => Promise<AfuMusicTrack[]>;
+  onListPurchases?: () => Promise<AfuMusicLedgerItem[]>;
+  onListEarnings?: () => Promise<AfuMusicLedgerItem[]>;
   onResolveAudio?: (track: AfuMusicTrack) => Promise<string | null>;
   onResolveDownload?: (track: AfuMusicTrack, filename: string) => Promise<string | null>;
   onPlay?: (track: AfuMusicTrack) => void | Promise<void>;
@@ -67,14 +71,17 @@ export type AfuMusicCallbacks = {
     fileName: string;
     mimeType?: string;
     fileSize?: number;
+    videoUseAllowed?: boolean;
   }) => Promise<AfuMusicTrack | void>;
   onDeleteUpload?: (track: AfuMusicTrack) => Promise<void>;
   onOpenWallet?: () => void;
+  onUpgradePremium?: () => void;
 };
 
 type Props = AfuMusicCallbacks & {
   initialSection?: MusicSection;
   playlistOwnerId?: string;
+  canPublishPaid?: boolean;
 };
 
 const INK = "#19172F";
@@ -84,76 +91,6 @@ const GOLD = "#D8A746";
 const CANVAS = "#F7F1E9";
 const PAPER = "#FFF9F1";
 const MUTED = "#8D847B";
-
-const SEED_TRACKS: AfuMusicTrack[] = [
-  {
-    id: "seed-quiet-morning",
-    title: "Quiet Morning",
-    artist: "Mara Sol",
-    handle: "@marasol",
-    genre: "Ambient",
-    duration: "4:18",
-    plays: 18200,
-    price: 0,
-    coverColor: "#252143",
-    accentColor: "#F7BB75",
-    isFeatured: true,
-    createdAt: "Today",
-  },
-  {
-    id: "seed-afterimage",
-    title: "Afterimage",
-    artist: "Kofi North",
-    handle: "@kofinorth",
-    genre: "Electronic",
-    duration: "3:42",
-    plays: 9400,
-    price: 28,
-    coverColor: "#E85949",
-    accentColor: "#19172F",
-    isFeatured: true,
-    createdAt: "Yesterday",
-  },
-  {
-    id: "seed-blue-hour",
-    title: "Blue Hour, Side A",
-    artist: "June Ayo",
-    handle: "@juneayo",
-    genre: "R&B",
-    duration: "5:06",
-    plays: 12100,
-    price: 42,
-    coverColor: "#25356D",
-    accentColor: "#E9C35B",
-    createdAt: "May 18",
-  },
-  {
-    id: "seed-unfolding",
-    title: "Unfolding",
-    artist: "Nia Vale",
-    handle: "@niavale",
-    genre: "Acoustic",
-    duration: "2:57",
-    plays: 6300,
-    price: 16,
-    coverColor: "#E6B75E",
-    accentColor: "#F06451",
-    createdAt: "May 12",
-  },
-  {
-    id: "seed-small-hours",
-    title: "Small Hours",
-    artist: "Owen Sunday",
-    handle: "@owensunday",
-    genre: "Lo-fi",
-    duration: "3:31",
-    plays: 4600,
-    price: 24,
-    coverColor: "#6D7B77",
-    accentColor: "#F7E6C1",
-    createdAt: "May 09",
-  },
-];
 
 const GENRES = ["All", "Ambient", "Electronic", "R&B", "Acoustic", "Lo-fi"];
 
@@ -177,10 +114,12 @@ function TrackArt({
   size = 72,
   radius = 18,
 }: {
-  track: AfuMusicTrack;
+  track?: AfuMusicTrack;
   size?: number;
   radius?: number;
 }) {
+  const coverColor = track?.coverColor || "#E8DED2";
+  const accentColor = track?.accentColor || "#BBAA98";
   return (
     <View
       style={[
@@ -189,7 +128,7 @@ function TrackArt({
           width: size,
           height: size,
           borderRadius: radius,
-          backgroundColor: track.coverColor || INK,
+          backgroundColor: coverColor,
         },
       ]}
     >
@@ -197,7 +136,7 @@ function TrackArt({
         style={[
           styles.artOrb,
           {
-            backgroundColor: track.accentColor || CORAL,
+            backgroundColor: accentColor,
             width: size * 0.56,
             height: size * 0.56,
             borderRadius: size,
@@ -210,7 +149,7 @@ function TrackArt({
         style={[
           styles.artLine,
           {
-            backgroundColor: track.accentColor || CORAL,
+            backgroundColor: accentColor,
             width: size * 0.7,
             left: size * 0.12,
             bottom: size * 0.18,
@@ -218,9 +157,13 @@ function TrackArt({
           },
         ]}
       />
-      <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.18) }]}>
-        {initials(track.artist)}
-      </Text>
+      {track ? (
+        <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.18) }]}>
+          {initials(track.artist)}
+        </Text>
+      ) : (
+        <Ionicons name="musical-notes" size={Math.max(18, size * 0.34)} color={INK} />
+      )}
     </View>
   );
 }
@@ -393,7 +336,7 @@ function PlaylistRow({
   onPlay: () => void;
   onDelete: () => void;
 }) {
-  const cover = playlist.tracks[0] || SEED_TRACKS[0];
+  const cover = playlist.tracks[0];
   return (
     <View style={styles.playlistCard}>
       <Pressable onPress={onPlay} style={({ pressed }) => [styles.playlistMain, pressed && styles.pressed]}>
@@ -446,16 +389,27 @@ export default function AfuMusicApp({
   onCache,
   onRemoveCache,
   onListOffline,
+  onListPurchases,
+  onListEarnings,
   onResolveAudio,
   onResolveDownload,
   onPlay,
   onUpload,
   onDeleteUpload,
   onOpenWallet,
+  onUpgradePremium,
   playlistOwnerId,
+  canPublishPaid = false,
   acoinBalance,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
+  const {
+    track: selectedTrack,
+    queue: playQueue,
+    queueTitle,
+    play: playGlobally,
+    setQueue,
+  } = useAfuMusicPlayer();
   const [section, setSection] = useState<MusicSection>(initialSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
   const [query, setQuery] = useState("");
@@ -466,9 +420,6 @@ export default function AfuMusicApp({
   const [cachedIds, setCachedIds] = useState<string[]>([]);
   const [offlineTracks, setOfflineTracks] = useState<AfuMusicTrack[]>([]);
   const [ownedIds, setOwnedIds] = useState<string[]>([]);
-  const [selectedTrack, setSelectedTrack] = useState<AfuMusicTrack | null>(null);
-  const [playQueue, setPlayQueue] = useState<AfuMusicTrack[]>([]);
-  const [queueTitle, setQueueTitle] = useState("AfuMusic");
   const [downloadingIds, setDownloadingIds] = useState<string[]>([]);
   const [savingIds, setSavingIds] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<AfuMusicPlaylist[]>([]);
@@ -477,19 +428,49 @@ export default function AfuMusicApp({
   const [playlistModalTrack, setPlaylistModalTrack] = useState<AfuMusicTrack | null>(null);
   const [playlistDraft, setPlaylistDraft] = useState("");
   const [purchaseTrack, setPurchaseTrack] = useState<AfuMusicTrack | null>(null);
+  const [ledgerRows, setLedgerRows] = useState<AfuMusicLedgerItem[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadGenre, setUploadGenre] = useState("Ambient");
-  const [uploadPrice, setUploadPrice] = useState("20");
+  const [uploadPrice, setUploadPrice] = useState("5");
+  const [uploadIsPaid, setUploadIsPaid] = useState(false);
+  const [uploadVideoUseAllowed, setUploadVideoUseAllowed] = useState(false);
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+
+  const loadLedger = useCallback(async () => {
+    if (section !== "purchases" && section !== "earnings") return;
+    const load = section === "purchases" ? onListPurchases : onListEarnings;
+    if (!load) {
+      setLedgerRows([]);
+      setLedgerError(true);
+      return;
+    }
+    setLedgerLoading(true);
+    setLedgerError(false);
+    try {
+      setLedgerRows(await load());
+    } catch {
+      setLedgerRows([]);
+      setLedgerError(true);
+    } finally {
+      setLedgerLoading(false);
+    }
+  }, [onListEarnings, onListPurchases, section]);
+
+  useEffect(() => {
+    if (section === "purchases" || section === "earnings") void loadLedger();
+  }, [loadLedger, section]);
 
   const loadTracks = useCallback(async () => {
     setLoadError(false);
     setLoading(true);
     try {
-      const result = onBrowse ? await onBrowse() : SEED_TRACKS;
+      if (!onBrowse) throw new Error("AfuMusic catalog is unavailable.");
+      const result = await onBrowse();
       setTracks(result);
       setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
     } catch {
@@ -647,26 +628,22 @@ export default function AfuMusicApp({
     notifyPlay: boolean,
   ) => {
     const uniqueQueue = queue.filter((item, index) => queue.findIndex((other) => other.id === item.id) === index);
-    setPlayQueue(uniqueQueue);
-    setQueueTitle(title);
     try {
       if (notifyPlay) await onPlay?.(track);
-      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
+      await playGlobally(track, uniqueQueue, title, { showPlayer: true });
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onPlay, onResolveAudio]);
+  }, [onPlay, playGlobally]);
 
   const selectQueuedTrack = useCallback(async (track: AfuMusicTrack) => {
     try {
       await onPlay?.(track);
-      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
+      await playGlobally(track, playQueue, queueTitle, { showPlayer: true });
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onPlay, onResolveAudio]);
+  }, [onPlay, playGlobally, playQueue, queueTitle]);
 
   const featuredTracks = useMemo(() => (
     tracks
@@ -705,14 +682,13 @@ export default function AfuMusicApp({
       void playTrack(track);
       return;
     }
-    setPlayQueue((current) => {
+    setQueue((current) => {
       const next = current.length ? current.filter((item) => item.id !== track.id) : [selectedTrack];
       const currentIndex = next.findIndex((item) => item.id === selectedTrack.id);
       next.splice(currentIndex < 0 ? next.length : currentIndex + 1, 0, track);
       return next;
     });
-    setQueueTitle((title) => title || "Up next");
-  }, [playTrack, selectedTrack]);
+  }, [playTrack, selectedTrack, setQueue]);
 
   const startPlaylist = useCallback((playlist: AfuMusicPlaylist) => {
     if (!playlist.tracks.length) {
@@ -797,7 +773,8 @@ export default function AfuMusicApp({
     }
     setPurchasing(true);
     try {
-      if (onPurchase) await onPurchase(purchaseTrack);
+      if (!onPurchase) throw new Error("Music purchases are unavailable right now.");
+      await onPurchase(purchaseTrack);
       setOwnedIds((ids) => [...ids, purchaseTrack.id]);
       setTracks((current) => current.map((track) => (
         track.id === purchaseTrack.id ? { ...track, isOwned: true } : track
@@ -816,12 +793,48 @@ export default function AfuMusicApp({
       copyToCacheDirectory: true,
       multiple: false,
     });
-    if (!result.canceled) setUploadFile(result.assets[0]);
-  }, []);
+    if (!result.canceled) {
+      const file = result.assets[0];
+      setUploadFile(file);
+      if (!uploadTitle.trim()) {
+        setUploadTitle(file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim());
+      }
+    }
+  }, [uploadTitle]);
+
+  const showPremiumRequired = useCallback(() => {
+    showAlert(
+      "Premium required",
+      "Paid music publishing requires AfuChat Premium. Upgrade your subscription to publish music for sale.",
+      [
+        { text: "Not now", style: "cancel" },
+        {
+          text: "Upgrade to Premium",
+          onPress: () => {
+            setUploadOpen(false);
+            onUpgradePremium?.();
+          },
+        },
+      ],
+    );
+  }, [onUpgradePremium]);
 
   const submitUpload = useCallback(async () => {
     if (!uploadTitle.trim() || !uploadFile) {
       showAlert("Add a title and audio", "Choose the track you want to publish before continuing.");
+      return;
+    }
+    const price = uploadIsPaid ? Number(uploadPrice) : 0;
+    if (uploadIsPaid && !canPublishPaid) {
+      showPremiumRequired();
+      return;
+    }
+    if (uploadIsPaid && (!Number.isInteger(price) || price < 5 || price > 1000)) {
+      showAlert("Check the track price", "Paid music must cost between 5 and 1,000 ACoin.");
+      return;
+    }
+    if (!onUpload) {
+      showAlert("Publishing unavailable", "AfuMusic publishing is unavailable right now. Try again later.");
       return;
     }
     setUploading(true);
@@ -829,25 +842,14 @@ export default function AfuMusicApp({
       const payload = {
         title: uploadTitle.trim(),
         genre: uploadGenre,
-        price: Math.max(0, Number(uploadPrice) || 0),
+        price,
         fileUri: uploadFile.uri,
         fileName: uploadFile.name,
         mimeType: uploadFile.mimeType,
         fileSize: uploadFile.size,
+        videoUseAllowed: uploadVideoUseAllowed,
       };
-      const result = onUpload ? await onUpload(payload) : {
-        id: `local-${Date.now()}`,
-        title: payload.title,
-        artist: "You",
-        handle: "@you",
-        genre: payload.genre,
-        price: payload.price,
-        duration: "—",
-        coverColor: INK,
-        accentColor: CORAL,
-        audioUrl: payload.fileUri,
-        createdAt: "Just now",
-      };
+      const result = await onUpload(payload);
       if (result) {
         setTracks((current) => [{
           ...result,
@@ -858,13 +860,22 @@ export default function AfuMusicApp({
       setUploadOpen(false);
       setUploadTitle("");
       setUploadFile(null);
+      setUploadIsPaid(false);
+      setUploadVideoUseAllowed(false);
       showAlert("Published to AfuMusic", "Your track is ready for listeners.");
-    } catch {
+    } catch (error) {
+      const errorMessage = error instanceof Error
+        ? error.message
+        : String((error as { message?: unknown } | null)?.message ?? "");
+      if (errorMessage.includes("music_paid_publishing_requires_premium")) {
+        showPremiumRequired();
+        return;
+      }
       showAlert("Upload failed", "Your track was not published. Try again.");
     } finally {
       setUploading(false);
     }
-  }, [onUpload, uploadFile, uploadGenre, uploadPrice, uploadTitle]);
+  }, [canPublishPaid, onUpload, showPremiumRequired, uploadFile, uploadGenre, uploadIsPaid, uploadPrice, uploadTitle, uploadVideoUseAllowed]);
 
   const renderTrack = useCallback(({ item }: { item: AfuMusicTrack }) => (
     <TrackRow
@@ -887,7 +898,9 @@ export default function AfuMusicApp({
   const sectionTitle = section === "discover" ? "Find your next repeat" :
     section === "library" ? "Your listening library" :
     section === "offline" ? "Ready without signal" :
-    section === "playlists" ? "Your playlists" : "Your studio";
+    section === "playlists" ? "Your playlists" :
+    section === "purchases" ? "Your purchase history" :
+    section === "earnings" ? "Your creator earnings" : "Your studio";
 
   return (
     <View style={[styles.root, { backgroundColor: CANVAS, paddingTop: insets.top }]}>
@@ -925,6 +938,8 @@ export default function AfuMusicApp({
           <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} />
           <SectionPill label="Playlists" icon="list-outline" active={section === "playlists"} onPress={() => setSection("playlists")} />
           <SectionPill label="Studio" icon="mic-outline" active={section === "studio"} onPress={() => setSection("studio")} />
+          <SectionPill label="Purchases" icon="receipt-outline" active={section === "purchases"} onPress={() => setSection("purchases")} />
+          <SectionPill label="Earnings" icon="cash-outline" active={section === "earnings"} onPress={() => setSection("earnings")} />
         </ScrollView>
       </View>
 
@@ -969,7 +984,9 @@ export default function AfuMusicApp({
 
       <View style={styles.contentHeader}>
         <View>
-          <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : section === "playlists" ? "YOUR COLLECTIONS" : "YOUR NEXT LISTEN"}</Text>
+          <Text style={styles.sectionEyebrow}>
+            {section === "studio" ? "PUBLISH & MANAGE" : section === "playlists" ? "YOUR COLLECTIONS" : section === "purchases" ? "LISTENING RECEIPTS" : section === "earnings" ? "TRACK SALES" : "YOUR NEXT LISTEN"}
+          </Text>
           <Text style={styles.sectionTitle}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
@@ -995,7 +1012,34 @@ export default function AfuMusicApp({
         </ScrollView>
       ) : null}
 
-      {section === "playlists" ? (
+      {section === "purchases" || section === "earnings" ? (
+        ledgerLoading ? (
+          <SkeletonRows />
+        ) : ledgerError ? (
+          <EmptyState icon="cloud-offline-outline" title="Ledger unavailable" message="We couldn't load your AfuMusic transactions." action={{ label: "Try again", onPress: () => { void loadLedger(); } }} />
+        ) : ledgerRows.length === 0 ? (
+          <EmptyState
+            icon={section === "purchases" ? "receipt-outline" : "cash-outline"}
+            title={section === "purchases" ? "No purchases yet" : "No track earnings yet"}
+            message={section === "purchases" ? "Tracks you unlock will appear here." : "Your paid track sales will appear here as they happen."}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={styles.ledgerList} showsVerticalScrollIndicator={false}>
+            {ledgerRows.map((row) => (
+              <View key={row.id} style={styles.ledgerRow}>
+                <View style={styles.ledgerIcon}><Ionicons name={section === "purchases" ? "musical-notes" : "cash-outline"} size={18} color={CORAL} /></View>
+                <View style={styles.ledgerCopy}>
+                  <Text style={styles.ledgerTitle} numberOfLines={1}>{row.title}</Text>
+                  <Text style={styles.ledgerMeta} numberOfLines={1}>
+                    {section === "purchases" ? `Creator: ${row.counterpartyName}` : `Buyer: ${row.counterpartyName}`} · {new Date(row.happenedAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={styles.ledgerAmount}>{section === "purchases" ? "−" : "+"}{row.amount} AC</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )
+      ) : section === "playlists" ? (
         playlistOwnerId && loadedPlaylistOwner !== playlistOwnerId ? (
           <SkeletonRows />
         ) : playlists.length === 0 ? (
@@ -1039,21 +1083,6 @@ export default function AfuMusicApp({
           ListHeaderComponent={section === "discover" && !query ? <Text style={styles.listHint}>Fresh from independent creators</Text> : null}
         />
       )}
-
-      {selectedTrack ? (
-        <MusicPlayerSheet
-          track={selectedTrack}
-          queue={playQueue}
-          queueTitle={queueTitle}
-          onSelectTrack={(track) => { void selectQueuedTrack(track); }}
-          onClose={() => setSelectedTrack(null)}
-          onDownload={Platform.OS === "web" ? () => { void handleWebDownload(selectedTrack); } : undefined}
-          downloading={downloadingIds.includes(selectedTrack.id)}
-          onSaveOffline={Platform.OS !== "web" ? () => { void handleCache(selectedTrack); } : undefined}
-          isCached={cachedIds.includes(selectedTrack.id)}
-          savingOffline={savingIds.includes(selectedTrack.id)}
-        />
-      ) : null}
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
@@ -1163,11 +1192,50 @@ export default function AfuMusicApp({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
               {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
             </ScrollView>
-            <Text style={styles.fieldLabel}>Unlock price</Text>
-            <View style={styles.priceInput}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" style={styles.priceTextInput} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+            <Text style={styles.fieldLabel}>Publishing option</Text>
+            <View style={styles.publishModes}>
+              <Pressable onPress={() => setUploadIsPaid(false)} style={[styles.publishMode, !uploadIsPaid && styles.publishModeActive]}>
+                <Ionicons name="gift-outline" size={16} color={!uploadIsPaid ? PAPER : MUTED} />
+                <Text style={[styles.publishModeText, !uploadIsPaid && styles.publishModeTextActive]}>Free</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (!canPublishPaid) {
+                    showPremiumRequired();
+                    return;
+                  }
+                  setUploadIsPaid(true);
+                }}
+                style={[styles.publishMode, uploadIsPaid && styles.publishModeActive]}
+              >
+                <Ionicons name="flash-outline" size={16} color={uploadIsPaid ? PAPER : MUTED} />
+                <Text style={[styles.publishModeText, uploadIsPaid && styles.publishModeTextActive]}>Paid</Text>
+                {!canPublishPaid ? <Ionicons name="lock-closed" size={12} color={MUTED} /> : null}
+              </Pressable>
+            </View>
+            {uploadIsPaid ? (
+              <>
+                <Text style={styles.fieldLabel}>Price (5–1,000 ACoin)</Text>
+                <View style={styles.priceInput}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" style={styles.priceTextInput} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+              </>
+            ) : (
+              <Text style={styles.freePublishingNote}>Listeners can play this track without purchasing it.</Text>
+            )}
+            <Pressable
+              onPress={() => setUploadVideoUseAllowed((allowed) => !allowed)}
+              style={styles.videoUseToggle}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: uploadVideoUseAllowed }}
+            >
+              <Ionicons name={uploadVideoUseAllowed ? "checkbox" : "square-outline"} size={19} color={uploadVideoUseAllowed ? COBALT : MUTED} />
+              <View style={styles.videoUseCopy}>
+                <Text style={styles.videoUseTitle}>Allow use in AfuChat videos</Text>
+                <Text style={styles.videoUseNote}>Only tracks with this permission can be added to Shots.</Text>
+              </View>
+            </Pressable>
             <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, pressed && styles.pressed]}>
               <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
-              <View style={styles.filePickerCopy}><Text style={styles.filePickerTitle}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={styles.filePickerSub}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
+              <View style={styles.filePickerCopy}><Text style={styles.filePickerTitle}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={styles.filePickerSub}>{uploadFile ? "Ready to publish" : "MP3, M4A, WAV, OGG, or AAC"}</Text></View>
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
             <Pressable onPress={submitUpload} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
@@ -1288,6 +1356,13 @@ const styles = StyleSheet.create({
   playlistListLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.1, marginTop: 17, marginBottom: 7 },
   playlistChoices: { maxHeight: 210 },
   playlistChoice: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
+  ledgerList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28, gap: 8 },
+  ledgerRow: { minHeight: 68, flexDirection: "row", alignItems: "center", gap: 11, padding: 10, borderRadius: 15, backgroundColor: PAPER },
+  ledgerIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#F064511A" },
+  ledgerCopy: { flex: 1, minWidth: 0 },
+  ledgerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
+  ledgerMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 9, marginTop: 4 },
+  ledgerAmount: { color: INK, fontFamily: "Inter_700Bold", fontSize: 10 },
   uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
@@ -1297,6 +1372,16 @@ const styles = StyleSheet.create({
   formGenreChipActive: { borderColor: INK, backgroundColor: INK },
   formGenreText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
   formGenreTextActive: { color: PAPER },
+  publishModes: { flexDirection: "row", gap: 8 },
+  publishMode: { flex: 1, height: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER },
+  publishModeActive: { borderColor: INK, backgroundColor: INK },
+  publishModeText: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 12 },
+  publishModeTextActive: { color: PAPER },
+  freePublishingNote: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 8 },
+  videoUseToggle: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12, paddingVertical: 7 },
+  videoUseCopy: { flex: 1 },
+  videoUseTitle: { color: INK, fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  videoUseNote: { color: MUTED, fontFamily: "Inter_400Regular", fontSize: 9, marginTop: 3 },
   priceInput: { flexDirection: "row", alignItems: "center", height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13 },
   priceTextInput: { flex: 1, color: INK, fontFamily: "Inter_700Bold", fontSize: 13, marginLeft: 7 },
   acoinSuffix: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 11 },
