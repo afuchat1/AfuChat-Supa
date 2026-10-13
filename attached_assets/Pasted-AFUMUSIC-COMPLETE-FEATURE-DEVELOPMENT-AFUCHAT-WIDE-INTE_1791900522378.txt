@@ -1,0 +1,1063 @@
+AFUMUSIC — COMPLETE FEATURE DEVELOPMENT, AFUCHAT-WIDE INTEGRATION, AND PRODUCTION READINESS
+
+Repository: https://github.com/afuchat1/AfuChat-Supa
+
+Project: AfuChat Technologies Limited
+Feature: AfuMusic
+Platform: AfuChat mobile application and all applicable connected platform surfaces
+Primary objective: Build, complete, integrate, and verify AfuMusic as a first-class music system across the entire AfuChat platform.
+
+---
+
+PART 1 — PROJECT REQUIREMENTS AND WORKING RULES
+
+1.1 The complete objective
+
+Implement AfuMusic as a complete, premium-quality music ecosystem inside AfuChat.
+
+AfuMusic must not be an independent feature that users must open before discovering or using music. Music must be integrated into the existing AfuChat super app, just like other native content types.
+
+Users must be able to discover, play, publish, share, purchase, and interact with music from the appropriate locations throughout AfuChat.
+
+The completed feature must include:
+
+- Music discovery and browsing.
+- Track details and creator information.
+- User-uploaded cover artwork.
+- Music file upload and publishing.
+- Free and Paid publishing.
+- AfuChat Premium entitlement enforcement.
+- ACoin pricing and purchases through AfuPay.
+- Global AfuSearch integration.
+- Main feed and post integration.
+- AfuChat Shots integration.
+- Background music selection for video creation.
+- Global music playback and a persistent mini-player.
+- Full-screen player, queue, playlists, and library.
+- Creator profiles and music discovery.
+- Offline music where supported.
+- Purchase history, creator earnings, and transaction integrity.
+- Security, moderation, storage, and rights enforcement.
+- Complete testing, regression prevention, and production readiness.
+
+Every required feature must either be implemented or verified as already working. Missing or incomplete functionality must not be omitted simply because some related code already exists.
+
+1.2 Inspect the repository before implementation
+
+First inspect the current repository, branch, application architecture, and all files related to AfuMusic.
+
+Review the actual current versions of these areas, including but not limited to:
+
+- "artifacts/mobile/modules/afumusic/index.tsx"
+- "artifacts/mobile/modules/afumusic/MusicPlayerContext.tsx"
+- "artifacts/mobile/modules/afumusic/MusicPlayerSheet.tsx"
+- "artifacts/mobile/lib/afuMusic.ts"
+- "artifacts/mobile/lib/musicCache.ts"
+- "artifacts/mobile/components/music/AfuMusicArtwork.tsx"
+- "artifacts/mobile/components/music/MusicTrackCard.tsx"
+- "artifacts/mobile/components/music/MusicPickerSheet.tsx"
+- "artifacts/mobile/app/_layout.tsx"
+- "artifacts/mobile/app/(tabs)/search.tsx"
+- "artifacts/mobile/app/(tabs)/discover.tsx"
+- "artifacts/mobile/app/post/[id].tsx"
+- "artifacts/mobile/app/moments/create.tsx"
+- "artifacts/mobile/app/moments/create-video.tsx"
+- "artifacts/mobile/app/video/[id].tsx"
+- The music creator studio and related routes.
+- The profile, subscription, AfuPay, wallet, transaction-history, and earnings implementations.
+- The actual database schema, migration history, triggers, functions, storage policies, and access-control rules.
+
+Use the real current paths if any have changed.
+
+Inspect the package configuration, installed audio/video dependencies, navigation structure, global providers, and actual production database compatibility before changing architecture.
+
+Create a clear feature audit with these statuses:
+
+1. Implemented and verified.
+2. Implemented but incomplete.
+3. Present in code but not verified in production.
+4. Missing and requiring implementation.
+5. Blocked by an actual platform or technical limitation.
+
+For every incomplete or missing requirement, identify the exact file, data flow, or backend operation that needs work.
+
+Do not confuse an existing component, import, migration file, database column, or visible button with a completed feature.
+
+1.3 Protect the existing application
+
+AfuChat already has working functionality. Preserve it.
+
+- Do not reset the repository or discard unrelated work.
+- Do not replace the existing Supabase connection.
+- Do not introduce an unnecessary API gateway or new backend architecture.
+- Do not create duplicate music tables, duplicate ownership systems, or parallel wallets.
+- Do not remove existing migrations or erase production records.
+- Do not replace functioning application features with mock implementations.
+- Do not make unrelated changes to messaging, authentication, posts, or other AfuChat modules.
+- Do not silently change established database contracts.
+
+Use the existing architecture wherever possible. If a change is necessary, explain the reason and make the smallest compatible change.
+
+Implement through reviewable commits or pull requests. Verify the actual working tree and current branch before making changes.
+
+---
+
+PART 2 — AFUMUSIC PRODUCT AND VISUAL EXPERIENCE
+
+2.1 Create a complete premium music experience
+
+Design AfuMusic to feel distinctive, polished, modern, and native to AfuChat.
+
+This must be a substantive user-experience redesign, not merely changing colors, increasing border radii, or rearranging ordinary lists.
+
+The experience should include:
+
+- An artwork-led discovery home.
+- Featured releases based on real published tracks.
+- Trending and popular music based on genuine platform data.
+- New releases.
+- Genre and mood collections where supported by real metadata.
+- Recently played music based on actual listening history.
+- Search and filtering.
+- Track details.
+- Creator information and profiles.
+- Full-screen playback.
+- Queue and playback controls.
+- Library and playlists.
+- Offline music where supported.
+- Music publishing studio.
+- Paid music purchase screens.
+- Creator earnings and purchase history.
+
+Use a consistent visual identity across AfuMusic, AfuSearch, posts, Shots, and video editing. These surfaces should feel connected to the same product rather than separate applications.
+
+Do not use fake artists, invented tracks, placeholder engagement numbers, or demo tracks in production-facing screens.
+
+When no music exists, show a designed empty state that explains how to discover or publish music.
+
+2.2 Artwork and track presentation
+
+Use creator-uploaded cover artwork whenever available.
+
+Track artwork must be consistent across every surface. The same track must not show different covers in Search, the player, the feed, and the library unless the creator has legitimately updated the artwork.
+
+Provide a neutral music-icon fallback when a cover is missing or unavailable.
+
+Avoid fake artwork, arbitrary artist initials, unrelated stock imagery, or placeholder content as substitutes for real cover art.
+
+Support artwork loading, caching, image replacement, failed image requests, and safe fallback rendering.
+
+2.3 Responsive and accessible UI
+
+Ensure the interface works on supported Android devices, including smaller and less powerful phones.
+
+Maintain usable touch targets, readable labels, accessible controls, responsive artwork, and correct system navigation behavior.
+
+Player controls and music attribution must not obstruct important Shots controls, post interactions, system gestures, or accessibility elements.
+
+---
+
+PART 3 — COMPLETE MUSIC DATA AND TRACK LIFECYCLE
+
+3.1 Canonical music records
+
+Use the existing AfuChat music data model, including the existing "music_tracks" structure and related records, after verifying the current schema.
+
+A track must have one canonical identity throughout AfuChat.
+
+The data model must support the applicable existing fields for:
+
+- Track ID.
+- Creator ID.
+- Title.
+- Artist or creator display name.
+- Genre.
+- Audio storage location.
+- Audio MIME type.
+- File size.
+- Duration when available.
+- Cover artwork URL and storage location.
+- Free/Paid status.
+- Price in ACoin.
+- Publication status.
+- Discoverability.
+- Listening and usage statistics.
+- Video-use permissions where applicable.
+- Creation and update timestamps.
+- Moderation or removal status.
+- Other fields already used by the application.
+
+Do not create separate music records when a track is attached to a post, used in a Shot, selected for a video, or opened from Search.
+
+Use the canonical track ID everywhere.
+
+3.2 Track lifecycle
+
+Implement the complete lifecycle:
+
+1. Creator selects an audio file.
+2. The application validates the file.
+3. Metadata is extracted where supported.
+4. The creator adds or confirms track information.
+5. The creator uploads optional cover artwork.
+6. The creator selects Free or Paid publishing.
+7. Premium eligibility and price restrictions are checked.
+8. The media files are uploaded safely.
+9. The canonical track record is created.
+10. The track enters the appropriate publication state.
+11. Published tracks become discoverable according to visibility and moderation rules.
+12. Users can play or purchase the track according to access permissions.
+13. The creator can manage the track.
+14. Deletion or moderation updates all relevant surfaces safely.
+
+Failed uploads must not leave broken tracks, orphaned storage objects, or duplicate records.
+
+3.3 Publication states
+
+Handle draft, uploading, published, failed, removed, and moderated states where supported by the existing architecture.
+
+Only eligible, published, discoverable tracks should appear in public discovery.
+
+Do not expose unpublished or private tracks through AfuSearch, the main feed, creator discovery, or public track links.
+
+---
+
+PART 4 — AUDIO UPLOAD, METADATA, AND COVER ARTWORK
+
+4.1 Audio file selection
+
+Complete the existing audio-upload flow.
+
+Support the existing accepted audio formats, currently including MP3, M4A, WAV, OGG, and AAC, subject to actual platform support.
+
+Preserve the current 100 MB maximum audio-file limit unless a justified, tested change is required.
+
+Validate the file's actual type, extension, size, and uploadability. Do not rely solely on a client-supplied filename or MIME type.
+
+Provide:
+
+- File selection.
+- File details.
+- Validation feedback.
+- Upload progress.
+- Cancel and retry.
+- Failure recovery.
+- Success confirmation.
+- Duplicate-submission protection.
+
+4.2 Automatic title extraction
+
+Automatically extract the track title from embedded audio metadata where supported.
+
+If embedded metadata is missing or unsupported, use the filename as the initial title.
+
+Allow the creator to edit the title before publishing.
+
+Extract additional supported metadata, such as artist and duration, when reliably available. Do not invent metadata or claim extraction succeeded when it did not.
+
+4.3 Creator-uploaded cover artwork
+
+Users must be able to upload their own cover image for each track.
+
+Provide a visible Upload cover action in the publishing studio.
+
+The creator must be able to:
+
+- Select a photo from the device.
+- Preview the image.
+- Replace it before publishing.
+- Remove it before publishing.
+- See validation errors.
+- Retry failed uploads.
+- Confirm that the saved track uses the uploaded cover.
+
+Use the existing supported JPEG, PNG, and WebP formats and the current 10 MB cover limit unless the audit establishes a justified alternative.
+
+Provide a square artwork preview or crop suitable for music artwork.
+
+Cover art is optional. A track without a cover must use a neutral music-icon fallback rather than a fake image.
+
+Upload artwork to the existing approved storage destination. Store the correct cover reference in the canonical track record.
+
+Verify that the uploaded cover persists after navigating away, restarting the app, and reopening the track.
+
+4.4 Artwork throughout AfuChat
+
+The uploaded cover must appear consistently in:
+
+- AfuMusic discovery.
+- Full-screen player.
+- Global mini-player.
+- AfuSearch All results.
+- AfuSearch Music results.
+- Main feed music attachments.
+- Music posts.
+- Shots attribution.
+- Video soundtrack picker.
+- Creator profiles.
+- Playlists and queues.
+- Owned music and purchase history.
+- Creator studio and earnings views where appropriate.
+
+Replacing artwork must update the canonical track presentation across the application.
+
+When deleting artwork or a track, remove only the relevant stored object through a safe cleanup process. Do not delete unrelated storage files.
+
+---
+
+PART 5 — FREE AND PAID MUSIC PUBLISHING
+
+5.1 Two publishing options
+
+The publishing interface must clearly offer:
+
+Publish as Free
+
+- Available to eligible creators without requiring AfuChat Premium.
+- Price is zero.
+- Listeners can listen without purchasing the track.
+- Track is labeled Free.
+
+Publish as Paid
+
+- Available only to creators with a valid, active AfuChat Premium entitlement.
+- Requires a valid price between 5 and 1,000 ACoin inclusive.
+- Track is labeled Paid or Premium throughout AfuChat.
+- Listeners must purchase the track before accessing protected playback.
+
+Do not combine Free and Paid into an ambiguous price input that could accidentally publish the wrong access type.
+
+5.2 Premium publishing enforcement
+
+When a non-Premium creator selects Paid publishing, show this exact message:
+
+"Paid music publishing requires AfuChat Premium. Upgrade your subscription to publish music for sale."
+
+Provide an Upgrade to Premium action that opens the existing AfuChat subscription screen.
+
+Preserve the selected file, metadata, and cover when practical so the creator can continue after upgrading.
+
+Verify Premium entitlement through the trusted existing subscription system. A client-side flag, locally stored value, or hidden UI control is not sufficient.
+
+If a Premium subscription expires or is cancelled, enforce the existing policy for new publishing and management without unexpectedly deleting previously published tracks or changing their prices.
+
+5.3 ACoin price rules
+
+Every newly published Paid track must have an integer price between 5 and 1,000 ACoin inclusive.
+
+- Minimum: 5 ACoin.
+- Maximum: 1,000 ACoin.
+- No paid track at zero ACoin.
+- No price below 5 ACoin.
+- No price above 1,000 ACoin.
+- No negative, malformed, missing, or invalid paid price.
+
+Validate the range in the publishing UI and at a trusted backend/database boundary.
+
+A modified client must not be able to bypass the restriction.
+
+Free publishing remains a separate option with a zero price.
+
+Do not confuse the ACoin price of an individual track with the AfuChat Premium subscription price.
+
+---
+
+PART 6 — AFUCHAT-WIDE DISCOVERY AND SEARCH
+
+6.1 Global AfuSearch integration
+
+Music must be integrated into the actual AfuSearch feature used across AfuChat.
+
+Do not treat the search field inside AfuMusic or MusicPickerSheet as satisfying this requirement.
+
+Inspect the existing global search screen, query construction, result aggregation, ranking, pagination, and result rendering.
+
+Music must be eligible to appear in the global All results alongside existing content types whenever it is relevant.
+
+The dedicated Music category can remain, but it must not be the only way to discover music.
+
+6.2 Search fields and relevance
+
+Support relevant matching against:
+
+- Track title.
+- Artist or creator name.
+- Creator handle.
+- Genre.
+- Stored descriptive metadata.
+- Supported indexed keywords.
+- Other genuine track metadata.
+
+Examples:
+
+- A song-title query returns the corresponding published track.
+- A creator-name query can return their profile and tracks.
+- A genre query returns relevant music.
+- A keyword query returns music whose actual searchable metadata matches.
+- A general query can include relevant music in All results.
+
+Use the existing search architecture and preserve all existing categories.
+
+Do not break searches for people, posts, videos, channels, events, products, jobs, or any other currently supported AfuChat content.
+
+6.3 Search result behavior
+
+Each music result must show available artwork, title, creator, and Free/Paid status. Show the price and ownership state when relevant.
+
+Tapping a result must open the canonical track detail experience or authorized playback flow.
+
+Handle empty results, loading, pagination, and failures. A failed music query must not break the entire search screen.
+
+Avoid duplicates between All results and the dedicated Music filter.
+
+---
+
+PART 7 — MAIN FEED AND MUSIC POSTS
+
+7.1 Feed discovery
+
+Music must be discoverable in the normal AfuChat feed.
+
+Complete the existing feed and post-detail integrations rather than creating a disconnected music feed.
+
+Music can appear through:
+
+- Music posts.
+- Posts with attached music.
+- Videos with soundtrack attribution.
+- Creator profiles and published content.
+- Existing relevant feed recommendations.
+
+Show the track's artwork, title, creator, and access state.
+
+Respect existing feed visibility, moderation, ranking, pagination, and engagement rules.
+
+7.2 Four post types
+
+Update the existing post composer to support these explicit publishing types:
+
+1. Text.
+2. Photo.
+3. Video.
+4. Music.
+
+Preserve existing caption, media, privacy, visibility, and engagement behavior.
+
+7.3 Music post publishing
+
+Allow users to select an existing published track and publish it as a music post.
+
+The post must reference the canonical track ID rather than uploading a duplicate audio file.
+
+A Music post must support the existing compatible post metadata and engagement features.
+
+When a user opens the attachment, resolve the correct track and ownership state.
+
+Free tracks can be played without purchasing them. Unowned Paid tracks must show a purchase action instead of unauthorized playback.
+
+A music post must remain structurally valid if the track becomes temporarily unavailable. Display an appropriate unavailable state rather than crashing the feed.
+
+7.4 Feed playback
+
+When a user starts music from a feed post, use the shared global player.
+
+If the user navigates away, playback should continue under the global playback rules.
+
+Do not create a new independent player for every music card.
+
+---
+
+PART 8 — AFUCHAT SHOTS AND AUTOMATIC MUSIC DISCOVERY
+
+8.1 Automatic playback
+
+Integrate music with the active Shot and video playback lifecycle.
+
+When a Shot becomes active:
+
+- A Free soundtrack may autoplay according to the Shot's configured audio behavior.
+- An owned Paid soundtrack may play when authorized and permitted.
+- An unowned Paid soundtrack must not play and must display the track information and a Buy track action.
+- A Shot without attached music must preserve its normal audio behavior.
+
+Autoplay must not trigger an unauthorized charge or silently unlock Paid music.
+
+8.2 Scrolling behavior
+
+When a user scrolls to another Shot:
+
+- Stop or transition away from the previous Shot's music.
+- Start the new Shot's permitted soundtrack when appropriate.
+- Prevent audio from inactive or preloaded Shots from playing.
+- Prevent overlapping soundtracks.
+- Avoid creating new playback sessions on every render.
+- Preserve the feed's existing visibility and pause/resume rules.
+
+8.3 Original sound and music
+
+Support the saved audio mode:
+
+- Original: use the video's original sound without adding a separate soundtrack.
+- Mix: play the original sound and music using the configured volume levels.
+- Replace: mute the original sound and use the selected music instead.
+
+The playback behavior must match the creator's saved choice.
+
+8.4 Music attribution
+
+Display a suitable music attribution area showing the uploaded cover, track title, and creator where appropriate.
+
+Tapping the attribution must open the canonical music experience.
+
+Allow users to discover other tracks by the creator where that functionality exists.
+
+---
+
+PART 9 — VIDEO CREATION, EDITING, AND SOUNDTRACKS
+
+9.1 Music selection
+
+Complete the existing music picker in the video creation flow.
+
+Users must be able to:
+
+- Browse available music.
+- Search relevant tracks.
+- View cover art, creator, genre, and access state.
+- Preview permitted music.
+- Select Free music.
+- Select Paid music they own.
+- Purchase an unowned Paid track where appropriate.
+- Replace the selected track.
+- Remove the soundtrack.
+- Preview the final audio configuration.
+
+9.2 Sound controls
+
+Where supported, allow users to:
+
+- Keep the original video sound.
+- Replace original sound with music.
+- Mix music and original sound.
+- Adjust music volume.
+- Adjust original-audio volume.
+- Preview changes before publishing.
+
+Persist the canonical track ID, audio mode, and relevant volume settings using the existing video data model.
+
+Verify that the published video reader consumes the same fields.
+
+9.3 Actual audio processing
+
+Do not treat a track ID or preview player as proof that the final video contains the selected soundtrack.
+
+If Replace is selected, the published video must not retain audible original audio.
+
+If Mix is selected, the published result must contain both audio sources at the configured levels.
+
+If Original is selected, no separate soundtrack should be introduced.
+
+Inspect the existing video-processing pipeline. Use compatible existing media-processing functionality where possible. If actual audio merging or replacement is missing, implement a technically compatible, tested path.
+
+Account for video quality, memory, processing time, device compatibility, upload limits, and failure recovery.
+
+If a platform limitation prevents a specific behavior, document it explicitly and implement the supported alternative rather than pretending the feature works.
+
+9.4 Music rights
+
+A listener's purchase for personal listening must not automatically grant unrestricted rights to embed and redistribute that audio in published videos.
+
+Enforce track video-use permissions and other applicable rights.
+
+Do not allow a client-side flag to bypass these rules.
+
+---
+
+PART 10 — GLOBAL PLAYBACK AND PERSISTENT MINI-PLAYER
+
+10.1 Shared player architecture
+
+Use the existing "AfuMusicPlayerProvider", player context, and shared player components if they can support the requirements correctly.
+
+The player must be part of the global AfuChat application shell, not a component that exists only inside AfuMusic.
+
+The same player state must serve authorized playback initiated from:
+
+- AfuSearch.
+- Main feed posts.
+- Track detail pages.
+- Creator profiles.
+- Playlists.
+- AfuMusic.
+- Other appropriate AfuChat surfaces.
+
+10.2 Persistent playback
+
+When a user starts an authorized track and leaves its originating screen, playback should continue through navigation across supported screens.
+
+The full-screen player should offer appropriate controls:
+
+- Play/pause.
+- Previous and next where applicable.
+- Seek/progress.
+- Queue.
+- Shuffle and repeat where implemented.
+- Track artwork and creator information.
+- Additional track actions supported by the application.
+
+10.3 Global mini-player
+
+Show a compact player when a user-initiated or otherwise permitted global music session is active.
+
+It must display:
+
+- Cover artwork.
+- Track title.
+- Creator.
+- Play/pause.
+- An action to reopen the full player.
+- A clear close/stop control.
+
+Closing the player must stop playback and clear the active session as appropriate. Merely hiding the player must not leave unexpected audio running.
+
+Switching screens must not instantiate duplicate players or interrupt playback unnecessarily.
+
+10.4 Shots coordination
+
+Coordinate the global player with the active Shot.
+
+Do not overlay duplicate controls or create unrelated music sessions on top of the video player.
+
+When a Shot's music is active, its attribution and video controls should remain coherent with the global player architecture.
+
+10.5 Audio interruptions and background behavior
+
+Verify the actual audio library and installed package versions before making changes.
+
+Handle:
+
+- Backgrounding and foregrounding.
+- Network loss.
+- Audio interruptions.
+- Headphone disconnection.
+- Track switching.
+- Video-to-music transitions.
+- Playback errors.
+- Explicit stop actions.
+- Duplicate start requests.
+
+Test supported background playback on real devices. An in-app mini-player must not be described as a system-wide floating window over other applications unless that separate platform-specific capability is implemented with the required permissions and user consent.
+
+---
+
+PART 11 — MUSIC LIBRARY, PLAYLISTS, AND OFFLINE PLAYBACK
+
+11.1 User library
+
+Complete the existing library using real account and music records.
+
+Where supported, users should be able to browse:
+
+- Their published tracks.
+- Owned or purchased tracks.
+- Playlists.
+- Recently played tracks.
+- Queued tracks.
+- Offline tracks.
+- Creator uploads.
+- Purchase history.
+
+Do not display a Paid track as owned unless the canonical purchase record or trusted entitlement confirms ownership.
+
+11.2 Playlists and queue
+
+Allow users to create and manage playlists where the existing data model supports them.
+
+Support adding and removing tracks, viewing playlist details, reordering the queue where supported, and playing authorized tracks.
+
+Maintain canonical track identity and ownership state throughout the playlist.
+
+Handle deleted, unavailable, or unowned Paid tracks gracefully.
+
+11.3 Offline music
+
+Complete the existing private offline cache where supported.
+
+Respect the existing cache size and file-count limits unless a justified change is necessary.
+
+- Download only when requested and permitted.
+- Show download progress.
+- Allow cancellation and retry.
+- Prevent duplicate downloads.
+- Remove cached tracks safely.
+- Keep private cached files inaccessible to other accounts.
+- Do not cache protected Premium audio for unauthorized users.
+- Revalidate access where required by the platform's rules.
+
+Clearly distinguish a locally cached track from an owned Paid track. Offline availability must not be treated as proof of ownership.
+
+---
+
+PART 12 — AFUPAY PURCHASES AND CREATOR EARNINGS
+
+12.1 Use the existing AfuPay wallet
+
+All Paid music purchases must use the existing AfuPay ACoin wallet and trusted transaction system.
+
+Do not introduce a second wallet or parallel balance.
+
+Before purchase, show:
+
+- Track title and cover.
+- Creator.
+- Exact ACoin price.
+- Current wallet balance.
+- Clear Buy track action.
+
+If the user has insufficient funds, explain the issue and provide the existing AfuPay funding route where available.
+
+12.2 Purchase integrity
+
+Inspect the existing "purchase_music_track" function and associated wallet transaction functions.
+
+Use the correct existing functions if they are compatible with the actual schema.
+
+A successful purchase must:
+
+1. Authenticate the buyer.
+2. Validate the canonical track.
+3. Confirm the track is published and Paid.
+4. Confirm the buyer does not already own it.
+5. Validate the actual current price.
+6. Deduct the exact ACoin price.
+7. Record ownership.
+8. Record the buyer's transaction.
+9. Record the creator's earnings through the existing system.
+10. Make the updated ownership available across AfuChat.
+
+The operation must be atomic or use a safe recoverable transaction design.
+
+Repeated taps, retries, and concurrent requests must not double-charge or duplicate earnings.
+
+Failed transactions must not grant ownership. Successful charges must not leave orphaned ownership or earnings records.
+
+12.3 Purchase history
+
+Display the buyer's purchased music through the existing music library and purchase-history experience.
+
+The purchase must also be represented correctly in the existing AfuPay transaction history.
+
+Display the appropriate track, amount, transaction status, and date based on actual transaction records.
+
+12.4 Creator earnings
+
+Integrate music earnings into the existing creator and AfuPay accounting model.
+
+Where the platform supports creator earnings or balances, record and display the creator's share correctly.
+
+Do not assume the creator receives the full sale price if an existing platform fee or distribution rule applies. Inspect the current AfuChat financial rules and implement the actual defined calculation.
+
+Use authoritative transaction records rather than fabricated earnings counters.
+
+---
+
+PART 13 — CREATOR STUDIO AND MUSIC MANAGEMENT
+
+Provide a complete creator studio connected to the actual music data.
+
+Creators must be able to:
+
+- Upload tracks.
+- Upload and replace cover art.
+- Edit permitted metadata.
+- Choose Free or Paid publishing.
+- Set valid Paid prices.
+- See upload and publication status.
+- View their published music.
+- Open a published track.
+- View real listening and usage statistics where supported.
+- View real earnings and purchases where authorized.
+- Edit or delete tracks according to platform rules.
+- Handle upload and publication errors.
+
+Make ownership clear and verify permissions before allowing management operations.
+
+Deleting a track must update discovery and playback access appropriately and must not delete unrelated media or financial records.
+
+Preserve valid financial history for completed purchases according to the existing accounting and retention rules.
+
+---
+
+PART 14 — CREATOR PROFILES AND SHARING
+
+Integrate music into existing creator profiles and profile-content discovery.
+
+Users should be able to discover a creator's published tracks through the relevant existing profile surfaces.
+
+Show genuine track artwork, titles, and Free/Paid states.
+
+Where supported, provide navigation to the creator's music collection and individual tracks.
+
+Music links and shared attachments must resolve to the canonical track.
+
+Handle unavailable, deleted, private, or moderated tracks safely.
+
+Do not create duplicate track identities when sharing a track.
+
+---
+
+PART 15 — SECURITY, MODERATION, AND DATA INTEGRITY
+
+15.1 Authorization
+
+Enforce access rules at trusted backend/database boundaries.
+
+- Only eligible creators may publish Paid music.
+- Only valid Premium subscribers may publish new Paid tracks.
+- Prices must obey the 5–1,000 ACoin rule.
+- Only published and discoverable tracks may appear publicly.
+- Unowned Paid music must not be streamed or downloaded without authorization.
+- A client-side ownership flag must never authorize protected audio.
+- Video-use permissions must be enforced independently of listening ownership.
+- Only authorized users may edit or delete tracks.
+- Wallet balances and transaction records must remain protected.
+
+15.2 Storage protection
+
+Use existing approved storage destinations and upload mechanisms.
+
+Do not expose service credentials, private storage paths, unrestricted protected audio URLs, or sensitive signed upload information.
+
+Validate uploaded files and use safe upload and deletion operations.
+
+If signed URLs are used, verify their expiration, refresh behavior, and authorization.
+
+15.3 Moderation
+
+Respect existing AfuChat moderation and visibility rules.
+
+Removed or moderated tracks must not remain publicly discoverable or continue to play through stale links without authorization.
+
+Handle reports, blocked creators, deleted records, and unavailable media without crashing the app.
+
+15.4 Database changes
+
+Inspect the current migrations, production schema, policies, functions, and triggers before adding anything.
+
+For each proposed database change:
+
+1. Identify the exact missing behavior.
+2. Verify that the current schema does not already support it.
+3. Check migration history and production compatibility.
+4. Make the smallest additive, safe change.
+5. Preserve existing data.
+6. Explain deployment and rollback requirements.
+
+Do not apply migrations blindly or claim they are deployed merely because the SQL file exists in the repository.
+
+Do not create a new API, schema, wallet, or music ownership system without a demonstrated need.
+
+---
+
+PART 16 — PERFORMANCE AND FAILURE RECOVERY
+
+Optimize AfuMusic for normal AfuChat use and supported lower-powered Android devices.
+
+Ensure:
+
+- Smooth Shots scrolling.
+- Efficient music search and result loading.
+- No repeated player initialization.
+- No overlapping audio sessions.
+- Appropriate artwork caching.
+- Efficient track metadata loading.
+- Safe audio buffering.
+- No unnecessary full-file downloads.
+- Correct playback-state synchronization.
+- Correct handling of interrupted uploads.
+- Safe purchase retries.
+- Clear empty, loading, success, and error states.
+- Stable navigation across all integrated surfaces.
+- No memory leaks from players, media objects, or subscriptions.
+
+Do not block the entire feed because music data failed to load. Existing AfuChat functionality must remain usable when the music subsystem experiences an error.
+
+---
+
+PART 17 — COMPLETE END-TO-END ACCEPTANCE TESTS
+
+Do not declare the implementation complete until all applicable tests below pass.
+
+A. Track publishing and artwork
+
+1. A creator can select a valid audio file.
+2. The file is validated against the supported formats and size limits.
+3. The title is extracted from embedded metadata where supported.
+4. Filename fallback works when metadata is missing.
+5. The creator can edit the title.
+6. The creator can upload a JPEG, PNG, or WebP cover within the supported size limit.
+7. The creator can preview, replace, or remove a cover before publishing.
+8. Cover art persists after navigation and app restart.
+9. The same cover appears on all relevant AfuChat surfaces.
+10. Invalid or oversized media is rejected.
+11. Failed uploads can be retried without creating duplicate or broken records.
+12. Unpublished tracks are not publicly discoverable.
+
+B. Free and Paid publishing
+
+13. An eligible non-Premium user can publish Free music.
+14. A non-Premium user cannot publish Paid music.
+15. The exact Premium-required message is shown.
+16. The upgrade action opens the actual subscription flow.
+17. A valid Premium user can publish Paid music.
+18. Paid prices of 5 and 1,000 ACoin are accepted.
+19. Prices outside the permitted range are rejected in the client and trusted backend/database.
+20. Invalid Paid prices cannot be published by modifying client requests.
+21. Premium entitlement is checked against authoritative subscription data.
+
+C. AfuSearch
+
+22. Searching for a matching song title returns music in global All results.
+23. Searching for a creator can return their music.
+24. Searching by genre or supported keywords returns relevant tracks.
+25. The Music filter continues to work.
+26. Existing people, posts, videos, channels, events, products, jobs, and other supported search categories still work.
+27. Music results display correct artwork, price, creator, and ownership status.
+28. Selecting a result opens the correct canonical track.
+29. Music query failures do not break the entire search experience.
+
+D. Main feed and post composer
+
+30. The composer supports Text, Photo, Video, and Music.
+31. A user can publish a music post referencing an existing canonical track.
+32. Music posts appear in the normal feed.
+33. Existing post features and visibility rules remain intact.
+34. Free music can be played from a post.
+35. Unowned Paid music displays a purchase action.
+36. Music attachments resolve to the correct track and artwork.
+37. Feed navigation does not create duplicate players.
+
+E. Shots
+
+38. Free music autoplays when the active Shot's configuration requires it.
+39. An unowned Paid soundtrack does not play.
+40. The correct purchase action appears for locked music.
+41. Owned Paid tracks follow the authorized playback path.
+42. Scrolling between Shots does not create overlapping or stale music.
+43. Original, Mix, and Replace modes work as configured.
+44. Music attribution opens the correct canonical track.
+
+F. Video creation and publishing
+
+45. A creator can browse, search, preview, select, replace, and remove music.
+46. Only permitted tracks can be used in the video.
+47. Music and original-audio controls work where supported.
+48. The selected track and audio settings persist through publishing.
+49. Replace actually removes audible original video sound.
+50. Mix actually combines the sources at the selected levels.
+51. Original preserves the video sound without adding music.
+52. The published output is tested, not just the editor preview.
+
+G. Global player
+
+53. Starting a track from AfuSearch continues across supported screen navigation.
+54. Starting music from a post uses the same shared player.
+55. The mini-player shows the correct cover and track information.
+56. Play/pause and reopening the full player work.
+57. Stop/remove stops playback and clears the session.
+58. No duplicate player or overlapping music is created.
+59. Audio interruptions and network loss are handled.
+60. Supported background playback is tested on a physical device.
+
+H. AfuPay purchases and accounting
+
+61. An unowned Paid track cannot be played before purchase.
+62. The correct price and wallet balance are displayed.
+63. The exact price is deducted through the existing AfuPay wallet.
+64. Successful purchases update ownership across the app.
+65. The purchase appears in the buyer's history.
+66. Creator earnings are recorded correctly.
+67. Repeated requests do not double-charge.
+68. Failed transactions do not grant ownership.
+69. Premium subscription alone does not unlock every Paid track.
+
+I. Library, playlists, and offline music
+
+70. The library reflects actual ownership and creator records.
+71. Playlists and queues use canonical track IDs.
+72. Unavailable tracks are handled safely.
+73. Offline downloads respect access and cache rules.
+74. Cached files are private and can be removed safely.
+75. Offline cache state does not falsely grant ownership.
+
+J. Regression, build, and deployment
+
+76. Existing authentication and profiles still work.
+77. Existing messaging and navigation still work.
+78. Existing posts and feed functionality still work.
+79. Existing Shots and video uploads still work.
+80. Existing subscription and AfuPay functionality still work.
+81. Type checking, linting, automated tests, and production builds pass where configured.
+82. Required migrations are verified against the intended database.
+83. Core user journeys are tested on a real supported Android device.
+84. No fake production music data, broken navigation, or nonfunctional buttons remain.
+
+Record any tests that cannot be executed, explain why, and do not mark them as passed.
+
+---
+
+PART 18 — IMPLEMENTATION AND DELIVERY PROCESS
+
+Phase 1: Audit
+
+Inspect the current repository and provide the feature-completion matrix. Identify existing implementations, gaps, compatibility issues, and genuine blockers.
+
+Phase 2: Complete the music foundation
+
+Finish canonical track data, metadata extraction, cover upload, publication, ownership, pricing, secure storage, and access control.
+
+Phase 3: Complete playback
+
+Finish the shared player, full-screen player, mini-player, queue, track switching, audio-session handling, and supported background behavior.
+
+Phase 4: Integrate the whole application
+
+Complete AfuSearch global results, feed posts, post composer, Shots, video creation, creator profiles, playlists, and music-sharing entry points.
+
+Do not stop after implementing the AfuMusic screen or MusicPickerSheet.
+
+Phase 5: Complete financial flows
+
+Verify Premium publishing entitlement, ACoin price validation, AfuPay purchases, wallet history, ownership updates, and creator earnings.
+
+Phase 6: Finish UX and resilience
+
+Complete empty states, errors, loading, artwork fallbacks, retries, offline behavior, accessibility, and responsive layouts.
+
+Phase 7: Test and release
+
+Run all relevant automated tests, verify the database state, build the app, test core user journeys on a supported device, fix regressions, and report actual results.
+
+Do not claim a feature is complete merely because it compiles or a button appears.
+
+Final delivery report
+
+Provide:
+
+- What was already implemented.
+- What was incomplete or missing.
+- Every important change made.
+- The modified files and their purposes.
+- Database changes and their reasons.
+- Migration status and deployment requirements.
+- The actual playback implementation and verified behavior.
+- Cover-art upload and storage results.
+- AfuSearch, feed, Shots, and video integration test results.
+- Premium entitlement and ACoin purchase verification.
+- Test commands and actual output.
+- Build status and device coverage.
+- Any remaining blockers or limitations.
+
+Final definition of done: AfuMusic is a fully working, polished, secure, platform-wide music ecosystem integrated into the existing AfuChat super app. Music can be discovered in global AfuSearch results, the normal feed, Shots, and creator profiles; users can publish music posts and add permitted music to videos; creators can upload their own covers; Free and Paid publishing follow the specified rules; Paid tracks cost between 5 and 1,000 ACoin and remain locked until purchased; AfuPay handles purchases and earnings correctly; and the global player works consistently across supported AfuChat screens.
+
+Everything must be implemented or verified—not skipped because related code already exists. Preserve existing AfuChat functionality and use the actual repository and production schema as the source of truth.

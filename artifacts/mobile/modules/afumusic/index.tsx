@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -402,6 +402,8 @@ export default function AfuMusicApp({
   const [uploadVideoUseAllowed, setUploadVideoUseAllowed] = useState(false);
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [uploadCover, setUploadCover] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const musicSearchSequence = useRef(0);
+  const musicSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadLedger = useCallback(async () => {
     if (section !== "purchases" && section !== "earnings") return;
@@ -448,7 +450,6 @@ export default function AfuMusicApp({
       const result = await onListOffline();
       setOfflineTracks(result);
       setCachedIds(result.map((track) => track.id));
-      setOwnedIds((ids) => Array.from(new Set([...ids, ...result.map((track) => track.id)])));
     } catch {
       setOfflineTracks([]);
       setCachedIds([]);
@@ -495,11 +496,15 @@ export default function AfuMusicApp({
       const matchesSection =
         section === "library" ? ownedIds.includes(track.id) || track.isOwned :
         section === "offline" ? cachedIds.includes(track.id) :
-        section === "studio" ? track.handle === "@you" || track.artist === "You" || track.id.startsWith("local-") :
+        section === "studio" ? track.creatorId === playlistOwnerId :
         true;
       return matchesGenre && matchesQuery && matchesSection;
     });
-  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, query, section, tracks]);
+  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, playlistOwnerId, query, section, tracks]);
+
+  useEffect(() => () => {
+    if (musicSearchTimer.current) clearTimeout(musicSearchTimer.current);
+  }, []);
 
   const persistPlaylists = useCallback(async (next: AfuMusicPlaylist[]) => {
     if (playlistOwnerId && loadedPlaylistOwner !== playlistOwnerId) {
@@ -614,17 +619,24 @@ export default function AfuMusicApp({
       .slice(0, 4)
   ), [tracks]);
 
-  const handleSearch = useCallback(async (value: string) => {
+  const handleSearch = useCallback((value: string) => {
     setQuery(value);
-    if (!onSearch || !value.trim()) return;
-    try {
-      const result = await onSearch(value.trim());
-      setTracks(result);
+    const requestId = ++musicSearchSequence.current;
+    if (musicSearchTimer.current) clearTimeout(musicSearchTimer.current);
+    musicSearchTimer.current = setTimeout(async () => {
+      try {
+        const result = value.trim()
+          ? await onSearch?.(value.trim())
+          : await onBrowse?.();
+        if (requestId !== musicSearchSequence.current || !result) return;
+        setTracks(result);
         setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
-    } catch {
-      setLoadError(true);
-    }
-  }, [onSearch]);
+        setLoadError(false);
+      } catch {
+        if (requestId === musicSearchSequence.current) setLoadError(true);
+      }
+    }, 240);
+  }, [onBrowse, onSearch]);
 
   const openTrack = useCallback(async (track: AfuMusicTrack) => {
     const owned = ownedIds.includes(track.id) || track.isOwned || track.price === 0;
@@ -1176,7 +1188,14 @@ export default function AfuMusicApp({
             <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable></View>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
             <Text style={styles.fieldLabel}>Track title</Text>
-            <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={MUTED} style={styles.formInput} />
+            <TextInput
+              value={uploadTitle}
+              onChangeText={setUploadTitle}
+              maxLength={120}
+              placeholder="Give it a name"
+              placeholderTextColor={MUTED}
+              style={styles.formInput}
+            />
             <View style={{ flexDirection: "row", alignItems: "center", gap: 11, marginTop: 13 }}>
               <AfuMusicArtwork
                 uri={uploadCover?.uri}

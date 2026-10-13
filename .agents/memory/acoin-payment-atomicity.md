@@ -38,6 +38,15 @@ if (!Number.isFinite(ts)) return 0;  // prevents NaN > 0 == false bypass
 
 **How to apply:** Any numeric value read from MMKV/AsyncStorage that drives a security/business rule must be validated with `Number.isFinite` before use.
 
+## Live production RPC grant warning
+On 2026-10-13, the live `credit_acoin` and `deduct_acoin` functions were executable by `anon` and `authenticated`. `credit_acoin` had no caller check; `deduct_acoin` checked that a session existed but did not require `auth.uid() = p_user_id`. Existing client flows call these functions directly to pay or credit other users.
+
+Both functions only update `profiles.acoin`; neither writes `acoin_transactions`. `credit_acoin` returns void, while `deduct_acoin` returns JSONB.
+
+**Why:** Broadly revoking these grants without replacing each transfer, gift, marketplace, premium, and service-payment path would break legitimate transactions, while leaving them open permits unauthorized balance changes.
+
+**How to apply:** Audit function ACLs and caller identity in production before treating ACoin as secure. If a workflow needs a financial ledger, write its entries in the same transactional function. Replace direct cross-user client calls with scoped atomic server RPCs before removing the broad grants.
+
 ## Files fixed in this audit
 - `app/wallet/scan.tsx` — deduct_acoin/credit_acoin
 - `modules/afupay/index.tsx` — deduct_acoin/credit_acoin (ACoin branch)

@@ -517,7 +517,12 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
               })()
             : Promise.resolve({ data: [] }),
 
-          wantsMusic ? searchMusicTracks(trimmed) : Promise.resolve([] as AfuMusicTrack[]),
+          wantsMusic
+            ? searchMusicTracks(trimmed).catch((error) => {
+                console.warn("[AfuSearch] Music results unavailable:", error);
+                return [] as AfuMusicTrack[];
+              })
+            : Promise.resolve([] as AfuMusicTrack[]),
 
           wantsVideos
             ? (() => {
