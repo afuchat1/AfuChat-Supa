@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { AfuMusicTrack } from "@/modules/afumusic";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 
 let NativeAudio: typeof import("expo-av").Audio | null = null;
 if (Platform.OS !== "web") {
@@ -49,11 +50,17 @@ function formatTime(milliseconds: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function Artwork() {
+function Artwork({ track }: { track: AfuMusicTrack }) {
   return (
-    <View style={styles.artwork}>
-      <Ionicons name="musical-notes" size={68} color="#8D847B" />
-    </View>
+    <AfuMusicArtwork
+      uri={track.coverArtUrl}
+      size={250}
+      radius={32}
+      iconColor="#8D847B"
+      backgroundColor="#EFE9E1"
+      style={styles.artwork}
+      accessibilityLabel={`${track.title} cover art`}
+    />
   );
 }
 
@@ -358,7 +365,7 @@ export default function MusicPlayerSheet({
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Artwork />
+          <Artwork track={track} />
           <View style={styles.trackInfo}>
             <Text style={styles.title} numberOfLines={2}>{track.title}</Text>
             <Text style={styles.artist} numberOfLines={1}>{track.artist} · {track.genre}</Text>

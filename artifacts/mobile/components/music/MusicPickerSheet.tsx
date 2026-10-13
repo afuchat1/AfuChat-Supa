@@ -16,6 +16,7 @@ import { showAlert } from "@/lib/alert";
 import { getMusicTrackById, listMusicTracks, purchaseMusicTrack } from "@/lib/afuMusic";
 import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
 import type { AfuMusicTrack } from "@/modules/afumusic";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 
 type Props = {
   visible: boolean;
@@ -175,9 +176,15 @@ export default function MusicPickerSheet({ visible, onClose, onSelect, selectedT
                 const busy = busyTrackId === track.id;
                 return (
                   <View key={track.id} style={[styles.row, selected && styles.rowSelected]}>
-                    <View style={[styles.art, { backgroundColor: track.coverColor || COLORS.ink }]}>
-                      <Ionicons name="musical-notes" size={20} color="#FFF9F1" />
-                    </View>
+                    <AfuMusicArtwork
+                      uri={track.coverArtUrl}
+                      size={42}
+                      radius={12}
+                      iconColor={COLORS.ink}
+                      backgroundColor={COLORS.paper}
+                      style={styles.art}
+                      accessibilityLabel={`${track.title} cover art`}
+                    />
                     <View style={styles.rowCopy}>
                       <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
                       <Text style={styles.trackArtist} numberOfLines={1}>{track.artist} · {track.genre}</Text>

@@ -30,6 +30,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
 import MusicPickerSheet from "@/components/music/MusicPickerSheet";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { aiEnhancePost, aiGenerateHashtags, aiGenerateCaption } from "@/lib/aiHelper";
@@ -441,9 +442,14 @@ export default function CreatePostScreen() {
 
         {musicTrack ? (
           <View style={{ marginLeft: 16 + AVATAR_SZ + 14, marginRight: 16, marginTop: 10, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 10, padding: 9, borderRadius: 14, backgroundColor: colors.surface }}>
-            <View style={{ width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: musicTrack.coverColor || colors.accent }}>
-              <Ionicons name="musical-notes" size={17} color="#fff" />
-            </View>
+            <AfuMusicArtwork
+              uri={musicTrack.coverArtUrl}
+              size={36}
+              radius={11}
+              iconColor={colors.accent}
+              backgroundColor={colors.backgroundSecondary}
+              accessibilityLabel={`${musicTrack.title} cover art`}
+            />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 11 }} numberOfLines={1}>{musicTrack.title}</Text>
               <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }} numberOfLines={1}>{musicTrack.artist} · {musicTrack.price > 0 ? `${musicTrack.price} ACoin` : "Free"}</Text>

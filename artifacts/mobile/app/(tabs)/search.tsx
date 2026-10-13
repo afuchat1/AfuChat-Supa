@@ -27,6 +27,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
 import { purchaseMusicTrack, searchMusicTracks } from "@/lib/afuMusic";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { showAlert } from "@/lib/alert";
@@ -1084,9 +1085,14 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         activeOpacity={0.82}
         style={[ss.listRow, { marginHorizontal: 12, marginBottom: 8, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.surface }]}
       >
-        <View style={{ width: 48, height: 48, borderRadius: 13, backgroundColor: track.coverColor || CORAL, alignItems: "center", justifyContent: "center" }}>
-          <Ionicons name="musical-notes" size={22} color="#fff" />
-        </View>
+        <AfuMusicArtwork
+          uri={track.coverArtUrl}
+          size={48}
+          radius={13}
+          iconColor={CORAL}
+          backgroundColor={colors.surface}
+          accessibilityLabel={`${track.title} cover art`}
+        />
         <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
           <Text style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
           <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>{track.artist} · {track.genre}</Text>

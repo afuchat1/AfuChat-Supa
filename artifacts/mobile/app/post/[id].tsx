@@ -42,6 +42,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { Avatar } from "@/components/ui/Avatar";
 import CachedImage from "@/components/ui/CachedImage";
 import { RichText } from "@/components/ui/RichText";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
@@ -251,6 +252,7 @@ type Post = {
   view_count: number;
   like_count: number;
   post_type: string;
+  music_track_id?: string | null;
   is_verified: boolean;
   is_organization_verified: boolean;
   profile: { display_name: string; handle: string; avatar_url: string | null };
@@ -370,7 +372,7 @@ export default function PostDetailScreen() {
           const result = await supabase
             .from("posts")
             .select(`
-              id, author_id, content, image_url, created_at, view_count, like_count, post_type,
+              id, author_id, content, image_url, created_at, view_count, like_count, post_type, music_track_id,
               profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
               post_images(image_url, display_order)
             `)
@@ -397,6 +399,7 @@ export default function PostDetailScreen() {
             view_count: (data as any).view_count ?? 0,
             like_count: data.like_count ?? 0,
             post_type: data.post_type ?? "text",
+            music_track_id: (data as any).music_track_id ?? null,
             is_verified: prof.is_verified ?? false,
             is_organization_verified: prof.is_organization_verified ?? false,
             profile: {
@@ -831,6 +834,12 @@ export default function PostDetailScreen() {
           </RichText>
         </View>
       )}
+
+      {post.music_track_id ? (
+        <View style={{ paddingHorizontal: 16, marginTop: 10 }}>
+          <MusicTrackCard trackId={post.music_track_id} mode="post" />
+        </View>
+      ) : null}
 
       {/* Images */}
       {allImages.length > 0 && (

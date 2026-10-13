@@ -555,12 +555,20 @@ const VideoItem = React.memo(function VideoItem({
     }
   }, [isActive]);
 
-  // ── Mute non-active (preloaded) players ─────────────────────────────────
-  // Prevents any audio bleed from the 1-2 near-active buffered videos when
-  // the active video plays or enters PiP.
+  // ── Coordinate a published soundtrack with the video's original audio ───
+  // Inactive/preloaded clips stay silent. For a music-backed video, replace
+  // mutes the original sound while mix applies the creator's saved level.
+  const soundtrackMode = item.music_track_id ? item.music_audio_mode ?? "original" : "original";
+  const originalAudioVolumeValue = Number(item.original_audio_volume ?? 1);
+  const originalAudioVolume = Number.isFinite(originalAudioVolumeValue)
+    ? Math.max(0, Math.min(1, originalAudioVolumeValue))
+    : 1;
   useEffect(() => {
-    try { player.muted = !isActive; } catch {}
-  }, [isActive]);
+    try {
+      player.muted = !isActive || soundtrackMode === "replace";
+      player.volume = soundtrackMode === "mix" ? originalAudioVolume : 1;
+    } catch {}
+  }, [isActive, originalAudioVolume, player, soundtrackMode]);
 
   // ── AppState: resume on foreground return ───────────────────────────────
   // useFocusEffect fires only on navigation events, NOT the home button, so

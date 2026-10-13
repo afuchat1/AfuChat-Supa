@@ -34,6 +34,9 @@ import { showToast } from "@/lib/toast";
 import * as Haptics from "@/lib/haptics";
 import { getPrestigeTier } from "@/lib/prestige";
 import { LinearGradient } from "@/components/ui/SafeGradient";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
+import { listMusicTracksByCreator } from "@/lib/afuMusic";
+import type { AfuMusicTrack } from "@/modules/afumusic";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +65,7 @@ type Counts = { followers: number; following: number; posts: number };
 type GridPost = { id: string; image_url: string | null; article_cover_url: string | null; video_url: string | null; post_type: string | null; content?: string | null; article_title?: string | null };
 type MutualUser = { id: string; handle: string; avatar_url: string | null };
 type ExpandUser = { id: string; display_name: string; handle: string; avatar_url: string | null; bio: string | null; is_verified: boolean; is_organization_verified: boolean; acoin: number };
-type TabId = "posts" | "articles" | "videos";
+type TabId = "posts" | "articles" | "videos" | "music";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -152,6 +155,10 @@ export default function ContactScreen() {
   const [mutualExpanded,  setMutualExpanded]  = useState(false);
   const [allGridPosts,  setAllGridPosts]  = useState<GridPost[]>([]);
   const [gridLoading,   setGridLoading]   = useState(false);
+  const [creatorMusic, setCreatorMusic] = useState<AfuMusicTrack[]>([]);
+  const [musicLoading, setMusicLoading] = useState(true);
+  const [musicLoadError, setMusicLoadError] = useState(false);
+  const [musicRetry, setMusicRetry] = useState(0);
   const [activeTab,         setActiveTab]         = useState<TabId>("posts");
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [expandedStat,      setExpandedStat]      = useState<"followers" | "following" | null>(null);
@@ -227,6 +234,40 @@ export default function ContactScreen() {
       .limit(90)
       .then(({ data }) => { setAllGridPosts((data as GridPost[]) ?? []); setGridLoading(false); }, () => { setAllGridPosts([]); setGridLoading(false); });
   }, [id, loading]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const canSeeProfileMusic = !!profile && (!profile.is_private || isSelf || isFollowing);
+    if (!id || loading || !canSeeProfileMusic) {
+      setCreatorMusic([]);
+      setMusicLoading(false);
+      setMusicLoadError(false);
+      return () => { cancelled = true; };
+    }
+
+    setMusicLoading(true);
+    setMusicLoadError(false);
+    listMusicTracksByCreator(id).then(
+      (tracks) => {
+        if (!cancelled) setCreatorMusic(tracks);
+      },
+      () => {
+        if (!cancelled) {
+          setCreatorMusic([]);
+          setMusicLoadError(true);
+        }
+      },
+    ).finally(() => {
+      if (!cancelled) setMusicLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [id, isFollowing, isSelf, loading, musicRetry, profile?.is_private]);
+
+  useEffect(() => {
+    if (!musicLoading && !musicLoadError && creatorMusic.length === 0 && activeTab === "music") {
+      setActiveTab("posts");
+    }
+  }, [activeTab, creatorMusic.length, musicLoadError, musicLoading]);
 
   // ── Derive visible posts for the active tab (instant, no network) ─────────
   const gridPosts = React.useMemo(() => {
@@ -394,6 +435,9 @@ export default function ContactScreen() {
     { id: "posts",    icon: "grid",           label: "Posts"    },
     { id: "articles", icon: "document-text",  label: "Articles" },
     { id: "videos",   icon: "videocam",       label: "Videos"   },
+    ...(musicLoading || musicLoadError || creatorMusic.length > 0
+      ? [{ id: "music" as const, icon: "musical-notes", label: "Music" }]
+      : []),
   ];
 
   const isOrg = profile.is_organization_verified || profile.is_business_mode;
@@ -900,7 +944,25 @@ export default function ContactScreen() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* PHOTO GRID                                                       */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        {gridLoading ? (
+        {activeTab === "music" ? (
+          musicLoading ? (
+            <View style={s.gridCenter}><ActivityIndicator color={accent} size="large" /></View>
+          ) : musicLoadError ? (
+            <View style={s.gridCenter}>
+              <Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} />
+              <Text style={[s.emptyTitle, { color: colors.text }]}>Music could not be loaded</Text>
+              <TouchableOpacity onPress={() => setMusicRetry((value) => value + 1)} style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+                <Text style={{ color: accent, fontFamily: "Inter_700Bold", fontSize: 13 }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ paddingHorizontal: 14, paddingTop: 12, gap: 9 }}>
+              {creatorMusic.map((track) => (
+                <MusicTrackCard key={track.id} trackId={track.id} mode="post" />
+              ))}
+            </View>
+          )
+        ) : gridLoading ? (
           <View style={s.gridCenter}><ActivityIndicator color={accent} size="large" /></View>
         ) : gridPosts.length === 0 ? (
           <View style={s.gridCenter}>

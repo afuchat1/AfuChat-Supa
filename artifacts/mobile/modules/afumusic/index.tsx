@@ -14,10 +14,12 @@ import {
   View,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "@/lib/alert";
 import type { AfuMusicLedgerItem } from "@/lib/afuMusic";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 import { useAfuMusicPlayer } from "./MusicPlayerContext";
 import {
   loadMusicPlaylists,
@@ -48,6 +50,7 @@ export type AfuMusicTrack = {
   mimeType?: string;
   fileSize?: number;
   videoUseAllowed?: boolean;
+  coverArtUrl?: string;
   createdAt?: string;
 };
 
@@ -72,6 +75,10 @@ export type AfuMusicCallbacks = {
     mimeType?: string;
     fileSize?: number;
     videoUseAllowed?: boolean;
+    coverUri?: string;
+    coverFileName?: string;
+    coverMimeType?: string;
+    coverFileSize?: number;
   }) => Promise<AfuMusicTrack | void>;
   onDeleteUpload?: (track: AfuMusicTrack) => Promise<void>;
   onOpenWallet?: () => void;
@@ -101,6 +108,7 @@ function formatPlays(value?: number) {
 }
 
 function TrackArt({
+  track,
   size = 72,
   radius = 18,
 }: {
@@ -109,19 +117,15 @@ function TrackArt({
   radius?: number;
 }) {
   return (
-    <View
-      style={[
-        styles.trackArt,
-        {
-          width: size,
-          height: size,
-          borderRadius: radius,
-          backgroundColor: "#E8DED2",
-        },
-      ]}
-    >
-      <Ionicons name="musical-notes" size={Math.max(18, size * 0.34)} color={INK} />
-    </View>
+    <AfuMusicArtwork
+      uri={track?.coverArtUrl}
+      size={size}
+      radius={radius}
+      iconColor={INK}
+      backgroundColor="#E8DED2"
+      style={styles.trackArt}
+      accessibilityLabel={track ? `${track.title} cover art` : "Track cover art"}
+    />
   );
 }
 
@@ -397,6 +401,7 @@ export default function AfuMusicApp({
   const [uploadIsPaid, setUploadIsPaid] = useState(false);
   const [uploadVideoUseAllowed, setUploadVideoUseAllowed] = useState(false);
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [uploadCover, setUploadCover] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const loadLedger = useCallback(async () => {
     if (section !== "purchases" && section !== "earnings") return;
@@ -759,6 +764,27 @@ export default function AfuMusicApp({
     }
   }, [uploadTitle]);
 
+  const pickCover = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.88,
+      });
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+          showAlert("Cover image is too large", "Choose an image smaller than 10 MB.");
+          return;
+        }
+        setUploadCover(asset);
+      }
+    } catch {
+      showAlert("Cover image unavailable", "Could not open your photos. Please try again.");
+    }
+  }, []);
+
   const showPremiumRequired = useCallback(() => {
     showAlert(
       "Premium required",
@@ -805,6 +831,10 @@ export default function AfuMusicApp({
         mimeType: uploadFile.mimeType,
         fileSize: uploadFile.size,
         videoUseAllowed: uploadVideoUseAllowed,
+        coverUri: uploadCover?.uri,
+        coverFileName: uploadCover?.fileName || "cover.jpg",
+        coverMimeType: uploadCover?.mimeType || undefined,
+        coverFileSize: uploadCover?.fileSize || undefined,
       };
       const result = await onUpload(payload);
       if (result) {
@@ -817,6 +847,7 @@ export default function AfuMusicApp({
       setUploadOpen(false);
       setUploadTitle("");
       setUploadFile(null);
+      setUploadCover(null);
       setUploadIsPaid(false);
       setUploadVideoUseAllowed(false);
       showAlert("Published to AfuMusic", "Your track is ready for listeners.");
@@ -1143,8 +1174,34 @@ export default function AfuMusicApp({
           <View style={styles.uploadSheet}>
             <View style={styles.sheetHandle} />
             <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable></View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
             <Text style={styles.fieldLabel}>Track title</Text>
             <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={MUTED} style={styles.formInput} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 11, marginTop: 13 }}>
+              <AfuMusicArtwork
+                uri={uploadCover?.uri}
+                size={56}
+                radius={14}
+                iconColor={CORAL}
+                backgroundColor="#E8DED2"
+                accessibilityLabel={uploadCover ? "Selected track cover" : "No track cover selected"}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.fieldLabel}>Cover art (optional)</Text>
+                <Text style={styles.filePickerSub} numberOfLines={2}>
+                  {uploadCover ? "Ready to upload with this track" : "Square JPG, PNG or WebP · up to 10 MB"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={uploadCover ? () => setUploadCover(null) : () => { void pickCover(); }}
+                style={({ pressed }) => [styles.coverPickButton, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={uploadCover ? "Remove cover art" : "Choose cover art"}
+              >
+                <Ionicons name={uploadCover ? "close" : "image-outline"} size={17} color={CORAL} />
+                <Text style={styles.coverPickText}>{uploadCover ? "Remove" : "Choose"}</Text>
+              </Pressable>
+            </View>
             <Text style={styles.fieldLabel}>Genre</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
               {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
@@ -1196,6 +1253,7 @@ export default function AfuMusicApp({
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
             <Pressable onPress={submitUpload} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -1317,7 +1375,7 @@ const styles = StyleSheet.create({
   ledgerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
   ledgerMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 9, marginTop: 4 },
   ledgerAmount: { color: INK, fontFamily: "Inter_700Bold", fontSize: 10 },
-  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
+  uploadSheet: { maxHeight: "92%", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 12 },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
   formInput: { height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
@@ -1343,5 +1401,7 @@ const styles = StyleSheet.create({
   filePickerCopy: { flex: 1 },
   filePickerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
   filePickerSub: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
+  coverPickButton: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, borderRadius: 11, backgroundColor: PAPER },
+  coverPickText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
   publishButton: { height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: CORAL, borderRadius: 15, marginTop: 17 },
 });

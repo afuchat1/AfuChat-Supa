@@ -2,12 +2,17 @@ import * as FileSystem from "expo-file-system/legacy";
 
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { cacheMusicFile, getOfflineMusicEntries, getOfflineMusicUri } from "./musicCache";
-import { deleteUserFile, getSignedR2ReadUrl, uploadToStorage } from "./mediaUpload";
+import { deleteUserFile, getSignedR2ReadUrl, prepareMediaForUpload, uploadToStorage } from "./mediaUpload";
 import { supabase } from "./supabase";
 
 const MUSIC_BUCKET = "music";
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
+const MAX_COVER_BYTES = 10 * 1024 * 1024;
 const AUDIO_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/ogg", "audio/aac"]);
+const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MUSIC_TRACK_COLUMNS = "id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,cover_art_url,created_at";
+const MUSIC_TRACK_COLUMNS_LEGACY = MUSIC_TRACK_COLUMNS.replace(",cover_art_url", "");
+let warnedAboutCoverMigration = false;
 
 type MusicRow = {
   id: string;
@@ -25,6 +30,7 @@ type MusicRow = {
   usage_count?: number | null;
   is_featured?: boolean | null;
   video_use_allowed?: boolean | null;
+  cover_art_url?: string | null;
   created_at: string;
   creator?: { display_name?: string | null; handle?: string | null } | null;
 };
@@ -45,6 +51,18 @@ function formatDuration(seconds: number | null | undefined) {
   const minutes = Math.floor(seconds / 60);
   const remaining = Math.floor(seconds % 60).toString().padStart(2, "0");
   return `${minutes}:${remaining}`;
+}
+
+function isMissingCoverColumns(error: any) {
+  const message = String(error?.message ?? error?.details ?? "").toLowerCase();
+  return /cover_art_(url|path)/.test(message)
+    && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
+}
+
+function warnCoverMigrationMissing() {
+  if (warnedAboutCoverMigration) return;
+  warnedAboutCoverMigration = true;
+  console.warn("[AfuMusic] Apply 20261013000003_afumusic_cover_art.sql to enable track cover art.");
 }
 
 function rowToTrack(
@@ -72,6 +90,7 @@ function rowToTrack(
     fileSize: row.file_size ?? undefined,
     audioUrl: row.audio_url ?? null,
     videoUseAllowed: row.video_use_allowed ?? false,
+    coverArtUrl: row.cover_art_url ?? undefined,
     isFeatured: row.is_featured ?? false,
     createdAt: row.created_at,
   };
@@ -96,30 +115,45 @@ async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
     if (creatorSearchError) throw creatorSearchError;
     matchingCreatorIds = (matchingCreators ?? []).map((profile: any) => profile.id);
   }
-  let request = supabase
-    .from("music_tracks")
-    .select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,created_at")
-    .eq("status", "published")
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (searchTerm) {
-    const filters = [
-      `title.ilike.%${searchTerm}%`,
-      `artist.ilike.%${searchTerm}%`,
-      `genre.ilike.%${searchTerm}%`,
-    ];
-    if (matchingCreatorIds.length) {
-      filters.push(`creator_id.in.(${matchingCreatorIds.join(",")})`);
+  const buildRequest = (columns: string) => {
+    let request = (supabase.from("music_tracks") as any)
+      .select(columns)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (searchTerm) {
+      const filters = [
+        `title.ilike.%${searchTerm}%`,
+        `artist.ilike.%${searchTerm}%`,
+        `genre.ilike.%${searchTerm}%`,
+      ];
+      if (matchingCreatorIds.length) {
+        filters.push(`creator_id.in.(${matchingCreatorIds.join(",")})`);
+      }
+      request = request.or(filters.join(","));
     }
-    request = request.or(filters.join(","));
-  }
-  const [{ data: rows, error }, { data: purchases }, { data: profiles }, offline] = await Promise.all([
-    request,
+    return request;
+  };
+  const loadRows = async () => {
+    let result = await buildRequest(MUSIC_TRACK_COLUMNS);
+    if (isMissingCoverColumns(result.error)) {
+      warnCoverMigrationMissing();
+      result = await buildRequest(MUSIC_TRACK_COLUMNS_LEGACY);
+    }
+    return result;
+  };
+  const [{ data: rows, error }, { data: purchases }, offline] = await Promise.all([
+    loadRows(),
     supabase.from("music_purchases").select("track_id").eq("buyer_id", userId),
-    supabase.from("profiles").select("id,display_name,handle").limit(1000),
     getOfflineMusicEntries(userId),
   ]);
   if (error) throw error;
+
+  const creatorIds = [...new Set((rows ?? []).map((row: any) => row.creator_id).filter(Boolean))];
+  const { data: profiles, error: profileError } = creatorIds.length
+    ? await supabase.from("profiles").select("id,display_name,handle").in("id", creatorIds)
+    : { data: [], error: null };
+  if (profileError) throw profileError;
 
   const purchased = new Set((purchases ?? []).map((item: any) => item.track_id));
   const cached = new Set(offline.map((entry) => entry.trackId));
@@ -138,15 +172,69 @@ export async function searchMusicTracks(query: string) {
   return loadTracks(query);
 }
 
+export async function listMusicTracksByCreator(creatorId: string) {
+  if (!creatorId) return [];
+  let viewerId: string | undefined;
+  try {
+    viewerId = (await supabase.auth.getUser()).data.user?.id;
+  } catch {
+    viewerId = undefined;
+  }
+
+  const loadRows = async () => {
+    const base = () => (supabase.from("music_tracks") as any)
+      .select(MUSIC_TRACK_COLUMNS)
+      .eq("creator_id", creatorId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(24);
+    let result = await base();
+    if (isMissingCoverColumns(result.error)) {
+      warnCoverMigrationMissing();
+      result = await (supabase.from("music_tracks") as any)
+        .select(MUSIC_TRACK_COLUMNS_LEGACY)
+        .eq("creator_id", creatorId)
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .limit(24);
+    }
+    return result;
+  };
+  const [{ data: rows, error }, { data: purchases }, offline, { data: creator }] = await Promise.all([
+    loadRows(),
+    viewerId
+      ? supabase.from("music_purchases").select("track_id").eq("buyer_id", viewerId)
+      : Promise.resolve({ data: [] as { track_id: string }[] }),
+    viewerId ? getOfflineMusicEntries(viewerId) : Promise.resolve([]),
+    supabase.from("profiles").select("id,display_name,handle").eq("id", creatorId).maybeSingle(),
+  ]);
+  if (error) throw error;
+
+  const purchasedIds = new Set((purchases ?? []).map((item: any) => item.track_id));
+  const cachedIds = new Set(offline.map((entry) => entry.trackId));
+  return ((rows ?? []) as MusicRow[]).map((row) => rowToTrack({
+    ...row,
+    creator: creator?.id === creatorId ? creator : null,
+  }, purchasedIds, cachedIds, viewerId));
+}
+
 export async function getMusicTrackById(trackId: string) {
   const userId = await currentUserId();
-  const [{ data: row, error }, { data: purchase }, offline] = await Promise.all([
-    supabase
-      .from("music_tracks")
-      .select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,created_at")
+  const loadTrack = async () => {
+    const query = (columns: string) => (supabase.from("music_tracks") as any)
+      .select(columns)
       .eq("id", trackId)
       .eq("status", "published")
-      .maybeSingle(),
+      .maybeSingle();
+    let result = await query(MUSIC_TRACK_COLUMNS);
+    if (isMissingCoverColumns(result.error)) {
+      warnCoverMigrationMissing();
+      result = await query(MUSIC_TRACK_COLUMNS_LEGACY);
+    }
+    return result;
+  };
+  const [{ data: row, error }, { data: purchase }, offline] = await Promise.all([
+    loadTrack(),
     supabase.from("music_purchases").select("track_id").eq("buyer_id", userId).eq("track_id", trackId).maybeSingle(),
     getOfflineMusicEntries(userId),
   ]);
@@ -295,6 +383,10 @@ export async function publishMusicTrack(input: {
   mimeType?: string;
   fileSize?: number;
   videoUseAllowed?: boolean;
+  coverUri?: string;
+  coverFileName?: string;
+  coverMimeType?: string;
+  coverFileSize?: number;
 }) {
   const creatorId = await currentUserId();
   const mimeType = input.mimeType || "audio/mpeg";
@@ -309,43 +401,109 @@ export async function publishMusicTrack(input: {
   const extension = audioExtension(input.fileName, mimeType);
   const uniquePart = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const path = `${creatorId}/${uniquePart}.${extension}`;
-  const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType);
-  if (upload.error || !upload.publicUrl) {
-    throw new Error(upload.error || "Audio upload failed.");
-  }
-  const { data, error } = await supabase.from("music_tracks").insert({
-    creator_id: creatorId,
-    title: input.title.trim(),
-    audio_url: upload.publicUrl,
-    genre: input.genre,
-    price_acoin: input.price,
-    storage_path: path,
-    mime_type: mimeType,
-    file_size: fileSize,
-    video_use_allowed: input.videoUseAllowed ?? false,
-  }).select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,created_at").single();
-  if (error) {
-    await deleteUserFile(`${MUSIC_BUCKET}/${path}`).catch(() => {});
+  const audioKey = `${MUSIC_BUCKET}/${path}`;
+  let coverPath: string | null = null;
+  let coverKey: string | null = null;
+  try {
+    const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType);
+    if (upload.error || !upload.publicUrl) {
+      throw new Error(upload.error || "Audio upload failed.");
+    }
+
+    let coverUrl: string | null = null;
+    if (input.coverUri) {
+      const coverName = input.coverFileName || "cover.jpg";
+      const coverExtension = coverName.split(".").pop()?.toLowerCase() || "jpg";
+      const inferredType = coverExtension === "png" ? "image/png"
+        : coverExtension === "webp" ? "image/webp"
+        : coverExtension === "jpg" || coverExtension === "jpeg" ? "image/jpeg"
+        : "";
+      const coverMimeType = input.coverMimeType || inferredType;
+      if (!COVER_TYPES.has(coverMimeType)) {
+        throw new Error("Use a JPG, PNG, or WebP image for the cover.");
+      }
+      const coverInfo = await FileSystem.getInfoAsync(input.coverUri).catch(() => ({ exists: true, size: input.coverFileSize ?? 0 } as any));
+      const coverSize = Number((coverInfo as any).size ?? input.coverFileSize ?? 0);
+      if (coverSize > MAX_COVER_BYTES) throw new Error("Cover images must be 10 MB or smaller.");
+      const safeExtension = coverMimeType === "image/png" ? "png" : coverMimeType === "image/webp" ? "webp" : "jpg";
+      coverPath = `${creatorId}/${uniquePart}_cover.${safeExtension}`;
+      coverKey = `${MUSIC_BUCKET}/${coverPath}`;
+      const stableCoverUri = await prepareMediaForUpload(input.coverUri, safeExtension);
+      const coverUpload = await uploadToStorage(MUSIC_BUCKET, coverPath, stableCoverUri, coverMimeType);
+      if (coverUpload.error || !coverUpload.publicUrl) {
+        throw new Error(coverUpload.error || "Cover upload failed.");
+      }
+      coverUrl = coverUpload.publicUrl;
+    }
+
+    const trackValues: Record<string, unknown> = {
+      creator_id: creatorId,
+      title: input.title.trim(),
+      audio_url: upload.publicUrl,
+      genre: input.genre,
+      price_acoin: input.price,
+      storage_path: path,
+      mime_type: mimeType,
+      file_size: fileSize,
+      video_use_allowed: input.videoUseAllowed ?? false,
+    };
+    const insertTrack = (includeCover: boolean) => (supabase.from("music_tracks") as any)
+      .insert(includeCover ? {
+        ...trackValues,
+        cover_art_url: coverUrl,
+        cover_art_path: coverPath,
+      } : trackValues)
+      .select(includeCover ? MUSIC_TRACK_COLUMNS : MUSIC_TRACK_COLUMNS_LEGACY)
+      .single();
+    let inserted = await insertTrack(true);
+    if (isMissingCoverColumns(inserted.error) && !coverUrl) {
+      warnCoverMigrationMissing();
+      inserted = await insertTrack(false);
+    }
+    if (inserted.error) throw inserted.error;
+    const data = inserted.data as MusicRow;
+    return {
+      ...rowToTrack(data, new Set([data.id]), new Set(), creatorId),
+      artist: "You",
+      handle: "@you",
+    };
+  } catch (error) {
+    await Promise.all([
+      deleteUserFile(audioKey).catch(() => {}),
+      coverKey ? deleteUserFile(coverKey).catch(() => {}) : Promise.resolve(),
+    ]);
+    if (input.coverUri && isMissingCoverColumns(error)) {
+      throw new Error("Track cover uploads need the AfuMusic cover-art database migration. Apply 20261013000003_afumusic_cover_art.sql in Supabase, then retry.");
+    }
     throw error;
   }
-  return {
-    ...rowToTrack(data as MusicRow, new Set([data.id]), new Set(), creatorId),
-    artist: "You",
-    handle: "@you",
-  };
 }
 
 export async function removeMusicTrack(track: AfuMusicTrack) {
-  const { error } = await supabase
-    .from("music_tracks")
+  const creatorId = await currentUserId();
+  const remove = (includeCoverPath: boolean) => (supabase.from("music_tracks") as any)
     .update({ status: "removed" })
     .eq("id", track.id)
-    .eq("creator_id", await currentUserId());
-  if (error) throw error;
-  if (track.storagePath) {
-    const deleted = await deleteUserFile(`${MUSIC_BUCKET}/${track.storagePath}`);
+    .eq("creator_id", creatorId)
+    .select(includeCoverPath ? "storage_path,cover_art_path" : "storage_path")
+    .maybeSingle();
+  let result = await remove(true);
+  if (isMissingCoverColumns(result.error)) {
+    warnCoverMigrationMissing();
+    result = await remove(false);
+  }
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error("This track is unavailable or you do not have permission to remove it.");
+  if (result.data.storage_path) {
+    const deleted = await deleteUserFile(`${MUSIC_BUCKET}/${result.data.storage_path}`);
     if (!deleted.ok) {
       console.warn("[AfuMusic] R2 cleanup failed:", deleted.error);
+    }
+  }
+  if (result.data.cover_art_path) {
+    const deleted = await deleteUserFile(`${MUSIC_BUCKET}/${result.data.cover_art_path}`);
+    if (!deleted.ok) {
+      console.warn("[AfuMusic] cover cleanup failed:", deleted.error);
     }
   }
 }

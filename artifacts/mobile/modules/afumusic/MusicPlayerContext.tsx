@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { showAlert } from "@/lib/alert";
 import type { AfuMusicTrack } from "./index";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 
 type PlayerSource = "library" | "shot";
 
@@ -231,7 +232,14 @@ function GlobalPlayerHost() {
       {!visible && source === "library" ? (
         <View pointerEvents="box-none" style={[styles.miniLayer, { bottom: Math.max(insets.bottom, 8) + (Platform.OS === "web" ? 14 : 78) }]}>
           <Pressable onPress={open} style={styles.miniPlayer} accessibilityRole="button" accessibilityLabel={`Open player: ${track.title}`}>
-            <View style={styles.miniIcon}><Ionicons name="musical-notes" size={18} color="#FFF9F1" /></View>
+            <AfuMusicArtwork
+              uri={track.coverArtUrl}
+              size={36}
+              radius={12}
+              iconColor="#FFF9F1"
+              backgroundColor="#F06451"
+              accessibilityLabel={`${track.title} cover art`}
+            />
             <View style={styles.miniCopy}>
               <Text style={styles.miniTitle} numberOfLines={1}>{track.title}</Text>
               <Text style={styles.miniArtist} numberOfLines={1}>{track.artist}</Text>

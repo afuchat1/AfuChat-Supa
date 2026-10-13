@@ -8,6 +8,7 @@ import { getMusicTrackById, purchaseMusicTrack } from "@/lib/afuMusic";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
 import { useTheme } from "@/hooks/useTheme";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 
 type Props = {
   trackId: string;
@@ -130,9 +131,15 @@ export default function MusicTrackCard({
       accessibilityRole="button"
       accessibilityLabel={track ? `AfuMusic: ${track.title}, ${track.price === 0 ? "free" : `${track.price} ACoin`}` : "AfuMusic track"}
     >
-      <View style={styles.art}>
-        <Ionicons name="musical-notes" size={19} color="#FFF9F1" />
-      </View>
+      <AfuMusicArtwork
+        uri={track?.coverArtUrl}
+        size={42}
+        radius={12}
+        iconColor={colors.textMuted}
+        backgroundColor={colors.surface}
+        style={styles.art}
+        accessibilityLabel={track ? `${track.title} cover art` : "Track cover art"}
+      />
       <View style={styles.copy}>
         <Text style={[styles.kicker, { color: colors.textMuted }]}>AFUMUSIC</Text>
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>

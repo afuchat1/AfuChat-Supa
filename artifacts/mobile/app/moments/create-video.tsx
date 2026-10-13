@@ -44,6 +44,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
 import MusicPickerSheet from "@/components/music/MusicPickerSheet";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
 import { supabase } from "@/lib/supabase";
@@ -1540,9 +1541,14 @@ function EditPhase({
                 </View>
                 {musicTrack ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, backgroundColor: "#1A1A1A" }}>
-                    <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: musicTrack.coverColor || accent, alignItems: "center", justifyContent: "center" }}>
-                      <Ionicons name="musical-notes" size={18} color="#fff" />
-                    </View>
+                    <AfuMusicArtwork
+                      uri={musicTrack.coverArtUrl}
+                      size={38}
+                      radius={10}
+                      iconColor={accent}
+                      backgroundColor="#292929"
+                      accessibilityLabel={`${musicTrack.title} cover art`}
+                    />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }} numberOfLines={1}>{musicTrack.title}</Text>
                       <Text style={{ color: "#999", fontFamily: "Inter_400Regular", fontSize: 10, marginTop: 3 }} numberOfLines={1}>{musicTrack.artist} · Cleared for AfuChat videos</Text>
