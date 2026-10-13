@@ -144,6 +144,18 @@ export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string 
   return result.url;
 }
 
+export async function getMusicDownloadUri(track: AfuMusicTrack, filename: string): Promise<string | null> {
+  await currentUserId();
+  if (!track.storagePath) {
+    return track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")
+      ? track.audioUrl
+      : null;
+  }
+  const result = await getSignedR2ReadUrl(MUSIC_BUCKET, track.storagePath, track.id, filename);
+  if (result.error || !result.url) throw new Error(result.error || "This track is not available for download.");
+  return result.url;
+}
+
 export async function cacheMusicTrackOffline(track: AfuMusicTrack) {
   const userId = await currentUserId();
   if (track.price > 0 && track.creatorId !== userId && !track.isOwned) {

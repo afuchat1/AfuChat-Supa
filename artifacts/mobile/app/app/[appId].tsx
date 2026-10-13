@@ -1,6 +1,5 @@
 import React from "react";
-import { Platform } from "react-native";
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
@@ -44,6 +43,7 @@ import MoneyRequestScreen from "@/app/wallet/request";
 import AfuMusicApp from "@/modules/afumusic";
 import {
   cacheMusicTrackOffline,
+  getMusicDownloadUri,
   getMusicPlaybackUri,
   listMusicTracks,
   listOfflineMusicTracks,
@@ -160,7 +160,6 @@ export default function FullAppRoute() {
     }),
   ) as Record<string, string>;
   if (!rawId || !isAppId(rawId)) return null;
-  if (rawId === "afumusic" && Platform.OS === "web") return <Redirect href="/" />;
   return (
     <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afumusic"}>
       <AppContent appId={rawId} section={section} params={routeParams} />
@@ -174,6 +173,7 @@ function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
   return (
     <AfuMusicApp
       initialSection={(initialSection as any) || "discover"}
+      playlistOwnerId={profile?.id}
       acoinBalance={profile?.acoin}
       onBrowse={listMusicTracks}
       onSearch={searchMusicTracks}
@@ -182,6 +182,7 @@ function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
       onRemoveCache={removeMusicTrackOffline}
       onListOffline={listOfflineMusicTracks}
       onResolveAudio={getMusicPlaybackUri}
+      onResolveDownload={getMusicDownloadUri}
       onUpload={publishMusicTrack}
       onDeleteUpload={removeMusicTrack}
       onOpenWallet={() => router.push("/app/afupay")}

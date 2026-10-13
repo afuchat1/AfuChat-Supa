@@ -93,7 +93,6 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     icon: "musical-notes",
     gradient: ["#19172F", "#F06451"] as const,
     keepAlive: false,
-    nativeOnly: true,
     badge: "NEW",
   },
   {

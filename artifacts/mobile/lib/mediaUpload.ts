@@ -453,6 +453,7 @@ export async function getSignedR2ReadUrl(
   bucket: string,
   filePath: string,
   trackId?: string,
+  downloadFilename?: string,
 ): Promise<{ url: string | null; error: string | null }> {
   try {
     const token = await getAccessToken();
@@ -463,7 +464,12 @@ export async function getSignedR2ReadUrl(
         "Content-Type": "application/json",
         ...(await edgeFnHeaders(token)),
       },
-      body: JSON.stringify({ bucket, path: filePath, trackId }),
+      body: JSON.stringify({
+        bucket,
+        path: filePath,
+        trackId,
+        ...(downloadFilename ? { downloadFilename } : {}),
+      }),
     });
     const text = await response.text().catch(() => "");
     if (!text || text.trimStart().startsWith("<")) {

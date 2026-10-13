@@ -80,6 +80,19 @@ function getS3Client(cfg: Config): S3Client {
   });
 }
 
+function downloadDisposition(filename: string) {
+  const safeName = filename
+    .replace(/[\r\n\0]/g, "")
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .trim()
+    .slice(0, 160) || "AfuMusic track.mp3";
+  const asciiName = safeName.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  const utf8Name = encodeURIComponent(safeName).replace(/['()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`;
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 async function verifyAuth(req: Request, cfg: Config): Promise<string | null> {
@@ -184,7 +197,7 @@ Deno.serve(async (req: Request) => {
     // database check is intentionally server-side so a client cannot turn a
     // track key into an unrestricted download URL.
     if (action === "read" && req.method === "POST") {
-      let body: { bucket?: string; path?: string; trackId?: string } = {};
+      let body: { bucket?: string; path?: string; trackId?: string; downloadFilename?: string } = {};
       try { body = await req.json(); } catch { /* invalid body handled below */ }
 
       const logicalBucket = (body.bucket ?? "").trim();
@@ -225,9 +238,14 @@ Deno.serve(async (req: Request) => {
       }
 
       const key = buildKey(logicalBucket, callerPath);
+      const downloadFilename = (body.downloadFilename ?? "").trim();
       const readUrl = await getSignedUrl(
         s3,
-        new GetObjectCommand({ Bucket: cfg.bucket, Key: key }),
+        new GetObjectCommand({
+          Bucket: cfg.bucket,
+          Key: key,
+          ...(downloadFilename ? { ResponseContentDisposition: downloadDisposition(downloadFilename) } : {}),
+        }),
         { expiresIn: 3600 },
       );
       return json({ url: readUrl, key });

@@ -16,10 +16,16 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AudioPlayer from "@/components/AudioPlayer";
 import { showAlert } from "@/lib/alert";
+import MusicPlayerSheet from "./MusicPlayerSheet";
+import {
+  loadMusicPlaylists,
+  saveMusicPlaylists,
+  type AfuMusicPlaylist,
+} from "./playlistStore";
+import { downloadMusicFile, getMusicDownloadFilename } from "./musicFileDownload";
 
-type MusicSection = "discover" | "library" | "offline" | "studio";
+type MusicSection = "discover" | "library" | "offline" | "playlists" | "studio";
 
 export type AfuMusicTrack = {
   id: string;
@@ -51,6 +57,7 @@ export type AfuMusicCallbacks = {
   onRemoveCache?: (track: AfuMusicTrack) => Promise<void>;
   onListOffline?: () => Promise<AfuMusicTrack[]>;
   onResolveAudio?: (track: AfuMusicTrack) => Promise<string | null>;
+  onResolveDownload?: (track: AfuMusicTrack, filename: string) => Promise<string | null>;
   onPlay?: (track: AfuMusicTrack) => void | Promise<void>;
   onUpload?: (input: {
     title: string;
@@ -67,6 +74,7 @@ export type AfuMusicCallbacks = {
 
 type Props = AfuMusicCallbacks & {
   initialSection?: MusicSection;
+  playlistOwnerId?: string;
 };
 
 const INK = "#19172F";
@@ -265,19 +273,29 @@ function TrackRow({
   track,
   owned,
   cached,
+  webDownload,
+  downloading,
   managed = false,
   onOpen,
   onPlay,
   onCache,
+  onDownload,
+  onPlayNext,
+  onAddToPlaylist,
   onDelete,
 }: {
   track: AfuMusicTrack;
   owned: boolean;
   cached: boolean;
+  webDownload?: boolean;
+  downloading?: boolean;
   managed?: boolean;
   onOpen: () => void;
   onPlay: () => void;
   onCache: () => void;
+  onDownload?: () => void;
+  onPlayNext?: () => void;
+  onAddToPlaylist?: () => void;
   onDelete?: () => void;
 }) {
   return (
@@ -316,13 +334,82 @@ function TrackRow({
           <Text style={styles.priceText}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
         )}
         {owned ? (
-          <Pressable onPress={onCache} hitSlop={8} accessibilityLabel={cached ? "Available offline" : "Save offline"}>
-            <Ionicons name={cached ? "arrow-down-circle" : "arrow-down-circle-outline"} size={21} color={cached ? COBALT : MUTED} />
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              if (webDownload) onDownload?.();
+              else onCache();
+            }}
+            hitSlop={8}
+            accessibilityLabel={webDownload ? `Download ${track.title}` : cached ? "Available offline" : "Save offline"}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color={CORAL} />
+            ) : (
+              <Ionicons
+                name={webDownload ? "download-outline" : cached ? "arrow-down-circle" : "arrow-down-circle-outline"}
+                size={21}
+                color={cached && !webDownload ? COBALT : MUTED}
+              />
+            )}
           </Pressable>
+        ) : null}
+        {owned && !managed ? (
+          <>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                onPlayNext?.();
+              }}
+              hitSlop={8}
+              accessibilityLabel={`Play ${track.title} next`}
+            >
+              <Ionicons name="play-skip-forward-outline" size={19} color={MUTED} />
+            </Pressable>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                onAddToPlaylist?.();
+              }}
+              hitSlop={8}
+              accessibilityLabel={`Add ${track.title} to a playlist`}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={MUTED} />
+            </Pressable>
+          </>
         ) : null}
         <Ionicons name="chevron-forward" size={17} color="#B2A79B" />
       </View>
     </Pressable>
+  );
+}
+
+function PlaylistRow({
+  playlist,
+  onPlay,
+  onDelete,
+}: {
+  playlist: AfuMusicPlaylist;
+  onPlay: () => void;
+  onDelete: () => void;
+}) {
+  const cover = playlist.tracks[0] || SEED_TRACKS[0];
+  return (
+    <View style={styles.playlistCard}>
+      <Pressable onPress={onPlay} style={({ pressed }) => [styles.playlistMain, pressed && styles.pressed]}>
+        <TrackArt track={cover} size={58} radius={15} />
+        <View style={styles.playlistCopy}>
+          <Text style={styles.playlistTitle} numberOfLines={1}>{playlist.name}</Text>
+          <Text style={styles.playlistMeta}>{playlist.tracks.length} {playlist.tracks.length === 1 ? "track" : "tracks"}</Text>
+        </View>
+      </Pressable>
+      <Pressable onPress={onPlay} hitSlop={8} accessibilityLabel={`Play ${playlist.name}`}>
+        <Ionicons name="play-circle" size={28} color={CORAL} />
+      </Pressable>
+      <Pressable onPress={onDelete} hitSlop={8} accessibilityLabel={`Delete ${playlist.name}`}>
+        <Ionicons name="trash-outline" size={19} color={MUTED} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -351,46 +438,6 @@ function EmptyState({
   );
 }
 
-function PlayerSheet({
-  track,
-  onClose,
-}: {
-  track: AfuMusicTrack;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.playerSheet}>
-        <View style={styles.sheetHandle} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetEyebrow}>NOW LISTENING</Text>
-          <Pressable onPress={onClose} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable>
-        </View>
-        <TrackArt track={track} size={250} radius={34} />
-        <Text style={styles.playerTitle}>{track.title}</Text>
-        <Text style={styles.playerArtist}>{track.artist} · {track.genre}</Text>
-        {track.audioUrl ? (
-          <AudioPlayer
-            uri={track.audioUrl}
-            tintColor={PAPER}
-            waveColor={CORAL}
-            backgroundColor={INK}
-          />
-        ) : (
-          <View style={styles.playerUnavailable}>
-            <Ionicons name="musical-notes-outline" size={18} color={CORAL} />
-            <Text style={styles.playerUnavailableText}>Audio preview is not available for this track yet.</Text>
-          </View>
-        )}
-        <View style={styles.playerNote}>
-          <Ionicons name="lock-closed-outline" size={15} color={COBALT} />
-          <Text style={styles.playerNoteText}>Private listening inside AfuChat</Text>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 export default function AfuMusicApp({
   initialSection = "discover",
   onBrowse,
@@ -400,10 +447,12 @@ export default function AfuMusicApp({
   onRemoveCache,
   onListOffline,
   onResolveAudio,
+  onResolveDownload,
   onPlay,
   onUpload,
   onDeleteUpload,
   onOpenWallet,
+  playlistOwnerId,
   acoinBalance,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
@@ -418,6 +467,15 @@ export default function AfuMusicApp({
   const [offlineTracks, setOfflineTracks] = useState<AfuMusicTrack[]>([]);
   const [ownedIds, setOwnedIds] = useState<string[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<AfuMusicTrack | null>(null);
+  const [playQueue, setPlayQueue] = useState<AfuMusicTrack[]>([]);
+  const [queueTitle, setQueueTitle] = useState("AfuMusic");
+  const [downloadingIds, setDownloadingIds] = useState<string[]>([]);
+  const [savingIds, setSavingIds] = useState<string[]>([]);
+  const [playlists, setPlaylists] = useState<AfuMusicPlaylist[]>([]);
+  const [loadedPlaylistOwner, setLoadedPlaylistOwner] = useState<string | null>(null);
+  const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
+  const [playlistModalTrack, setPlaylistModalTrack] = useState<AfuMusicTrack | null>(null);
+  const [playlistDraft, setPlaylistDraft] = useState("");
   const [purchaseTrack, setPurchaseTrack] = useState<AfuMusicTrack | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -459,6 +517,25 @@ export default function AfuMusicApp({
     void syncOffline();
   }, [loadTracks, syncOffline]);
 
+  useEffect(() => {
+    let active = true;
+    setPlaylists([]);
+    setLoadedPlaylistOwner(null);
+    if (!playlistOwnerId) return () => { active = false; };
+    void loadMusicPlaylists(playlistOwnerId)
+      .then((result) => {
+        if (!active) return;
+        setPlaylists(result);
+        setLoadedPlaylistOwner(playlistOwnerId);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadedPlaylistOwner(playlistOwnerId);
+        showAlert("Playlists unavailable", "Your saved playlists could not be loaded.");
+      });
+    return () => { active = false; };
+  }, [playlistOwnerId]);
+
   const refresh = useCallback(async () => {
     setRefreshing(true);
     await loadTracks();
@@ -480,6 +557,116 @@ export default function AfuMusicApp({
       return matchesGenre && matchesQuery && matchesSection;
     });
   }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, query, section, tracks]);
+
+  const persistPlaylists = useCallback(async (next: AfuMusicPlaylist[]) => {
+    if (playlistOwnerId && loadedPlaylistOwner !== playlistOwnerId) {
+      throw new Error("Playlists are still loading. Try again in a moment.");
+    }
+    if (playlistOwnerId) await saveMusicPlaylists(playlistOwnerId, next);
+    setPlaylists(next);
+  }, [loadedPlaylistOwner, playlistOwnerId]);
+
+  const openPlaylistModal = useCallback((track: AfuMusicTrack | null = null) => {
+    setPlaylistModalTrack(track);
+    setPlaylistDraft("");
+    setPlaylistModalOpen(true);
+  }, []);
+
+  const createPlaylist = useCallback(async () => {
+    const name = playlistDraft.trim();
+    if (!name) {
+      showAlert("Name your playlist", "Enter a name before creating the playlist.");
+      return;
+    }
+    if (playlists.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      showAlert("Playlist already exists", "Choose a different name for this playlist.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const playlist: AfuMusicPlaylist = {
+      id: `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      tracks: playlistModalTrack ? [playlistModalTrack] : [],
+      updatedAt: now,
+    };
+    try {
+      await persistPlaylists([...playlists, playlist]);
+      setPlaylistModalOpen(false);
+      setPlaylistDraft("");
+      setPlaylistModalTrack(null);
+    } catch (error) {
+      showAlert("Playlist could not be saved", error);
+    }
+  }, [persistPlaylists, playlistDraft, playlistModalTrack, playlists]);
+
+  const addTrackToPlaylist = useCallback(async (playlistId: string) => {
+    if (!playlistModalTrack) return;
+    const updated = playlists.map((playlist) => (
+      playlist.id !== playlistId || playlist.tracks.some((item) => item.id === playlistModalTrack.id)
+        ? playlist
+        : { ...playlist, tracks: [...playlist.tracks, playlistModalTrack], updatedAt: new Date().toISOString() }
+    ));
+    try {
+      await persistPlaylists(updated);
+      setPlaylistModalOpen(false);
+      setPlaylistModalTrack(null);
+      setPlaylistDraft("");
+    } catch (error) {
+      showAlert("Track could not be added", error);
+    }
+  }, [persistPlaylists, playlistModalTrack, playlists]);
+
+  const deletePlaylist = useCallback((playlist: AfuMusicPlaylist) => {
+    showAlert("Delete this playlist?", `"${playlist.name}" and its saved track list will be removed.`, [
+      { text: "Keep playlist", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await persistPlaylists(playlists.filter((item) => item.id !== playlist.id));
+          } catch (error) {
+            showAlert("Playlist could not be deleted", error);
+          }
+        },
+      },
+    ]);
+  }, [persistPlaylists, playlists]);
+
+  const queueForTrack = useCallback((track: AfuMusicTrack) => {
+    const available = filteredTracks.filter((item) =>
+      ownedIds.includes(item.id) || item.isOwned || item.price === 0
+    );
+    return available.some((item) => item.id === track.id) ? available : [track, ...available];
+  }, [filteredTracks, ownedIds]);
+
+  const activateTrack = useCallback(async (
+    track: AfuMusicTrack,
+    queue: AfuMusicTrack[],
+    title: string,
+    notifyPlay: boolean,
+  ) => {
+    const uniqueQueue = queue.filter((item, index) => queue.findIndex((other) => other.id === item.id) === index);
+    setPlayQueue(uniqueQueue);
+    setQueueTitle(title);
+    try {
+      if (notifyPlay) await onPlay?.(track);
+      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
+      setSelectedTrack({ ...track, audioUrl });
+    } catch (error) {
+      showAlert("Playback unavailable", error);
+    }
+  }, [onPlay, onResolveAudio]);
+
+  const selectQueuedTrack = useCallback(async (track: AfuMusicTrack) => {
+    try {
+      await onPlay?.(track);
+      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
+      setSelectedTrack({ ...track, audioUrl });
+    } catch (error) {
+      showAlert("Playback unavailable", error);
+    }
+  }, [onPlay, onResolveAudio]);
 
   const featuredTracks = useMemo(() => (
     tracks
@@ -506,25 +693,37 @@ export default function AfuMusicApp({
       setPurchaseTrack(track);
       return;
     }
-    try {
-      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
-    } catch (error) {
-      showAlert("Playback unavailable", error);
-    }
-  }, [onResolveAudio, ownedIds]);
+    await activateTrack(track, queueForTrack(track), section === "library" ? "My library" : section === "offline" ? "Offline" : "Discover", false);
+  }, [activateTrack, ownedIds, queueForTrack, section]);
 
   const playTrack = useCallback(async (track: AfuMusicTrack) => {
-    try {
-      await onPlay?.(track);
-      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
-    } catch (error) {
-      showAlert("Playback unavailable", error);
+    await activateTrack(track, queueForTrack(track), section === "library" ? "My library" : section === "offline" ? "Offline" : "Discover", true);
+  }, [activateTrack, queueForTrack, section]);
+
+  const handlePlayNext = useCallback((track: AfuMusicTrack) => {
+    if (!selectedTrack) {
+      void playTrack(track);
+      return;
     }
-  }, [onPlay, onResolveAudio]);
+    setPlayQueue((current) => {
+      const next = current.length ? current.filter((item) => item.id !== track.id) : [selectedTrack];
+      const currentIndex = next.findIndex((item) => item.id === selectedTrack.id);
+      next.splice(currentIndex < 0 ? next.length : currentIndex + 1, 0, track);
+      return next;
+    });
+    setQueueTitle((title) => title || "Up next");
+  }, [playTrack, selectedTrack]);
+
+  const startPlaylist = useCallback((playlist: AfuMusicPlaylist) => {
+    if (!playlist.tracks.length) {
+      showAlert("This playlist is empty", "Add tracks from your library to start listening.");
+      return;
+    }
+    void activateTrack(playlist.tracks[0], playlist.tracks, playlist.name, true);
+  }, [activateTrack]);
 
   const handleCache = useCallback(async (track: AfuMusicTrack) => {
+    setSavingIds((ids) => ids.includes(track.id) ? ids : [...ids, track.id]);
     try {
       if (cachedIds.includes(track.id)) {
         if (!onRemoveCache) throw new Error("Offline removal is unavailable.");
@@ -543,8 +742,26 @@ export default function AfuMusicApp({
         return;
       }
       showAlert("Could not save offline", "Try again when you have a stronger connection.");
+    } finally {
+      setSavingIds((ids) => ids.filter((id) => id !== track.id));
     }
   }, [cachedIds, onCache, onRemoveCache]);
+
+  const handleWebDownload = useCallback(async (track: AfuMusicTrack) => {
+    setDownloadingIds((ids) => ids.includes(track.id) ? ids : [...ids, track.id]);
+    try {
+      const filename = getMusicDownloadFilename(track);
+      const uri = onResolveDownload
+        ? await onResolveDownload(track, filename)
+        : onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
+      if (!uri) throw new Error("The audio file is not available for this track.");
+      await downloadMusicFile(track, uri, filename);
+    } catch (error) {
+      showAlert("Download failed", error);
+    } finally {
+      setDownloadingIds((ids) => ids.filter((id) => id !== track.id));
+    }
+  }, [onResolveAudio, onResolveDownload]);
 
   const handleDeleteUpload = useCallback((track: AfuMusicTrack) => {
     showAlert("Remove this track?", "Listeners will no longer see it in AfuMusic.", [
@@ -654,17 +871,23 @@ export default function AfuMusicApp({
       track={item}
       owned={ownedIds.includes(item.id) || item.isOwned || item.price === 0}
       cached={cachedIds.includes(item.id)}
+      webDownload={Platform.OS === "web"}
+      downloading={Platform.OS === "web" ? downloadingIds.includes(item.id) : savingIds.includes(item.id)}
       managed={section === "studio"}
       onOpen={() => { void openTrack(item); }}
       onPlay={() => { void playTrack(item); }}
-      onCache={() => handleCache(item)}
+      onCache={() => { void handleCache(item); }}
+      onDownload={() => { void handleWebDownload(item); }}
+      onPlayNext={() => handlePlayNext(item)}
+      onAddToPlaylist={() => openPlaylistModal(item)}
       onDelete={() => handleDeleteUpload(item)}
     />
-  ), [cachedIds, handleCache, handleDeleteUpload, openTrack, ownedIds, playTrack, section]);
+  ), [cachedIds, downloadingIds, handleCache, handleDeleteUpload, handlePlayNext, handleWebDownload, openPlaylistModal, openTrack, ownedIds, playTrack, savingIds, section]);
 
   const sectionTitle = section === "discover" ? "Find your next repeat" :
     section === "library" ? "Your listening library" :
-    section === "offline" ? "Ready without signal" : "Your studio";
+    section === "offline" ? "Ready without signal" :
+    section === "playlists" ? "Your playlists" : "Your studio";
 
   return (
     <View style={[styles.root, { backgroundColor: CANVAS, paddingTop: insets.top }]}>
@@ -700,6 +923,7 @@ export default function AfuMusicApp({
           <SectionPill label="Discover" icon="sparkles-outline" active={section === "discover"} onPress={() => setSection("discover")} />
           <SectionPill label="Library" icon="albums-outline" active={section === "library"} onPress={() => setSection("library")} />
           <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} />
+          <SectionPill label="Playlists" icon="list-outline" active={section === "playlists"} onPress={() => setSection("playlists")} />
           <SectionPill label="Studio" icon="mic-outline" active={section === "studio"} onPress={() => setSection("studio")} />
         </ScrollView>
       </View>
@@ -745,13 +969,18 @@ export default function AfuMusicApp({
 
       <View style={styles.contentHeader}>
         <View>
-          <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : "YOUR NEXT LISTEN"}</Text>
+          <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : section === "playlists" ? "YOUR COLLECTIONS" : "YOUR NEXT LISTEN"}</Text>
           <Text style={styles.sectionTitle}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
           <Pressable onPress={() => setUploadOpen(true)} style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
             <Ionicons name="add" size={19} color={PAPER} />
             <Text style={styles.addButtonText}>Publish</Text>
+          </Pressable>
+        ) : section === "playlists" ? (
+          <Pressable onPress={() => openPlaylistModal()} style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
+            <Ionicons name="add" size={19} color={PAPER} />
+            <Text style={styles.addButtonText}>New playlist</Text>
           </Pressable>
         ) : null}
       </View>
@@ -766,7 +995,29 @@ export default function AfuMusicApp({
         </ScrollView>
       ) : null}
 
-      {loading ? (
+      {section === "playlists" ? (
+        playlistOwnerId && loadedPlaylistOwner !== playlistOwnerId ? (
+          <SkeletonRows />
+        ) : playlists.length === 0 ? (
+          <EmptyState
+            icon="list-outline"
+            title="Your playlists start here"
+            message="Create a playlist, then add tracks from Discover or your Library."
+            action={{ label: "Create a playlist", onPress: () => openPlaylistModal() }}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={styles.playlistList} showsVerticalScrollIndicator={false}>
+            {playlists.map((playlist) => (
+              <PlaylistRow
+                key={playlist.id}
+                playlist={playlist}
+                onPlay={() => startPlaylist(playlist)}
+                onDelete={() => deletePlaylist(playlist)}
+              />
+            ))}
+          </ScrollView>
+        )
+      ) : loading ? (
         <SkeletonRows />
       ) : loadError ? (
         <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadTracks }} />
@@ -774,7 +1025,7 @@ export default function AfuMusicApp({
         <EmptyState
           icon={section === "offline" ? "cloud-download-outline" : section === "studio" ? "mic-outline" : "albums-outline"}
           title={section === "offline" ? "Nothing saved offline" : section === "library" ? "Your library is waiting" : section === "studio" ? "No published tracks" : "No tracks found"}
-          message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : "Try another search or publish your first track."}
+          message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : section === "studio" ? "Try another search or publish your first track." : "Try another search."}
           action={section === "studio" ? { label: "Publish a track", onPress: () => setUploadOpen(true) } : undefined}
         />
       ) : (
@@ -789,7 +1040,20 @@ export default function AfuMusicApp({
         />
       )}
 
-      {selectedTrack ? <PlayerSheet track={selectedTrack} onClose={() => setSelectedTrack(null)} /> : null}
+      {selectedTrack ? (
+        <MusicPlayerSheet
+          track={selectedTrack}
+          queue={playQueue}
+          queueTitle={queueTitle}
+          onSelectTrack={(track) => { void selectQueuedTrack(track); }}
+          onClose={() => setSelectedTrack(null)}
+          onDownload={Platform.OS === "web" ? () => { void handleWebDownload(selectedTrack); } : undefined}
+          downloading={downloadingIds.includes(selectedTrack.id)}
+          onSaveOffline={Platform.OS !== "web" ? () => { void handleCache(selectedTrack); } : undefined}
+          isCached={cachedIds.includes(selectedTrack.id)}
+          savingOffline={savingIds.includes(selectedTrack.id)}
+        />
+      ) : null}
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
@@ -823,6 +1087,67 @@ export default function AfuMusicApp({
               {purchasing ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="flash" size={16} color={PAPER} /><Text style={styles.purchaseButtonText}>Unlock for {purchaseTrack?.price} AC</Text></>}
             </Pressable>
             <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={styles.cancelText}>Not now</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={playlistModalOpen} animationType="slide" transparent onRequestClose={() => setPlaylistModalOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.playlistSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.playlistModalHeader}>
+              <View>
+                <Text style={styles.purchaseKicker}>{playlistModalTrack ? "SAVE THIS TRACK" : "YOUR MUSIC"}</Text>
+                <Text style={styles.playlistModalTitle}>{playlistModalTrack ? "Add to playlist" : "New playlist"}</Text>
+              </View>
+              <Pressable onPress={() => setPlaylistModalOpen(false)} hitSlop={10} accessibilityLabel="Close playlist dialog">
+                <Ionicons name="close" size={23} color={INK} />
+              </Pressable>
+            </View>
+            {playlistModalTrack ? (
+              <View style={styles.playlistTrackPreview}>
+                <TrackArt track={playlistModalTrack} size={44} radius={12} />
+                <View style={styles.playlistCopy}>
+                  <Text style={styles.playlistTitle} numberOfLines={1}>{playlistModalTrack.title}</Text>
+                  <Text style={styles.playlistMeta} numberOfLines={1}>{playlistModalTrack.artist}</Text>
+                </View>
+              </View>
+            ) : null}
+            <TextInput
+              value={playlistDraft}
+              onChangeText={setPlaylistDraft}
+              placeholder="Playlist name"
+              placeholderTextColor={MUTED}
+              style={styles.formInput}
+              maxLength={48}
+              returnKeyType="done"
+              accessibilityLabel="Playlist name"
+            />
+            <Pressable onPress={() => { void createPlaylist(); }} style={({ pressed }) => [styles.playlistCreateButton, pressed && styles.purchaseButtonPressed]}>
+              <Ionicons name="add-circle-outline" size={18} color={PAPER} />
+              <Text style={styles.purchaseButtonText}>{playlistModalTrack ? "Create playlist with track" : "Create playlist"}</Text>
+            </Pressable>
+            {playlistModalTrack && playlists.length > 0 ? (
+              <>
+                <Text style={styles.playlistListLabel}>OR ADD TO AN EXISTING PLAYLIST</Text>
+                <ScrollView style={styles.playlistChoices} keyboardShouldPersistTaps="handled">
+                  {playlists.map((playlist) => (
+                    <Pressable
+                      key={playlist.id}
+                      onPress={() => { void addTrackToPlaylist(playlist.id); }}
+                      style={({ pressed }) => [styles.playlistChoice, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="musical-notes-outline" size={18} color={CORAL} />
+                      <View style={styles.playlistCopy}>
+                        <Text style={styles.playlistTitle} numberOfLines={1}>{playlist.name}</Text>
+                        <Text style={styles.playlistMeta}>{playlist.tracks.length} {playlist.tracks.length === 1 ? "track" : "tracks"}</Text>
+                      </View>
+                      <Ionicons name={playlist.tracks.some((item) => item.id === playlistModalTrack.id) ? "checkmark-circle" : "add-circle-outline"} size={20} color={playlist.tracks.some((item) => item.id === playlistModalTrack.id) ? COBALT : MUTED} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -913,7 +1238,7 @@ const styles = StyleSheet.create({
   trackTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 14 },
   trackArtist: { color: "#645C55", fontFamily: "Inter_500Medium", fontSize: 11 },
   trackMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10 },
-  rowActions: { flexDirection: "row", alignItems: "center", gap: 9 },
+  rowActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   miniPlay: { width: 27, height: 27, borderRadius: 14, backgroundColor: CORAL, alignItems: "center", justifyContent: "center" },
   miniPlayPressed: { backgroundColor: INK, transform: [{ scale: 0.9 }] },
   priceText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
@@ -949,15 +1274,20 @@ const styles = StyleSheet.create({
   purchaseButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 13 },
   cancelButton: { padding: 14 },
   cancelText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 12 },
-  playerSheet: { flex: 1, alignItems: "center", backgroundColor: CANVAS, paddingHorizontal: 22, paddingTop: 10 },
-  sheetHeader: { width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 30 },
-  sheetEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.5 },
-  playerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 24, marginTop: 24, textAlign: "center" },
-  playerArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 5, marginBottom: 24 },
-  playerUnavailable: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: INK, borderRadius: 22, paddingVertical: 14, paddingHorizontal: 18 },
-  playerUnavailableText: { color: "#D0CADC", fontFamily: "Inter_500Medium", fontSize: 11, textAlign: "center", flex: 1 },
-  playerNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 21 },
-  playerNoteText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
+  playlistList: { paddingHorizontal: 20, paddingBottom: 28, gap: 9 },
+  playlistCard: { minHeight: 76, flexDirection: "row", alignItems: "center", gap: 13, padding: 9, borderRadius: 17, backgroundColor: PAPER },
+  playlistMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 11 },
+  playlistCopy: { flex: 1, minWidth: 0 },
+  playlistTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
+  playlistMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 4 },
+  playlistSheet: { maxHeight: "88%", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
+  playlistModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 15 },
+  playlistModalTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, marginTop: 5 },
+  playlistTrackPreview: { flexDirection: "row", alignItems: "center", gap: 11, padding: 9, borderRadius: 14, backgroundColor: PAPER, marginBottom: 13 },
+  playlistCreateButton: { height: 46, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: CORAL, borderRadius: 14, marginTop: 10 },
+  playlistListLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.1, marginTop: 17, marginBottom: 7 },
+  playlistChoices: { maxHeight: 210 },
+  playlistChoice: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
   uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
