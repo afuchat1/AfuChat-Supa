@@ -100,17 +100,7 @@ function formatPlays(value?: number) {
   return `${value} plays`;
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 function TrackArt({
-  track,
   size = 72,
   radius = 18,
 }: {
@@ -118,8 +108,6 @@ function TrackArt({
   size?: number;
   radius?: number;
 }) {
-  const coverColor = track?.coverColor || "#E8DED2";
-  const accentColor = track?.accentColor || "#BBAA98";
   return (
     <View
       style={[
@@ -128,42 +116,11 @@ function TrackArt({
           width: size,
           height: size,
           borderRadius: radius,
-          backgroundColor: coverColor,
+          backgroundColor: "#E8DED2",
         },
       ]}
     >
-      <View
-        style={[
-          styles.artOrb,
-          {
-            backgroundColor: accentColor,
-            width: size * 0.56,
-            height: size * 0.56,
-            borderRadius: size,
-            right: -size * 0.12,
-            top: size * 0.1,
-          },
-        ]}
-      />
-      <View
-        style={[
-          styles.artLine,
-          {
-            backgroundColor: accentColor,
-            width: size * 0.7,
-            left: size * 0.12,
-            bottom: size * 0.18,
-            transform: [{ rotate: "-22deg" }],
-          },
-        ]}
-      />
-      {track ? (
-        <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.18) }]}>
-          {initials(track.artist)}
-        </Text>
-      ) : (
-        <Ionicons name="musical-notes" size={Math.max(18, size * 0.34)} color={INK} />
-      )}
+      <Ionicons name="musical-notes" size={Math.max(18, size * 0.34)} color={INK} />
     </View>
   );
 }
@@ -1299,9 +1256,6 @@ const styles = StyleSheet.create({
   trackRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 82, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
   trackRowPressed: { opacity: 0.7, transform: [{ translateX: 2 }] },
   trackArt: { overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  artOrb: { position: "absolute", opacity: 0.92 },
-  artLine: { height: 3, position: "absolute", borderRadius: 4, opacity: 0.9 },
-  artInitials: { color: PAPER, fontFamily: "Inter_700Bold", letterSpacing: 0.5, zIndex: 1 },
   trackCopy: { flex: 1, minWidth: 0, gap: 3 },
   trackTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 14 },
   trackArtist: { color: "#645C55", fontFamily: "Inter_500Medium", fontSize: 11 },

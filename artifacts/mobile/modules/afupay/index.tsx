@@ -233,6 +233,8 @@ export default function AfuPayApp({
         acoin_transfer_received: { label: "ACoin Received", icon: "arrow-down-circle" },
         marketplace_purchase: { label: "Marketplace Purchase", icon: "cart" },
         marketplace_sale: { label: "Marketplace Sale", icon: "storefront" },
+        music_purchase: { label: "AfuMusic Purchase", icon: "musical-notes" },
+        music_sale: { label: "AfuMusic Sale", icon: "musical-notes" },
         game_purchase: { label: "Game Purchase", icon: "game-controller" },
         game_reward: { label: "Game Reward", icon: "trophy" },
         red_envelope_sent: { label: "Red Envelope Sent", icon: "gift" },
@@ -249,7 +251,11 @@ export default function AfuPayApp({
       });
       (acoinTx || []).forEach((t: any) => {
         const m = acoinLabels[t.transaction_type];
-        all.push({ id: t.id, type: t.transaction_type, label: m?.label || t.transaction_type.replace(/_/g, " "), icon: m?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"), color: t.amount > 0 ? "#34C759" : "#FF9500", amount: t.amount, currency: "acoin", created_at: t.created_at, status: "completed" });
+        const trackTitle = typeof t.metadata?.track_title === "string" ? t.metadata.track_title.trim() : "";
+        const label = trackTitle && ["music_purchase", "music_sale"].includes(t.transaction_type)
+          ? `${m?.label || "AfuMusic"} · ${trackTitle}`
+          : m?.label || t.transaction_type.replace(/_/g, " ");
+        all.push({ id: t.id, type: t.transaction_type, label, icon: m?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"), color: t.amount > 0 ? "#34C759" : "#FF9500", amount: t.amount, currency: "acoin", created_at: t.created_at, status: "completed" });
       });
       all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setTransactions(all);

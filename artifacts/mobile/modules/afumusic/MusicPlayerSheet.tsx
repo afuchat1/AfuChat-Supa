@@ -35,6 +35,8 @@ type Props = {
   volume?: number;
   onSelectTrack: (track: AfuMusicTrack) => void;
   onClose: () => void;
+  onPlaybackStateChange?: (isPlaying: boolean) => void;
+  onRegisterPlaybackToggle?: (toggle: (() => Promise<void>) | null) => void;
   onDownload?: () => void;
   downloading?: boolean;
   onSaveOffline?: () => void;
@@ -47,16 +49,10 @@ function formatTime(milliseconds: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function initials(name: string) {
-  return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function Artwork({ track }: { track: AfuMusicTrack }) {
+function Artwork() {
   return (
-    <View style={[styles.artwork, { backgroundColor: track.coverColor || "#19172F" }]}>
-      <View style={[styles.artworkOrb, { backgroundColor: track.accentColor || "#F06451" }]} />
-      <Text style={styles.artworkText}>{initials(track.artist)}</Text>
-      <Ionicons name="musical-notes" size={20} color="#FFF9F1" style={styles.artworkIcon} />
+    <View style={styles.artwork}>
+      <Ionicons name="musical-notes" size={68} color="#8D847B" />
     </View>
   );
 }
@@ -69,6 +65,8 @@ export default function MusicPlayerSheet({
   volume = 0.75,
   onSelectTrack,
   onClose,
+  onPlaybackStateChange,
+  onRegisterPlaybackToggle,
   onDownload,
   downloading = false,
   onSaveOffline,
@@ -91,6 +89,10 @@ export default function MusicPlayerSheet({
   const [shuffle, setShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
   const [queueOpen, setQueueOpen] = useState(false);
+
+  useEffect(() => {
+    onPlaybackStateChange?.(isPlaying);
+  }, [isPlaying, onPlaybackStateChange]);
 
   const restartCurrent = useCallback(async () => {
     try {
@@ -210,7 +212,7 @@ export default function MusicPlayerSheet({
             allowsRecordingIOS: false,
             playsInSilentModeIOS: true,
             shouldDuckAndroid: true,
-            staysActiveInBackground: false,
+            staysActiveInBackground: true,
           });
         } catch {
           // Continue to create the sound; some Expo Go versions reject optional audio-mode fields.
@@ -296,6 +298,11 @@ export default function MusicPlayerSheet({
     }
   }, [durationMs, isLoaded, isPlaying, positionMs]);
 
+  useEffect(() => {
+    onRegisterPlaybackToggle?.(togglePlayback);
+    return () => onRegisterPlaybackToggle?.(null);
+  }, [onRegisterPlaybackToggle, togglePlayback]);
+
   const seek = useCallback(async (event: GestureResponderEvent) => {
     if (!isLoaded || durationMs <= 0) return;
     const ratio = Math.max(0, Math.min(1, event.nativeEvent.locationX / Math.max(1, seekWidth.current)));
@@ -351,7 +358,7 @@ export default function MusicPlayerSheet({
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Artwork track={track} />
+          <Artwork />
           <View style={styles.trackInfo}>
             <Text style={styles.title} numberOfLines={2}>{track.title}</Text>
             <Text style={styles.artist} numberOfLines={1}>{track.artist} · {track.genre}</Text>
@@ -464,10 +471,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#F06451", fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25 },
   queueTitle: { color: "#8D847B", fontFamily: "Inter_600SemiBold", fontSize: 11, marginTop: 4 },
   scrollContent: { alignItems: "center", paddingBottom: 26 },
-  artwork: { width: 232, height: 232, borderRadius: 28, overflow: "hidden", alignItems: "center", justifyContent: "center", marginTop: 5 },
-  artworkOrb: { width: 164, height: 164, borderRadius: 90, position: "absolute", right: -40, top: -28, opacity: 0.9 },
-  artworkText: { color: "#FFF9F1", fontFamily: "Inter_700Bold", fontSize: 52, letterSpacing: 1, zIndex: 1 },
-  artworkIcon: { position: "absolute", bottom: 19, left: 18, opacity: 0.85 },
+  artwork: { width: 232, height: 232, borderRadius: 28, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: "#E8DED2", marginTop: 5 },
   trackInfo: { width: "100%", alignItems: "center", marginTop: 20, marginBottom: 20 },
   title: { color: "#19172F", fontFamily: "Inter_700Bold", fontSize: 23, letterSpacing: -0.4, textAlign: "center" },
   artist: { color: "#8D847B", fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 6 },

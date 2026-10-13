@@ -47,26 +47,12 @@ function formatDuration(seconds: number | null | undefined) {
   return `${minutes}:${remaining}`;
 }
 
-function colorsFor(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index++) hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
-  const palettes = [
-    ["#252143", "#F7BB75"],
-    ["#E85949", "#19172F"],
-    ["#25356D", "#E9C35B"],
-    ["#6D7B77", "#F7E6C1"],
-    ["#5A2C62", "#F06451"],
-  ];
-  return palettes[hash % palettes.length];
-}
-
 function rowToTrack(
   row: MusicRow,
   ownedIds: Set<string>,
   cachedIds: Set<string>,
   currentUserId?: string,
 ): AfuMusicTrack {
-  const [coverColor, accentColor] = colorsFor(row.id);
   const artist = row.creator?.display_name?.trim() || row.creator?.handle?.trim() || row.artist?.trim() || "AfuMusic creator";
   const handle = row.creator?.handle ? `@${row.creator.handle.replace(/^@/, "")}` : undefined;
   return {
@@ -81,8 +67,6 @@ function rowToTrack(
     price: Math.max(0, row.price_acoin ?? 0),
     isOwned: ownedIds.has(row.id) || row.creator_id === currentUserId,
     isCached: cachedIds.has(row.id),
-    coverColor,
-    accentColor,
     storagePath: row.storage_path ?? undefined,
     mimeType: row.mime_type ?? undefined,
     fileSize: row.file_size ?? undefined,
@@ -101,15 +85,33 @@ async function currentUserId(): Promise<string> {
 
 async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
   const userId = await currentUserId();
+  const searchTerm = query?.trim().replace(/[%_,()."]/g, "");
+  let matchingCreatorIds: string[] = [];
+  if (searchTerm) {
+    const { data: matchingCreators, error: creatorSearchError } = await supabase
+      .from("profiles")
+      .select("id")
+      .or(`display_name.ilike.%${searchTerm}%,handle.ilike.%${searchTerm}%`)
+      .limit(100);
+    if (creatorSearchError) throw creatorSearchError;
+    matchingCreatorIds = (matchingCreators ?? []).map((profile: any) => profile.id);
+  }
   let request = supabase
     .from("music_tracks")
     .select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,created_at")
     .eq("status", "published")
     .order("created_at", { ascending: false })
     .limit(100);
-  if (query?.trim()) {
-    const escaped = query.trim().replace(/[%_,]/g, "");
-    if (escaped) request = request.or(`title.ilike.%${escaped}%,genre.ilike.%${escaped}%`);
+  if (searchTerm) {
+    const filters = [
+      `title.ilike.%${searchTerm}%`,
+      `artist.ilike.%${searchTerm}%`,
+      `genre.ilike.%${searchTerm}%`,
+    ];
+    if (matchingCreatorIds.length) {
+      filters.push(`creator_id.in.(${matchingCreatorIds.join(",")})`);
+    }
+    request = request.or(filters.join(","));
   }
   const [{ data: rows, error }, { data: purchases }, { data: profiles }, offline] = await Promise.all([
     request,

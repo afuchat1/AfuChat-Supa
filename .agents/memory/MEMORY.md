@@ -107,3 +107,4 @@
 - [Vercel public profile prerendering](vercel-public-profile-prerender.md) — static Vercel hosting needs per-handle HTML files so profiles are readable before JavaScript runs.
 - [AfuMusic schema drift](afumusic-schema-drift.md) — Supabase may already contain a legacy public music_tracks table; apply the private AfuMusic schema additively.
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
+- [AfuMusic platform rules](afumusic-platform-rules.md) — AfuMusic uses the shared AfuPay wallet; paid publishing requires Premium and prices stay within 5–1000 ACoin.

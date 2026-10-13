@@ -23,6 +23,10 @@ type PlayerContextValue = {
   visible: boolean;
   source: PlayerSource;
   volume: number;
+  isPlaying: boolean;
+  togglePlayback: () => Promise<void>;
+  registerPlaybackToggle: (toggle: (() => Promise<void>) | null) => void;
+  setPlaybackState: (isPlaying: boolean) => void;
   play: (
     track: AfuMusicTrack,
     queue?: AfuMusicTrack[],
@@ -53,6 +57,8 @@ export function AfuMusicPlayerProvider({ children }: { children: React.ReactNode
   const [visible, setVisible] = useState(false);
   const [source, setSource] = useState<PlayerSource>("library");
   const [volume, setVolume] = useState(0.75);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playbackToggleRef = useRef<(() => Promise<void>) | null>(null);
   const accountRef = useRef<string | null>(user?.id ?? null);
   const playerRef = useRef({ track, source });
   playerRef.current = { track, source };
@@ -63,6 +69,15 @@ export function AfuMusicPlayerProvider({ children }: { children: React.ReactNode
     setQueue([]);
     setQueueTitle("AfuMusic");
     setSource("library");
+    setIsPlaying(false);
+  }, []);
+
+  const registerPlaybackToggle = useCallback((toggle: (() => Promise<void>) | null) => {
+    playbackToggleRef.current = toggle;
+  }, []);
+
+  const togglePlayback = useCallback(async () => {
+    await playbackToggleRef.current?.();
   }, []);
 
   useEffect(() => {
@@ -88,6 +103,7 @@ export function AfuMusicPlayerProvider({ children }: { children: React.ReactNode
     setQueueTitle(nextTitle);
     setSource(options.source ?? "library");
     setVisible(options.showPlayer ?? options.source !== "shot");
+    setIsPlaying(false);
     if (typeof options.volume === "number") setVolume(Math.max(0, Math.min(1, options.volume)));
     setTrack({ ...nextTrack, audioUrl });
   }, []);
@@ -103,6 +119,10 @@ export function AfuMusicPlayerProvider({ children }: { children: React.ReactNode
     visible,
     source,
     volume,
+    isPlaying,
+    togglePlayback,
+    registerPlaybackToggle,
+    setPlaybackState: setIsPlaying,
     play,
     setVolume,
     setQueue,
@@ -112,7 +132,7 @@ export function AfuMusicPlayerProvider({ children }: { children: React.ReactNode
     },
     stop,
     stopShot,
-  }), [play, queue, queueTitle, source, stop, stopShot, track, visible, volume]);
+  }), [isPlaying, play, queue, queueTitle, registerPlaybackToggle, source, stop, stopShot, togglePlayback, track, visible, volume]);
 
   return (
     <PlayerContext.Provider value={value}>
@@ -123,7 +143,22 @@ export function AfuMusicPlayerProvider({ children }: { children: React.ReactNode
 }
 
 function GlobalPlayerHost() {
-  const { track, queue, queueTitle, visible, source, volume, play, minimize, open, stop } = useAfuMusicPlayer();
+  const {
+    track,
+    queue,
+    queueTitle,
+    visible,
+    source,
+    volume,
+    isPlaying,
+    togglePlayback,
+    registerPlaybackToggle,
+    setPlaybackState,
+    play,
+    minimize,
+    open,
+    stop,
+  } = useAfuMusicPlayer();
   const insets = useSafeAreaInsets();
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -185,6 +220,8 @@ function GlobalPlayerHost() {
         volume={volume}
         onSelectTrack={selectQueuedTrack}
         onClose={minimize}
+        onPlaybackStateChange={setPlaybackState}
+        onRegisterPlaybackToggle={registerPlaybackToggle}
         onDownload={Platform.OS === "web" ? () => { void download(); } : undefined}
         downloading={downloading}
         onSaveOffline={Platform.OS !== "web" ? () => { void saveOffline(); } : undefined}
@@ -200,6 +237,14 @@ function GlobalPlayerHost() {
               <Text style={styles.miniArtist} numberOfLines={1}>{track.artist}</Text>
             </View>
             <Ionicons name="chevron-up" size={19} color="#19172F" />
+          </Pressable>
+          <Pressable
+            onPress={() => { void togglePlayback(); }}
+            style={styles.miniToggle}
+            accessibilityRole="button"
+            accessibilityLabel={isPlaying ? "Pause music" : "Resume music"}
+          >
+            <Ionicons name={isPlaying ? "pause" : "play"} size={19} color="#19172F" />
           </Pressable>
           <Pressable onPress={stop} style={styles.miniStop} accessibilityRole="button" accessibilityLabel="Stop music">
             <Ionicons name="close" size={18} color="#19172F" />
@@ -217,5 +262,6 @@ const styles = StyleSheet.create({
   miniCopy: { flex: 1, minWidth: 0 },
   miniTitle: { color: "#19172F", fontFamily: "Inter_700Bold", fontSize: 12 },
   miniArtist: { color: "#8D847B", fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
+  miniToggle: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF9F1", alignItems: "center", justifyContent: "center" },
   miniStop: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#FFF9F1", alignItems: "center", justifyContent: "center" },
 });
