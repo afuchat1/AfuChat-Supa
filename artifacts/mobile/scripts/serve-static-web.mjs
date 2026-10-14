@@ -113,7 +113,7 @@ createServer(async (request, response) => {
       const html = await readFile(filePath, "utf8");
       const enhancedHtml = await decoratePublicHtml(pathname, html);
       response.writeHead(200, {
-        "Cache-Control": "public, max-age=60",
+        "Cache-Control": "no-store",
         "Content-Type": "text/html; charset=utf-8",
       });
       response.end(enhancedHtml);

@@ -103,6 +103,7 @@
 - [Native-only Google auth](native-only-google-auth.md) — keep Supabase Google enabled; mobile sends native Google ID tokens, with no web One Tap or Google redirects.
 - [Username marketplace schema drift](username-marketplace-schema-drift.md) — production owned_usernames uses acquired_at; marketplace RPCs must match it instead of assuming created_at.
 - [Expo static web surface](expo-next-web-port.md) — Expo Router is canonical for web; static export plus clean URLs gives crawlers HTML without duplicating the mobile UI.
+- [Reward XP bundle loading](rewardxp-web-bundle.md) — Keep the shared XP helper in the startup bundle; lazy-chunk misses can surface as unknown-module errors.
 - [Vercel Babel workspace dependencies](vercel-babel-workspace-deps.md) — clean Vercel pnpm installs may need Babel packages declared at the workspace root for react-native-worklets.
 - [Vercel public profile prerendering](vercel-public-profile-prerender.md) — static Vercel hosting needs per-handle HTML files so profiles are readable before JavaScript runs.
 - [AfuMusic schema drift](afumusic-schema-drift.md) — live schema may lag repo migrations; paid CDN URLs were publicly reachable, so verify private R2 access before enabling paid playback.

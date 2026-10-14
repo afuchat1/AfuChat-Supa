@@ -81,6 +81,7 @@ import { DataModeProvider } from "@/context/DataModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import { RouteFrame } from "@/components/ui/RouteFrame";
+import "@/lib/rewardXp";
 import { UsernameLoadingOverlay } from "@/components/ui/UsernameLoadingOverlay";
 import AlertModal from "@/components/ui/AlertModal";
 import { GlobalInboxListener } from "@/components/GlobalInboxListener";
