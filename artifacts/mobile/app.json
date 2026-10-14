@@ -10,6 +10,7 @@
     "backgroundColor": "#FFFFFF",
     "android": {
       "package": "com.afuchat.mobile",
+      "supportsRtl": false,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
