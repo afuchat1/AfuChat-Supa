@@ -198,9 +198,16 @@ async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
 
 interface SignedUpload {
   uploadUrl: string;
-  publicUrl: string;
+  publicUrl: string | null;
+  privateStoragePath?: string | null;
   key: string;
 }
+
+export type StorageUploadResult = {
+  publicUrl: string | null;
+  privateStoragePath?: string | null;
+  error: string | null;
+};
 
 async function getSignedUpload(
   bucket: string,
@@ -239,9 +246,20 @@ async function getSignedUpload(
     return { data: null, error: `Sign failed (HTTP ${resp.status}): ${text.slice(0, 120)}` };
   }
   if (!resp.ok) return { data: null, error: json?.error || `Sign failed (HTTP ${resp.status})` };
-  if (!json?.uploadUrl || !json?.publicUrl) return { data: null, error: "Sign endpoint returned no URL" };
+  const privateStoragePath = typeof json?.privateStoragePath === "string" ? json.privateStoragePath : null;
+  if (!json?.uploadUrl || (!json?.publicUrl && !privateStoragePath)) {
+    return { data: null, error: "Sign endpoint returned no usable upload destination" };
+  }
 
-  return { data: { uploadUrl: json.uploadUrl, publicUrl: json.publicUrl, key: json.key }, error: null };
+  return {
+    data: {
+      uploadUrl: json.uploadUrl,
+      publicUrl: json.publicUrl ?? null,
+      privateStoragePath,
+      key: json.key,
+    },
+    error: null,
+  };
 }
 
 async function proxyUpload(
@@ -249,7 +267,7 @@ async function proxyUpload(
   filePath: string,
   body: Blob | ArrayBuffer,
   contentType: string,
-): Promise<{ publicUrl: string | null; error: string | null }> {
+): Promise<StorageUploadResult> {
   const token = await getAccessToken();
   if (!token) return { publicUrl: null, error: "Not authenticated" };
 
@@ -280,9 +298,10 @@ async function proxyUpload(
     return { publicUrl: null, error: `Upload failed (HTTP ${resp.status}): ${text.slice(0, 120)}` };
   }
   if (!resp.ok) return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${resp.status})` };
-  if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
+  const privateStoragePath = typeof json?.privateStoragePath === "string" ? json.privateStoragePath : null;
+  if (!json?.publicUrl && !privateStoragePath) return { publicUrl: null, error: "Upload service returned no usable destination" };
 
-  return { publicUrl: json.publicUrl, error: null };
+  return { publicUrl: json.publicUrl ?? null, privateStoragePath, error: null };
 }
 
 /**
@@ -299,7 +318,7 @@ export async function uploadToStorage(
   fileUri: string,
   contentType?: string,
   expectedSize?: number,
-): Promise<{ publicUrl: string | null; error: string | null }> {
+): Promise<StorageUploadResult> {
   try {
     let resolvedMime = contentType;
     if (!resolvedMime && fileUri.startsWith("data:")) {
@@ -327,7 +346,11 @@ export async function uploadToStorage(
             headers: { "Content-Type": mime },
             body: body as any,
           });
-          if (putResp.ok) return { publicUrl: sign.data.publicUrl, error: null };
+          if (putResp.ok) {
+            return realBucket === "music-private"
+              ? { publicUrl: null, privateStoragePath: filePath, error: null }
+              : { publicUrl: sign.data.publicUrl, error: null };
+          }
         } catch {}
       }
       return proxyUpload(realBucket, filePath, body, mime);
@@ -394,7 +417,9 @@ export async function uploadToStorage(
         });
         if (putResult.status >= 200 && putResult.status < 300) {
           cleanupTemp();
-          return { publicUrl: sign.data.publicUrl, error: null };
+          return realBucket === "music-private"
+            ? { publicUrl: null, privateStoragePath: filePath, error: null }
+            : { publicUrl: sign.data.publicUrl, error: null };
         }
         console.warn(
           `[Upload] Presigned PUT failed (${putResult.status}), falling back to proxy`,
@@ -436,8 +461,11 @@ export async function uploadToStorage(
       if (proxyResult.status < 200 || proxyResult.status >= 300) {
         return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${proxyResult.status})` };
       }
-      if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
-      return { publicUrl: json.publicUrl, error: null };
+      const privateStoragePath = typeof json?.privateStoragePath === "string" ? json.privateStoragePath : null;
+      if (!json?.publicUrl && !privateStoragePath) {
+        return { publicUrl: null, error: "Upload service returned no usable destination" };
+      }
+      return { publicUrl: json.publicUrl ?? null, privateStoragePath, error: null };
     } catch (e: any) {
       console.warn(`[Upload] Native proxy stream failed, trying readable URI fallback: ${e?.message || e}`);
     }
@@ -459,6 +487,22 @@ export async function uploadToStorage(
     }
   } catch (e: any) {
     return { publicUrl: null, error: e?.message || "Upload failed" };
+  }
+}
+
+export async function isPrivateMusicStorageReady(): Promise<boolean> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return false;
+    const response = await fetch(uploadsUrl("music-private-ready"), {
+      headers: await edgeFnHeaders(token),
+    });
+    const text = await response.text().catch(() => "");
+    if (!text || text.trimStart().startsWith("<")) return false;
+    const body = JSON.parse(text);
+    return response.ok && body?.ready === true;
+  } catch {
+    return false;
   }
 }
 

@@ -15,6 +15,7 @@
 //   CLOUDFLARE_R2_ACCESS_KEY_ID   — R2 API token key ID
 //   CLOUDFLARE_R2_SECRET_ACCESS_KEY — R2 API token secret
 //   R2_BUCKET                     — R2 bucket name (e.g. "afuchat-media")
+//   R2_PRIVATE_MUSIC_BUCKET       — dedicated private bucket for paid tracks
 //   R2_PUBLIC_BASE_URL            — CDN base URL (e.g. "https://cdn.afuchat.com")
 //
 // R2 key structure: {logical-bucket}/{user-id}/{filename}
@@ -26,6 +27,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   ListObjectsV2Command,
 } from "npm:@aws-sdk/client-s3";
 import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner";
@@ -52,6 +54,7 @@ interface Config {
   accessKeyId: string;
   secretAccessKey: string;
   bucket: string;
+  privateMusicBucket: string;
   publicBaseUrl: string;
   supabaseUrl: string;
   serviceRoleKey: string;
@@ -63,6 +66,7 @@ function getConfig(): Config {
     accessKeyId: Deno.env.get("CLOUDFLARE_R2_ACCESS_KEY_ID") ?? "",
     secretAccessKey: Deno.env.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY") ?? "",
     bucket: Deno.env.get("R2_BUCKET") ?? "afuchat-media",
+    privateMusicBucket: Deno.env.get("R2_PRIVATE_MUSIC_BUCKET") ?? "afumusic-private",
     publicBaseUrl: (Deno.env.get("R2_PUBLIC_BASE_URL") ?? "").replace(/\/$/, ""),
     supabaseUrl: Deno.env.get("SUPABASE_URL") ?? "",
     serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -131,6 +135,21 @@ function buildKey(logicalBucket: string, callerPath: string): string {
 
 function publicUrl(cfg: Config, key: string): string {
   return `${cfg.publicBaseUrl}/${key}`;
+}
+
+function getPhysicalBucket(cfg: Config, logicalBucket: string): string {
+  if (logicalBucket === "music-private") return cfg.privateMusicBucket;
+  return cfg.bucket;
+}
+
+async function isPrivateMusicBucketReady(cfg: Config, s3: S3Client): Promise<boolean> {
+  if (!cfg.privateMusicBucket || cfg.privateMusicBucket === cfg.bucket) return false;
+  try {
+    await s3.send(new HeadBucketCommand({ Bucket: cfg.privateMusicBucket }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function validateMusicUpload(
@@ -206,6 +225,15 @@ Deno.serve(async (req: Request) => {
   const s3 = getS3Client(cfg);
 
   try {
+    if (action === "music-private-ready" && req.method === "GET") {
+      const ready = await isPrivateMusicBucketReady(cfg, s3);
+      return json(
+        ready
+          ? { ready: true }
+          : { ready: false, error: "The dedicated private AfuMusic bucket is unavailable to the storage service." },
+        ready ? 200 : 503,
+      );
+    }
 
     // ── POST /uploads/sign ──────────────────────────────────────────────────
     // Returns a presigned PUT URL so the client can stream bytes directly to R2.
@@ -218,9 +246,12 @@ Deno.serve(async (req: Request) => {
       const contentType = (body.contentType ?? "application/octet-stream").trim();
 
       let contentLength: number | undefined;
-      if (logicalBucket === "music") {
+      if (logicalBucket === "music" || logicalBucket === "music-private") {
         const validation = validateMusicUpload(userId, callerPath, contentType);
         if (validation.error) return json({ error: validation.error }, 403);
+        if (logicalBucket === "music-private" && validation.isCover) {
+          return json({ error: "Paid music cover art must use the public music bucket." }, 403);
+        }
         if (body.contentLength !== undefined) {
           if (!Number.isSafeInteger(body.contentLength) || body.contentLength <= 0) {
             return json({ error: "Music upload size must be a positive whole number of bytes." }, 400);
@@ -232,11 +263,15 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      if (logicalBucket === "music-private" && !(await isPrivateMusicBucketReady(cfg, s3))) {
+        return json({ error: "The dedicated private AfuMusic bucket is not ready." }, 503);
+      }
+
       const key = buildKey(logicalBucket, callerPath);
-      const cdnUrl = publicUrl(cfg, key);
+      const targetBucket = getPhysicalBucket(cfg, logicalBucket);
 
       const command = new PutObjectCommand({
-        Bucket: cfg.bucket,
+        Bucket: targetBucket,
         Key: key,
         ContentType: contentType,
         ...(contentLength ? { ContentLength: contentLength } : {}),
@@ -246,7 +281,13 @@ Deno.serve(async (req: Request) => {
       const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
 
       console.log(`[uploads/sign] userId=${userId} key=${key}`);
-      return json({ uploadUrl, publicUrl: cdnUrl, key });
+      return json({
+        uploadUrl,
+        ...(logicalBucket === "music-private"
+          ? { privateStoragePath: callerPath }
+          : { publicUrl: publicUrl(cfg, key) }),
+        key,
+      });
     }
 
     // ── POST /uploads/read ───────────────────────────────────────────────────
@@ -260,30 +301,47 @@ Deno.serve(async (req: Request) => {
       const logicalBucket = (body.bucket ?? "").trim();
       const callerPath = (body.path ?? "").trim();
       const trackId = (body.trackId ?? "").trim();
-      if (logicalBucket !== "music" || !callerPath || !trackId) {
+      if (!["music", "music-private"].includes(logicalBucket) || !callerPath || !trackId) {
         return json({ error: "A music bucket, path, and trackId are required" }, 400);
       }
 
       const admin = createClient(cfg.supabaseUrl, cfg.serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
-      const { data: track, error: trackError } = await admin
+      let trackResult = await admin
         .from("music_tracks")
-        .select("creator_id,price_acoin,storage_path,status")
+        .select("creator_id,price_acoin,storage_path,status,storage_bucket")
         .eq("id", trackId)
         .maybeSingle();
+      if (trackResult.error && /storage_bucket/i.test(String(trackResult.error.message ?? ""))) {
+        trackResult = await admin
+          .from("music_tracks")
+          .select("creator_id,price_acoin,storage_path,status")
+          .eq("id", trackId)
+          .maybeSingle();
+      }
+      const { data: track, error: trackError } = trackResult;
 
       if (trackError) throw trackError;
+      const isPaid = (track?.price_acoin ?? 0) > 0;
+      const expectedBucket = isPaid ? "music-private" : "music";
+      const storedBucket = (track as { storage_bucket?: string | null } | null)?.storage_bucket ?? "music";
       if (
         !track ||
         track.status !== "published" ||
-        track.storage_path !== callerPath
+        track.storage_path !== callerPath ||
+        storedBucket !== expectedBucket ||
+        logicalBucket !== expectedBucket
       ) {
         return json({ error: "Track not available" }, 404);
       }
 
+      if (isPaid && !(await isPrivateMusicBucketReady(cfg, s3))) {
+        return json({ error: "The dedicated private AfuMusic bucket is not ready." }, 503);
+      }
+
       const isCreator = track.creator_id === userId;
-      if (!isCreator && (track.price_acoin ?? 0) > 0) {
+      if (!isCreator && isPaid) {
         const { data: purchase, error: purchaseError } = await admin
           .from("music_purchases")
           .select("id")
@@ -299,7 +357,7 @@ Deno.serve(async (req: Request) => {
       const readUrl = await getSignedUrl(
         s3,
         new GetObjectCommand({
-          Bucket: cfg.bucket,
+          Bucket: getPhysicalBucket(cfg, logicalBucket),
           Key: key,
           ...(downloadFilename ? { ResponseContentDisposition: downloadDisposition(downloadFilename) } : {}),
         }),
@@ -316,13 +374,19 @@ Deno.serve(async (req: Request) => {
       const callerPath = (url.searchParams.get("path") ?? `${userId}/${Date.now()}`).trim();
       const contentType = (req.headers.get("content-type") ?? "application/octet-stream").split(";")[0].trim();
 
-      const musicValidation = logicalBucket === "music"
+      const musicValidation = logicalBucket === "music" || logicalBucket === "music-private"
         ? validateMusicUpload(userId, callerPath, contentType)
         : null;
       if (musicValidation?.error) return json({ error: musicValidation.error }, 403);
+      if (logicalBucket === "music-private" && musicValidation?.isCover) {
+        return json({ error: "Paid music cover art must use the public music bucket." }, 403);
+      }
+      if (logicalBucket === "music-private" && !(await isPrivateMusicBucketReady(cfg, s3))) {
+        return json({ error: "The dedicated private AfuMusic bucket is not ready." }, 503);
+      }
 
       const key = buildKey(logicalBucket, callerPath);
-      const cdnUrl = publicUrl(cfg, key);
+      const targetBucket = getPhysicalBucket(cfg, logicalBucket);
 
       const bodyBytes = await req.arrayBuffer();
       if (!bodyBytes.byteLength) {
@@ -333,7 +397,7 @@ Deno.serve(async (req: Request) => {
       }
 
       await s3.send(new PutObjectCommand({
-        Bucket: cfg.bucket,
+        Bucket: targetBucket,
         Key: key,
         Body: new Uint8Array(bodyBytes),
         ContentType: contentType,
@@ -341,7 +405,12 @@ Deno.serve(async (req: Request) => {
       }));
 
       console.log(`[uploads/upload] userId=${userId} key=${key} bytes=${bodyBytes.byteLength}`);
-      return json({ publicUrl: cdnUrl, key });
+      return json({
+        ...(logicalBucket === "music-private"
+          ? { privateStoragePath: callerPath }
+          : { publicUrl: publicUrl(cfg, key) }),
+        key,
+      });
     }
 
     // ── GET /uploads/usage ──────────────────────────────────────────────────
@@ -396,6 +465,9 @@ Deno.serve(async (req: Request) => {
     // Lists the authenticated user's files in a given logical bucket.
     if (action === "list" && req.method === "GET") {
       const logicalBucket = (url.searchParams.get("bucket") ?? "uploads").trim();
+      if (logicalBucket === "music-private") {
+        return json({ error: "Private AfuMusic files cannot be listed through the public file browser." }, 403);
+      }
       const pageToken = url.searchParams.get("token") ?? undefined;
 
       const prefix = `${logicalBucket}/${userId}/`;
@@ -437,7 +509,12 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Forbidden" }, 403);
       }
 
-      await s3.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }));
+      const logicalBucket = keySegments[0];
+      if (!logicalBucket || logicalBucket.includes("..")) return json({ error: "Invalid key" }, 400);
+      await s3.send(new DeleteObjectCommand({
+        Bucket: getPhysicalBucket(cfg, logicalBucket),
+        Key: key,
+      }));
       console.log(`[uploads/object] userId=${userId} deleted key=${key}`);
       return json({ ok: true });
     }

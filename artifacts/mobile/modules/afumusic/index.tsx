@@ -47,6 +47,7 @@ export type AfuMusicTrack = {
   audioUrl?: string | null;
   creatorId?: string;
   storagePath?: string;
+  storageBucket?: string;
   mimeType?: string;
   fileSize?: number;
   videoUseAllowed?: boolean;

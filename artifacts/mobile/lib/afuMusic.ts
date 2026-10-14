@@ -2,17 +2,25 @@ import * as FileSystem from "expo-file-system/legacy";
 
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { cacheMusicFile, getOfflineMusicEntries, getOfflineMusicUri } from "./musicCache";
-import { deleteUserFile, getSignedR2ReadUrl, prepareMediaForUpload, uploadToStorage } from "./mediaUpload";
+import {
+  deleteUserFile,
+  getSignedR2ReadUrl,
+  isPrivateMusicStorageReady,
+  prepareMediaForUpload,
+  uploadToStorage,
+} from "./mediaUpload";
 import { supabase } from "./supabase";
 
 const MUSIC_BUCKET = "music";
+const MUSIC_PRIVATE_BUCKET = "music-private";
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
 const AUDIO_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/ogg", "audio/aac"]);
 const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MUSIC_TRACK_COLUMNS = "id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,cover_art_url,created_at";
+const MUSIC_TRACK_COLUMNS = "id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,storage_bucket,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,cover_art_url,created_at";
 const MUSIC_TRACK_COLUMNS_NO_COVER = MUSIC_TRACK_COLUMNS.replace(",cover_art_url", "");
-const MUSIC_TRACK_COLUMNS_BASE = MUSIC_TRACK_COLUMNS_NO_COVER.replace(",video_use_allowed", "");
+const MUSIC_TRACK_COLUMNS_NO_STORAGE_BUCKET = MUSIC_TRACK_COLUMNS_NO_COVER.replace(",storage_bucket", "");
+const MUSIC_TRACK_COLUMNS_BASE = MUSIC_TRACK_COLUMNS_NO_STORAGE_BUCKET.replace(",video_use_allowed", "");
 let warnedAboutCoverMigration = false;
 let warnedAboutPlatformMigration = false;
 
@@ -25,6 +33,7 @@ type MusicRow = {
   genre: string;
   price_acoin: number | null;
   storage_path: string | null;
+  storage_bucket?: string | null;
   mime_type: string | null;
   file_size: number | null;
   duration_seconds: number | null;
@@ -61,9 +70,15 @@ function isMissingCoverColumns(error: any) {
     && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
 }
 
+function isMissingStorageBucketColumn(error: any) {
+  const message = String(error?.message ?? error?.details ?? "").toLowerCase();
+  return message.includes("storage_bucket")
+    && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
+}
+
 function isMissingPlatformColumns(error: any) {
   const message = String(error?.message ?? error?.details ?? "").toLowerCase();
-  return /(cover_art_(url|path)|video_use_allowed)/.test(message)
+  return /(cover_art_(url|path)|video_use_allowed|storage_bucket)/.test(message)
     && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
 }
 
@@ -79,6 +94,12 @@ function warnPlatformMigrationMissing() {
   console.warn("[AfuMusic] Apply the AfuMusic platform integration migration to enable video licensing and music posts.");
 }
 
+function warnPrivateStorageMigrationMissing() {
+  if (warnedAboutPlatformMigration) return;
+  warnedAboutPlatformMigration = true;
+  console.warn("[AfuMusic] Apply the AfuMusic production hardening migration before publishing paid tracks.");
+}
+
 async function selectTracksWithCompatibleColumns(makeRequest: (columns: string) => any) {
   let result = await makeRequest(MUSIC_TRACK_COLUMNS);
   if (!isMissingPlatformColumns(result.error)) return result;
@@ -90,6 +111,12 @@ async function selectTracksWithCompatibleColumns(makeRequest: (columns: string) 
 
   result = await makeRequest(MUSIC_TRACK_COLUMNS_NO_COVER);
   if (!isMissingPlatformColumns(result.error)) return result;
+
+  if (isMissingStorageBucketColumn(result.error)) {
+    warnPrivateStorageMigrationMissing();
+    result = await makeRequest(MUSIC_TRACK_COLUMNS_NO_STORAGE_BUCKET);
+    if (!isMissingPlatformColumns(result.error)) return result;
+  }
 
   result = await makeRequest(MUSIC_TRACK_COLUMNS_BASE);
   return result;
@@ -116,6 +143,7 @@ function rowToTrack(
     isOwned: ownedIds.has(row.id) || row.creator_id === currentUserId,
     isCached: cachedIds.has(row.id),
     storagePath: row.storage_path ?? undefined,
+    storageBucket: row.storage_bucket ?? "music",
     mimeType: row.mime_type ?? undefined,
     fileSize: row.file_size ?? undefined,
     // Paid playback must go through the authenticated read-URL endpoint, never
@@ -359,13 +387,17 @@ export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string 
   const cached = await getOfflineMusicUri(userId, track.id);
   if (cached) return cached;
   if (track.price === 0 && track.audioUrl?.startsWith("file://")) return track.audioUrl;
+  const storageBucket = track.storageBucket ?? MUSIC_BUCKET;
+  if (track.price > 0 && storageBucket !== MUSIC_PRIVATE_BUCKET) {
+    throw new Error("This paid track is not in private storage. It must be moved before paid playback can continue.");
+  }
   if (!track.storagePath) {
     if (track.price === 0 && track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")) {
       return track.audioUrl;
     }
     return null;
   }
-  const result = await getSignedR2ReadUrl(MUSIC_BUCKET, track.storagePath, track.id);
+  const result = await getSignedR2ReadUrl(storageBucket, track.storagePath, track.id);
   if (result.error || !result.url) throw new Error(result.error || "This track is not available for playback.");
   return result.url;
 }
@@ -375,12 +407,16 @@ export async function getMusicDownloadUri(track: AfuMusicTrack, filename: string
   if (track.price > 0 && track.creatorId !== userId && !track.isOwned) {
     throw new Error("Purchase this track before downloading it.");
   }
+  const storageBucket = track.storageBucket ?? MUSIC_BUCKET;
+  if (track.price > 0 && storageBucket !== MUSIC_PRIVATE_BUCKET) {
+    throw new Error("This paid track is not in private storage. It must be moved before paid downloads can continue.");
+  }
   if (!track.storagePath) {
     return track.price === 0 && track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")
       ? track.audioUrl
       : null;
   }
-  const result = await getSignedR2ReadUrl(MUSIC_BUCKET, track.storagePath, track.id, filename);
+  const result = await getSignedR2ReadUrl(storageBucket, track.storagePath, track.id, filename);
   if (result.error || !result.url) throw new Error(result.error || "This track is not available for download.");
   return result.url;
 }
@@ -525,6 +561,45 @@ export async function publishMusicTrack(input: {
       throw new Error("Paid publishing needs the AfuMusic premium-entitlement migration. Apply the production migration before retrying.");
     }
   }
+  let coverMimeType = "";
+  let coverSize = 0;
+  let safeCoverExtension = "jpg";
+  if (input.coverUri) {
+    const schemaCheck = await supabase
+      .from("music_tracks")
+      .select("cover_art_url,cover_art_path")
+      .limit(1);
+    if (isMissingCoverColumns(schemaCheck.error)) {
+      warnCoverMigrationMissing();
+      throw new Error("Track cover art needs the AfuMusic cover-art migration. Apply 20261013000003_afumusic_cover_art.sql in Supabase, then retry.");
+    }
+    if (schemaCheck.error) throw schemaCheck.error;
+
+    const coverName = input.coverFileName || "cover.jpg";
+    const coverExtension = coverName.split(".").pop()?.toLowerCase() || "jpg";
+    const inferredType = coverExtension === "png" ? "image/png"
+      : coverExtension === "webp" ? "image/webp"
+      : coverExtension === "jpg" || coverExtension === "jpeg" ? "image/jpeg"
+      : "";
+    coverMimeType = input.coverMimeType || inferredType;
+    if (!COVER_TYPES.has(coverMimeType)) {
+      throw new Error("Use a JPG, PNG, or WebP image for the cover.");
+    }
+    coverSize = await verifiedFileSize(input.coverUri, input.coverFileSize, "cover image");
+    if (coverSize > MAX_COVER_BYTES) throw new Error("Cover images must be 10 MB or smaller.");
+    safeCoverExtension = coverMimeType === "image/png" ? "png" : coverMimeType === "image/webp" ? "webp" : "jpg";
+  }
+  if (input.price > 0) {
+    const schemaCheck = await supabase.from("music_tracks").select("storage_bucket").limit(1);
+    if (isMissingStorageBucketColumn(schemaCheck.error)) {
+      warnPrivateStorageMigrationMissing();
+      throw new Error("Paid publishing needs the AfuMusic production migration. Apply 20261014000000_afumusic_production_hardening.sql before retrying.");
+    }
+    if (schemaCheck.error) throw schemaCheck.error;
+    if (!(await isPrivateMusicStorageReady())) {
+      throw new Error("Paid AfuMusic publishing is blocked until the dedicated private R2 bucket is reachable by the upload service. Your audio was not uploaded.");
+    }
+  }
   const fileSize = await verifiedFileSize(input.fileUri, input.fileSize, "audio");
   if (fileSize > MAX_AUDIO_BYTES) throw new Error("Audio files must be 100 MB or smaller.");
   const durationSeconds = await extractDurationSeconds(input.fileUri);
@@ -535,33 +610,24 @@ export async function publishMusicTrack(input: {
   const extension = audioExtension(input.fileName, mimeType);
   const uniquePart = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const path = `${creatorId}/${uniquePart}.${extension}`;
-  const audioKey = `${MUSIC_BUCKET}/${path}`;
+  const audioBucket = input.price > 0 ? MUSIC_PRIVATE_BUCKET : MUSIC_BUCKET;
+  const audioKey = `${audioBucket}/${path}`;
   let coverPath: string | null = null;
   let coverKey: string | null = null;
   try {
-    const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType, fileSize);
-    if (upload.error || !upload.publicUrl) {
+    const upload = await uploadToStorage(audioBucket, path, input.fileUri, mimeType, fileSize);
+    if (
+      upload.error ||
+      (input.price > 0 ? upload.privateStoragePath !== path : !upload.publicUrl)
+    ) {
       throw new Error(upload.error || "Audio upload failed.");
     }
 
     let coverUrl: string | null = null;
     if (input.coverUri) {
-      const coverName = input.coverFileName || "cover.jpg";
-      const coverExtension = coverName.split(".").pop()?.toLowerCase() || "jpg";
-      const inferredType = coverExtension === "png" ? "image/png"
-        : coverExtension === "webp" ? "image/webp"
-        : coverExtension === "jpg" || coverExtension === "jpeg" ? "image/jpeg"
-        : "";
-      const coverMimeType = input.coverMimeType || inferredType;
-      if (!COVER_TYPES.has(coverMimeType)) {
-        throw new Error("Use a JPG, PNG, or WebP image for the cover.");
-      }
-      const coverSize = await verifiedFileSize(input.coverUri, input.coverFileSize, "cover image");
-      if (coverSize > MAX_COVER_BYTES) throw new Error("Cover images must be 10 MB or smaller.");
-      const safeExtension = coverMimeType === "image/png" ? "png" : coverMimeType === "image/webp" ? "webp" : "jpg";
-      coverPath = `${creatorId}/${uniquePart}_cover.${safeExtension}`;
+      coverPath = `${creatorId}/${uniquePart}_cover.${safeCoverExtension}`;
       coverKey = `${MUSIC_BUCKET}/${coverPath}`;
-      const stableCoverUri = await prepareMediaForUpload(input.coverUri, safeExtension);
+      const stableCoverUri = await prepareMediaForUpload(input.coverUri, safeCoverExtension);
       const coverUpload = await uploadToStorage(MUSIC_BUCKET, coverPath, stableCoverUri, coverMimeType, coverSize);
       if (coverUpload.error || !coverUpload.publicUrl) {
         throw new Error(coverUpload.error || "Cover upload failed.");
@@ -576,6 +642,7 @@ export async function publishMusicTrack(input: {
       genre: input.genre,
       price_acoin: input.price,
       storage_path: path,
+      storage_bucket: audioBucket,
       mime_type: mimeType,
       file_size: fileSize,
       duration_seconds: durationSeconds,
