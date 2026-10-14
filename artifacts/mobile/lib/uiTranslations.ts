@@ -4,7 +4,6 @@ export type UiLanguageDefinition = {
   code: UiLanguage;
   label: string;
   nativeLabel: string;
-  isRTL: boolean;
 };
 
 /**
@@ -13,14 +12,14 @@ export type UiLanguageDefinition = {
  * bundled catalog is complete.
  */
 export const UI_LANGUAGE_REGISTRY: readonly UiLanguageDefinition[] = [
-  { code: "en", label: "English", nativeLabel: "English", isRTL: false },
-  { code: "sw", label: "Swahili", nativeLabel: "Kiswahili", isRTL: false },
-  { code: "fr", label: "French", nativeLabel: "Français", isRTL: false },
-  { code: "es", label: "Spanish", nativeLabel: "Español", isRTL: false },
-  { code: "ar", label: "Arabic", nativeLabel: "العربية", isRTL: true },
-  { code: "zh", label: "Chinese", nativeLabel: "中文", isRTL: false },
-  { code: "am", label: "Amharic", nativeLabel: "አማርኛ", isRTL: false },
-  { code: "rw", label: "Kinyarwanda", nativeLabel: "Kinyarwanda", isRTL: false },
+  { code: "en", label: "English", nativeLabel: "English" },
+  { code: "sw", label: "Swahili", nativeLabel: "Kiswahili" },
+  { code: "fr", label: "French", nativeLabel: "Français" },
+  { code: "es", label: "Spanish", nativeLabel: "Español" },
+  { code: "ar", label: "Arabic", nativeLabel: "العربية" },
+  { code: "zh", label: "Chinese", nativeLabel: "中文" },
+  { code: "am", label: "Amharic", nativeLabel: "አማርኛ" },
+  { code: "rw", label: "Kinyarwanda", nativeLabel: "Kinyarwanda" },
 ];
 
 export const BUNDLED_UI_LANGUAGES: readonly UiLanguage[] =
@@ -31,9 +30,6 @@ export function getUiLanguageDefinition(language: string | null | undefined): Ui
   return UI_LANGUAGE_REGISTRY.find((item) => item.code === code) ?? null;
 }
 
-export function isRtlUiLanguage(language: string | null | undefined): boolean {
-  return getUiLanguageDefinition(language)?.isRTL ?? false;
-}
 
 export function isBundledUiLanguage(language: string | null | undefined): language is UiLanguage {
   return BUNDLED_UI_LANGUAGES.includes((language ?? "") as UiLanguage);
