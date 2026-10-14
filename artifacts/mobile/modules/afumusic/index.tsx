@@ -871,7 +871,17 @@ export default function AfuMusicApp({
         showPremiumRequired();
         return;
       }
-      showAlert("Upload failed", "Your track was not published. Try again.");
+      if (errorMessage.toLowerCase().includes("production migration")) {
+        showAlert(
+          "Publishing setup incomplete",
+          "Paid AfuMusic publishing is temporarily blocked until private storage is configured. Your track was not published.",
+        );
+        return;
+      }
+      showAlert(
+        "Upload failed",
+        errorMessage || "Your track was not published. Try again.",
+      );
     } finally {
       setUploading(false);
     }

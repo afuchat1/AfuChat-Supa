@@ -206,6 +206,7 @@ async function getSignedUpload(
   bucket: string,
   filePath: string,
   contentType: string,
+  contentLength?: number,
 ): Promise<{ data: SignedUpload | null; error: string | null }> {
   const token = await getAccessToken();
   if (!token) return { data: null, error: "Not authenticated" };
@@ -218,7 +219,12 @@ async function getSignedUpload(
         "Content-Type": "application/json",
         ...(await edgeFnHeaders(token)),
       },
-      body: JSON.stringify({ bucket, path: filePath, contentType }),
+      body: JSON.stringify({
+        bucket,
+        path: filePath,
+        contentType,
+        ...(Number.isSafeInteger(contentLength) && (contentLength ?? 0) > 0 ? { contentLength } : {}),
+      }),
     });
   } catch (e: any) {
     return { data: null, error: `Network error: ${e?.message || e}` };
@@ -292,6 +298,7 @@ export async function uploadToStorage(
   filePath: string,
   fileUri: string,
   contentType?: string,
+  expectedSize?: number,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   try {
     let resolvedMime = contentType;
@@ -312,7 +319,7 @@ export async function uploadToStorage(
       } catch {
         return { publicUrl: null, error: "Could not read selected file. Please try again." };
       }
-      const sign = await getSignedUpload(realBucket, filePath, mime);
+      const sign = await getSignedUpload(realBucket, filePath, mime, body.size);
       if (sign.data) {
         try {
           const putResp = await fetch(sign.data.uploadUrl, {
@@ -366,7 +373,18 @@ export async function uploadToStorage(
     };
 
     // 1. Try presigned PUT — bytes stream directly from disk to R2.
-    const sign = await getSignedUpload(realBucket, filePath, mime);
+    let contentLength = expectedSize;
+    if (realBucket === "music") {
+      try {
+        const info = await FileSystem.getInfoAsync(uploadUri) as { exists?: boolean; size?: number };
+        if (info.exists && Number.isSafeInteger(info.size) && (info.size ?? 0) > 0) {
+          contentLength = info.size;
+        }
+      } catch {
+        // Keep the verified picker size when filesystem metadata is unavailable.
+      }
+    }
+    const sign = await getSignedUpload(realBucket, filePath, mime, contentLength);
     if (sign.data) {
       try {
         const putResult = await FileSystem.uploadAsync(sign.data.uploadUrl, uploadUri, {

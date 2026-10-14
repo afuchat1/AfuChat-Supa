@@ -539,7 +539,7 @@ export async function publishMusicTrack(input: {
   let coverPath: string | null = null;
   let coverKey: string | null = null;
   try {
-    const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType);
+    const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType, fileSize);
     if (upload.error || !upload.publicUrl) {
       throw new Error(upload.error || "Audio upload failed.");
     }
@@ -562,7 +562,7 @@ export async function publishMusicTrack(input: {
       coverPath = `${creatorId}/${uniquePart}_cover.${safeExtension}`;
       coverKey = `${MUSIC_BUCKET}/${coverPath}`;
       const stableCoverUri = await prepareMediaForUpload(input.coverUri, safeExtension);
-      const coverUpload = await uploadToStorage(MUSIC_BUCKET, coverPath, stableCoverUri, coverMimeType);
+      const coverUpload = await uploadToStorage(MUSIC_BUCKET, coverPath, stableCoverUri, coverMimeType, coverSize);
       if (coverUpload.error || !coverUpload.publicUrl) {
         throw new Error(coverUpload.error || "Cover upload failed.");
       }

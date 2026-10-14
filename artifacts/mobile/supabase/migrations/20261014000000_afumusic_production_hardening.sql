@@ -25,11 +25,56 @@ alter table public.music_tracks
   alter column video_use_allowed set default false,
   alter column video_use_allowed set not null;
 
+-- Backfill object keys from this app's known public CDN URL shape so free
+-- tracks can also move to authenticated playback without losing their files.
+update public.music_tracks
+set storage_path = regexp_replace(
+  split_part(audio_url, '?', 1),
+  '^https://cdn[.]afuchat[.]com/music/',
+  '',
+  'i'
+)
+where storage_path is null
+  and audio_url ~* '^https://cdn[.]afuchat[.]com/music/.+';
+
 alter table public.music_tracks
   drop constraint if exists music_tracks_afumusic_paid_price_check;
 alter table public.music_tracks
   add constraint music_tracks_afumusic_paid_price_check
   check (price_acoin = 0 or price_acoin between 5 and 1000) not valid;
+
+do $$
+begin
+  if exists (
+    select 1
+    from public.music_tracks
+    where price_acoin > 0
+      and (
+        creator_id is null
+        or storage_path is null
+        or position('/' in storage_path) = 0
+        or right(storage_path, 1) = '/'
+        or split_part(storage_path, '/', 1) is distinct from creator_id::text
+      )
+  ) then
+    raise exception 'Paid AfuMusic tracks must have an owner-scoped R2 storage path before privacy hardening.';
+  end if;
+end;
+$$;
+
+alter table public.music_tracks
+  drop constraint if exists music_tracks_paid_storage_path_check;
+alter table public.music_tracks
+  add constraint music_tracks_paid_storage_path_check
+  check (
+    price_acoin = 0 or (
+      creator_id is not null
+      and storage_path is not null
+      and position('/' in storage_path) > 0
+      and right(storage_path, 1) <> '/'
+      and split_part(storage_path, '/', 1) = creator_id::text
+    )
+  ) not valid;
 
 -- Paid files must be served only by the authenticated /uploads/read endpoint,
 -- not by the legacy public URL copied into this metadata column.
@@ -114,6 +159,25 @@ begin
     raise exception 'afumusic_paid_price_must_be_5_to_1000';
   end if;
 
+  if new.storage_path is not null
+    and (
+      new.creator_id is null
+      or position('/' in new.storage_path) = 0
+      or right(new.storage_path, 1) = '/'
+      or split_part(new.storage_path, '/', 1) is distinct from new.creator_id::text
+    ) then
+    raise exception 'afumusic_storage_path_owner_mismatch';
+  end if;
+
+  if new.price_acoin > 0 then
+    if new.storage_path is null or btrim(new.storage_path) = '' then
+      raise exception 'afumusic_paid_track_requires_storage_path';
+    end if;
+    -- Older app clients may still submit the public URL; never retain it for
+    -- paid catalog entries.
+    new.audio_url := null;
+  end if;
+
   if new.price_acoin > 0 and not public.afumusic_creator_has_premium(new.creator_id) then
     raise exception 'music_paid_publishing_requires_premium';
   end if;
@@ -124,7 +188,7 @@ $$;
 
 drop trigger if exists afumusic_paid_publishing_guard on public.music_tracks;
 create trigger afumusic_paid_publishing_guard
-  before insert or update of price_acoin, creator_id
+  before insert or update of price_acoin, creator_id, audio_url, storage_path
   on public.music_tracks
   for each row
   execute function public.guard_afumusic_paid_publishing();

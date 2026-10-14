@@ -133,6 +133,47 @@ function publicUrl(cfg: Config, key: string): string {
   return `${cfg.publicBaseUrl}/${key}`;
 }
 
+function validateMusicUpload(
+  userId: string,
+  callerPath: string,
+  contentType: string,
+): { error: string | null; isCover: boolean; maxBytes: number } {
+  const parts = callerPath.replace(/^\/+/, "").split("/");
+  if (parts.length !== 2 || parts[0] !== userId || !parts[1]) {
+    return { error: "Music uploads must be stored under your own account.", isCover: false, maxBytes: 0 };
+  }
+
+  const filename = parts[1].toLowerCase();
+  const extension = filename.split(".").pop() ?? "";
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  const isCover = /_cover\.(jpg|jpeg|png|webp)$/.test(filename);
+
+  if (isCover) {
+    const coverExtensions: Record<string, string[]> = {
+      "image/jpeg": ["jpg", "jpeg"],
+      "image/png": ["png"],
+      "image/webp": ["webp"],
+    };
+    if (!coverExtensions[mime]?.includes(extension)) {
+      return { error: "Music cover files must be JPG, PNG, or WebP images.", isCover, maxBytes: 0 };
+    }
+    return { error: null, isCover, maxBytes: 10 * 1024 * 1024 };
+  }
+
+  const audioExtensions: Record<string, string[]> = {
+    "audio/mpeg": ["mp3"],
+    "audio/mp4": ["m4a"],
+    "audio/x-m4a": ["m4a"],
+    "audio/wav": ["wav"],
+    "audio/ogg": ["ogg"],
+    "audio/aac": ["aac"],
+  };
+  if (!audioExtensions[mime]?.includes(extension)) {
+    return { error: "Music audio must be MP3, M4A, WAV, OGG, or AAC.", isCover, maxBytes: 0 };
+  }
+  return { error: null, isCover, maxBytes: 100 * 1024 * 1024 };
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -169,12 +210,27 @@ Deno.serve(async (req: Request) => {
     // ── POST /uploads/sign ──────────────────────────────────────────────────
     // Returns a presigned PUT URL so the client can stream bytes directly to R2.
     if (action === "sign" && req.method === "POST") {
-      let body: { bucket?: string; path?: string; contentType?: string } = {};
+      let body: { bucket?: string; path?: string; contentType?: string; contentLength?: number } = {};
       try { body = await req.json(); } catch { /* empty body is fine */ }
 
       const logicalBucket = (body.bucket ?? "uploads").trim();
       const callerPath = (body.path ?? `${userId}/${Date.now()}`).trim();
       const contentType = (body.contentType ?? "application/octet-stream").trim();
+
+      let contentLength: number | undefined;
+      if (logicalBucket === "music") {
+        const validation = validateMusicUpload(userId, callerPath, contentType);
+        if (validation.error) return json({ error: validation.error }, 403);
+        if (body.contentLength !== undefined) {
+          if (!Number.isSafeInteger(body.contentLength) || body.contentLength <= 0) {
+            return json({ error: "Music upload size must be a positive whole number of bytes." }, 400);
+          }
+          if (body.contentLength > validation.maxBytes) {
+            return json({ error: `Music files must be ${validation.isCover ? "10 MB" : "100 MB"} or smaller.` }, 413);
+          }
+          contentLength = body.contentLength;
+        }
+      }
 
       const key = buildKey(logicalBucket, callerPath);
       const cdnUrl = publicUrl(cfg, key);
@@ -183,6 +239,7 @@ Deno.serve(async (req: Request) => {
         Bucket: cfg.bucket,
         Key: key,
         ContentType: contentType,
+        ...(contentLength ? { ContentLength: contentLength } : {}),
       });
 
       // Presigned URL valid for 5 minutes — plenty for large video uploads.
@@ -259,12 +316,20 @@ Deno.serve(async (req: Request) => {
       const callerPath = (url.searchParams.get("path") ?? `${userId}/${Date.now()}`).trim();
       const contentType = (req.headers.get("content-type") ?? "application/octet-stream").split(";")[0].trim();
 
+      const musicValidation = logicalBucket === "music"
+        ? validateMusicUpload(userId, callerPath, contentType)
+        : null;
+      if (musicValidation?.error) return json({ error: musicValidation.error }, 403);
+
       const key = buildKey(logicalBucket, callerPath);
       const cdnUrl = publicUrl(cfg, key);
 
       const bodyBytes = await req.arrayBuffer();
       if (!bodyBytes.byteLength) {
-    return json({ error: "Empty file body. Nothing to upload." }, 400);
+        return json({ error: "Empty file body. Nothing to upload." }, 400);
+      }
+      if (musicValidation && bodyBytes.byteLength > musicValidation.maxBytes) {
+        return json({ error: `Music files must be ${musicValidation.isCover ? "10 MB" : "100 MB"} or smaller.` }, 413);
       }
 
       await s3.send(new PutObjectCommand({

@@ -14,4 +14,4 @@ On 2026-10-13, read-only inspection found the live project missing the newer cov
 
 **Why:** The app's signed /uploads/read route cannot enforce purchase rights when the same object remains directly reachable on the public CDN.
 
-**How to apply:** Before calling paid audio secure, verify the real production schema and make the music object path private at Cloudflare/R2, then clear legacy paid audio_url values and apply the guarded catalog/purchase migration.
+**How to apply:** Before calling paid audio secure, verify the real production schema and make the music object path private at Cloudflare/R2, then clear legacy paid audio_url values and apply the guarded catalog/purchase migration. Check both the custom CDN and the bucket's managed r2.dev domain: a zone WAF rule only protects the custom hostname, while disabling r2.dev leaves the custom domain active but removes that alternate public hostname for every object in the bucket.
