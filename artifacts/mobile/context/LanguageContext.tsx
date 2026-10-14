@@ -32,7 +32,6 @@ function normalizeLanguage(value: string | null | undefined): string | null {
 type LanguageContextType = {
   preferredLang: string | null;
   langLabel: string;
-  isRTL: boolean;
   setPreferredLang: (lang: string | null) => Promise<void>;
   translateUserContent: (text: string) => Promise<string>;
   voiceToText: boolean;
@@ -44,7 +43,6 @@ type LanguageContextType = {
 const LanguageContext = createContext<LanguageContextType>({
   preferredLang: null,
   langLabel: "Off",
-  isRTL: false,
   setPreferredLang: async () => {},
   translateUserContent: async (t) => t,
   voiceToText: false,
@@ -218,7 +216,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     : "Off";
   // Arabic is supported as translated copy, but AfuChat's controls and
   // containers always use the same left-to-right layout.
-  const isRTL = false;
   // Keep non-hook callers used by the Babel transform in sync during the same
   // render that observes a language change, not one render later.
   setLocale(preferredLang);
@@ -234,7 +231,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <LanguageContext.Provider
-      value={{ preferredLang, langLabel, isRTL, setPreferredLang, translateUserContent, voiceToText, textToSpeech, t, tp }}
+      value={{ preferredLang, langLabel, setPreferredLang, translateUserContent, voiceToText, textToSpeech, t, tp }}
     >
       {children}
     </LanguageContext.Provider>
