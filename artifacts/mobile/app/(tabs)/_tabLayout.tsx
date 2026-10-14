@@ -26,6 +26,7 @@ import { supabase } from "@/lib/supabase";
 import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
+import { T } from "@/constants/theme";
 
 // Visible bottom bar tabs — Chat · Discover · Shorts · Apps · Me
 const BOTTOM_TABS = [
@@ -521,7 +522,7 @@ export default function TabLayout() {
   const prevSessionRef = useRef<Session | null>(null);
   const insets         = useSafeAreaInsets();
   const { width }      = useWindowDimensions();
-  const isDesktop      = Platform.OS === "web" && width >= 980;
+  const isDesktop      = Platform.OS === "web" && width >= T.layout.desktopBreakpoint;
 
   useEffect(() => {
     if (loading) return;

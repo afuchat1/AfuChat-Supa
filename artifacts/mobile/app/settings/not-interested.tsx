@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
+import { Separator } from "@/components/ui/Separator";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -167,7 +168,6 @@ export default function NotInterestedScreen() {
   const isEmpty = !loading && authors.length === 0 && topics.length === 0;
 
   const sectionBg   = isDark ? "#1C1C1E" : colors.surface;
-  const separatorBg = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -198,7 +198,7 @@ export default function NotInterestedScreen() {
               <View style={[styles.card, { backgroundColor: sectionBg }]}>
                 {authors.map((author, i) => (
                   <View key={author.id}>
-                    {i > 0 && <View style={[styles.sep, { backgroundColor: separatorBg }]} />}
+                    {i > 0 && <Separator />}
                     <View style={styles.row}>
                       <Avatar
                         uri={author.avatar_url}
@@ -239,7 +239,7 @@ export default function NotInterestedScreen() {
                   const icon = (TOPIC_ICONS[topic] ?? "pricetag") as any;
                   return (
                     <View key={topic}>
-                      {i > 0 && <View style={[styles.sep, { backgroundColor: separatorBg }]} />}
+                      {i > 0 && <Separator />}
                       <View style={styles.row}>
                         <View style={styles.topicIcon}>
                           <Ionicons name={icon} size={22} color={colors.text} />
@@ -290,7 +290,6 @@ const styles = StyleSheet.create({
   section:     { paddingHorizontal: 16, marginBottom: 20 },
   sectionLabel:{ fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, marginBottom: 8, marginLeft: 4 },
   card:        { borderRadius: 14, overflow: "hidden" },
-  sep:         { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
   row:         { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
   name:        { fontSize: 15, fontFamily: "Inter_500Medium" },
   handle:      { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },

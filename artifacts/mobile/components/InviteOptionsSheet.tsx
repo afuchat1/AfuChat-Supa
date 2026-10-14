@@ -27,7 +27,7 @@ export default function InviteOptionsSheet({ visible, onClose, onSelect }: Props
     >
       <View style={{ padding: 20, gap: 12 }}>
         <View style={{ alignItems: "center", gap: 5, marginBottom: 2 }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.separator }} />
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.textMuted }} />
           <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold" }}>
             Invite via
           </Text>

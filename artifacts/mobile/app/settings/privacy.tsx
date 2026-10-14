@@ -7,6 +7,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { Separator } from "@/components/ui/Separator";
 
 // ─── Section ──────────────────────────────────────────────────────────────────
 function Section({
@@ -69,7 +70,7 @@ function Row({
           style={{ marginLeft: 2 }}
         />
       </TouchableOpacity>
-      {!last && <View style={[s.divider, { backgroundColor: colors.separator }]} />}
+      {!last && <Separator />}
     </>
   );
 }
@@ -181,11 +182,11 @@ export default function PrivacySettingsScreen() {
             <Switch
               value={adv.auto_reply_enabled}
               onValueChange={(v) => setFeature("auto_reply_enabled", v)}
-              trackColor={{ true: accent, false: colors.separator }}
+              trackColor={{ true: accent, false: colors.border }}
               thumbColor="#fff"
             />
           </View>
-          <View style={[s.divider, { backgroundColor: colors.separator }]} />
+          <Separator />
           <View style={s.toggleRow}>
             <View style={s.iconWrap}>
               <Ionicons name="timer-outline" size={22} color={colors.text} />
@@ -199,7 +200,7 @@ export default function PrivacySettingsScreen() {
             <Switch
               value={adv.temp_chat_enabled}
               onValueChange={(v) => setFeature("temp_chat_enabled", v)}
-              trackColor={{ true: accent, false: colors.separator }}
+              trackColor={{ true: accent, false: colors.border }}
               thumbColor="#fff"
             />
           </View>
@@ -223,5 +224,4 @@ const s = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 17 },
-  divider: { height: 0.5, marginHorizontal: 16 },
 });

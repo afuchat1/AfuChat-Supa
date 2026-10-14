@@ -171,7 +171,7 @@ const s = StyleSheet.create({
   groupIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   groupLabel: { fontSize: 15, fontFamily: "Inter_500Medium", marginBottom: 2 },
   groupDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
-  optStrip: { flexDirection: "row", borderTopWidth: 0.5, paddingVertical: 10, paddingHorizontal: 8 },
+  optStrip: { flexDirection: "row", paddingVertical: 10, paddingHorizontal: 8 },
   optItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 6, borderRadius: 8 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   radioDot: { width: 10, height: 10, borderRadius: 5 },

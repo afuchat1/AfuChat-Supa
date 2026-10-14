@@ -2758,7 +2758,7 @@ export default function DiscoverScreen() {
           <View style={[
             styles.tabRow,
             isCompactHeader && styles.tabRowCompact,
-            { paddingTop: insets.top + 6, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+            { paddingTop: insets.top + 6 },
           ]}>
           <View style={[styles.tabsGroup, isCompactHeader && styles.tabsGroupCompact]}>
           <TouchableOpacity
@@ -3416,7 +3416,6 @@ const styles = StyleSheet.create({
   },
   card: {
     overflow: "hidden",
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   cardHeader: {
     flexDirection: "row",

@@ -19,6 +19,7 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { patchLocalSetting } from "@/lib/storage/localSettings";
 import { useLanguage } from "@/context/LanguageContext";
+import { Separator } from "@/components/ui/Separator";
 
 type Settings = {
   data_personalization: boolean;
@@ -100,7 +101,7 @@ export default function PrivacyDataScreen() {
               onToggle={(v) => toggle("data_personalization", v)}
               saving={saving === "data_personalization"}
             />
-            <View style={[s.sep, { backgroundColor: colors.border }]} />
+            <Separator />
             <ToggleRow
               icon="analytics"
               iconColor="#007AFF"
@@ -153,7 +154,6 @@ const s = StyleSheet.create({
     paddingBottom: 8,
   },
   group: { marginHorizontal: 16, borderRadius: 16, overflow: "hidden" },
-  sep: { height: 0.5, marginLeft: 62 },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
   rowIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1 },

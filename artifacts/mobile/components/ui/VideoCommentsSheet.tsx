@@ -4,6 +4,7 @@
  * Supports: text · voice notes (≤ 60 s) · image attachments
  */
 import { showAlert } from "@/lib/alert";
+import { Separator } from "@/components/ui/Separator";
 import React, {
   useCallback,
   useEffect,
@@ -359,7 +360,6 @@ export const VideoReplyItem = React.memo(function VideoReplyItem({
   const ri_textSecondary = isDark ? "rgba(255,255,255,0.5)"   : "rgba(26,18,8,0.55)";
   const ri_textMuted     = isDark ? "rgba(255,255,255,0.3)"   : "rgba(26,18,8,0.38)";
   const ri_textBody      = isDark ? "rgba(255,255,255,0.88)"  : "rgba(26,18,8,0.88)";
-  const ri_separator     = isDark ? "rgba(255,255,255,0.05)"  : "rgba(26,18,8,0.07)";
 
   useEffect(() => {
     if (!isNew) return;
@@ -463,7 +463,7 @@ export const VideoReplyItem = React.memo(function VideoReplyItem({
         </View>
       </View>
       {isTop && !hasChildren && (
-        <View style={{ height: 0.5, backgroundColor: ri_separator, marginLeft: indent + 46, marginTop: 4 }} />
+        <Separator indent={indent + 46} />
       )}
       {!collapsed && r.children?.map((child) => (
         <VideoReplyItem key={child.id} reply={child} depth={depth + 1} onReplyTo={onReplyTo} isCreator={isCreator} isNew={false} accent={accent} likedSet={likedSet} onLike={onLike} isDark={isDark} />
@@ -573,7 +573,6 @@ export function VideoCommentsSheet({
   const titleCntClr  = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
   const sortTabTxt   = isDark ? "rgba(255,255,255,0.45)"    : "rgba(26,18,8,0.5)";
   const closeBtnClr  = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.5)";
-  const separatorClr = isDark ? "rgba(255,255,255,0.1)"     : "rgba(26,18,8,0.1)";
   const emptyIconClr = isDark ? "rgba(255,255,255,0.2)"     : "rgba(26,18,8,0.2)";
   const emptyTxtClr  = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.5)";
   const emptySubClr  = isDark ? "rgba(255,255,255,0.3)"     : "rgba(26,18,8,0.35)";
@@ -1329,7 +1328,7 @@ export function VideoCommentsSheet({
         </TouchableOpacity>
       </View>
 
-      <View style={{ height: 0.5, backgroundColor: separatorClr }} />
+      <Separator />
 
       {/* Scrollable comment list — flex:1 fills all remaining vertical space */}
       <View style={{ flex: 1 }}>

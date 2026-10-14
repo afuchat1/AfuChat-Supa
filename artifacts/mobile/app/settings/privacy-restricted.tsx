@@ -19,6 +19,7 @@ import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useLanguage } from "@/context/LanguageContext";
+import { Separator } from "@/components/ui/Separator";
 
 type RestrictedUser = {
   id: string;
@@ -149,7 +150,7 @@ export default function PrivacyRestrictedScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
-                {!isLast && <View style={[s.sep, { backgroundColor: colors.border }]} />}
+                {!isLast && <Separator />}
               </View>
             );
           }}
@@ -190,7 +191,6 @@ const s = StyleSheet.create({
   },
   rowWrapper: { borderRadius: 0, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
-  sep: { height: 0.5, marginLeft: 72 },
   name: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
   handle: { fontSize: 13, fontFamily: "Inter_400Regular" },
   unrestrictBtn: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, minWidth: 84, alignItems: "center" },

@@ -43,6 +43,14 @@ export const T = {
   sectionV: 24,   // vertical gap between page sections
   sepLeft:  54,   // left indent for separators under icon-label rows
 
+  // Shared responsive shell dimensions used by mobile tabs and desktop web.
+  layout: {
+    desktopBreakpoint: 980,
+    desktopSidebarExpandedWidth: 176,
+    desktopSidebarCollapsedWidth: 64,
+    desktopChatRailWidth: 360,
+  },
+
   // ── Border radius ────────────────────────────────────────────────────────────
   // Use the smallest radius that feels natural for each component size.
   radius: {

@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassHeader } from "@/components/ui/GlassHeader";
+import { Separator } from "@/components/ui/Separator";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -507,8 +508,8 @@ function SectionTitle({ label }: { label: string }) {
   return <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{label}</Text>;
 }
 
-function Sep({ color }: { color: string }) {
-  return <View style={[s.sep, { backgroundColor: color }]} />;
+function Sep(_props: { color: string }) {
+  return <Separator />;
 }
 
 function TogRow({
@@ -626,7 +627,6 @@ const s = StyleSheet.create({
   rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
 
-  sep: { height: 0.5, marginLeft: 60 },
 
   seg: {
     flexDirection: "row",

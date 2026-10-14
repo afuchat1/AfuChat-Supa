@@ -1732,7 +1732,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
         {/* ── Folder tab bar — fixed, always visible regardless of list content ── */}
         {showFolderUI && (
-          <View style={{ backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+          <View style={{ backgroundColor: colors.surface }}>
             <ScrollView
               ref={folderScrollRef}
               horizontal

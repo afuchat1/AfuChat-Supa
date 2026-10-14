@@ -20,6 +20,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { Separator } from "@/components/ui/Separator";
 import { showAlert } from "@/lib/alert";
 import { TwoFactorGate } from "@/components/ui/TwoFactorGate";
 import * as Haptics from "@/lib/haptics";
@@ -448,7 +449,7 @@ export default function TwoFactorScreen() {
                       </View>
                       <Ionicons name="checkmark-circle" size={16} color="#30D158" />
                     </View>
-                    {i < arr.length - 1 && <View style={[s.divider, { backgroundColor: colors.border }]} />}
+                    {i < arr.length - 1 && <Separator />}
                   </React.Fragment>
                 ))}
               </View>
@@ -492,7 +493,7 @@ export default function TwoFactorScreen() {
                     <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
                   </View>
                 </TouchableOpacity>
-                <View style={[s.divider, { backgroundColor: colors.border, marginLeft: 66 }]} />
+                <Separator />
                 <View style={s.actionRow}>
                   <View style={[s.actionIcon, { backgroundColor: "#8E8E93" }]}>
                     <Ionicons name="phone-portrait" size={18} color="#fff" />
@@ -878,7 +879,6 @@ const s = StyleSheet.create({
   compatName:  { fontSize: 14, fontFamily: "Inter_500Medium" },
   compatNote:  { fontSize: 11.5, fontFamily: "Inter_400Regular", marginTop: 1 },
 
-  divider: { height: StyleSheet.hairlineWidth },
   badge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText:  { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   footnote:   { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17, textAlign: "center", paddingHorizontal: 8, marginTop: 4 },
@@ -910,7 +910,7 @@ const s = StyleSheet.create({
   secretBox:        { borderRadius: 12, borderWidth: 1, padding: 14, gap: 8 },
   secretLabel:      { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 1.2 },
   secretKey:        { fontSize: 16, fontFamily: "Inter_700Bold", letterSpacing: 2.5, textAlign: "center" },
-  secretMeta:       { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8 },
+  secretMeta:       { paddingTop: 8 },
   secretMetaText:   { fontSize: 10, fontFamily: "Inter_400Regular", textAlign: "center" },
 
   ackRow:    { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 13, borderRadius: 12, borderWidth: 1.5 },

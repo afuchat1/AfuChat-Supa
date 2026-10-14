@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { Separator } from "@/components/ui/Separator";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -102,7 +103,7 @@ function Row({
           <Ionicons name="chevron-forward" size={15} color={colors.textMuted} style={{ marginLeft: 2 }} />
         )}
       </TouchableOpacity>
-      {!last && <View style={[s.divider, { backgroundColor: colors.separator }]} />}
+      {!last && <Separator />}
     </>
   );
 }
@@ -192,7 +193,7 @@ export default function SettingsScreen() {
           <Text style={[s.appearanceNote, { color: colors.textMuted }]}>
             {t("settings.appearance_note")}
           </Text>
-          <View style={[s.divider, { backgroundColor: colors.separator }]} />
+          <Separator />
           <Row
             icon="language"
             label="Language"
@@ -398,7 +399,6 @@ const s = StyleSheet.create({
   rowValue: { fontSize: 13, fontFamily: "Inter_400Regular" },
   badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  divider: { height: 0.5, marginHorizontal: 16 },
 
   // Theme toggle
   themeRow: { flexDirection: "row", gap: 8, paddingHorizontal: 14, paddingVertical: 12 },

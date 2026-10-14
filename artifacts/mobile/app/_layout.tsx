@@ -80,6 +80,7 @@ import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastContainer } from "@/components/ui/ToastContainer";
+import { RouteFrame } from "@/components/ui/RouteFrame";
 import { UsernameLoadingOverlay } from "@/components/ui/UsernameLoadingOverlay";
 import AlertModal from "@/components/ui/AlertModal";
 import { GlobalInboxListener } from "@/components/GlobalInboxListener";
@@ -105,11 +106,9 @@ import { getNativeShareChatId } from "@/lib/nativeShareShortcuts";
 // Conversations pre-warm remains in the useEffect below (not at module-eval time)
 // so MMKV is only accessed after the full native runtime is ready.
 
-// Lock out system-level font scaling so the app always renders at its
-// intended sizes regardless of the device's accessibility font-size setting.
+// Preserve Android text metrics without overriding the user's accessibility font size.
 (Text as any).defaultProps = {
   ...((Text as any).defaultProps ?? {}),
-  allowFontScaling: false,
   // Android reserves extra top/bottom font space by default. That space is
   // useful for some native text editing scenarios, but it makes icon/text
   // rows appear to have gaps behind their visible glyphs throughout the app.
@@ -117,7 +116,6 @@ import { getNativeShareChatId } from "@/lib/nativeShareShortcuts";
 };
 (TextInput as any).defaultProps = {
   ...((TextInput as any).defaultProps ?? {}),
-  allowFontScaling: false,
   includeFontPadding: false,
 };
 
@@ -245,16 +243,18 @@ function HardwareBackGuard() {
 function AppNavigationStack() {
   const { colors } = useTheme();
   const bg = colors.background;
+  const routeContentStyle = { backgroundColor: bg, flex: 1, minWidth: 0, minHeight: 0 } as const;
   const stack = (
     <Stack
+      screenLayout={({ children }) => <RouteFrame>{children}</RouteFrame>}
       screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
         gestureEnabled: true,
-        contentStyle: { backgroundColor: bg },
+        contentStyle: routeContentStyle,
       }}
     >
-      <Stack.Screen name="index"      options={{ animation: "slide_from_right", contentStyle: { backgroundColor: bg } }} />
+      <Stack.Screen name="index"      options={{ animation: "slide_from_right", contentStyle: routeContentStyle }} />
       <Stack.Screen name="welcome"    options={{ animation: "slide_from_right", gestureEnabled: false }} />
       <Stack.Screen name="(auth)"     options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="(tabs)"     options={{ animation: "slide_from_right" }} />
@@ -269,7 +269,7 @@ function AppNavigationStack() {
           presentation: "card",
           animation: "slide_from_right",
           gestureEnabled: true,
-          contentStyle: { backgroundColor: bg },
+          contentStyle: routeContentStyle,
         }}
       />
       <Stack.Screen name="+not-found" />

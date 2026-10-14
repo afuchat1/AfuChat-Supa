@@ -23,6 +23,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import AfuLogo from "@/components/ui/AfuLogo";
 import { useTheme } from "@/hooks/useTheme";
 import { SmartSheet } from "@/components/ui/SmartSheet";
+import { Separator } from "@/components/ui/Separator";
 import Colors from "@/constants/colors";
 import { useLanguage } from "@/context/LanguageContext";
 
@@ -167,7 +168,7 @@ export default function QRPosterSheet({
         </View>
 
         {/* Action buttons */}
-        <View style={[s.sep, { backgroundColor: colors.border }]} />
+        <Separator />
 
         <TouchableOpacity
           style={s.actionRow}
@@ -183,7 +184,7 @@ export default function QRPosterSheet({
            <Text style={[s.actionLabel, { color: accent }]}>{t("qr.share")}</Text>
         </TouchableOpacity>
 
-        <View style={[s.sep, { backgroundColor: colors.border }]} />
+        <Separator />
 
         <TouchableOpacity
           style={s.actionRow}
@@ -195,7 +196,7 @@ export default function QRPosterSheet({
            <Text style={[s.actionLabel, { color: colors.text }]}>{t("qr.save_image")}</Text>
         </TouchableOpacity>
 
-        <View style={[s.sep, { backgroundColor: colors.border }]} />
+        <Separator />
       </View>
     </SmartSheet>
   );
@@ -256,7 +257,6 @@ const s = StyleSheet.create({
   posterScan: { fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: 0.4, marginBottom: 4 },
   posterUrl:  { fontSize: 10, color: BRAND + "88", letterSpacing: 0.3, fontFamily: "monospace" as any },
 
-  sep:        { height: 0.5, marginVertical: 2 },
   actionRow:  { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, minHeight: 56 },
   actionIcon: { marginRight: 18, width: 24, textAlign: "center" },
   actionLabel:{ flex: 1, fontSize: 16, fontFamily: "Inter_700Bold" },

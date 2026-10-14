@@ -15,8 +15,9 @@ import { useLanguage } from "@/context/LanguageContext";
 import { safeRouter } from "@/lib/navUtils";
 import { Avatar } from "@/components/ui/Avatar";
 import { ChatsListPanel } from "@/app/(tabs)/index";
+import { T } from "@/constants/theme";
 
-const DESKTOP_BREAKPOINT = 980;
+const DESKTOP_BREAKPOINT = T.layout.desktopBreakpoint;
 
 const NAV_ITEMS = [
   { route: "/(tabs)/chats", label: "Chat", icon: "chatbubbles-outline" },
@@ -284,7 +285,7 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, minHeight: 0, flexDirection: "row", minWidth: 980 },
+  shell: { flex: 1, minHeight: 0, flexDirection: "row", minWidth: T.layout.desktopBreakpoint },
   sidebar: {
     flexShrink: 0,
     marginVertical: 14,
@@ -296,8 +297,8 @@ const styles = StyleSheet.create({
     ...({ transition: "width 180ms ease, background-color 180ms ease" } as any),
     ...({ boxShadow: "0 8px 24px rgba(56,45,29,0.12)" } as any),
   },
-  sidebarExpanded: { width: 176 },
-  sidebarCollapsed: { width: 64 },
+  sidebarExpanded: { width: T.layout.desktopSidebarExpandedWidth },
+  sidebarCollapsed: { width: T.layout.desktopSidebarCollapsedWidth },
   brandRow: {
     height: 42,
     flexDirection: "row",
@@ -367,7 +368,7 @@ const styles = StyleSheet.create({
   navLabel: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 16, fontFamily: "Inter_500Medium" },
   navLabelActive: { fontFamily: "Inter_700Bold" },
   liveDot: { width: 5, height: 5, borderRadius: 3, marginRight: 2 },
-  sidebarFooter: { borderTopWidth: 0.5, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 10 },
+  sidebarFooter: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 10 },
   sidebarFooterCollapsed: { paddingHorizontal: 7, alignItems: "center" },
   profileRow: {
     borderRadius: 9,
@@ -391,7 +392,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    borderBottomWidth: 0.5,
   },
   topBarTitle: { fontSize: 17, lineHeight: 22, fontFamily: "Inter_700Bold" },
   topBarSubtitle: { fontSize: 10, lineHeight: 14, marginTop: 8 },
@@ -407,9 +407,8 @@ const styles = StyleSheet.create({
   contentArea: { flex: 1, minHeight: 0 },
   masterDetail: { flex: 1, flexDirection: "row", minWidth: 0 },
   chatRail: {
-    width: 360,
+    width: T.layout.desktopChatRailWidth,
     flexShrink: 0,
-    borderRightWidth: 0.5,
     overflow: "hidden",
   },
   detailPane: { flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden" },

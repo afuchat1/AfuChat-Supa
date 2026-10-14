@@ -207,7 +207,7 @@ function EmojiScrollPanel({ onEmojiSelected, onScrollDown, onScrollUp, onSelect 
   return (
     <View style={{ flex: 1 }}>
       <BlurView intensity={GLASS.blur.medium} tint={isDark ? "dark" : "light"}
-          style={{ height: 44, borderBottomWidth: 0.5, borderBottomColor: glass.border }}>
+          style={{ height: 44 }}>
           <ScrollView ref={catBarRef} horizontal showsHorizontalScrollIndicator={false}
             style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 4, alignItems: "center", height: 44 }}>
             <TouchableOpacity onPress={() => setMode("history")}
@@ -449,7 +449,7 @@ function StickerScrollPanel({ onSendSticker, onScrollDown, onScrollUp, onSelect 
   return (
     <View style={{ flex: 1 }}>
       <BlurView intensity={GLASS.blur.medium} tint={isDark ? "dark" : "light"}
-          style={{ height: 44, borderBottomWidth: 0.5, borderBottomColor: glass.border }}>
+          style={{ height: 44 }}>
           <ScrollView ref={catBarRef} horizontal showsHorizontalScrollIndicator={false}
             style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 4, alignItems: "center", height: 44 }}>
             <TouchableOpacity onPress={() => setMode("history")}
@@ -803,7 +803,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 6,
-    borderBottomWidth: 0.5,
   },
 
   gifSearchBox: {

@@ -79,7 +79,6 @@ export default function AlertModal() {
 
   // Use theme surface colors — no hardcoded hex
   const cardBg = isDark ? colors.backgroundTertiary : colors.surface;
-  const divider = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)";
 
   return (
     <Modal
@@ -116,7 +115,6 @@ export default function AlertModal() {
           <View
             style={[
               useVertical ? styles.btnGroupVertical : styles.btnGroupHorizontal,
-              { borderTopColor: divider },
             ]}
           >
             {buttons.map((btn, i) => {
@@ -134,13 +132,6 @@ export default function AlertModal() {
                   key={i}
                   style={[
                     useVertical ? styles.btnVertical : styles.btnHorizontal,
-                    !useVertical && i < buttons.length - 1 && {
-                      borderRightWidth: T.border.hairline,
-                      borderRightColor: divider,
-                    },
-                    useVertical && i < buttons.length - 1 && {
-                      borderBottomColor: divider,
-                    },
                   ]}
                   onPress={() => dismiss(btn)}
                   activeOpacity={T.states.pressed}
@@ -205,11 +196,9 @@ const styles = StyleSheet.create({
   },
   btnGroupHorizontal: {
     flexDirection: "row",
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   btnGroupVertical: {
     flexDirection: "column",
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   btnHorizontal: {
     flex: 1,
@@ -221,7 +210,6 @@ const styles = StyleSheet.create({
     height: 50,
     alignItems: "center",
     justifyContent: "center",
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   btnText: {
     ...T.body,

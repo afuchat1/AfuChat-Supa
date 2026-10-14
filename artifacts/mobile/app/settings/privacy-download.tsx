@@ -16,6 +16,7 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { useLanguage } from "@/context/LanguageContext";
+import { Separator } from "@/components/ui/Separator";
 
 const DATA_TYPES: {
   id: string;
@@ -128,7 +129,7 @@ export default function PrivacyDownloadScreen() {
                 const isSelected = selected.has(item.id);
                 return (
                   <View key={item.id}>
-                    {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
+                    {i > 0 && <Separator />}
                     <TouchableOpacity
                       style={[s.row, { backgroundColor: colors.surface }]}
                       onPress={() => toggle(item.id)}
@@ -197,7 +198,6 @@ const s = StyleSheet.create({
     paddingBottom: 8,
   },
   group: { marginHorizontal: 16, borderRadius: 16, overflow: "hidden" },
-  sep: { height: 0.5, marginLeft: 62 },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
   rowIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1 },

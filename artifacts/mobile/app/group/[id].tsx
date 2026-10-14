@@ -25,6 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { SmartSheet } from "@/components/ui/SmartSheet";
+import { Separator } from "@/components/ui/Separator";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { Avatar } from "@/components/ui/Avatar";
@@ -109,7 +110,6 @@ export default function GroupManageScreen() {
   const [showMutePicker, setShowMutePicker] = useState(false);
 
   const sheetBg = isDark ? "#1C1C1E" : "#fff";
-  const sheetBorder = isDark ? "#2C2C2E" : "#E5E5EA";
 
   // ── Load mute state from Supabase ────────────────────────────────────────────
 
@@ -873,7 +873,7 @@ export default function GroupManageScreen() {
               </View>
             </View>
 
-            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: sheetBorder, marginVertical: 2 }} />
+            <Separator />
 
             <TouchableOpacity
               style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, minHeight: 56 }}
@@ -903,7 +903,7 @@ export default function GroupManageScreen() {
               </Text>
             </TouchableOpacity>
 
-            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: sheetBorder, marginVertical: 2 }} />
+            <Separator />
 
             <TouchableOpacity
               style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, minHeight: 56 }}
@@ -949,7 +949,7 @@ export default function GroupManageScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: sheetBorder, marginVertical: 2 }} />
+        <Separator />
 
         {addLoading ? (
           <View style={{ padding: 40, alignItems: "center" }}>

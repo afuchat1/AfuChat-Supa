@@ -13,6 +13,7 @@ import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { Separator } from "@/components/ui/Separator";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { TwoFactorGate } from "@/components/ui/TwoFactorGate";
@@ -56,7 +57,7 @@ function Row({
           <Ionicons name="chevron-forward" size={15} color={danger ? "#FF3B3088" : colors.textMuted} style={{ marginLeft: 2 }} />
         )}
       </TouchableOpacity>
-      {!last && <View style={[s.divider, { backgroundColor: colors.separator }]} />}
+      {!last && <Separator />}
     </>
   );
 }
@@ -169,7 +170,6 @@ const s = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 17 },
-  divider: { height: 0.5, marginHorizontal: 16 },
 
   footerNote: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 18, paddingHorizontal: 16, marginBottom: 8 },
 });

@@ -1,19 +1,5 @@
-import React from "react";
-import { StyleSheet, View } from "react-native";
-import { useTheme } from "@/hooks/useTheme";
-
-export function Separator({ indent = 0 }: { indent?: number }) {
-  const { colors } = useTheme();
-  return (
-    <View
-      style={[
-        styles.sep,
-        { backgroundColor: colors.separator, marginLeft: indent },
-      ]}
-    />
-  );
+// Keep the shared API so existing list screens retain their layout contracts,
+// but render no rule between feature rows.
+export function Separator(_props: { indent?: number }) {
+  return null;
 }
-
-const styles = StyleSheet.create({
-  sep: { height: 0.5 },
-});

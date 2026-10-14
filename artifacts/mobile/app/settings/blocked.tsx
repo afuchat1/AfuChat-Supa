@@ -21,6 +21,7 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { useLanguage } from "@/context/LanguageContext";
 import { registerUiTexts } from "@/lib/i18n";
+import { Separator } from "@/components/ui/Separator";
 
 type BlockedItem = {
   id: string;
@@ -173,7 +174,7 @@ export default function BlockedUsersScreen() {
                       )}
                     </TouchableOpacity>
                   </View>
-                  {!isLast && <View style={[s.sep, { backgroundColor: colors.border }]} />}
+                  {!isLast && <Separator />}
                 </View>
               );
             }}
@@ -197,7 +198,6 @@ const s = StyleSheet.create({
   },
   rowWrapper: { borderRadius: 0, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
-  sep: { height: 0.5, marginLeft: 74 },
   name: { fontSize: 15, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
   handle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 1 },
   blockedAt: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },

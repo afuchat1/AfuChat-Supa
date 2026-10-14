@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { SmartSheet } from "@/components/ui/SmartSheet";
+import { Separator } from "@/components/ui/Separator";
 
 export type DismissReason =
   | "not_interested"
@@ -37,7 +38,7 @@ export function DismissSheet({ visible, authorHandle: _authorHandle, onSelect, o
       handleColor={colors.border}
       peekFraction={0.5}
     >
-      <View style={[styles.sep, { backgroundColor: colors.border }]} />
+      <Separator />
 
       {REASONS.map((r) => (
         <TouchableOpacity
@@ -51,13 +52,12 @@ export function DismissSheet({ visible, authorHandle: _authorHandle, onSelect, o
         </TouchableOpacity>
       ))}
 
-      <View style={[styles.sep, { backgroundColor: colors.border }]} />
+      <Separator />
     </SmartSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  sep:     { height: 0.5, marginVertical: 2 },
   row:     { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, minHeight: 56 },
   rowIcon: { marginRight: 18, width: 24, textAlign: "center" },
   rowLabel:{ flex: 1, fontSize: 16, fontFamily: "Inter_700Bold" },

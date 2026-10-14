@@ -57,6 +57,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { SmartSheet } from "@/components/ui/SmartSheet";
+import { Separator } from "@/components/ui/Separator";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -274,7 +275,7 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
 
   return (
     <SmartSheet visible={visible} onClose={onClose} peekFraction={0.55} backgroundColor="#fff">
-      <View style={cmStyles.sep} />
+      <Separator />
 
       {/* Group 1 — sharing actions */}
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onRepost)} activeOpacity={0.65}>
@@ -294,7 +295,7 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
         <Text style={cmStyles.rowLabel}>Save</Text>
       </TouchableOpacity>
 
-      <View style={cmStyles.sep} />
+      <Separator />
 
       {/* Group 2 — playback controls */}
       <View style={cmStyles.row}>
@@ -309,7 +310,7 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
         />
       </View>
 
-      <View style={cmStyles.sep} />
+      <Separator />
 
       {/* Group 3 — negative actions */}
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onNotInterested)} activeOpacity={0.65}>
@@ -324,7 +325,6 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
   );
 }
 const cmStyles = StyleSheet.create({
-  sep:       { height: StyleSheet.hairlineWidth, backgroundColor: "#e8e8e8", marginVertical: 2 },
   row:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, minHeight: 56 },
   rowLast:   { marginBottom: 8 },
   rowIcon:   { marginRight: 18, width: 24, textAlign: "center" },

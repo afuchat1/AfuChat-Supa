@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { Separator } from "@/components/ui/Separator";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -75,7 +76,7 @@ export default function PrivacyMessagesScreen() {
               const selected = settings.message_privacy === opt.value;
               return (
                 <View key={opt.value}>
-                  {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
+                  {i > 0 && <Separator />}
                   <TouchableOpacity
                     style={[s.optRow, { backgroundColor: colors.surface }]}
                     onPress={() => select(opt.value)}
@@ -117,7 +118,6 @@ const s = StyleSheet.create({
     paddingBottom: 8,
   },
   group: { marginHorizontal: 16, borderRadius: 16, overflow: "hidden" },
-  sep: { height: 0.5, marginLeft: 62 },
   optRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
   optIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   optText: { flex: 1 },
