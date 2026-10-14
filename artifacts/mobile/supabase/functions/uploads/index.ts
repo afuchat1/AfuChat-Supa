@@ -14,6 +14,8 @@
 //   CLOUDFLARE_ACCOUNT_ID         — Cloudflare account ID
 //   CLOUDFLARE_R2_ACCESS_KEY_ID   — R2 API token key ID
 //   CLOUDFLARE_R2_SECRET_ACCESS_KEY — R2 API token secret
+//   CLOUDFLARE_R2_MUSIC_ACCESS_KEY_ID — key scoped to afumusic-private
+//   CLOUDFLARE_R2_MUSIC_SECRET_ACCESS_KEY — secret scoped to afumusic-private
 //   R2_BUCKET                     — R2 bucket name (e.g. "afuchat-media")
 //   R2_PRIVATE_MUSIC_BUCKET       — dedicated private bucket for paid tracks
 //   R2_PUBLIC_BASE_URL            — CDN base URL (e.g. "https://cdn.afuchat.com")
@@ -53,6 +55,8 @@ interface Config {
   accountId: string;
   accessKeyId: string;
   secretAccessKey: string;
+  privateMusicAccessKeyId: string;
+  privateMusicSecretAccessKey: string;
   bucket: string;
   privateMusicBucket: string;
   publicBaseUrl: string;
@@ -65,6 +69,8 @@ function getConfig(): Config {
     accountId: Deno.env.get("CLOUDFLARE_ACCOUNT_ID") ?? "",
     accessKeyId: Deno.env.get("CLOUDFLARE_R2_ACCESS_KEY_ID") ?? "",
     secretAccessKey: Deno.env.get("CLOUDFLARE_R2_SECRET_ACCESS_KEY") ?? "",
+    privateMusicAccessKeyId: Deno.env.get("CLOUDFLARE_R2_MUSIC_ACCESS_KEY_ID") ?? "",
+    privateMusicSecretAccessKey: Deno.env.get("CLOUDFLARE_R2_MUSIC_SECRET_ACCESS_KEY") ?? "",
     bucket: Deno.env.get("R2_BUCKET") ?? "afuchat-media",
     privateMusicBucket: Deno.env.get("R2_PRIVATE_MUSIC_BUCKET") ?? "afumusic-private",
     publicBaseUrl: (Deno.env.get("R2_PUBLIC_BASE_URL") ?? "").replace(/\/$/, ""),
@@ -73,13 +79,21 @@ function getConfig(): Config {
   };
 }
 
-function getS3Client(cfg: Config): S3Client {
+function getS3Client(cfg: Config, logicalBucket = "music"): S3Client {
+  const isPrivateMusic = logicalBucket === "music-private" || logicalBucket === cfg.privateMusicBucket;
+  const accessKeyId = isPrivateMusic ? cfg.privateMusicAccessKeyId : cfg.accessKeyId;
+  const secretAccessKey = isPrivateMusic ? cfg.privateMusicSecretAccessKey : cfg.secretAccessKey;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error(isPrivateMusic
+      ? "Private AfuMusic R2 credentials are not configured."
+      : "R2 credentials are not configured.");
+  }
   return new S3Client({
     region: "auto",
     endpoint: `https://${cfg.accountId}.r2.cloudflarestorage.com`,
     credentials: {
-      accessKeyId: cfg.accessKeyId,
-      secretAccessKey: cfg.secretAccessKey,
+      accessKeyId,
+      secretAccessKey,
     },
   });
 }
@@ -142,9 +156,15 @@ function getPhysicalBucket(cfg: Config, logicalBucket: string): string {
   return cfg.bucket;
 }
 
-async function isPrivateMusicBucketReady(cfg: Config, s3: S3Client): Promise<boolean> {
-  if (!cfg.privateMusicBucket || cfg.privateMusicBucket === cfg.bucket) return false;
+async function isPrivateMusicBucketReady(cfg: Config): Promise<boolean> {
+  if (
+    !cfg.privateMusicBucket
+    || cfg.privateMusicBucket === cfg.bucket
+    || !cfg.privateMusicAccessKeyId
+    || !cfg.privateMusicSecretAccessKey
+  ) return false;
   try {
+    const s3 = getS3Client(cfg, "music-private");
     await s3.send(new HeadBucketCommand({ Bucket: cfg.privateMusicBucket }));
     return true;
   } catch {
@@ -226,7 +246,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (action === "music-private-ready" && req.method === "GET") {
-      const ready = await isPrivateMusicBucketReady(cfg, s3);
+      const ready = await isPrivateMusicBucketReady(cfg);
       return json(
         ready
           ? { ready: true }
@@ -269,6 +289,7 @@ Deno.serve(async (req: Request) => {
 
       const key = buildKey(logicalBucket, callerPath);
       const targetBucket = getPhysicalBucket(cfg, logicalBucket);
+      const objectS3 = getS3Client(cfg, logicalBucket);
 
       const command = new PutObjectCommand({
         Bucket: targetBucket,
@@ -278,7 +299,7 @@ Deno.serve(async (req: Request) => {
       });
 
       // Presigned URL valid for 5 minutes — plenty for large video uploads.
-      const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+      const uploadUrl = await getSignedUrl(objectS3, command, { expiresIn: 300 });
 
       console.log(`[uploads/sign] userId=${userId} key=${key}`);
       return json({
@@ -304,6 +325,7 @@ Deno.serve(async (req: Request) => {
       if (!["music", "music-private"].includes(logicalBucket) || !callerPath || !trackId) {
         return json({ error: "A music bucket, path, and trackId are required" }, 400);
       }
+      const objectS3 = getS3Client(cfg, logicalBucket);
 
       const admin = createClient(cfg.supabaseUrl, cfg.serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
@@ -336,7 +358,7 @@ Deno.serve(async (req: Request) => {
         return json({ error: "Track not available" }, 404);
       }
 
-      if (isPaid && !(await isPrivateMusicBucketReady(cfg, s3))) {
+      if (isPaid && !(await isPrivateMusicBucketReady(cfg))) {
         return json({ error: "The dedicated private AfuMusic bucket is not ready." }, 503);
       }
 
@@ -355,7 +377,7 @@ Deno.serve(async (req: Request) => {
       const key = buildKey(logicalBucket, callerPath);
       const downloadFilename = (body.downloadFilename ?? "").trim();
       const readUrl = await getSignedUrl(
-        s3,
+        objectS3,
         new GetObjectCommand({
           Bucket: getPhysicalBucket(cfg, logicalBucket),
           Key: key,
@@ -371,6 +393,7 @@ Deno.serve(async (req: Request) => {
     // Used as fallback when direct presigned PUT is unavailable (e.g. web).
     if (action === "upload" && req.method === "POST") {
       const logicalBucket = (url.searchParams.get("bucket") ?? "uploads").trim();
+      const objectS3 = getS3Client(cfg, logicalBucket);
       const callerPath = (url.searchParams.get("path") ?? `${userId}/${Date.now()}`).trim();
       const contentType = (req.headers.get("content-type") ?? "application/octet-stream").split(";")[0].trim();
 
@@ -381,7 +404,7 @@ Deno.serve(async (req: Request) => {
       if (logicalBucket === "music-private" && musicValidation?.isCover) {
         return json({ error: "Paid music cover art must use the public music bucket." }, 403);
       }
-      if (logicalBucket === "music-private" && !(await isPrivateMusicBucketReady(cfg, s3))) {
+      if (logicalBucket === "music-private" && !(await isPrivateMusicBucketReady(cfg))) {
         return json({ error: "The dedicated private AfuMusic bucket is not ready." }, 503);
       }
 
@@ -396,7 +419,7 @@ Deno.serve(async (req: Request) => {
         return json({ error: `Music files must be ${musicValidation.isCover ? "10 MB" : "100 MB"} or smaller.` }, 413);
       }
 
-      await s3.send(new PutObjectCommand({
+      await objectS3.send(new PutObjectCommand({
         Bucket: targetBucket,
         Key: key,
         Body: new Uint8Array(bodyBytes),
@@ -511,7 +534,8 @@ Deno.serve(async (req: Request) => {
 
       const logicalBucket = keySegments[0];
       if (!logicalBucket || logicalBucket.includes("..")) return json({ error: "Invalid key" }, 400);
-      await s3.send(new DeleteObjectCommand({
+      const objectS3 = getS3Client(cfg, logicalBucket);
+      await objectS3.send(new DeleteObjectCommand({
         Bucket: getPhysicalBucket(cfg, logicalBucket),
         Key: key,
       }));
