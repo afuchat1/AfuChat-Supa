@@ -97,7 +97,7 @@ function warnPlatformMigrationMissing() {
 function warnPrivateStorageMigrationMissing() {
   if (warnedAboutPlatformMigration) return;
   warnedAboutPlatformMigration = true;
-  console.warn("[AfuMusic] Apply the AfuMusic production hardening migration before publishing paid tracks.");
+  console.warn("[AfuMusic] Apply 20261014000001_afumusic_private_storage_setup.sql before publishing paid tracks.");
 }
 
 async function selectTracksWithCompatibleColumns(makeRequest: (columns: string) => any) {
@@ -593,7 +593,7 @@ export async function publishMusicTrack(input: {
     const schemaCheck = await supabase.from("music_tracks").select("storage_bucket").limit(1);
     if (isMissingStorageBucketColumn(schemaCheck.error)) {
       warnPrivateStorageMigrationMissing();
-      throw new Error("Paid publishing needs the AfuMusic production migration. Apply 20261014000000_afumusic_production_hardening.sql before retrying.");
+      throw new Error("Paid publishing needs the AfuMusic private-storage setup migration. Apply 20261014000001_afumusic_private_storage_setup.sql before retrying.");
     }
     if (schemaCheck.error) throw schemaCheck.error;
     if (!(await isPrivateMusicStorageReady())) {

@@ -283,7 +283,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      if (logicalBucket === "music-private" && !(await isPrivateMusicBucketReady(cfg, s3))) {
+      if (logicalBucket === "music-private" && !(await isPrivateMusicBucketReady(cfg))) {
         return json({ error: "The dedicated private AfuMusic bucket is not ready." }, 503);
       }
 

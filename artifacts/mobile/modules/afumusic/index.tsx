@@ -872,10 +872,10 @@ export default function AfuMusicApp({
         showPremiumRequired();
         return;
       }
-      if (errorMessage.toLowerCase().includes("production migration")) {
+      if (/migration|private r2|private storage|private bucket/i.test(errorMessage)) {
         showAlert(
           "Publishing setup incomplete",
-          "Paid AfuMusic publishing is temporarily blocked until private storage is configured. Your track was not published.",
+          errorMessage || "AfuMusic needs a production setup step before this track can be published.",
         );
         return;
       }

@@ -5,7 +5,8 @@
 alter table public.music_tracks
   add column if not exists video_use_allowed boolean not null default false,
   add column if not exists cover_art_url text,
-  add column if not exists cover_art_path text;
+  add column if not exists cover_art_path text,
+  add column if not exists storage_bucket text not null default 'music';
 
 alter table public.music_tracks
   alter column audio_url drop not null,
@@ -170,6 +171,9 @@ begin
   end if;
 
   if new.price_acoin > 0 then
+    if new.storage_bucket is distinct from 'music-private' then
+      raise exception 'afumusic_paid_track_requires_private_storage';
+    end if;
     if new.storage_path is null or btrim(new.storage_path) = '' then
       raise exception 'afumusic_paid_track_requires_storage_path';
     end if;
@@ -188,7 +192,7 @@ $$;
 
 drop trigger if exists afumusic_paid_publishing_guard on public.music_tracks;
 create trigger afumusic_paid_publishing_guard
-  before insert or update of price_acoin, creator_id, audio_url, storage_path
+  before insert or update of price_acoin, creator_id, audio_url, storage_path, storage_bucket
   on public.music_tracks
   for each row
   execute function public.guard_afumusic_paid_publishing();
