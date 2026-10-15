@@ -1136,7 +1136,7 @@ function EditPhase({
         </View>
 
         {/* ── Edit tabs ── */}
-        <View style={[es.tabBar, { backgroundColor: "#111", borderBottomColor: "#222 }]}>
+        <View style={[es.tabBar, { backgroundColor: "#111", borderBottomColor: "#222" }]}>
           {TABS.map((t) => (
             <TouchableOpacity
               key={t.id}
