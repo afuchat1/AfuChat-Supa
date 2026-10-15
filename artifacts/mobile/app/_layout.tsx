@@ -84,6 +84,7 @@ import PushNotificationManager from "@/components/PushNotificationManager";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import { initActivityTracker } from "@/lib/activityTracker";
 import { MiniAppRuntimeProvider } from "@/lib/superapp/MiniAppRuntime";
+import { GlobalMusicPlayerProvider } from "@/components/GlobalMusicPlayer";
 import { AnimationGuardInit } from "@/components/AnimationGuardInit";
 import { SplashScreenView } from "@/components/ui/SplashScreenView";
 import NativeShareShortcutSync from "@/components/NativeShareShortcutSync";
@@ -626,6 +627,7 @@ export default function RootLayout() {
                           <AdvancedFeaturesProvider>
                             <ChatPreferencesProvider>
                               <MiniAppRuntimeProvider>
+                                <GlobalMusicPlayerProvider>
                                  <DeepLinkGate navigationReady={!!rootNavigationState?.key} />
                                 <IncomingShareGate navigationReady={!!rootNavigationState?.key} />
                                 <NativeShareShortcutSync />
@@ -634,6 +636,7 @@ export default function RootLayout() {
                                  <UsernameLoadingOverlay />
                                 <ToastContainer />
                                 <AlertModal />
+                                </GlobalMusicPlayerProvider>
                               </MiniAppRuntimeProvider>
                             </ChatPreferencesProvider>
                           </AdvancedFeaturesProvider>
