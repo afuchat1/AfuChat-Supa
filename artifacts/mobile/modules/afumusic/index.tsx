@@ -392,11 +392,12 @@ export default function AfuMusicApp({
         showAlert("Playback unavailable", "Audio is not available for this track yet.");
         return;
       }
-      playMusic(track, audioUrl);
+      const playableQueue = filteredTracks.filter((item) => ownedIds.includes(item.id) || item.isOwned || item.price === 0);
+      playMusic(track, audioUrl, playableQueue, onResolveAudio);
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onResolveAudio, ownedIds, playMusic]);
+  }, [filteredTracks, onResolveAudio, ownedIds, playMusic]);
 
   const playTrack = useCallback(async (track: AfuMusicTrack) => {
     try {
@@ -406,11 +407,12 @@ export default function AfuMusicApp({
         showAlert("Playback unavailable", "Audio is not available for this track yet.");
         return;
       }
-      playMusic(track, audioUrl);
+      const playableQueue = filteredTracks.filter((item) => ownedIds.includes(item.id) || item.isOwned || item.price === 0);
+      playMusic(track, audioUrl, playableQueue, onResolveAudio);
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onPlay, onResolveAudio, playMusic]);
+  }, [filteredTracks, onPlay, onResolveAudio, playMusic]);
 
   const handleCache = useCallback(async (track: AfuMusicTrack) => {
     try {

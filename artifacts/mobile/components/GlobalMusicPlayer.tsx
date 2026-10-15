@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
 import { useTheme } from "@/hooks/useTheme";
+import { showAlert } from "@/lib/alert";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 
 let NativeAudio: typeof import("expo-av").Audio | null = null;
@@ -14,10 +15,17 @@ if (Platform.OS !== "web" && !isExpoGo()) {
 type AVPlaybackStatus = import("expo-av").AVPlaybackStatus;
 type NativeSound = import("expo-av/build/Audio/Sound").Sound;
 
-type ActiveMusic = { track: AfuMusicTrack; uri: string };
+type AudioUriResolver = (track: AfuMusicTrack) => Promise<string | null>;
+type ActiveMusic = {
+  track: AfuMusicTrack;
+  uri: string;
+  queue: AfuMusicTrack[];
+  queueIndex: number;
+  resolveAudio?: AudioUriResolver;
+};
 type GlobalMusicContextValue = {
   activeMusic: ActiveMusic | null;
-  playMusic: (track: AfuMusicTrack, uri: string) => void;
+  playMusic: (track: AfuMusicTrack, uri: string, queue?: AfuMusicTrack[], resolveAudio?: AudioUriResolver) => void;
   stopMusic: () => void;
 };
 
@@ -34,7 +42,23 @@ function formatMusicTime(milliseconds: number) {
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-function MusicTransport({ uri }: { uri: string }) {
+function MusicTransport({
+  uri,
+  expanded,
+  onNext,
+  onPrevious,
+  hasNext,
+  hasPrevious,
+  advancing,
+}: {
+  uri: string;
+  expanded: boolean;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  advancing: boolean;
+}) {
   const { colors, accent } = useTheme();
   const soundRef = useRef<NativeSound | null>(null);
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -48,6 +72,11 @@ function MusicTransport({ uri }: { uri: string }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    setReady(false);
+    setPlaying(false);
+    setPosition(0);
+    setDuration(0);
+    setFailed(false);
     let webAudio: HTMLAudioElement | null = null;
 
     const onNativeStatus = (status: AVPlaybackStatus) => {
@@ -60,7 +89,10 @@ function MusicTransport({ uri }: { uri: string }) {
       setPlaying(status.isPlaying);
       setPosition(status.positionMillis ?? 0);
       setDuration(status.durationMillis ?? 0);
-      if (status.didJustFinish) setPlaying(false);
+      if (status.didJustFinish) {
+        setPlaying(false);
+        onNext?.();
+      }
     };
 
     const load = async () => {
@@ -84,6 +116,7 @@ function MusicTransport({ uri }: { uri: string }) {
             if (!mountedRef.current || !webAudio) return;
             setPlaying(false);
             setPosition(Number.isFinite(webAudio.duration) ? webAudio.duration * 1000 : 0);
+            onNext?.();
           };
           webAudio.onerror = () => { if (mountedRef.current) setFailed(true); };
           webAudio.load();
@@ -132,7 +165,7 @@ function MusicTransport({ uri }: { uri: string }) {
       soundRef.current = null;
       void sound?.unloadAsync().catch(() => {});
     };
-  }, [uri]);
+  }, [onNext, uri]);
 
   const togglePlayback = useCallback(async () => {
     if (!ready) return;
@@ -168,52 +201,64 @@ function MusicTransport({ uri }: { uri: string }) {
     } catch {}
   }, [duration]);
 
-  const seekBy = useCallback((seconds: number) => {
-    void seekTo(position + seconds * 1000);
-  }, [position, seekTo]);
   const progress = duration > 0 ? Math.min(1, position / duration) : 0;
 
   return (
-    <View style={styles.transport}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={playing ? "Pause music" : failed ? "Playback unavailable" : "Play music"}
-        onPress={() => void togglePlayback()}
-        disabled={!ready}
-        style={[styles.mainPlayButton, { backgroundColor: accent }, !ready && styles.disabledControl]}
-      >
-        {failed ? <Ionicons name="alert-circle" size={17} color="#FFFFFF" /> :
-          !ready ? <ActivityIndicator size="small" color="#FFFFFF" /> :
-          <Ionicons name={playing ? "pause" : "play"} size={17} color="#FFFFFF" />}
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back 10 seconds" onPress={() => seekBy(-10)} hitSlop={7} style={styles.skipButton}>
-        <Ionicons name="play-back" size={17} color={colors.textSecondary} />
-        <Text style={[styles.skipLabel, { color: colors.textMuted }]}>10</Text>
-      </Pressable>
-      <View style={styles.timeline}>
+    <View style={expanded ? styles.expandedTransport : styles.compactTransport}>
+      <View style={styles.transportControls}>
         <Pressable
-          accessibilityRole="adjustable"
-          accessibilityLabel="Track position"
-          accessibilityValue={{ min: 0, max: duration, now: position }}
-          onLayout={(event) => { seekWidth.current = event.nativeEvent.layout.width || 1; }}
-          onPress={(event) => {
-            if (!ready || !duration) return;
-            void seekTo((event.nativeEvent.locationX / seekWidth.current) * duration);
-          }}
-          style={[styles.seekTrack, { backgroundColor: colors.border }]}
+          accessibilityRole="button"
+          accessibilityLabel="Play previous track"
+          onPress={onPrevious}
+          disabled={!hasPrevious || advancing}
+          style={[styles.skipButton, expanded && styles.expandedSkipButton, (!hasPrevious || advancing) && styles.disabledControl]}
         >
-          <View style={[styles.seekFill, { width: `${progress * 100}%`, backgroundColor: accent }]} />
-          <View style={[styles.seekThumb, { left: `${progress * 100}%`, backgroundColor: accent }]} />
+          <Ionicons name="play-skip-back" size={expanded ? 20 : 17} color={colors.textSecondary} />
         </Pressable>
-        <View style={styles.timeRow}>
-          <Text style={[styles.timeText, { color: colors.textMuted }]}>{formatMusicTime(position)}</Text>
-          <Text style={[styles.timeText, { color: colors.textMuted }]}>{duration ? formatMusicTime(duration) : "--:--"}</Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={playing ? "Pause music" : failed ? "Playback unavailable" : "Play music"}
+          onPress={() => void togglePlayback()}
+          disabled={!ready}
+          style={[styles.mainPlayButton, { backgroundColor: accent }, expanded && styles.expandedPlayButton, !ready && styles.disabledControl]}
+        >
+          {failed ? <Ionicons name="alert-circle" size={17} color="#FFFFFF" /> :
+            !ready ? <ActivityIndicator size="small" color="#FFFFFF" /> :
+            <Ionicons name={playing ? "pause" : "play"} size={17} color="#FFFFFF" />}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Play next track"
+          onPress={onNext}
+          disabled={!hasNext || advancing}
+          style={[styles.skipButton, expanded && styles.expandedSkipButton, (!hasNext || advancing) && styles.disabledControl]}
+        >
+          {advancing ? <ActivityIndicator size="small" color={colors.textSecondary} /> :
+            <Ionicons name="play-skip-forward" size={expanded ? 20 : 17} color={colors.textSecondary} />}
+        </Pressable>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Forward 10 seconds" onPress={() => seekBy(10)} hitSlop={7} style={styles.skipButton}>
-        <Ionicons name="play-forward" size={17} color={colors.textSecondary} />
-        <Text style={[styles.skipLabel, { color: colors.textMuted }]}>10</Text>
-      </Pressable>
+      {expanded ? (
+        <View style={styles.timeline}>
+          <Pressable
+            accessibilityRole="adjustable"
+            accessibilityLabel="Track position"
+            accessibilityValue={{ min: 0, max: duration, now: position }}
+            onLayout={(event) => { seekWidth.current = event.nativeEvent.layout.width || 1; }}
+            onPress={(event) => {
+              if (!ready || !duration) return;
+              void seekTo((event.nativeEvent.locationX / seekWidth.current) * duration);
+            }}
+            style={[styles.seekTrack, { backgroundColor: colors.border }]}
+          >
+            <View style={[styles.seekFill, { width: `${progress * 100}%`, backgroundColor: accent }]} />
+            <View style={[styles.seekThumb, { left: `${progress * 100}%`, backgroundColor: accent }]} />
+          </Pressable>
+          <View style={styles.timeRow}>
+            <Text style={[styles.timeText, { color: colors.textMuted }]}>{formatMusicTime(position)}</Text>
+            <Text style={[styles.timeText, { color: colors.textMuted }]}>{duration ? formatMusicTime(duration) : "--:--"}</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -223,6 +268,11 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
   const { colors, accent } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [activeMusic, setActiveMusic] = useState<ActiveMusic | null>(null);
+  const activeMusicRef = useRef<ActiveMusic | null>(activeMusic);
+  activeMusicRef.current = activeMusic;
+  const advanceRequestRef = useRef(0);
+  const advancingRef = useRef(false);
+  const [advancing, setAdvancing] = useState(false);
   const [floatingPosition, setFloatingPosition] = useState({
     x: Math.max(8, windowWidth - 72),
     y: Math.max(insets.top + 12, windowHeight - insets.bottom - 190),
@@ -260,12 +310,66 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
   const [expanded, setExpanded] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
-  const playMusic = useCallback((track: AfuMusicTrack, uri: string) => {
-    setActiveMusic({ track, uri });
+  const playMusic = useCallback((
+    track: AfuMusicTrack,
+    uri: string,
+    queueTracks?: AfuMusicTrack[],
+    resolveAudio?: AudioUriResolver,
+  ) => {
+    const queue = queueTracks?.length ? [...queueTracks] : [track];
+    let queueIndex = queue.findIndex((item) => item.id === track.id);
+    if (queueIndex < 0) {
+      queue.unshift(track);
+      queueIndex = 0;
+    }
+    const next = { track, uri, queue, queueIndex, resolveAudio };
+    advanceRequestRef.current += 1;
+    advancingRef.current = false;
+    activeMusicRef.current = next;
+    setAdvancing(false);
+    setActiveMusic(next);
     setExpanded(false);
     setMinimized(false);
   }, []);
-  const stopMusic = useCallback(() => { setActiveMusic(null); setExpanded(false); setMinimized(false); }, []);
+
+  const advanceMusic = useCallback(async (direction: -1 | 1) => {
+    const current = activeMusicRef.current;
+    if (!current?.resolveAudio || advancingRef.current) return;
+    const queueIndex = current.queueIndex + direction;
+    const track = current.queue[queueIndex];
+    if (!track) return;
+
+    const requestId = ++advanceRequestRef.current;
+    advancingRef.current = true;
+    setAdvancing(true);
+    try {
+      const uri = await current.resolveAudio(track);
+      if (!uri) throw new Error("Audio is not available for this track yet.");
+      if (requestId !== advanceRequestRef.current || activeMusicRef.current !== current) return;
+      const next = { ...current, track, uri, queueIndex };
+      activeMusicRef.current = next;
+      setActiveMusic(next);
+    } catch (error) {
+      if (requestId === advanceRequestRef.current) showAlert("Playback unavailable", error);
+    } finally {
+      if (requestId === advanceRequestRef.current) {
+        advancingRef.current = false;
+        setAdvancing(false);
+      }
+    }
+  }, []);
+
+  const playNext = useCallback(() => { void advanceMusic(1); }, [advanceMusic]);
+  const playPrevious = useCallback(() => { void advanceMusic(-1); }, [advanceMusic]);
+  const stopMusic = useCallback(() => {
+    advanceRequestRef.current += 1;
+    advancingRef.current = false;
+    activeMusicRef.current = null;
+    setAdvancing(false);
+    setActiveMusic(null);
+    setExpanded(false);
+    setMinimized(false);
+  }, []);
   const value = useMemo(() => ({ activeMusic, playMusic, stopMusic }), [activeMusic, playMusic, stopMusic]);
 
   return (
@@ -281,40 +385,83 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
               minimized && styles.hiddenOverlay,
             ]}
           >
-            <View style={[styles.player, { backgroundColor: colors.surface, borderColor: colors.border }, expanded && styles.playerExpanded]}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={expanded ? "Current song details" : "Open current song"}
-                onPress={() => { setExpanded((value) => !value); setMinimized(false); }}
-                style={styles.trackHeader}
-              >
-                <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
-                  <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || accent} />
-                </View>
-                <View style={styles.trackCopy}>
-                   <Text numberOfLines={1} style={[styles.trackTitle, { color: colors.text }]}>{activeMusic.track.title}</Text>
-                   <Text numberOfLines={1} style={[styles.artist, { color: colors.textMuted }]}>{activeMusic.track.artist}</Text>
-                </View>
-                <Pressable accessibilityRole="button" accessibilityLabel="Minimize player to floating button" onPress={() => { setExpanded(false); setMinimized(true); }} hitSlop={8} style={styles.action}>
-                  <Ionicons name="chevron-down" size={19} color={colors.textMuted} />
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.action}>
-                  <Ionicons name="close" size={18} color={colors.textMuted} />
-                </Pressable>
-              </Pressable>
-              <View style={styles.controls}>
-                <MusicTransport key={activeMusic.track.id} uri={activeMusic.uri} />
+            <View style={[styles.player, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.expandedInfo, !expanded && styles.collapsedInfo]}>
+                {expanded ? (
+                  <>
+                    <View style={styles.sheetTopBar}>
+                      <Text style={[styles.sheetKicker, { color: colors.textMuted }]}>NOW PLAYING</Text>
+                      <View style={styles.sheetActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Collapse player"
+                          onPress={() => setExpanded(false)}
+                          hitSlop={8}
+                          style={styles.action}
+                        >
+                          <Ionicons name="chevron-down" size={19} color={colors.textMuted} />
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Minimize to floating player"
+                          onPress={() => { setExpanded(false); setMinimized(true); }}
+                          hitSlop={8}
+                          style={styles.action}
+                        >
+                          <Ionicons name="contract-outline" size={18} color={colors.textMuted} />
+                        </Pressable>
+                        <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.action}>
+                          <Ionicons name="close" size={18} color={colors.textMuted} />
+                        </Pressable>
+                      </View>
+                    </View>
+                    <View style={styles.songSheet}>
+                      <View style={[styles.largeArt, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                        <Ionicons name="musical-notes" size={42} color={activeMusic.track.accentColor || accent} />
+                      </View>
+                      <Text numberOfLines={2} style={[styles.sheetTitle, { color: colors.text }]}>{activeMusic.track.title}</Text>
+                      <Text numberOfLines={1} style={[styles.sheetArtist, { color: colors.textMuted }]}>{activeMusic.track.artist}</Text>
+                    </View>
+                  </>
+                ) : null}
               </View>
-              {expanded && !minimized ? (
-                <View style={styles.songSheet}>
-                  <View style={[styles.largeArt, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
-                    <Ionicons name="musical-notes" size={42} color={activeMusic.track.accentColor || accent} />
-                  </View>
-                  <Text numberOfLines={2} style={[styles.sheetTitle, { color: colors.text }]}>{activeMusic.track.title}</Text>
-                  <Text numberOfLines={1} style={[styles.sheetArtist, { color: colors.textMuted }]}>{activeMusic.track.artist}</Text>
-                  <Text style={[styles.sheetHint, { color: accent }]}>Now playing on AfuMusic</Text>
+              <View style={[styles.playerControlsRow, expanded && styles.playerControlsRowExpanded]}>
+                <View style={[styles.compactArtSlot, expanded && styles.hiddenControlSlot]}>
+                  {!expanded ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open player for ${activeMusic.track.title}`}
+                      onPress={() => { setExpanded(true); setMinimized(false); }}
+                      style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}
+                    >
+                      <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || accent} />
+                    </Pressable>
+                  ) : null}
                 </View>
-              ) : null}
+                <MusicTransport
+                  key={activeMusic.track.id}
+                  uri={activeMusic.uri}
+                  expanded={expanded}
+                  onNext={playNext}
+                  onPrevious={playPrevious}
+                  hasNext={Boolean(activeMusic.resolveAudio && activeMusic.queueIndex < activeMusic.queue.length - 1)}
+                  hasPrevious={Boolean(activeMusic.resolveAudio && activeMusic.queueIndex > 0)}
+                  advancing={advancing}
+                />
+                <View style={[styles.expandSlot, expanded && styles.hiddenControlSlot]}>
+                  {!expanded ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Expand music player"
+                      onPress={() => { setExpanded(true); setMinimized(false); }}
+                      hitSlop={8}
+                      style={styles.expandButton}
+                    >
+                      <Ionicons name="chevron-up" size={19} color={colors.textMuted} />
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
             </View>
           </View>
           {minimized ? (
@@ -381,7 +528,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   player: {
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 18,
@@ -392,31 +539,36 @@ const styles = StyleSheet.create({
       default: { elevation: 8 },
     }),
   },
-  playerExpanded: { paddingTop: 10, paddingBottom: 14 },
+  expandedInfo: { gap: 2 },
+  collapsedInfo: { height: 0, opacity: 0, overflow: "hidden" },
+  sheetTopBar: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sheetKicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.3 },
+  sheetActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   action: { padding: 4 },
-  controls: { opacity: 1 },
-  transport: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 8 },
+  playerControlsRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 42 },
+  playerControlsRowExpanded: { flexDirection: "column", alignItems: "stretch", paddingHorizontal: 8, paddingBottom: 3 },
+  compactArtSlot: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
+  expandSlot: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
+  hiddenControlSlot: { width: 0, height: 0, opacity: 0, overflow: "hidden" },
+  expandButton: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
+  compactTransport: { flex: 1, minWidth: 0, justifyContent: "center" },
+  expandedTransport: { width: "100%", gap: 13 },
+  transportControls: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 22 },
   mainPlayButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  expandedPlayButton: { width: 48, height: 48, borderRadius: 24 },
   disabledControl: { opacity: 0.68 },
   skipButton: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
-  skipLabel: { fontSize: 8, fontWeight: "700", marginTop: -5 },
-  timeline: { flex: 1, minWidth: 45, justifyContent: "center", gap: 5 },
+  expandedSkipButton: { width: 42, height: 42 },
+  timeline: { width: "100%", justifyContent: "center", gap: 6 },
   seekTrack: { height: 4, borderRadius: 2, justifyContent: "center" },
   seekFill: { position: "absolute", left: 0, height: 4, borderRadius: 2 },
   seekThumb: { position: "absolute", top: -3, width: 10, height: 10, borderRadius: 5, marginLeft: -5 },
   timeRow: { flexDirection: "row", justifyContent: "space-between" },
   timeText: { fontSize: 9, fontVariant: ["tabular-nums"] },
-  songSheet: { alignItems: "center", paddingTop: 14, paddingBottom: 6 },
+  songSheet: { alignItems: "center", paddingTop: 3, paddingBottom: 6 },
   largeArt: { width: 170, height: 170, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   sheetTitle: { fontSize: 17, fontWeight: "700", textAlign: "center", maxWidth: "95%" },
   sheetArtist: { fontSize: 13, marginTop: 5 },
-  sheetHint: { fontSize: 11, marginTop: 10 },
-  trackHeader: {
-    minHeight: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-  },
   art: {
     width: 42,
     height: 42,
@@ -424,8 +576,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  trackCopy: { flex: 1, minWidth: 55 },
-  trackTitle: { fontSize: 13, fontWeight: "700" },
-  artist: { fontSize: 11, marginTop: 2 },
-  close: { padding: 3 },
 });

@@ -1365,7 +1365,10 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
                     }
                     try {
                       const uri = await getMusicPlaybackUri(track);
-                      if (uri) playMusic(track, uri);
+                      if (uri) {
+                        const playableQueue = results.music.filter((item) => item.isOwned || item.price === 0);
+                        playMusic(track, uri, playableQueue, getMusicPlaybackUri);
+                      }
                     } catch {
                       safeRouter.push("/app/afumusic" as any);
                     }

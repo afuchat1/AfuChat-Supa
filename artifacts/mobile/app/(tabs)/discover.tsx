@@ -2879,7 +2879,13 @@ export default function DiscoverScreen() {
             {discoverMusic.map((track) => (
               <TouchableOpacity key={track.id} onPress={async () => {
                 if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
-                try { const uri = await getMusicPlaybackUri(track); if (uri) playMusic(track, uri); }
+                try {
+                  const uri = await getMusicPlaybackUri(track);
+                  if (uri) {
+                    const playableQueue = discoverMusic.filter((item) => item.isOwned || item.price === 0);
+                    playMusic(track, uri, playableQueue, getMusicPlaybackUri);
+                  }
+                }
                 catch { router.push("/app/afumusic" as any); }
               }} activeOpacity={0.75} style={{ width: 104 }}>
                 <View style={{ width: 104, height: 104, backgroundColor: track.coverColor || "#19172F", alignItems: "center", justifyContent: "center", marginBottom: 7 }}>
