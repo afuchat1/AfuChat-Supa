@@ -125,34 +125,6 @@ function TrackArt({
   );
 }
 
-function SectionPill({
-  label,
-  active,
-  icon,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) {
-  const { colors, accent } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.sectionPill,
-        { backgroundColor: active ? accent : colors.inputBg },
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons name={icon} size={15} color={active ? "#FFFFFF" : colors.text} />
-      <Text style={[styles.sectionPillLabel, { color: active ? "#FFFFFF" : colors.text }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function TrackRow({
   track,
   owned,
@@ -668,7 +640,6 @@ export default function AfuMusicApp({
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.purchaseSheet, { backgroundColor: colors.background }]}>
-            <View style={styles.sheetHandle} />
             {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={20} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
             <Text style={[styles.purchaseTitle, { color: colors.text }]}>{purchaseTrack?.title}</Text>
@@ -735,9 +706,9 @@ const styles = StyleSheet.create({
   wordmark: { color: INK, fontFamily: "Inter_700Bold", fontSize: 29, letterSpacing: -1.3 },
   wordmarkAccent: { color: CORAL },
   privateLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 8, letterSpacing: 1.4, marginTop: 3 },
-  coinBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F0E3C6", paddingHorizontal: 11, paddingVertical: 8, borderRadius: 16, marginTop: 2 },
+  coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, marginHorizontal: 20, height: 46, paddingHorizontal: 13, borderRadius: 14, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 48, paddingHorizontal: 14, borderRadius: 10, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
   pressed: { opacity: 0.72 },
   heroSection: { marginHorizontal: 20, marginTop: 26, paddingBottom: 23, borderBottomWidth: 1 },
@@ -748,14 +719,14 @@ const styles = StyleSheet.create({
   heroButtonText: { color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 12 },
   loadingState: { alignItems: "center", justifyContent: "center", paddingVertical: 42, gap: 12 },
   loadingLabel: { fontFamily: "Inter_500Medium", fontSize: 12 },
-  contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 22, marginBottom: 10 },
+  contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 28, marginBottom: 12 },
   sectionEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25, marginBottom: 4 },
-  sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.65 },
+  sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 25, letterSpacing: -0.8 },
   featuredBlock: { marginTop: 20 },
   featuredHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, marginBottom: 10 },
   featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4, marginTop: 3 },
   featuredRail: { paddingHorizontal: 20, gap: 12 },
-  featuredCard: { width: 112, paddingBottom: 5 },
+  featuredCard: { width: 124, paddingBottom: 8 },
   featuredCardTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginTop: 8 },
   featuredCardArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
   addButton: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: CORAL, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
@@ -768,7 +739,7 @@ const styles = StyleSheet.create({
   genreTextActive: { color: PAPER },
   listHint: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 11, marginBottom: 4 },
   trackList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
-  trackRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 82, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
+  trackRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 88, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E8DED4" },
   trackRowPressed: { opacity: 0.7, transform: [{ translateX: 2 }] },
   trackArt: { overflow: "hidden", alignItems: "center", justifyContent: "center" },
   artInitials: { color: "#FFFFFF", fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
@@ -788,8 +759,7 @@ const styles = StyleSheet.create({
   outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
   outlineButtonText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 11 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(25,23,47,0.42)" },
-  purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 23, paddingTop: 10, paddingBottom: 30 },
-  sheetHandle: { width: 38, height: 4, borderRadius: 3, backgroundColor: "#D4C7BC", marginBottom: 21 },
+  purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 23, paddingTop: 24, paddingBottom: 30 },
   purchaseKicker: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.45, marginTop: 15 },
   purchaseTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 24, textAlign: "center", marginTop: 5, letterSpacing: -0.5 },
   purchaseArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 },
@@ -815,7 +785,7 @@ const styles = StyleSheet.create({
   playerUnavailableText: { color: "#D0CADC", fontFamily: "Inter_500Medium", fontSize: 11, textAlign: "center", flex: 1 },
   playerNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 21 },
   playerNoteText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
-  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
+  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 21, paddingTop: 24, paddingBottom: 27 },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
   formInput: { height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
