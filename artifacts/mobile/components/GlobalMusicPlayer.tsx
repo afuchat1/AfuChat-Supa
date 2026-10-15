@@ -205,7 +205,7 @@ function MusicTransport({
 
   return (
     <View style={expanded ? styles.expandedTransport : styles.compactTransport}>
-      <View style={styles.transportControls}>
+      <View style={[styles.transportControls, expanded && styles.expandedTransportControls]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Play previous track"
@@ -381,11 +381,19 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
             pointerEvents={minimized ? "none" : "box-none"}
             style={[
               styles.overlay,
-              { bottom: Math.max(insets.bottom, 8) + 68 },
+              {
+                left: Math.max(10, (windowWidth - 460) / 2),
+                right: Math.max(10, (windowWidth - 460) / 2),
+                bottom: Math.max(insets.bottom, 8) + 68,
+              },
               minimized && styles.hiddenOverlay,
             ]}
           >
-            <View style={[styles.player, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[
+                styles.player,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                expanded ? styles.playerExpanded : styles.playerCompact,
+              ]}>
               <View style={[styles.expandedInfo, !expanded && styles.collapsedInfo]}>
                 {expanded ? (
                   <>
@@ -426,15 +434,20 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
                 ) : null}
               </View>
               <View style={[styles.playerControlsRow, expanded && styles.playerControlsRowExpanded]}>
-                <View style={[styles.compactArtSlot, expanded && styles.hiddenControlSlot]}>
+                <View style={[styles.compactInfoSlot, expanded && styles.hiddenControlSlot]}>
                   {!expanded ? (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Open player for ${activeMusic.track.title}`}
                       onPress={() => { setExpanded(true); setMinimized(false); }}
-                      style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}
+                      style={styles.compactTrackInfo}
                     >
-                      <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || accent} />
+                      <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                        <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || accent} />
+                      </View>
+                      <Text numberOfLines={1} style={[styles.miniTrackTitle, { color: colors.text }]}>
+                        {activeMusic.track.title}
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>
@@ -448,19 +461,6 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
                   hasPrevious={Boolean(activeMusic.resolveAudio && activeMusic.queueIndex > 0)}
                   advancing={advancing}
                 />
-                <View style={[styles.expandSlot, expanded && styles.hiddenControlSlot]}>
-                  {!expanded ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Expand music player"
-                      onPress={() => { setExpanded(true); setMinimized(false); }}
-                      hitSlop={8}
-                      style={styles.expandButton}
-                    >
-                      <Ionicons name="chevron-up" size={19} color={colors.textMuted} />
-                    </Pressable>
-                  ) : null}
-                </View>
               </View>
             </View>
           </View>
@@ -528,7 +528,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   player: {
-    gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 18,
@@ -539,6 +538,8 @@ const styles = StyleSheet.create({
       default: { elevation: 8 },
     }),
   },
+  playerCompact: { gap: 0, paddingHorizontal: 10, paddingVertical: 7 },
+  playerExpanded: { gap: 10, paddingVertical: 10 },
   expandedInfo: { gap: 2 },
   collapsedInfo: { height: 0, opacity: 0, overflow: "hidden" },
   sheetTopBar: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -547,13 +548,14 @@ const styles = StyleSheet.create({
   action: { padding: 4 },
   playerControlsRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 42 },
   playerControlsRowExpanded: { flexDirection: "column", alignItems: "stretch", paddingHorizontal: 8, paddingBottom: 3 },
-  compactArtSlot: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  expandSlot: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
+  compactInfoSlot: { flex: 1, minWidth: 0, height: 42, justifyContent: "center" },
+  compactTrackInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 9, minWidth: 0 },
+  miniTrackTitle: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: "700" },
   hiddenControlSlot: { width: 0, height: 0, opacity: 0, overflow: "hidden" },
-  expandButton: { width: 30, height: 34, alignItems: "center", justifyContent: "center" },
-  compactTransport: { flex: 1, minWidth: 0, justifyContent: "center" },
+  compactTransport: { width: 110, flex: 0, justifyContent: "center" },
   expandedTransport: { width: "100%", gap: 13 },
-  transportControls: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 22 },
+  transportControls: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  expandedTransportControls: { gap: 22 },
   mainPlayButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   expandedPlayButton: { width: 48, height: 48, borderRadius: 24 },
   disabledControl: { opacity: 0.68 },
