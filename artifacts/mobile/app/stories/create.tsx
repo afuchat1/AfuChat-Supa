@@ -111,7 +111,7 @@ export default function CreateStoryScreen() {
     const usage = await getDailyUsage("stories_create", tier);
     if (!usage.allowed) {
       setStarting(false);
-      const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
+      const nextTier = tier === "free" ? "Standard" : tier === "silver" ? "Pro" : "Platinum";
       showAlert(
         "Daily story limit reached",
         `You've shared all ${usage.limit} free stories for today. Upgrade to ${nextTier} for more.`,

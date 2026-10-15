@@ -113,7 +113,7 @@ export default function CreateGroupScreen() {
       const { data: currentCount } = await supabase.rpc("count_my_groups");
       const current = Number(currentCount ?? 0);
       if (current >= limit) {
-        const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
+        const nextTier = tier === "free" ? "Standard" : tier === "silver" ? "Pro" : "Platinum";
         showAlert(
           "Group limit reached",
           `You can create up to ${limit} group${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to create more.`,

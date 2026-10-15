@@ -1338,6 +1338,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const [
         { data: likesData }, { data: repliesData }, { data: viewsData },
         { data: myLikes }, { data: myBookmarks }, { data: myFollows },
+        { data: creatorSubscriptions },
       ] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
@@ -1345,6 +1346,11 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
         currentUser ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
         currentUser ? supabase.from("follows").select("following_id").eq("follower_id", currentUser.id).in("following_id", authorIds) : { data: [] },
+        supabase.from("user_subscriptions")
+          .select("user_id,subscription_plans(tier,grants_verification)")
+          .in("user_id", authorIds)
+          .eq("is_active", true)
+          .gt("expires_at", new Date().toISOString()),
       ]);
 
       setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
@@ -1358,12 +1364,22 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
       const followedSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
+      const verifiedPlanAuthorIds = new Set(
+        (creatorSubscriptions || [])
+          .filter((s: any) => s.subscription_plans?.grants_verification)
+          .map((s: any) => s.user_id)
+      );
+      const priorityAuthorIds = new Set(
+        (creatorSubscriptions || [])
+          .filter((s: any) => ["silver", "gold", "platinum"].includes(s.subscription_plans?.tier))
+          .map((s: any) => s.user_id)
+      );
 
       const allMapped: VideoPost[] = data.map((p: any) => ({
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
         view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
-        profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified, is_organization_verified: !!p.profiles?.is_organization_verified },
+        profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id), is_organization_verified: !!p.profiles?.is_organization_verified },
         liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
       }));
@@ -1406,7 +1422,8 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             interestMatches,
             isFollowing: followedSet.has(v.author_id),
             authorInteractionCount: v.liked ? 3 : 0,
-            isVerified: false,
+            isVerified: v.profile.is_verified,
+            isPriorityCreator: priorityAuthorIds.has(v.author_id),
             isOrgVerified: false,
             hasImages: !!v.image_url,
             sameCountry: false,
@@ -1440,7 +1457,8 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           const recency = Math.max(0, 100 - ageHours * 1.5);
           const velocity = Math.min((v.likeCount + v.replyCount * 2) / Math.max(ageHours, 0.5) * 6, 20);
           // Larger jitter so following tab isn't purely chronological every time
-          const score = recency + velocity + Math.random() * 8;
+          const priorityBoost = priorityAuthorIds.has(v.author_id) ? 35 : 0;
+          const score = recency + velocity + priorityBoost + Math.random() * 8;
           return { id: v.id, author_id: v.author_id, score, postType: "video" as const, video: v };
         });
         scored.sort((a, b) => b.score - a.score);

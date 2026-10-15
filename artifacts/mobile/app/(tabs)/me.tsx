@@ -191,7 +191,7 @@ const pc = StyleSheet.create({
 export default function MeScreen() {
   const { colors, accent, isDark } = useTheme();
   const { t, preferredLang } = useLanguage();
-  const { profile: authProfile, isPremium, subscription, loading, user, equippedGoods } = useAuth();
+  const { profile: authProfile, isPremium, isVerifiedCreator, subscription, loading, user, equippedGoods } = useAuth();
   const planLabel = useMemo(() => {
     const tier = subscription?.plan_tier?.toLowerCase();
     if (tier === "premium") return t("profile.plan_premium");
@@ -439,7 +439,7 @@ export default function MeScreen() {
                 <Text style={[s.heroName, { color: equippedGoods.has('sg4') ? Colors.gold : colors.text }]} numberOfLines={1} ellipsizeMode="tail">
                   {profile?.display_name || t("common.user")}
                 </Text>
-                <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={17} />
+                <VerifiedBadge isVerified={isVerifiedCreator || !!profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={17} />
               </View>
 
               <TouchableOpacity
@@ -650,7 +650,7 @@ export default function MeScreen() {
         handle={profile?.handle || t("common.user")}
         avatarUrl={profile?.avatar_url || null}
         afuId={afuId}
-        isVerified={!!profile?.is_verified}
+        isVerified={isVerifiedCreator || !!profile?.is_verified}
         isOrgVerified={!!profile?.is_organization_verified}
       />
 

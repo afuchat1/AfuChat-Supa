@@ -1891,7 +1891,7 @@ export default function DiscoverScreen() {
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
 
-      // Build org-posts query now so it fires alongside the 6 metadata queries
+      // Build org-posts query now so it fires alongside the feed metadata queries
       // rather than sequentially after them.
       let _orgQ: any = supabase
         .from("organization_page_posts")
@@ -1908,6 +1908,7 @@ export default function DiscoverScreen() {
         { data: followingData },
         { data: myReplies },
         { data: myBookmarks },
+        { data: creatorSubscriptions },
         _orgResult,
       ] = await Promise.all([
         postIds.length > 0 && user
@@ -1936,6 +1937,13 @@ export default function DiscoverScreen() {
         postIds.length > 0 && user
           ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
           : { data: [] },
+        authorIds.length > 0
+          ? supabase.from("user_subscriptions")
+              .select("user_id,expires_at,subscription_plans(tier,grants_verification)")
+              .in("user_id", authorIds)
+              .eq("is_active", true)
+              .gt("expires_at", new Date().toISOString())
+          : { data: [] },
         Promise.resolve(_orgQ).catch(() => ({ data: null })),
       ]);
       const _orgData: any[] | null = (_orgResult as any)?.data ?? null;
@@ -1947,6 +1955,16 @@ export default function DiscoverScreen() {
       for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
 
       const followingSet = new Set((followingData || []).map((f: any) => f.following_id));
+      const verifiedPlanAuthorIds = new Set(
+        (creatorSubscriptions || [])
+          .filter((s: any) => s.subscription_plans?.grants_verification)
+          .map((s: any) => s.user_id)
+      );
+      const priorityAuthorIds = new Set(
+        (creatorSubscriptions || [])
+          .filter((s: any) => ["silver", "gold", "platinum"].includes(s.subscription_plans?.tier))
+          .map((s: any) => s.user_id)
+      );
 
       // Enforce hide_posts_non_followers: remove posts from authors who restrict
       // visibility to their followers only, when the current viewer doesn't follow them.
@@ -1996,7 +2014,8 @@ export default function DiscoverScreen() {
           interestMatches,
           isFollowing: followingSet.has(p.author_id),
           authorInteractionCount: authorInteractionMap[p.author_id] || 0,
-          isVerified: p.profiles?.is_verified || false,
+          isVerified: p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id),
+          isPriorityCreator: priorityAuthorIds.has(p.author_id),
           isOrgVerified: p.profiles?.is_organization_verified || false,
           hasImages,
           sameCountry: !!userCountry && !!authorCountry && userCountry === authorCountry,
@@ -2019,7 +2038,7 @@ export default function DiscoverScreen() {
           created_at: p.created_at,
           view_count: p.view_count || 0,
           visibility: p.visibility || "public",
-          is_verified: p.profiles?.is_verified || false,
+          is_verified: p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id),
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: {
             display_name: p.profiles?.display_name || "User",

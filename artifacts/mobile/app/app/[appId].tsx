@@ -54,6 +54,7 @@ import {
   searchMusicTracks,
 } from "@/lib/afuMusic";
 import { useAuth } from "@/context/AuthContext";
+import { isVerifiedCreator } from "@/lib/creatorEntitlements";
 
 const APP_IDS: FullAppId[] = [
   "afupay", "afumarket", "afugames", "afubusiness", "afusearch",
@@ -169,15 +170,20 @@ export default function FullAppRoute() {
 }
 
 function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
-  const { profile } = useAuth();
+  const { profile, subscription, refreshProfile } = useAuth();
   const router = useRouter();
+  const canMonetize = isVerifiedCreator(profile?.is_verified, subscription);
   return (
     <AfuMusicApp
       initialSection={(initialSection as any) || "discover"}
       acoinBalance={profile?.acoin}
       onBrowse={listMusicTracks}
       onSearch={searchMusicTracks}
-      onPurchase={(track) => purchaseMusicTrack(track.id)}
+      onPurchase={async (track) => {
+        const result = await purchaseMusicTrack(track.id);
+        await refreshProfile();
+        return { alreadyOwned: result.alreadyOwned };
+      }}
       onCache={cacheMusicTrackOffline}
       onRemoveCache={removeMusicTrackOffline}
       onListOffline={listOfflineMusicTracks}
@@ -185,6 +191,8 @@ function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
       onUpload={publishMusicTrack}
       onDeleteUpload={removeMusicTrack}
       onOpenWallet={() => router.push("/app/afupay")}
+      onOpenPlans={() => router.push("/premium")}
+      canMonetize={canMonetize}
     />
   );
 }

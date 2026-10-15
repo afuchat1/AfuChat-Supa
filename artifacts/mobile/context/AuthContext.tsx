@@ -31,6 +31,7 @@ import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync, stopOfflineSync } from "@/lib/offlineSync";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
 import { safeRouter } from "@/lib/navUtils";
+import { isVerifiedCreator as resolveCreatorVerification } from "@/lib/creatorEntitlements";
 
 type Profile = {
   id: string;
@@ -82,6 +83,7 @@ type AuthContextType = {
   profile: Profile | null;
   subscription: Subscription | null;
   isPremium: boolean;
+  isVerifiedCreator: boolean;
   equippedGoods: Set<string>;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -95,6 +97,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   subscription: null,
   isPremium: false,
+  isVerifiedCreator: false,
   equippedGoods: new Set(),
   loading: true,
   signOut: async () => {},
@@ -1031,6 +1034,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Premium status is based only on an active paid subscription.
   const isPremium = subscription !== null;
+  const isVerifiedCreator = resolveCreatorVerification(profile?.is_verified, subscription);
 
   const contextValue = useMemo(
     () => ({
@@ -1039,13 +1043,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       subscription,
       isPremium,
+      isVerifiedCreator,
       equippedGoods,
       loading,
       signOut,
       refreshProfile,
       patchProfile,
     }),
-    [session, user, profile, subscription, isPremium, equippedGoods, loading, signOut]
+    [session, user, profile, subscription, isPremium, isVerifiedCreator, equippedGoods, loading, signOut]
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import { getSubscriptionPrice } from "@/lib/creatorEntitlements";
 
 // ── Currency helpers ─────────────────────────────────────────────────────────
 
@@ -83,12 +84,6 @@ type Plan = {
   tier: string;
 };
 
-const FALLBACK_PRICES: Record<string, number> = {
-  silver: 500,
-  gold: 1200,
-  platinum: 2500,
-};
-
 type TierCfg = {
   color: string;
   emoji: string;
@@ -98,17 +93,28 @@ type TierCfg = {
 };
 
 const TIER_CONFIG: Record<string, TierCfg> = {
+  free: {
+    color: "#8D96A8",
+    emoji: "○",
+    badge: "FREE",
+    tagline: "Core AfuChat access",
+    sections: [
+      { icon: "sparkles", title: "AfuAI", items: ["10 AI messages per day"] },
+      { icon: "people", title: "Social", items: ["Buy usernames and music"] },
+      { icon: "diamond", title: "Plan", items: ["No monthly charge"] },
+    ],
+  },
   silver: {
     color: "#8E9BB5",
-    emoji: "🥈",
-    badge: "SILVER",
-    tagline: "Essential AI & privacy tools",
+    emoji: "✓",
+    badge: "STANDARD",
+    tagline: "Verified access for creators",
     sections: [
       {
         icon: "checkmark-circle-outline",
         title: "AfuAI",
         items: [
-          "50 AI messages / day",
+          "Unlimited AfuAI access",
           "Message Translation",
           "Voice → Text transcription",
           "Text → Speech playback",
@@ -133,6 +139,9 @@ const TIER_CONFIG: Record<string, TierCfg> = {
           "3 Groups · 3 Channels",
           "5 Stories per day",
           "Red Envelope sends & claims",
+          "Eligibility to sell one username",
+          "Eligibility to sell music on AfuMusic",
+          "Priority feed access",
         ],
       },
       {
@@ -144,8 +153,8 @@ const TIER_CONFIG: Record<string, TierCfg> = {
   },
   gold: {
     color: "#C8923A",
-    emoji: "🥇",
-    badge: "GOLD",
+    emoji: "★",
+    badge: "PRO",
     tagline: "Power tools for creators",
     sections: [
       {
@@ -162,6 +171,9 @@ const TIER_CONFIG: Record<string, TierCfg> = {
         icon: "construct",
         title: "Power Tools",
         items: [
+          "Message translation, voice-to-text and text-to-speech",
+          "Chat folders, temporary chat, auto-reply and reminders",
+          "Edit history and advanced reactions",
           "Chat Export (PDF / TXT / JSON)",
           "Split Screen (Web)",
           "Group Roles System",
@@ -174,7 +186,9 @@ const TIER_CONFIG: Record<string, TierCfg> = {
         items: [
           "10 Groups · 10 Channels",
           "15 Stories per day",
-  "Creator Studio: Monetise posts",
+          "Red Envelope sends & claims",
+          "Creator Studio: Monetise posts",
+          "Eligibility to sell one username and music",
           "Prestige Status",
         ],
       },
@@ -182,7 +196,10 @@ const TIER_CONFIG: Record<string, TierCfg> = {
         icon: "diamond",
         title: "Perks",
         items: [
-          "Everything in Silver",
+          "Verified Badge",
+          "Ad-free experience",
+          "Basic and custom chat themes",
+          "Verified creator eligibility",
           "Custom chat themes",
           "Priority in Discover",
         ],
@@ -219,7 +236,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
         icon: "diamond",
         title: "Elite Perks",
         items: [
-          "Everything in Gold",
+          "Everything in Pro",
           "Priority Support",
           "Early access to features",
           "Exclusive Platinum badge & ring",
@@ -229,7 +246,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
   },
 };
 
-const TIERS = ["silver", "gold", "platinum"] as const;
+const PAID_TIERS = ["silver", "gold", "platinum"] as const;
 
 function durationLabel(days: number) {
   if (days >= 365) return `${Math.round(days / 365)} yr`;
@@ -244,11 +261,12 @@ export default function PremiumScreen() {
   const { profile, subscription, isPremium, refreshProfile, user } = useAuth();
   const insets = useSafeAreaInsets();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [activeTier, setActiveTier] = useState<string>("gold");
+  const [activeTier, setActiveTier] = useState<string>("free");
   const [loading, setLoading] = useState(true);
   const [subscribing, setSubscribing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const subscribeLockRef = useRef(false);
 
   const loadPlans = useCallback(async () => {
     const { data } = await supabase
@@ -257,12 +275,10 @@ export default function PremiumScreen() {
       .eq("is_active", true)
       .order("acoin_price", { ascending: true });
     if (data) {
-      // Prices are authoritative in the database. Never patch or write them
-      // from the client: doing so lets a stale client change billing data.
       const loadedPlans = data as Plan[];
       setPlans(loadedPlans);
       const ct = subscription?.plan_tier;
-      setActiveTier(ct && TIER_CONFIG[ct] ? ct : "gold");
+      setActiveTier(ct && TIER_CONFIG[ct] ? ct : "free");
     }
     setLoading(false);
   }, [subscription]);
@@ -281,77 +297,124 @@ export default function PremiumScreen() {
   const selectedPlan = plans.find((p) => p.tier === activeTier);
   const cfg = TIER_CONFIG[activeTier];
   const tierColor = cfg?.color ?? colors.accent;
-  const isCurrentPlan = isPremium && subscription?.plan_tier === activeTier;
+  const isCurrentPlan = activeTier === "free"
+    ? !isPremium
+    : isPremium && subscription?.plan_tier === activeTier;
   const isSwitching = isPremium && !isCurrentPlan && !!selectedPlan;
   const daysLeft = subscription
     ? Math.max(0, Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / 86400000))
     : 0;
-  const acoinPrice = selectedPlan?.acoin_price ?? 0;
-  const usdPrice = fmtUSD(acoinPrice);
-  const localPrice = localLine(acoinPrice, profile?.country);
+  const acoinPrice = activeTier === "free"
+    ? 0
+    : getSubscriptionPrice(activeTier, selectedPlan?.acoin_price) ?? selectedPlan?.acoin_price ?? 0;
+  const usdPrice = activeTier === "free" ? "$0" : fmtUSD(acoinPrice);
+  const localPrice = activeTier === "free" ? null : localLine(acoinPrice, profile?.country);
+  const tierOptions = subscription?.plan_tier === "platinum"
+    ? ["free", ...PAID_TIERS]
+    : ["free", "silver", "gold"];
 
   async function handleSubscribe() {
-    if (!profile || !user || !selectedPlan) return;
-    if ((profile.acoin || 0) < selectedPlan.acoin_price) {
-      showAlert("Insufficient ACoin", `You need ${selectedPlan.acoin_price} AC but have ${profile.acoin || 0}. Top up your wallet.`, [
+    if (subscribeLockRef.current || subscribing) return;
+    if (activeTier === "free") {
+      if (isPremium) void handleCancel();
+      return;
+    }
+    if (!profile || !user || !selectedPlan) {
+      showAlert("Plan unavailable", "This plan is not available right now. Try again later.");
+      return;
+    }
+    const price = getSubscriptionPrice(activeTier, selectedPlan.acoin_price);
+    if (price === null) {
+      showAlert("Plan unavailable", "This plan has no valid price configured.");
+      return;
+    }
+    if ((profile.acoin || 0) < price) {
+      showAlert("Insufficient ACoin", `You need ${price} AC but have ${profile.acoin || 0}. Top up your wallet.`, [
         { text: "Cancel", style: "cancel" },
         { text: "Top Up", onPress: () => router.push("/app/afupay?section=topup" as any) },
       ]);
       return;
     }
+    subscribeLockRef.current = true;
     showAlert(
       isSwitching ? "Switch Plan" : "Confirm Subscription",
       isSwitching
-        ? `Switch to ${selectedPlan.name} for ${acoinPrice} AC?\nCurrent plan cancels immediately.`
-        : `Subscribe to ${selectedPlan.name} for ${acoinPrice} AC (${usdPrice}) for ${durationLabel(selectedPlan.duration_days)}.`,
+        ? `Switch to ${cfg?.badge ?? selectedPlan.name} for ${price} AC?\nCurrent plan cancels immediately.`
+        : `Subscribe to ${cfg?.badge ?? selectedPlan.name} for ${price} AC (${fmtUSD(price)}) for ${durationLabel(selectedPlan.duration_days)}.`,
       [
-        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => {
+            subscribeLockRef.current = false;
+            setSubscribing(false);
+          },
+        },
         {
           text: isSwitching ? "Switch" : "Subscribe",
           onPress: async () => {
             setSubscribing(true);
-            const { error: deductErr } = await supabase
-              .rpc("deduct_acoin", { p_user_id: profile.id, p_amount: selectedPlan.acoin_price })
-              .maybeSingle();
-            if (deductErr) {
-              showAlert("Error", "Could not deduct ACoin. Check your balance.");
+            let deducted = false;
+            try {
+              const { data: deduction, error: deductErr } = await supabase
+                .rpc("deduct_acoin", { p_user_id: profile.id, p_amount: price })
+                .maybeSingle();
+              if (deductErr || (deduction as any)?.success !== true) {
+                showAlert("Subscription not completed", (deduction as any)?.message || "Could not deduct ACoin. Check your balance and try again.");
+                return;
+              }
+              deducted = true;
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + selectedPlan.duration_days);
+              const { error: subErr } = await supabase.from("user_subscriptions").upsert({
+                user_id: profile.id,
+                plan_id: selectedPlan.id,
+                started_at: new Date().toISOString(),
+                expires_at: expiresAt.toISOString(),
+                is_active: true,
+                acoin_paid: price,
+              }, { onConflict: "user_id" });
+              if (subErr) {
+                await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: price });
+                deducted = false;
+                showAlert("Subscription not activated", "The plan could not be activated. ACoin was refunded.");
+                return;
+              }
+              deducted = false;
+              const { error: ledgerError } = await supabase.from("acoin_transactions").insert({
+                user_id: profile.id,
+                amount: -price,
+                transaction_type: isSwitching ? "subscription_switch" : "subscription",
+                metadata: { plan_name: cfg?.badge ?? selectedPlan.name, plan_tier: selectedPlan.tier, duration_days: selectedPlan.duration_days },
+              });
+              let profileRefreshed = true;
+              try {
+                await refreshProfile();
+              } catch {
+                profileRefreshed = false;
+              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showAlert(
+                isSwitching ? "Plan switched" : `${cfg?.badge ?? selectedPlan.name} is active`,
+                ledgerError || !profileRefreshed
+                  ? `Your plan is active, but ${ledgerError ? "AfuPay could not record this transaction yet" : "your account balance or subscription status did not refresh"}.`
+                  : `${cfg?.badge ?? selectedPlan.name} is active for ${durationLabel(selectedPlan.duration_days)}.`,
+                [{ text: "Done", onPress: () => router.back() }]
+              );
+            } catch (error) {
+              if (deducted) {
+                await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: price }).catch(() => {});
+              }
+              showAlert("Subscription not completed", error instanceof Error ? error.message : "The transaction could not be completed.");
+            } finally {
+              subscribeLockRef.current = false;
               setSubscribing(false);
-              return;
             }
-            const expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + selectedPlan.duration_days);
-            const { error: subErr } = await supabase.from("user_subscriptions").upsert({
-              user_id: profile.id,
-              plan_id: selectedPlan.id,
-              started_at: new Date().toISOString(),
-              expires_at: expiresAt.toISOString(),
-              is_active: true,
-              acoin_paid: selectedPlan.acoin_price,
-            }, { onConflict: "user_id" });
-            if (subErr) {
-              await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: selectedPlan.acoin_price }).then(null, () => {});
-              showAlert("Error", "Could not activate subscription. ACoin refunded.");
-              setSubscribing(false);
-              return;
-            }
-            await supabase.from("acoin_transactions").insert({
-              user_id: profile.id,
-              amount: -selectedPlan.acoin_price,
-              transaction_type: isSwitching ? "subscription_switch" : "subscription",
-              metadata: { plan_name: selectedPlan.name, plan_tier: selectedPlan.tier, duration_days: selectedPlan.duration_days },
-            });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            await refreshProfile();
-            showAlert(
-              isSwitching ? "Plan Switched!" : "Welcome to Premium! 🎉",
-              `${selectedPlan.name} is active for ${durationLabel(selectedPlan.duration_days)}.`,
-              [{ text: "Awesome!", onPress: () => router.back() }]
-            );
-            setSubscribing(false);
           },
         },
       ]
     );
+    setSubscribing(true);
   }
 
   async function handleCancel() {
@@ -378,7 +441,7 @@ export default function PremiumScreen() {
             await refreshProfile();
             setCancelling(false);
             showAlert("Cancelled", "You are now on the free plan.", [
-              { text: "OK", onPress: () => setActiveTier("gold") },
+              { text: "OK", onPress: () => setActiveTier("free") },
             ]);
           },
         },
@@ -447,10 +510,12 @@ export default function PremiumScreen() {
 
         {/* Tier tabs */}
         <View style={[s.tabs, { borderBottomColor: sep }]}>
-          {TIERS.map((tier) => {
+          {tierOptions.map((tier) => {
             const tc = TIER_CONFIG[tier];
             const active = activeTier === tier;
-            const isCurrent = isPremium && subscription?.plan_tier === tier;
+            const isCurrent = tier === "free"
+              ? !isPremium
+              : isPremium && subscription?.plan_tier === tier;
             return (
               <Pressable
                 key={tier}
@@ -479,7 +544,7 @@ export default function PremiumScreen() {
                   <Text style={[s.priceUnit, { color: colors.textMuted }]}>AC</Text>
                   <View style={[s.durPill, { backgroundColor: tierColor + "18" }]}>
                     <Text style={[s.durTxt, { color: tierColor }]}>
-                      / {selectedPlan ? durationLabel(selectedPlan.duration_days) : "30 mo"}
+                      / {selectedPlan ? durationLabel(selectedPlan.duration_days) : activeTier === "free" ? "no charge" : "unavailable"}
                     </Text>
                   </View>
                 </View>
@@ -492,7 +557,7 @@ export default function PremiumScreen() {
                 </View>
                 <Text style={[s.rateNote, { color: isDark ? "#444" : "#ccc" }]}>1 AC = $0.01</Text>
               </View>
-              {selectedPlan?.grants_verification && (
+              {["silver", "gold", "platinum"].includes(activeTier) && (
                 <View style={[s.verBadge, { backgroundColor: tierColor + "15", borderColor: tierColor + "40" }]}>
                   <Ionicons name="shield-checkmark" size={13} color={tierColor} />
                   <Text style={[s.verTxt, { color: tierColor }]}>Verified</Text>
@@ -554,7 +619,7 @@ export default function PremiumScreen() {
 
       {/* Sticky CTA */}
       <View style={[s.cta, { paddingBottom: insets.bottom + 14, backgroundColor: colors.background, borderTopColor: sep }]}>
-        {selectedPlan && !isCurrentPlan && (
+        {activeTier !== "free" && selectedPlan && !isCurrentPlan && (
           <View style={[s.costRow, { borderColor: sep }]}>
             <View style={s.costCol}>
               <Text style={[s.costLbl, { color: colors.textMuted }]}>Balance</Text>
@@ -579,14 +644,23 @@ export default function PremiumScreen() {
           <View style={[s.currentBar, { backgroundColor: tierColor + "14", borderColor: tierColor + "33" }]}>
             <Text style={s.currentBarEmoji}>{cfg?.emoji}</Text>
             <Text style={[s.currentBarTxt, { color: tierColor }]}>
-              {subscription?.plan_name} · {daysLeft} days remaining
+              {activeTier === "free" ? "You are on the Free plan" : `${cfg?.badge} · ${daysLeft} days remaining`}
             </Text>
           </View>
-        ) : (
+        ) : activeTier === "free" && isPremium ? (
+          <TouchableOpacity
+            style={[s.ctaBtn, { backgroundColor: tierColor }, (subscribing || cancelling) && { opacity: 0.55 }]}
+            onPress={handleCancel}
+            disabled={subscribing || cancelling}
+            activeOpacity={0.85}
+          >
+            <Text style={s.ctaBtnTxt}>Switch to Free plan</Text>
+          </TouchableOpacity>
+        ) : selectedPlan ? (
           <TouchableOpacity
             style={[s.ctaBtn, { backgroundColor: tierColor }, (subscribing || cancelling) && { opacity: 0.55 }]}
             onPress={handleSubscribe}
-            disabled={subscribing || cancelling || !selectedPlan}
+            disabled={subscribing || cancelling}
             activeOpacity={0.85}
           >
             {subscribing ? (
@@ -602,9 +676,13 @@ export default function PremiumScreen() {
               </>
             )}
           </TouchableOpacity>
+        ) : (
+          <View style={[s.currentBar, { backgroundColor: cardBg, borderColor: sep }]}>
+            <Text style={[s.currentBarTxt, { color: colors.textMuted }]}>This plan is not available for purchase right now.</Text>
+          </View>
         )}
 
-        {selectedPlan && !isCurrentPlan && (
+        {activeTier !== "free" && selectedPlan && !isCurrentPlan && (
           <Text style={[s.legal, { color: isDark ? "#444" : "#bbb" }]}>
             {isSwitching
               ? "Switching cancels your current plan immediately. No refund."

@@ -46,7 +46,7 @@ export type AfuMusicTrack = {
 export type AfuMusicCallbacks = {
   onBrowse?: () => Promise<AfuMusicTrack[]>;
   onSearch?: (query: string) => Promise<AfuMusicTrack[]>;
-  onPurchase?: (track: AfuMusicTrack) => Promise<void>;
+  onPurchase?: (track: AfuMusicTrack) => Promise<void | { alreadyOwned?: boolean }>;
   onCache?: (track: AfuMusicTrack) => Promise<void>;
   onRemoveCache?: (track: AfuMusicTrack) => Promise<void>;
   onListOffline?: () => Promise<AfuMusicTrack[]>;
@@ -63,10 +63,12 @@ export type AfuMusicCallbacks = {
   }) => Promise<AfuMusicTrack | void>;
   onDeleteUpload?: (track: AfuMusicTrack) => Promise<void>;
   onOpenWallet?: () => void;
+  onOpenPlans?: () => void;
 };
 
 type Props = AfuMusicCallbacks & {
   initialSection?: MusicSection;
+  canMonetize?: boolean;
 };
 
 const INK = "#19172F";
@@ -76,76 +78,6 @@ const GOLD = "#D8A746";
 const CANVAS = "#F7F1E9";
 const PAPER = "#FFF9F1";
 const MUTED = "#8D847B";
-
-const SEED_TRACKS: AfuMusicTrack[] = [
-  {
-    id: "seed-quiet-morning",
-    title: "Quiet Morning",
-    artist: "Mara Sol",
-    handle: "@marasol",
-    genre: "Ambient",
-    duration: "4:18",
-    plays: 18200,
-    price: 0,
-    coverColor: "#252143",
-    accentColor: "#F7BB75",
-    isFeatured: true,
-    createdAt: "Today",
-  },
-  {
-    id: "seed-afterimage",
-    title: "Afterimage",
-    artist: "Kofi North",
-    handle: "@kofinorth",
-    genre: "Electronic",
-    duration: "3:42",
-    plays: 9400,
-    price: 28,
-    coverColor: "#E85949",
-    accentColor: "#19172F",
-    isFeatured: true,
-    createdAt: "Yesterday",
-  },
-  {
-    id: "seed-blue-hour",
-    title: "Blue Hour, Side A",
-    artist: "June Ayo",
-    handle: "@juneayo",
-    genre: "R&B",
-    duration: "5:06",
-    plays: 12100,
-    price: 42,
-    coverColor: "#25356D",
-    accentColor: "#E9C35B",
-    createdAt: "May 18",
-  },
-  {
-    id: "seed-unfolding",
-    title: "Unfolding",
-    artist: "Nia Vale",
-    handle: "@niavale",
-    genre: "Acoustic",
-    duration: "2:57",
-    plays: 6300,
-    price: 16,
-    coverColor: "#E6B75E",
-    accentColor: "#F06451",
-    createdAt: "May 12",
-  },
-  {
-    id: "seed-small-hours",
-    title: "Small Hours",
-    artist: "Owen Sunday",
-    handle: "@owensunday",
-    genre: "Lo-fi",
-    duration: "3:31",
-    plays: 4600,
-    price: 24,
-    coverColor: "#6D7B77",
-    accentColor: "#F7E6C1",
-    createdAt: "May 09",
-  },
-];
 
 const GENRES = ["All", "Ambient", "Electronic", "R&B", "Acoustic", "Lo-fi"];
 
@@ -404,7 +336,9 @@ export default function AfuMusicApp({
   onUpload,
   onDeleteUpload,
   onOpenWallet,
+  onOpenPlans,
   acoinBalance,
+  canMonetize = false,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
   const [section, setSection] = useState<MusicSection>(initialSection);
@@ -431,7 +365,8 @@ export default function AfuMusicApp({
     setLoadError(false);
     setLoading(true);
     try {
-      const result = onBrowse ? await onBrowse() : SEED_TRACKS;
+      if (!onBrowse) throw new Error("AfuMusic is not connected to the catalog.");
+      const result = await onBrowse();
       setTracks(result);
       setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
     } catch {
@@ -566,6 +501,7 @@ export default function AfuMusicApp({
 
   const confirmPurchase = useCallback(async () => {
     if (!purchaseTrack) return;
+    if (purchasing) return;
     const price = Math.max(0, purchaseTrack.price);
     if (price > 0 && typeof acoinBalance === "number" && acoinBalance < price) {
       showAlert(
@@ -580,18 +516,25 @@ export default function AfuMusicApp({
     }
     setPurchasing(true);
     try {
-      if (onPurchase) await onPurchase(purchaseTrack);
+      if (!onPurchase) throw new Error("AfuPay purchase is unavailable.");
+      const result = await onPurchase(purchaseTrack);
       setOwnedIds((ids) => [...ids, purchaseTrack.id]);
       setTracks((current) => current.map((track) => (
         track.id === purchaseTrack.id ? { ...track, isOwned: true } : track
       )));
       setPurchaseTrack(null);
+      showAlert(
+        result?.alreadyOwned ? "Already in your library" : "Purchase complete",
+        result?.alreadyOwned
+          ? `${purchaseTrack.title} was already owned, so no ACoin was charged.`
+          : `${purchaseTrack.title} is now in your library and available offline.`,
+      );
     } catch {
       showAlert("Purchase could not be completed", "Your ACoin balance was not changed. Try again.");
     } finally {
       setPurchasing(false);
     }
-  }, [acoinBalance, onOpenWallet, onPurchase, purchaseTrack]);
+  }, [acoinBalance, onOpenWallet, onPurchase, purchaseTrack, purchasing]);
 
   const pickAudio = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -603,6 +546,14 @@ export default function AfuMusicApp({
   }, []);
 
   const submitUpload = useCallback(async () => {
+    if (!canMonetize) {
+      showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to sell music.", [
+        { text: "Not now", style: "cancel" },
+        ...(onOpenPlans ? [{ text: "View plans", onPress: onOpenPlans }] : []),
+      ]);
+      return;
+    }
+    if (uploading) return;
     if (!uploadTitle.trim() || !uploadFile) {
       showAlert("Add a title and audio", "Choose the track you want to publish before continuing.");
       return;
@@ -618,19 +569,8 @@ export default function AfuMusicApp({
         mimeType: uploadFile.mimeType,
         fileSize: uploadFile.size,
       };
-      const result = onUpload ? await onUpload(payload) : {
-        id: `local-${Date.now()}`,
-        title: payload.title,
-        artist: "You",
-        handle: "@you",
-        genre: payload.genre,
-        price: payload.price,
-        duration: "—",
-        coverColor: INK,
-        accentColor: CORAL,
-        audioUrl: payload.fileUri,
-        createdAt: "Just now",
-      };
+      if (!onUpload) throw new Error("AfuMusic publishing is unavailable.");
+      const result = await onUpload(payload);
       if (result) {
         setTracks((current) => [{
           ...result,
@@ -647,7 +587,7 @@ export default function AfuMusicApp({
     } finally {
       setUploading(false);
     }
-  }, [onUpload, uploadFile, uploadGenre, uploadPrice, uploadTitle]);
+  }, [canMonetize, onOpenPlans, onUpload, uploadFile, uploadGenre, uploadPrice, uploadTitle, uploading]);
 
   const renderTrack = useCallback(({ item }: { item: AfuMusicTrack }) => (
     <TrackRow
@@ -749,7 +689,13 @@ export default function AfuMusicApp({
           <Text style={styles.sectionTitle}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
-          <Pressable onPress={() => setUploadOpen(true)} style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
+          <Pressable
+            onPress={() => {
+              if (canMonetize) setUploadOpen(true);
+              else void submitUpload();
+            }}
+            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+          >
             <Ionicons name="add" size={19} color={PAPER} />
             <Text style={styles.addButtonText}>Publish</Text>
           </Pressable>
@@ -845,7 +791,7 @@ export default function AfuMusicApp({
               <View style={styles.filePickerCopy}><Text style={styles.filePickerTitle}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={styles.filePickerSub}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
-            <Pressable onPress={submitUpload} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
+            <Pressable onPress={() => void submitUpload()} disabled={uploading || !canMonetize} style={({ pressed }) => [styles.publishButton, (pressed || !canMonetize) && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>

@@ -216,15 +216,32 @@ export default function AfuPayApp({
         { data: xpSent },
         { data: xpReceived },
         { data: acoinTx },
+        { data: musicTx },
         { data: settings },
       ] = await Promise.all([
         supabase.from("xp_transfers").select("id,amount,created_at,status,receiver_id,profiles!xp_transfers_receiver_id_fkey(handle)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(40),
         supabase.from("xp_transfers").select("id,amount,created_at,status,sender_id,profiles!xp_transfers_sender_id_fkey(handle)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(40),
         supabase.from("acoin_transactions").select("id,amount,transaction_type,created_at,metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(60),
+        supabase.from("music_transactions").select("id,track_id,buyer_id,creator_id,amount_acoin,created_at").or(`buyer_id.eq.${user.id},creator_id.eq.${user.id}`).order("created_at", { ascending: false }).limit(60),
         supabase.from("currency_settings").select("nexa_to_acoin_rate,conversion_fee_percent").limit(1).single(),
       ]);
       if (settings) setCurrSettings(settings as any);
       const all: Tx[] = [];
+      const musicRows = musicTx || [];
+      const musicCounterpartyIds = [...new Set(musicRows.map((t: any) => t.buyer_id === user.id ? t.creator_id : t.buyer_id))];
+      const musicTrackIds = [...new Set(musicRows.map((t: any) => t.track_id).filter(Boolean))];
+      const [{ data: musicProfiles }, { data: musicTracks }] = musicRows.length
+        ? await Promise.all([
+            musicCounterpartyIds.length
+              ? supabase.from("profiles").select("id,handle,display_name").in("id", musicCounterpartyIds)
+              : Promise.resolve({ data: [] }),
+            musicTrackIds.length
+              ? supabase.from("music_tracks").select("id,title").in("id", musicTrackIds)
+              : Promise.resolve({ data: [] }),
+          ])
+        : [{ data: [] }, { data: [] }];
+      const musicProfileMap = new Map((musicProfiles || []).map((p: any) => [p.id, p]));
+      const musicTrackMap = new Map((musicTracks || []).map((t: any) => [t.id, t.title]));
       const acoinLabels: Record<string, { label: string; icon: string }> = {
         conversion: { label: "Nexa → ACoin", icon: "swap-horizontal" },
         subscription: { label: "Premium Subscription", icon: "diamond" },
@@ -249,7 +266,40 @@ export default function AfuPayApp({
       });
       (acoinTx || []).forEach((t: any) => {
         const m = acoinLabels[t.transaction_type];
-        all.push({ id: t.id, type: t.transaction_type, label: m?.label || t.transaction_type.replace(/_/g, " "), icon: m?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"), color: t.amount > 0 ? "#34C759" : "#FF9500", amount: t.amount, currency: "acoin", created_at: t.created_at, status: "completed" });
+        const username = t.metadata?.item_type === "username" ? String(t.metadata?.username || "") : "";
+        const isUsernamePurchase = username && t.transaction_type === "marketplace_purchase";
+        const isUsernameSale = username && t.transaction_type === "marketplace_sale";
+        all.push({
+          id: t.id,
+          type: t.transaction_type,
+          label: isUsernamePurchase ? "Username Purchase" : isUsernameSale ? "Username Sale" : m?.label || t.transaction_type.replace(/_/g, " "),
+          icon: isUsernamePurchase ? "at" : isUsernameSale ? "at" : m?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"),
+          color: t.amount > 0 ? "#34C759" : "#FF9500",
+          amount: t.amount,
+          currency: "acoin",
+          created_at: t.created_at,
+          counterparty: username ? `@${username}` : undefined,
+          status: "completed",
+        });
+      });
+      musicRows.forEach((t: any) => {
+        const isBuyer = t.buyer_id === user.id;
+        const otherId = isBuyer ? t.creator_id : t.buyer_id;
+        const other = musicProfileMap.get(otherId) as any;
+        const title = musicTrackMap.get(t.track_id);
+        const amount = Math.max(0, Number(t.amount_acoin) || 0);
+        all.push({
+          id: `music-${t.id}`,
+          type: isBuyer ? "music_purchase" : "music_sale",
+          label: isBuyer ? "Music Purchase" : "Music Sale",
+          icon: isBuyer ? "musical-notes" : "musical-notes",
+          color: isBuyer ? "#FF9500" : "#34C759",
+          amount: isBuyer ? -amount : amount,
+          currency: "acoin",
+          created_at: t.created_at,
+          counterparty: `${other?.handle ? `@${other.handle}` : other?.display_name || "AfuMusic"}${title ? ` · ${title}` : ""}`,
+          status: "completed",
+        });
       });
       all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setTransactions(all);
@@ -277,6 +327,8 @@ export default function AfuPayApp({
     if (!user) return;
     const ch = supabase.channel(`afupay:${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "music_transactions", filter: `buyer_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "music_transactions", filter: `creator_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "money_requests", filter: `target_id=eq.${user.id}` }, () => loadPendingCount())
       .subscribe();

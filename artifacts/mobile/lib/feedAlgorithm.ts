@@ -244,6 +244,7 @@ export type FeedSignals = {
   isFollowing: boolean;
   authorInteractionCount: number;
   isVerified: boolean;
+  isPriorityCreator?: boolean;
   isOrgVerified: boolean;
   hasImages: boolean;
   sameCountry: boolean;
@@ -332,6 +333,7 @@ export function computeFeedScore(signals: FeedSignals): number {
     (signals.contentLength > 150 ? 3 : 0) +
     (signals.postType === "video" ? 4 : 0) +
     (signals.postType === "article" ? 2 : 0);
+  const priorityCreatorScore = signals.isPriorityCreator ? 35 : 0;
 
   // ── Diversity penalty: cap same author in one batch ───────────────────────
   const diversityPenalty = signals.authorPostCountInFeed > 2
@@ -369,7 +371,7 @@ export function computeFeedScore(signals: FeedSignals): number {
     freshnessScore + trendingScore + burstScore + engagementScore +
     engagementRateScore + completionScore + hashtagScore +
     interestScore + affinityScore + qualityScore +
-    diversityPenalty + seenPenalty + notInterestedPenalty + randomJitter
+    priorityCreatorScore + diversityPenalty + seenPenalty + notInterestedPenalty + randomJitter
   );
 }
 

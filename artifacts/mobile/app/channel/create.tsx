@@ -133,7 +133,7 @@ export default function CreateChannelScreen() {
       const { data: currentCount } = await supabase.rpc("count_my_channels");
       const current = Number(currentCount ?? 0);
       if (current >= limit) {
-        const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
+        const nextTier = tier === "free" ? "Standard" : tier === "silver" ? "Pro" : "Platinum";
         showAlert(
           "Channel limit reached",
           `You can create up to ${limit} channel${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to broadcast to more audiences.`,

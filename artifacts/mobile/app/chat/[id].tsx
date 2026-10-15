@@ -122,6 +122,7 @@ import { GIPHY_API_KEY } from "@/lib/env";
 import { BlurView } from "expo-blur";
 import WallpaperOverlay from "@/components/chat/WallpaperOverlay";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
+import { getSubscriptionPrice } from "@/lib/creatorEntitlements";
 import EmojiStickerPicker from "@/components/chat/EmojiStickerPicker";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
@@ -4443,27 +4444,37 @@ function ChatScreen() {
       }
       case "subscribe": {
         const { tier } = ea.params;
-        const { data: plan } = await supabase.from("subscription_plans").select("id, name, tier, acoin_price, duration_days").eq("tier", tier.toLowerCase()).eq("is_active", true).single();
+        const requestedTier = String(tier || "").toLowerCase();
+        const planTier = requestedTier === "standard" ? "silver" : requestedTier === "pro" ? "gold" : requestedTier;
+        const { data: plan } = await supabase.from("subscription_plans").select("id, name, tier, acoin_price, duration_days").eq("tier", planTier).eq("is_active", true).single();
         if (!plan) return { success: false, message: `Plan '${tier}' not found` };
         const p = plan as any;
+        const price = getSubscriptionPrice(p.tier, p.acoin_price);
+        if (price === null) return { success: false, message: "This subscription has no valid price configured." };
         const live = await freshProfile();
-        if (!live || (live.acoin || 0) < p.acoin_price) return { success: false, message: `Insufficient ACoin. Need ${p.acoin_price}` };
-        const { error: dedErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: p.acoin_price }).maybeSingle();
-        if (dedErr) return { success: false, message: "Could not deduct ACoin" };
+        if (!live || (live.acoin || 0) < price) return { success: false, message: `Insufficient ACoin. Need ${price}` };
+        const { data: deduction, error: dedErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: price }).maybeSingle();
+        if (dedErr || (deduction as any)?.success !== true) {
+          return { success: false, message: (deduction as any)?.message || "Could not deduct ACoin" };
+        }
         const exp = new Date(); exp.setDate(exp.getDate() + p.duration_days);
-        const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: user.id, plan_id: p.id, started_at: new Date().toISOString(), expires_at: exp.toISOString(), is_active: true, acoin_paid: p.acoin_price }, { onConflict: "user_id" });
+        const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: user.id, plan_id: p.id, started_at: new Date().toISOString(), expires_at: exp.toISOString(), is_active: true, acoin_paid: price }, { onConflict: "user_id" });
         if (subErr) {
           try {
-            await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: p.acoin_price });
+            await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: price });
           } catch {}
           return { success: false, message: "Could not activate subscription. ACoin was refunded." };
         }
-        const { error: txErr } = await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -p.acoin_price, transaction_type: "subscription", metadata: { plan_name: p.name, plan_tier: p.tier, duration_days: p.duration_days } });
-        if (txErr) {
-          // Entitlement is already active, so do not claim the purchase failed.
-          // The missing ledger row can be repaired by the server/admin audit.
-        }
-        return { success: true, message: `Subscribed to ${p.name}! Active for ${p.duration_days} days.`, invoice: { type: "Premium Subscription", date: new Date().toISOString(), amount: p.acoin_price, currency: "ACoin", reference: `SUB-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `${p.name}. ${p.duration_days} days` } };
+        const { error: txErr } = await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -price, transaction_type: "subscription", metadata: { plan_name: planTier === "silver" ? "Standard" : planTier === "gold" ? "Pro" : p.name, plan_tier: p.tier, duration_days: p.duration_days } });
+        const planName = planTier === "silver" ? "Standard" : planTier === "gold" ? "Pro" : p.name;
+        await refreshProfile().catch(() => {});
+        return {
+          success: true,
+          message: txErr
+            ? `${planName} is active for ${p.duration_days} days, but AfuPay could not record the transaction yet. Do not subscribe again.`
+            : `Subscribed to ${planName}! Active for ${p.duration_days} days.`,
+          invoice: { type: "Premium Subscription", date: new Date().toISOString(), amount: price, currency: "ACoin", reference: `SUB-${Date.now().toString(36).toUpperCase()}`, status: "Completed", description: `${planName}. ${p.duration_days} days` },
+        };
       }
       case "cancel_subscription": {
         const { error } = await supabase.rpc("cancel_my_subscription");
@@ -4924,8 +4935,8 @@ SPECIAL TAGS — append these at the end of your response when relevant:
   · send_acoin: {"handle":"username","amount":50}
   · follow: {"handle":"username"}
   · unfollow: {"handle":"username"}
-  · subscribe: {"tier":"silver"} — Silver · 500 ACoin (~$5) · 30 days · 50 AI msgs/day, verified badge, ad-free
-  · subscribe: {"tier":"gold"} — Gold · 1200 ACoin (~$12) · 30 days · 200 AI msgs/day, creator tools, priority discover
+  · subscribe: {"tier":"standard"} — Standard · 299 ACoin ($2.99)/month · verified badge, unlimited AfuAI, priority feed, one username listing, AfuMusic creator eligibility
+  · subscribe: {"tier":"pro"} — Pro · 599 ACoin ($5.99)/month · preserve the current Pro benefits, including 200 AfuAI messages/day and creator tools
   · subscribe: {"tier":"platinum"} — Platinum · 2500 ACoin (~$25) · 30 days · Unlimited AI, elite social, all perks
   · cancel_subscription: {}
   · convert_nexa: {"amount":100}
@@ -5686,12 +5697,14 @@ STRICT RULES:
       const aiTier = (subscription?.plan_tier as "free" | "silver" | "gold" | "platinum") || "free";
       const aiUsage = await getDailyUsage("afuai_messages", aiTier);
       if (!aiUsage.allowed) {
-        const nextTier = aiTier === "free" ? "Silver" : aiTier === "silver" ? "Gold" : "Platinum";
+        const nextTier = aiTier === "free" ? "Standard" : aiTier === "silver" ? "Pro" : "Platinum";
+        const tierLabel = aiTier === "silver" ? "Standard" : aiTier === "gold" ? "Pro" : aiTier === "platinum" ? "Platinum" : "Free";
+        const nextUsage = aiTier === "free" ? "unlimited" : aiTier === "silver" ? "200" : "unlimited";
         setMessages((prev) => [{
           id: `afuai_limit_${Date.now()}`,
           chat_id: activeChatId,
           sender_id: AFUAI_BOT_ID,
-          encrypted_content: `You've reached your ${aiUsage.limit} daily message limit on the ${aiTier === "free" ? "Free" : aiTier.charAt(0).toUpperCase() + aiTier.slice(1)} plan. Upgrade to ${nextTier} for ${aiTier === "free" ? "50" : aiTier === "silver" ? "200" : "unlimited"} messages per day.`,
+          encrypted_content: `You've reached your ${aiUsage.limit} daily message limit on the ${tierLabel} plan. Upgrade to ${nextTier} for ${nextUsage} messages per day.`,
           sent_at: new Date().toISOString(),
           sender: { display_name: "AfuAI", avatar_url: null, handle: "afuai" },
           reactions: [],
