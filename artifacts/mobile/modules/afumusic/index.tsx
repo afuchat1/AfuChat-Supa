@@ -510,9 +510,9 @@ export default function AfuMusicApp({
     />
   ), [cachedIds, handleCache, handleDeleteUpload, openTrack, ownedIds, playTrack, section]);
 
-  const sectionTitle = section === "discover" ? "Find your next repeat" :
-    section === "library" ? "Your listening library" :
-    section === "offline" ? "Ready without signal" : "Your studio";
+  const sectionTitle = section === "discover" ? "Discover" :
+    section === "library" ? "Your library" :
+    section === "offline" ? "Downloads" : "Your tracks";
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
@@ -525,7 +525,7 @@ export default function AfuMusicApp({
       >
       <View style={styles.topBar}>
         <View>
-          <Text style={[styles.wordmark, { color: colors.text }]}>Afu<Text style={[styles.wordmarkAccent, { color: accent }]}>Music</Text></Text>
+          <Text style={[styles.wordmark, { color: colors.text }]}></Text>
         </View>
         <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="flash" size={13} color={GOLD} />
@@ -549,19 +549,12 @@ export default function AfuMusicApp({
         {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable> : null}
       </View>
 
-      {section === "discover" && !query ? (
-        <View style={[styles.heroSection, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.heroTitle, { color: colors.text }]}>Your next favourite starts here.</Text>
-          <Text style={[styles.heroBody, { color: colors.textSecondary }]}>Discover independent artists, collect the tracks you love, and play them across AfuChat.</Text>
-        </View>
-      ) : null}
-
       {section === "discover" && !query && featuredTracks.length > 0 ? (
         <View style={styles.featuredBlock}>
           <View style={styles.featuredHeader}>
             <View>
-              <Text style={styles.sectionEyebrow}>EDITOR'S PICKS</Text>
-              <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured this week</Text>
+              <Text style={styles.sectionEyebrow}></Text>
+              <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured tracks</Text>
             </View>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>
@@ -578,7 +571,7 @@ export default function AfuMusicApp({
 
       <View style={styles.contentHeader}>
         <View>
-          <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : "YOUR NEXT LISTEN"}</Text>
+          <Text style={styles.sectionEyebrow}>{section === "studio" ? "" : ""}</Text>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
