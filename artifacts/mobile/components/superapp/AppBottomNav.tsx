@@ -10,6 +10,7 @@ export type AppNavItem = {
   key: string;
   label: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
+  activeIcon?: React.ComponentProps<typeof Ionicons>["name"];
   href: string;
 };
 
@@ -70,8 +71,8 @@ export default function AppBottomNav({ items, activeKey }: Props) {
                   <View style={[styles.activeIconOval, { backgroundColor: accent }]} />
                 )}
                 <Ionicons
-                  name={item.icon}
-                  size={21}
+                  name={active ? (item.activeIcon ?? item.icon) : item.icon}
+                  size={active ? 23 : 21}
                   color={active ? colors.bubbleText : colors.textMuted}
                 />
               </View>
