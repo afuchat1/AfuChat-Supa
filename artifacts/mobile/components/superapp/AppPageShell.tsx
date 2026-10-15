@@ -1,5 +1,5 @@
 import React from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import AppBottomNav, { type AppNavItem } from "./AppBottomNav";
 
@@ -98,7 +98,11 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
 // pages never become modal overlays or detached windows.
 
 export function getAppNav(appId: FullAppId) {
-  return NAV[appId];
+  const items = NAV[appId];
+  // Offline music caching uses the native file cache and is not available in browsers.
+  return appId === "afumusic" && Platform.OS === "web"
+    ? items.filter((item) => item.key !== "offline")
+    : items;
 }
 
 export function normalizeAppNavKey(section?: string) {
