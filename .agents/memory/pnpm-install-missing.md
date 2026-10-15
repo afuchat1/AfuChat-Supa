@@ -18,8 +18,8 @@ from `/home/runner/workspace` (the workspace root, not artifacts/mobile).
 
 If a frozen reinstall reports that the Expo version in the mobile manifest differs from the lockfile, use `CI=true pnpm install --no-frozen-lockfile` from the workspace root to reconcile it before restarting the workflow.
 
-If reinstalling fails with `ERR_PNPM_FETCH_403` for a locked transitive package, do not assume dependencies were restored or keep repeating the same install. Follow package-management's firewall recovery guidance for the blocked dependency before retrying the app workflow.
+If reinstalling fails with `ERR_PNPM_FETCH_403` for a locked transitive package, do not assume dependencies were restored or keep repeating the same install. Identify the parent dependency and follow package-management's firewall recovery guidance. A scoped override to the latest semver-compatible child version resolved this workspace's blocked package without changing Expo or React Native.
 
-**Why:** A dependency restore was blocked by the Replit package firewall while fetching a transitive package, leaving Expo unable to resolve a required plugin.
+**Why:** The Replit package firewall denied a locked transitive tarball, leaving Expo unable to resolve required plugins. The compatible child-version override let installation complete without changing the mobile framework.
 
-**How to apply:** Confirm the install completed successfully before restarting Expo; if it reports a firewall 403, identify the parent dependency and resolve that issue without changing registries or bypassing the firewall.
+**How to apply:** Check the parent's version range, use a scoped override only when the replacement satisfies it, regenerate the lockfile, and confirm installation succeeds before restarting the app. Do not change registries or bypass the firewall.
