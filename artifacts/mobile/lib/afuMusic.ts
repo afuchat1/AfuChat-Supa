@@ -191,29 +191,31 @@ export async function publishMusicTrack(input: {
   fileSize?: number;
 }) {
   const creatorId = await currentUserId();
-  const [{ data: creator, error: creatorError }, { data: activeSubscription, error: subscriptionError }] = await Promise.all([
-    supabase.from("profiles").select("is_verified").eq("id", creatorId).maybeSingle(),
-    supabase
-      .from("user_subscriptions")
-      .select("is_active,expires_at,subscription_plans(tier)")
-      .eq("user_id", creatorId)
-      .eq("is_active", true)
-      .gt("expires_at", new Date().toISOString())
-      .maybeSingle(),
-  ]);
-  if (creatorError || subscriptionError) throw new Error("Could not verify creator eligibility. Try again.");
-  const plan = (activeSubscription as any)?.subscription_plans;
-  if (!isVerifiedCreator(creator?.is_verified, activeSubscription ? {
-    is_active: activeSubscription.is_active,
-    expires_at: activeSubscription.expires_at,
-    plan_tier: Array.isArray(plan) ? plan[0]?.tier : plan?.tier,
-  } : null)) {
-    throw new Error("An active Standard or Pro plan, or an existing verified badge, is required to sell music.");
-  }
   const mimeType = input.mimeType || "audio/mpeg";
   if (!AUDIO_TYPES.has(mimeType)) throw new Error("Use an MP3, M4A, WAV, OGG, or AAC audio file.");
   if (!Number.isFinite(input.price) || input.price < 0 || input.price > 100000) {
     throw new Error("Choose a price from 0 to 100,000 ACoin.");
+  }
+  if (input.price > 0) {
+    const [{ data: creator, error: creatorError }, { data: activeSubscription, error: subscriptionError }] = await Promise.all([
+      supabase.from("profiles").select("is_verified").eq("id", creatorId).maybeSingle(),
+      supabase
+        .from("user_subscriptions")
+        .select("is_active,expires_at,subscription_plans(tier)")
+        .eq("user_id", creatorId)
+        .eq("is_active", true)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle(),
+    ]);
+    if (creatorError || subscriptionError) throw new Error("Could not verify creator eligibility. Try again.");
+    const plan = (activeSubscription as any)?.subscription_plans;
+    if (!isVerifiedCreator(creator?.is_verified, activeSubscription ? {
+      is_active: activeSubscription.is_active,
+      expires_at: activeSubscription.expires_at,
+      plan_tier: Array.isArray(plan) ? plan[0]?.tier : plan?.tier,
+    } : null)) {
+      throw new Error("An active Standard or Pro plan, or an existing verified badge, is required to sell music.");
+    }
   }
   let fileSize = Number(input.fileSize ?? 0);
   if (Platform.OS === "web" && (input.fileUri.startsWith("blob:") || input.fileUri.startsWith("data:"))) {
