@@ -28,6 +28,7 @@ interface AudioPlayerProps {
   waveColor?: string;
   backgroundColor?: string;
   onError?: () => void;
+  autoPlay?: boolean;
 }
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -351,7 +352,7 @@ function AudioPlayerActive({
   );
 }
 
-export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor, backgroundColor }: AudioPlayerProps) {
+export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor, backgroundColor, autoPlay = false }: AudioPlayerProps) {
   const [active, setActive] = useState(false);
   const playerIdRef = useRef<string | null>(null);
 
@@ -361,10 +362,11 @@ export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor, bac
       deactivate: () => setActive(false),
     });
     playerIdRef.current = id;
+    if (autoPlay) voicePlaybackCoordinator.play(id);
     return () => {
       voicePlaybackCoordinator.unregister(id);
     };
-  }, []);
+  }, [autoPlay]);
 
   if (!active) {
     return (

@@ -1,6 +1,5 @@
 import React from "react";
-import { Platform } from "react-native";
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
@@ -161,9 +160,8 @@ export default function FullAppRoute() {
     }),
   ) as Record<string, string>;
   if (!rawId || !isAppId(rawId)) return null;
-  if (rawId === "afumusic" && Platform.OS === "web") return <Redirect href="/" />;
   return (
-    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afumusic"}>
+    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)}>
       <AppContent appId={rawId} section={section} params={routeParams} />
     </AppPageShell>
   );

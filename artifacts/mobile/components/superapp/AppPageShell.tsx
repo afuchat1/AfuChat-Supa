@@ -1,5 +1,5 @@
 import React from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import AppBottomNav, { type AppNavItem } from "./AppBottomNav";
 
@@ -86,10 +86,10 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "saved", label: "Saved", icon: "bookmark-outline", href: "/app/afusaved" },
   ],
   afumusic: [
-    { key: "discover", label: "Discover", icon: "sparkles-outline", href: "/app/afumusic" },
-    { key: "library", label: "Library", icon: "albums-outline", href: "/app/afumusic?section=library" },
-    { key: "offline", label: "Offline", icon: "arrow-down-circle-outline", href: "/app/afumusic?section=offline" },
-    { key: "studio", label: "Studio", icon: "mic-outline", href: "/app/afumusic?section=studio" },
+    { key: "discover", label: "Explore", icon: "compass-outline", activeIcon: "compass", href: "/app/afumusic" },
+    { key: "library", label: "My Music", icon: "albums-outline", activeIcon: "albums", href: "/app/afumusic?section=library" },
+    { key: "offline", label: "Downloads", icon: "cloud-download-outline", activeIcon: "cloud-download", href: "/app/afumusic?section=offline" },
+    { key: "studio", label: "Studio", icon: "musical-notes-outline", activeIcon: "musical-notes", href: "/app/afumusic?section=studio" },
   ],
 };
 
@@ -98,7 +98,11 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
 // pages never become modal overlays or detached windows.
 
 export function getAppNav(appId: FullAppId) {
-  return NAV[appId];
+  const items = NAV[appId];
+  // Offline music caching uses the native file cache and is not available in browsers.
+  return appId === "afumusic" && Platform.OS === "web"
+    ? items.filter((item) => item.key !== "offline")
+    : items;
 }
 
 export function normalizeAppNavKey(section?: string) {

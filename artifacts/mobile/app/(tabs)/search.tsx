@@ -44,6 +44,9 @@ import { Avatar } from "@/components/ui/Avatar";
 import UserName from "@/components/ui/UserName";
 import { getPersonalizedTags, getSearchSuggestions } from "@/lib/personalization";
 import Colors from "@/constants/colors";
+import { searchMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
+import type { AfuMusicTrack } from "@/modules/afumusic";
+import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -67,7 +70,7 @@ const FALLBACK_TAGS = [
   "business", "sports", "movies", "food", "nature", "education",
 ];
 
-type SearchTab = "all" | "people" | "posts" | "videos" | "channels" | "events" | "gifts" | "market" | "jobs";
+type SearchTab = "all" | "people" | "posts" | "videos" | "music" | "channels" | "events" | "gifts" | "market" | "jobs";
 type SortMode  = "relevance" | "recent" | "popular";
 type DateRange = "all" | "24h" | "7d" | "30d";
 
@@ -76,6 +79,7 @@ const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "people",   label: "People",   icon: "people" },
   { id: "posts",    label: "Posts",    icon: "document-text" },
   { id: "videos",   label: "Videos",   icon: "play-circle" },
+  { id: "music",    label: "Music",    icon: "musical-notes" },
   { id: "channels", label: "Channels", icon: "megaphone" },
   { id: "events",   label: "Events",   icon: "calendar" },
   { id: "jobs",     label: "Jobs",     icon: "briefcase" },
@@ -118,9 +122,10 @@ type AllResults = {
   gifts:    GiftResult[];
   market:   MarketResult[];
   jobs:     JobResult[];
+  music:    AfuMusicTrack[];
 };
 
-const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], groups:[], events:[], gifts:[], market:[], jobs:[] };
+const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], groups:[], events:[], gifts:[], market:[], jobs:[], music:[] };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -283,6 +288,7 @@ function RowSkeleton({ bg }: { bg: string }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function SearchScreen({ title = "Search", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
+  const { playMusic } = useGlobalMusicPlayer();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
   // Shadow the module-level BRAND constant so every reference inside this
@@ -471,8 +477,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       const wantsGifts    = all || currentTab === "gifts";
       const wantsMarket   = all || currentTab === "market";
       const wantsJobs     = all || currentTab === "jobs";
+      const wantsMusic    = all || currentTab === "music";
 
-      const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes] =
+      const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes, musicRes] =
         await Promise.all([
           wantsPeople
             ? (() => {
@@ -563,6 +570,10 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
                 .order("created_at", { ascending: false })
                 .limit(all ? 4 : 25)
             : Promise.resolve({ data: [] }),
+
+          wantsMusic && trimmed.length > 0
+            ? searchMusicTracks(trimmed).catch(() => [] as AfuMusicTrack[])
+            : Promise.resolve([] as AfuMusicTrack[]),
         ]);
 
       let marketItems: MarketResult[] = [];
@@ -679,12 +690,13 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs };
+      const music = (musicRes || []) as AfuMusicTrack[];
+      const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs, music };
       if (id !== searchIdRef.current) return;
 
       setResults(finalResults);
       const total = people.length + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length;
+        + events.length + gifts.length + marketItems.length + jobs.length + music.length;
       setTotalCount(total);
       setLoading(false);
       if (trimmed.length > 0) {
@@ -1293,12 +1305,13 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
     const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
     const showVideos   = (tab === "all" || tab === "videos")   && results.videos.length > 0;
+    const showMusic    = (tab === "all" || tab === "music")    && results.music.length > 0;
     const showChannels = (tab === "all" || tab === "channels") && results.channels.length > 0;
     const showEvents   = (tab === "all" || tab === "events")   && results.events.length > 0;
     const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
     const showMarket   = (tab === "all" || tab === "market")   && results.market.length > 0;
     const showJobs     = (tab === "all" || tab === "jobs")     && results.jobs.length > 0;
-    const any = showPeople || showPosts || showVideos || showChannels || showEvents || showGifts || showMarket || showJobs;
+    const any = showPeople || showPosts || showVideos || showMusic || showChannels || showEvents || showGifts || showMarket || showJobs;
 
     if (!any) return <NoResults />;
 
@@ -1335,6 +1348,43 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           <View>
             <SectionHeader icon="play-circle" label="Videos" color={RED} count={results.videos.length} onSeeAll={tab === "all" && results.videos.length >= 4 ? () => onTabPress("videos") : undefined} />
             <VideoGrid videos={tab === "all" ? results.videos.slice(0, 4) : results.videos} />
+          </View>
+        )}
+        {showMusic && (
+          <View>
+            <SectionHeader icon="musical-notes" label="Music" color={BRAND} count={results.music.length} onSeeAll={tab === "all" && results.music.length >= 4 ? () => onTabPress("music") : undefined} />
+            <View style={{ paddingHorizontal: 12 }}>
+              {results.music.slice(0, tab === "all" ? 4 : results.music.length).map((track) => (
+                <TouchableOpacity
+                  key={track.id}
+                  activeOpacity={0.75}
+                  onPress={async () => {
+                    if (track.price > 0 && !track.isOwned) {
+                      safeRouter.push("/app/afumusic" as any);
+                      return;
+                    }
+                    try {
+                      const uri = await getMusicPlaybackUri(track);
+                      if (uri) playMusic(track, uri);
+                    } catch {
+                      safeRouter.push("/app/afumusic" as any);
+                    }
+                  }}
+                  style={[ss.musicResultRow, { borderBottomColor: colors.border }]}
+                >
+                  <View style={[ss.musicResultArt, { backgroundColor: track.coverColor || "#19172F" }]}>
+                    <Ionicons name="musical-notes" size={19} color={track.accentColor || BRAND} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{track.title}</Text>
+                    <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 11, marginTop: 3 }}>{track.artist} · {track.genre}</Text>
+                  </View>
+                  <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+                    {track.price > 0 && !track.isOwned ? "Unlock" : "Play"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
         {showJobs && (
@@ -1798,6 +1848,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
                 : t.id === "people" ? results.people.length
                 : t.id === "posts" ? results.posts.length
                 : t.id === "videos" ? results.videos.length
+                : t.id === "music" ? results.music.length
                 : t.id === "channels" ? results.channels.length
                 : t.id === "events" ? results.events.length
                 : t.id === "gifts" ? results.gifts.length
@@ -1849,6 +1900,8 @@ export default function SearchRoute() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const ss = StyleSheet.create({
+  musicResultRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  musicResultArt: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   root: { flex: 1 },
 
   header: {

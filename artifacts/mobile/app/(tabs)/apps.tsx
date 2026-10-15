@@ -79,8 +79,7 @@ const CATEGORIES: Category[] = [
         gradient: ["#19172F", "#F06451"],
         route: "/app/afumusic",
         badge: "NEW",
-        nativeOnly: true,
-        featuredSub: "Discover independent sounds and keep your library offline.",
+        featuredSub: "Discover independent sounds, stream tracks and manage your library.",
       },
       {
         id: "afubusiness",

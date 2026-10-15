@@ -44,6 +44,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
 import { supabase } from "@/lib/supabase";
+import { listMusicTracks, purchaseMusicTrack } from "@/lib/afuMusic";
+import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
@@ -831,6 +833,11 @@ function EditPhase({
   const [thumbGen, setThumbGen] = useState(false);
   const [caption, setCaption] = useState("");
   const [soundDismissed, setSoundDismissed] = useState(false);
+  const [selectedMusic, setSelectedMusic] = useState<AfuMusicTrack | null>(null);
+  const [musicTracks, setMusicTracks] = useState<AfuMusicTrack[]>([]);
+  const [musicLoading, setMusicLoading] = useState(false);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [purchasingTrackId, setPurchasingTrackId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<TextOverlay | null>(null);
   const [editTextValue, setEditTextValue] = useState("");
   const [editTextColor, setEditTextColor] = useState("#FFFFFF");
@@ -913,6 +920,42 @@ function EditPhase({
     },
   })).current;
 
+  async function openMusicPicker() {
+    setShowMusicPicker(true);
+    setMusicLoading(true);
+    try {
+      setMusicTracks(await listMusicTracks());
+    } catch (error: any) {
+      showAlert("Music unavailable", error?.message || "Could not load AfuMusic tracks.");
+    } finally {
+      setMusicLoading(false);
+    }
+  }
+
+  async function chooseMusic(track: AfuMusicTrack) {
+    if (track.price > 0 && !track.isOwned) {
+      setPurchasingTrackId(track.id);
+      try {
+        await purchaseMusicTrack(track.id);
+        const refreshed = await listMusicTracks();
+        setMusicTracks(refreshed);
+        const purchased = refreshed.find((item) => item.id === track.id);
+        if (!purchased?.isOwned) throw new Error("The purchase was not confirmed. Try again.");
+        setSelectedMusic(purchased);
+        setSoundDismissed(false);
+        setShowMusicPicker(false);
+      } catch (error: any) {
+        showAlert("Could not unlock track", error?.message || "Please try again.");
+      } finally {
+        setPurchasingTrackId(null);
+      }
+      return;
+    }
+    setSelectedMusic(track);
+    setSoundDismissed(false);
+    setShowMusicPicker(false);
+  }
+
   function handlePost() {
     onPost({
       videoUri, videoMime, duration: trimEnd - trimStart,
@@ -924,7 +967,8 @@ function EditPhase({
       textOverlays: texts,
       stickerOverlays: stickers,
       trimStart, trimEnd,
-      soundName: soundDismissed ? null : soundName,
+      soundName: soundDismissed ? null : (selectedMusic?.title || soundName),
+      musicTrackId: soundDismissed ? null : (selectedMusic?.id || null),
       audience,
     });
   }
@@ -1077,6 +1121,18 @@ function EditPhase({
               );
             })()}
           </View>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#111" }}>
+          <Ionicons name="musical-notes" size={19} color={accent} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }} numberOfLines={1}>{selectedMusic?.title || (soundDismissed ? "No soundtrack" : soundName || "Add an AfuMusic soundtrack")}</Text>
+            <Text style={{ color: "#777", fontFamily: "Inter_400Regular", fontSize: 11 }}>{selectedMusic ? ("AfuMusic · " + selectedMusic.artist) : "Choose a free track or unlock a paid track"}</Text>
+          </View>
+          <TouchableOpacity onPress={openMusicPicker} style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: accent }}>
+            <Text style={{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{selectedMusic || soundName ? "Change" : "Choose music"}</Text>
+          </TouchableOpacity>
+          {(selectedMusic || soundName) && !soundDismissed ? <TouchableOpacity onPress={() => { setSoundDismissed(true); setSelectedMusic(null); }} hitSlop={8}><Ionicons name="close" size={18} color="#777" /></TouchableOpacity> : null}
         </View>
 
         {/* ── Edit tabs ── */}
@@ -1555,6 +1611,29 @@ function EditPhase({
         </View>
         )}
       </ScrollView>
+      <Modal visible={showMusicPicker} transparent animationType="slide" onRequestClose={() => setShowMusicPicker(false)}>
+        <Pressable onPress={() => setShowMusicPicker(false)} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" }}>
+          <Pressable onPress={() => {}} style={{ maxHeight: "72%", backgroundColor: "#151515", paddingTop: 18, paddingBottom: Math.max(insets.bottom, 16) + 10 }}>
+            <View style={{ paddingHorizontal: 18, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 }}>AfuMusic soundtrack</Text>
+              <TouchableOpacity onPress={() => setShowMusicPicker(false)} hitSlop={10}><Ionicons name="close" size={22} color="#aaa" /></TouchableOpacity>
+            </View>
+            {musicLoading ? <ActivityIndicator color={accent} style={{ marginVertical: 24 }} /> : musicTracks.length === 0 ? <Text style={{ color: "#888", padding: 20 }}>No published tracks are available yet.</Text> : (
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {musicTracks.map((track) => {
+                  const needsPurchase = track.price > 0 && !track.isOwned;
+                  const busy = purchasingTrackId === track.id;
+                  return <TouchableOpacity key={track.id} disabled={!!purchasingTrackId} onPress={() => chooseMusic(track)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 13, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#2a2a2a" }}>
+                    <View style={{ width: 42, height: 42, backgroundColor: track.coverColor || "#292343", alignItems: "center", justifyContent: "center" }}><Ionicons name="musical-notes" size={18} color={track.accentColor || accent} /></View>
+                    <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{track.title}</Text><Text numberOfLines={1} style={{ color: "#888", fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 3 }}>{track.artist + " · " + (track.price > 0 ? (track.price + " ACoin") : "Free")}</Text></View>
+                    {busy ? <ActivityIndicator color={accent} /> : <Text style={{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{needsPurchase ? "Unlock" : selectedMusic?.id === track.id ? "Selected" : "Use track"}</Text>}
+                  </TouchableOpacity>;
+                })}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1642,6 +1721,7 @@ type PostPayload = {
   textOverlays: TextOverlay[]; stickerOverlays: StickerOverlay[];
   trimStart: number; trimEnd: number;
   soundName?: string | null;
+  musicTrackId?: string | null;
   audience: "public" | "followers" | "private";
 };
 
@@ -1716,7 +1796,7 @@ export default function CreateVideoScreen() {
       caption: _cap, filter: _filter, frame: _frame,
       textOverlays: _texts, stickerOverlays: _stickers,
       trimStart: _ts, trimEnd: _te,
-      soundName: _sound, audience: _aud,
+      soundName: _sound, musicTrackId: _musicTrackId, audience: _aud,
     } = payload;
 
     // Show inline posting phase — do NOT dismiss yet
@@ -1777,6 +1857,7 @@ export default function CreateVideoScreen() {
           stickers: _stickers.length > 0 ? _stickers : undefined,
           trimStart: _ts > 0 ? _ts : undefined,
           trimEnd: _te < _dur + (_ts || 0) ? _te : undefined,
+          musicTrackId: _musicTrackId || undefined,
         });
 
         const { data: post, error } = await supabase.from("posts").insert({

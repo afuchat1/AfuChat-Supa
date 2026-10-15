@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,8 +15,9 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AudioPlayer from "@/components/AudioPlayer";
 import { showAlert } from "@/lib/alert";
+import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
+import { useTheme } from "@/hooks/useTheme";
 
 type MusicSection = "discover" | "library" | "offline" | "studio";
 
@@ -71,13 +71,13 @@ type Props = AfuMusicCallbacks & {
   canMonetize?: boolean;
 };
 
-const INK = "#19172F";
-const CORAL = "#F06451";
+const INK = "#000000";
+const CORAL = "#1018D8";
 const COBALT = "#1018D8";
-const GOLD = "#D8A746";
-const CANVAS = "#F7F1E9";
-const PAPER = "#FFF9F1";
-const MUTED = "#8D847B";
+const GOLD = "#D4A853";
+const CANVAS = "#F5F0E8";
+const PAPER = "#FFFFFF";
+const MUTED = "#8C7F6A";
 
 const GENRES = ["All", "Ambient", "Electronic", "R&B", "Acoustic", "Lo-fi"];
 
@@ -105,6 +105,7 @@ function TrackArt({
   size?: number;
   radius?: number;
 }) {
+  const { accent } = useTheme();
   return (
     <View
       style={[
@@ -113,83 +114,14 @@ function TrackArt({
           width: size,
           height: size,
           borderRadius: radius,
-          backgroundColor: track.coverColor || INK,
+          backgroundColor: track.coverColor || accent,
         },
       ]}
     >
-      <View
-        style={[
-          styles.artOrb,
-          {
-            backgroundColor: track.accentColor || CORAL,
-            width: size * 0.56,
-            height: size * 0.56,
-            borderRadius: size,
-            right: -size * 0.12,
-            top: size * 0.1,
-          },
-        ]}
-      />
-      <View
-        style={[
-          styles.artLine,
-          {
-            backgroundColor: track.accentColor || CORAL,
-            width: size * 0.7,
-            left: size * 0.12,
-            bottom: size * 0.18,
-            transform: [{ rotate: "-22deg" }],
-          },
-        ]}
-      />
-      <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.18) }]}>
+      <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.2) }]}>
         {initials(track.artist)}
       </Text>
     </View>
-  );
-}
-
-function SkeletonRows() {
-  return (
-    <View style={styles.skeletonStack}>
-      {[1, 2, 3].map((item) => (
-        <View key={item} style={styles.skeletonRow}>
-          <View style={styles.skeletonArt} />
-          <View style={styles.skeletonCopy}>
-            <View style={styles.skeletonLong} />
-            <View style={styles.skeletonShort} />
-          </View>
-          <View style={styles.skeletonDot} />
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function SectionPill({
-  label,
-  active,
-  icon,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.sectionPill,
-        active && styles.sectionPillActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons name={icon} size={15} color={active ? PAPER : INK} />
-      <Text style={[styles.sectionPillLabel, active && styles.sectionPillLabelActive]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -202,6 +134,7 @@ function TrackRow({
   onPlay,
   onCache,
   onDelete,
+  canCache = true,
 }: {
   track: AfuMusicTrack;
   owned: boolean;
@@ -211,14 +144,16 @@ function TrackRow({
   onPlay: () => void;
   onCache: () => void;
   onDelete?: () => void;
+  canCache?: boolean;
 }) {
+  const { colors, accent } = useTheme();
   return (
-    <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, pressed && styles.trackRowPressed]}>
-      <TrackArt track={track} size={64} radius={16} />
+    <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, { borderBottomColor: colors.border }, pressed && styles.trackRowPressed]}>
+      <TrackArt track={track} size={64} radius={6} />
       <View style={styles.trackCopy}>
-        <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
-        <Text style={styles.trackArtist} numberOfLines={1}>{track.artist} · {track.genre}</Text>
-        <Text style={styles.trackMeta}>{formatPlays(track.plays)}{track.duration ? ` · ${track.duration}` : ""}</Text>
+        <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
+        <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>{track.artist} · {track.genre}</Text>
+        <Text style={[styles.trackMeta, { color: colors.textMuted }]}>{formatPlays(track.plays)}{track.duration ? ` · ${track.duration}` : ""}</Text>
       </View>
       <View style={styles.rowActions}>
         {managed ? (
@@ -240,14 +175,14 @@ function TrackRow({
               onPlay();
             }}
             hitSlop={8}
-            style={({ pressed }) => [styles.miniPlay, pressed && styles.miniPlayPressed]}
+            style={({ pressed }) => [styles.miniPlay, { backgroundColor: accent }, pressed && styles.miniPlayPressed]}
           >
             <Ionicons name="play" size={13} color={PAPER} />
           </Pressable>
         ) : (
-          <Text style={styles.priceText}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
+          <Text style={[styles.priceText, { color: accent }]}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
         )}
-        {owned ? (
+        {owned && canCache ? (
           <Pressable onPress={onCache} hitSlop={8} accessibilityLabel={cached ? "Available offline" : "Save offline"}>
             <Ionicons name={cached ? "arrow-down-circle" : "arrow-down-circle-outline"} size={21} color={cached ? COBALT : MUTED} />
           </Pressable>
@@ -269,57 +204,18 @@ function EmptyState({
   message: string;
   action?: { label: string; onPress: () => void };
 }) {
+  const { colors, accent } = useTheme();
   return (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIcon}><Ionicons name={icon} size={25} color={CORAL} /></View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyMessage}>{message}</Text>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.inputBg }]}><Ionicons name={icon} size={25} color={accent} /></View>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.emptyMessage, { color: colors.textMuted }]}>{message}</Text>
       {action ? (
         <Pressable onPress={action.onPress} style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}>
           <Text style={styles.outlineButtonText}>{action.label}</Text>
         </Pressable>
       ) : null}
     </View>
-  );
-}
-
-function PlayerSheet({
-  track,
-  onClose,
-}: {
-  track: AfuMusicTrack;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.playerSheet}>
-        <View style={styles.sheetHandle} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetEyebrow}>NOW LISTENING</Text>
-          <Pressable onPress={onClose} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable>
-        </View>
-        <TrackArt track={track} size={250} radius={34} />
-        <Text style={styles.playerTitle}>{track.title}</Text>
-        <Text style={styles.playerArtist}>{track.artist} · {track.genre}</Text>
-        {track.audioUrl ? (
-          <AudioPlayer
-            uri={track.audioUrl}
-            tintColor={PAPER}
-            waveColor={CORAL}
-            backgroundColor={INK}
-          />
-        ) : (
-          <View style={styles.playerUnavailable}>
-            <Ionicons name="musical-notes-outline" size={18} color={CORAL} />
-            <Text style={styles.playerUnavailableText}>Audio preview is not available for this track yet.</Text>
-          </View>
-        )}
-        <View style={styles.playerNote}>
-          <Ionicons name="lock-closed-outline" size={15} color={COBALT} />
-          <Text style={styles.playerNoteText}>Private listening inside AfuChat</Text>
-        </View>
-      </View>
-    </Modal>
   );
 }
 
@@ -341,7 +237,9 @@ export default function AfuMusicApp({
   canMonetize = false,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
-  const [section, setSection] = useState<MusicSection>(initialSection);
+  const { colors, accent, isDark } = useTheme();
+  const { playMusic } = useGlobalMusicPlayer();
+  const [section, setSection] = useState<MusicSection>(Platform.OS === "web" && initialSection === "offline" ? "discover" : initialSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("All");
@@ -351,13 +249,13 @@ export default function AfuMusicApp({
   const [cachedIds, setCachedIds] = useState<string[]>([]);
   const [offlineTracks, setOfflineTracks] = useState<AfuMusicTrack[]>([]);
   const [ownedIds, setOwnedIds] = useState<string[]>([]);
-  const [selectedTrack, setSelectedTrack] = useState<AfuMusicTrack | null>(null);
   const [purchaseTrack, setPurchaseTrack] = useState<AfuMusicTrack | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadGenre, setUploadGenre] = useState("Ambient");
+  const [uploadMode, setUploadMode] = useState<"free" | "paid">("free");
   const [uploadPrice, setUploadPrice] = useState("20");
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
 
@@ -443,21 +341,29 @@ export default function AfuMusicApp({
     }
     try {
       const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
+      if (!audioUrl) {
+        showAlert("Playback unavailable", "Audio is not available for this track yet.");
+        return;
+      }
+      playMusic(track, audioUrl);
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onResolveAudio, ownedIds]);
+  }, [onResolveAudio, ownedIds, playMusic]);
 
   const playTrack = useCallback(async (track: AfuMusicTrack) => {
     try {
       await onPlay?.(track);
       const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
+      if (!audioUrl) {
+        showAlert("Playback unavailable", "Audio is not available for this track yet.");
+        return;
+      }
+      playMusic(track, audioUrl);
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onPlay, onResolveAudio]);
+  }, [onPlay, onResolveAudio, playMusic]);
 
   const handleCache = useCallback(async (track: AfuMusicTrack) => {
     try {
@@ -527,7 +433,9 @@ export default function AfuMusicApp({
         result?.alreadyOwned ? "Already in your library" : "Purchase complete",
         result?.alreadyOwned
           ? `${purchaseTrack.title} was already owned, so no ACoin was charged.`
-          : `${purchaseTrack.title} is now in your library and available offline.`,
+          : Platform.OS === "web"
+            ? `${purchaseTrack.title} is now in your library and ready to play on the web.`
+            : `${purchaseTrack.title} is now in your library and available offline.`,
       );
     } catch {
       showAlert("Purchase could not be completed", "Your ACoin balance was not changed. Try again.");
@@ -542,11 +450,16 @@ export default function AfuMusicApp({
       copyToCacheDirectory: true,
       multiple: false,
     });
-    if (!result.canceled) setUploadFile(result.assets[0]);
+    if (!result.canceled) {
+      const file = result.assets[0];
+      setUploadFile(file);
+      const titleFromFile = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+      setUploadTitle(titleFromFile || file.name);
+    }
   }, []);
 
   const submitUpload = useCallback(async () => {
-    if (!canMonetize) {
+    if (uploadMode === "paid" && !canMonetize) {
       showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to sell music.", [
         { text: "Not now", style: "cancel" },
         ...(onOpenPlans ? [{ text: "View plans", onPress: onOpenPlans }] : []),
@@ -563,7 +476,7 @@ export default function AfuMusicApp({
       const payload = {
         title: uploadTitle.trim(),
         genre: uploadGenre,
-        price: Math.max(0, Number(uploadPrice) || 0),
+        price: uploadMode === "free" ? 0 : Math.max(1, Math.floor(Number(uploadPrice) || 0)),
         fileUri: uploadFile.uri,
         fileName: uploadFile.name,
         mimeType: uploadFile.mimeType,
@@ -580,6 +493,7 @@ export default function AfuMusicApp({
       }
       setUploadOpen(false);
       setUploadTitle("");
+      setUploadMode("free");
       setUploadFile(null);
       showAlert("Published to AfuMusic", "Your track is ready for listeners.");
     } catch {
@@ -587,7 +501,7 @@ export default function AfuMusicApp({
     } finally {
       setUploading(false);
     }
-  }, [canMonetize, onOpenPlans, onUpload, uploadFile, uploadGenre, uploadPrice, uploadTitle, uploading]);
+  }, [canMonetize, onOpenPlans, onUpload, uploadFile, uploadGenre, uploadMode, uploadPrice, uploadTitle, uploading]);
 
   const renderTrack = useCallback(({ item }: { item: AfuMusicTrack }) => (
     <TrackRow
@@ -598,85 +512,60 @@ export default function AfuMusicApp({
       onOpen={() => { void openTrack(item); }}
       onPlay={() => { void playTrack(item); }}
       onCache={() => handleCache(item)}
+      canCache={Platform.OS !== "web"}
       onDelete={() => handleDeleteUpload(item)}
     />
   ), [cachedIds, handleCache, handleDeleteUpload, openTrack, ownedIds, playTrack, section]);
 
-  const sectionTitle = section === "discover" ? "Find your next repeat" :
-    section === "library" ? "Your listening library" :
-    section === "offline" ? "Ready without signal" : "Your studio";
+  const sectionTitle = section === "discover" ? "Discover" :
+    section === "library" ? "Your library" :
+    section === "offline" ? "Downloads" : "Your tracks";
 
   return (
-    <View style={[styles.root, { backgroundColor: CANVAS, paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <ScrollView
+        style={styles.pageScroll}
+        contentContainerStyle={styles.pageContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={accent} />}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={styles.topBar}>
-        <View>
-          <Text style={styles.wordmark}>Afu<Text style={styles.wordmarkAccent}>Music</Text></Text>
-          <Text style={styles.privateLabel}>A PRIVATE LISTENING SPACE</Text>
-        </View>
-        <View style={styles.coinBadge}>
+<View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="flash" size={13} color={GOLD} />
-          <Text style={styles.coinText}>
+          <Text style={[styles.coinText, { color: colors.text }]}>
             {typeof acoinBalance === "number" ? `${Math.floor(acoinBalance)} AC` : "ACoin"}
           </Text>
         </View>
       </View>
 
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={18} color={MUTED} />
+      <View style={[styles.searchWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
           value={query}
           onChangeText={handleSearch}
           placeholder="Search tracks, artists, sounds"
-          placeholderTextColor={MUTED}
-          style={styles.searchInput}
+          placeholderTextColor={colors.textMuted}
+          style={[styles.searchInput, { color: colors.text }]}
           returnKeyType="search"
           accessibilityLabel="Search AfuMusic"
         />
-        {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={MUTED} /></Pressable> : null}
+        {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable> : null}
       </View>
-
-      <View style={styles.sectionRail}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionRailContent}>
-          <SectionPill label="Discover" icon="sparkles-outline" active={section === "discover"} onPress={() => setSection("discover")} />
-          <SectionPill label="Library" icon="albums-outline" active={section === "library"} onPress={() => setSection("library")} />
-          <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} />
-          <SectionPill label="Studio" icon="mic-outline" active={section === "studio"} onPress={() => setSection("studio")} />
-        </ScrollView>
-      </View>
-
-      {section === "discover" && !query ? (
-        <View style={styles.heroCard}>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroEyebrow}>AfuMusic / 001</Text>
-            <Text style={styles.heroTitle}>Songs worth{`\n`}keeping close.</Text>
-            <Text style={styles.heroBody}>Independent sounds, shared privately. Unlock a track once and keep it with you offline.</Text>
-            <Pressable onPress={() => setSection("library")} style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}>
-              <Text style={styles.heroButtonText}>Open my library</Text>
-              <Ionicons name="arrow-forward" size={16} color={INK} />
-            </Pressable>
-          </View>
-          <View style={styles.heroDisc}>
-            <View style={styles.discOuter}><View style={styles.discInner}><View style={styles.discLabel}><Ionicons name="musical-notes" size={22} color={CORAL} /></View></View></View>
-            <View style={styles.discNeedle} />
-          </View>
-        </View>
-      ) : null}
 
       {section === "discover" && !query && featuredTracks.length > 0 ? (
         <View style={styles.featuredBlock}>
           <View style={styles.featuredHeader}>
             <View>
-              <Text style={styles.sectionEyebrow}>EDITOR'S PICKS</Text>
-              <Text style={styles.featuredTitle}>Featured this week</Text>
+              <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured tracks</Text>
             </View>
-            <Ionicons name="headset-outline" size={19} color={CORAL} />
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>
             {featuredTracks.map((track) => (
               <Pressable key={track.id} onPress={() => { void openTrack(track); }} style={({ pressed }) => [styles.featuredCard, pressed && styles.pressed]}>
-                <TrackArt track={track} size={78} radius={18} />
-                <Text style={styles.featuredCardTitle} numberOfLines={1}>{track.title}</Text>
-                <Text style={styles.featuredCardArtist} numberOfLines={1}>{track.artist}</Text>
+                <TrackArt track={track} size={78} radius={6} />
+                <Text style={[styles.featuredCardTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
+                <Text style={[styles.featuredCardArtist, { color: colors.textMuted }]} numberOfLines={1}>{track.artist}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -685,15 +574,11 @@ export default function AfuMusicApp({
 
       <View style={styles.contentHeader}>
         <View>
-          <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : "YOUR NEXT LISTEN"}</Text>
-          <Text style={styles.sectionTitle}>{sectionTitle}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
           <Pressable
-            onPress={() => {
-              if (canMonetize) setUploadOpen(true);
-              else void submitUpload();
-            }}
+            onPress={() => setUploadOpen(true)}
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
           >
             <Ionicons name="add" size={19} color={PAPER} />
@@ -705,15 +590,19 @@ export default function AfuMusicApp({
       {section === "discover" && !query ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreRail}>
           {GENRES.map((item) => (
-            <Pressable key={item} onPress={() => setGenre(item)} style={[styles.genreChip, genre === item && styles.genreChipActive]}>
-              <Text style={[styles.genreText, genre === item && styles.genreTextActive]}>{item}</Text>
+            <Pressable key={item} onPress={() => setGenre(item)} style={[styles.genreChip, { backgroundColor: genre === item ? accent : colors.inputBg, borderColor: genre === item ? accent : colors.border }]}>
+              <Text style={[styles.genreText, { color: genre === item ? "#FFFFFF" : colors.text }]}>{item}</Text>
             </Pressable>
           ))}
         </ScrollView>
       ) : null}
 
+
       {loading ? (
-        <SkeletonRows />
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="small" color={accent} />
+          <Text style={[styles.loadingLabel, { color: colors.textMuted }]}>Loading your music</Text>
+        </View>
       ) : loadError ? (
         <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadTracks }} />
       ) : filteredTracks.length === 0 ? (
@@ -724,34 +613,28 @@ export default function AfuMusicApp({
           action={section === "studio" ? { label: "Publish a track", onPress: () => setUploadOpen(true) } : undefined}
         />
       ) : (
-        <FlatList
-          data={filteredTracks}
-          renderItem={renderTrack}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.trackList}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={CORAL} />}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={section === "discover" && !query ? <Text style={styles.listHint}>Fresh from independent creators</Text> : null}
-        />
+        <View style={styles.trackList}>
+          {filteredTracks.map((track) => (
+            <React.Fragment key={track.id}>{renderTrack({ item: track })}</React.Fragment>
+          ))}
+        </View>
       )}
-
-      {selectedTrack ? <PlayerSheet track={selectedTrack} onClose={() => setSelectedTrack(null)} /> : null}
+      </ScrollView>
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.purchaseSheet}>
-            <View style={styles.sheetHandle} />
-            {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={20} /> : null}
+          <View style={[styles.purchaseSheet, { backgroundColor: colors.background }]}>
+            {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={6} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
-            <Text style={styles.purchaseTitle}>{purchaseTrack?.title}</Text>
-            <Text style={styles.purchaseArtist}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
+            <Text style={[styles.purchaseTitle, { color: colors.text }]}>{purchaseTrack?.title}</Text>
+            <Text style={[styles.purchaseArtist, { color: colors.textMuted }]}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
             <View style={styles.purchaseRule} />
-            <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>One-time access</Text><Text style={styles.purchaseValue}>{purchaseTrack?.price} ACoin</Text></View>
-            <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
+            <View style={styles.purchaseRow}><Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>One-time access</Text><Text style={[styles.purchaseValue, { color: colors.text }]}>{purchaseTrack?.price} ACoin</Text></View>
+            <View style={styles.purchaseRow}><Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
             {typeof acoinBalance === "number" ? (
               <View style={styles.balanceRow}>
-                <Text style={styles.purchaseLabel}>Your balance</Text>
-                <Text style={[styles.purchaseValue, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
+                <Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>Your balance</Text>
+                <Text style={[styles.purchaseValue, { color: colors.text }, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
               </View>
             ) : null}
             {typeof acoinBalance === "number" && acoinBalance < (purchaseTrack?.price ?? 0) ? (
@@ -768,30 +651,43 @@ export default function AfuMusicApp({
             >
               {purchasing ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="flash" size={16} color={PAPER} /><Text style={styles.purchaseButtonText}>Unlock for {purchaseTrack?.price} AC</Text></>}
             </Pressable>
-            <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={styles.cancelText}>Not now</Text></Pressable>
+            <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={[styles.cancelText, { color: colors.text }]}>Not now</Text></Pressable>
           </View>
         </View>
       </Modal>
 
       <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => setUploadOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
-          <View style={styles.uploadSheet}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable></View>
-            <Text style={styles.fieldLabel}>Track title</Text>
-            <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={MUTED} style={styles.formInput} />
-            <Text style={styles.fieldLabel}>Genre</Text>
+          <View style={[styles.uploadSheet, { backgroundColor: colors.background }]}>
+            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={[styles.purchaseTitle, { color: colors.text }]}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Track title</Text>
+            <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={colors.textMuted} style={[styles.formInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]} />
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Genre</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
               {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
             </ScrollView>
-            <Text style={styles.fieldLabel}>Unlock price</Text>
-            <View style={styles.priceInput}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" style={styles.priceTextInput} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
-            <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, pressed && styles.pressed]}>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Availability</Text>
+            <View style={[styles.uploadModeRow, { borderColor: colors.border }]}>
+              <Pressable onPress={() => setUploadMode("free")} style={[styles.uploadModeOption, uploadMode === "free" && { backgroundColor: accent }]}>
+                <Text style={[styles.uploadModeTitle, { color: uploadMode === "free" ? PAPER : colors.text }]}>Free</Text>
+                <Text style={[styles.uploadModeHint, { color: uploadMode === "free" ? PAPER : colors.textMuted }]}>Anyone can listen</Text>
+              </Pressable>
+              <Pressable onPress={() => setUploadMode("paid")} style={[styles.uploadModeOption, uploadMode === "paid" && { backgroundColor: accent }]}>
+                <Text style={[styles.uploadModeTitle, { color: uploadMode === "paid" ? PAPER : colors.text }]}>Paid</Text>
+                <Text style={[styles.uploadModeHint, { color: uploadMode === "paid" ? PAPER : colors.textMuted }]}>Unlock with ACoin</Text>
+              </Pressable>
+            </View>
+            {uploadMode === "paid" ? <>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Price</Text>
+              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+              {!canMonetize ? <Text style={[styles.uploadEligibility, { color: colors.textMuted }]}>Paid uploads require an active Standard or Pro plan, or a verified badge.</Text> : null}
+            </> : null}
+            <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
               <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
-              <View style={styles.filePickerCopy}><Text style={styles.filePickerTitle}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={styles.filePickerSub}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
+              <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
-            <Pressable onPress={() => void submitUpload()} disabled={uploading || !canMonetize} style={({ pressed }) => [styles.publishButton, (pressed || !canMonetize) && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
+            <Pressable onPress={() => void submitUpload()} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish {uploadMode === "free" ? "free track" : "paid track"}</Text></>}</Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -800,61 +696,39 @@ export default function AfuMusicApp({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, width: "100%" },
+  pageScroll: { flex: 1, width: "100%" },
+  pageContent: { paddingBottom: 24, width: "100%", maxWidth: 1120, alignSelf: "center" },
   topBar: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 15, paddingBottom: 14 },
-  wordmark: { color: INK, fontFamily: "Inter_700Bold", fontSize: 29, letterSpacing: -1.3 },
-  wordmarkAccent: { color: CORAL },
-  privateLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 8, letterSpacing: 1.4, marginTop: 3 },
-  coinBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F0E3C6", paddingHorizontal: 11, paddingVertical: 8, borderRadius: 16, marginTop: 2 },
+  coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 4, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, marginHorizontal: 20, height: 45, paddingHorizontal: 13, borderRadius: 14, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 46, paddingHorizontal: 12, borderRadius: 4, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
-  sectionRail: { marginTop: 15 },
-  sectionRailContent: { paddingHorizontal: 20, gap: 8 },
-  sectionPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, height: 35, borderRadius: 18, backgroundColor: "#EFE7DE" },
-  sectionPillActive: { backgroundColor: INK },
-  sectionPillLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
-  sectionPillLabelActive: { color: PAPER },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  heroCard: { overflow: "hidden", flexDirection: "row", minHeight: 205, marginHorizontal: 20, marginTop: 17, borderRadius: 25, backgroundColor: INK, padding: 19 },
-  heroCopy: { flex: 1, zIndex: 2 },
-  heroEyebrow: { color: "#AFA9C9", fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
-  heroTitle: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 27, lineHeight: 29, letterSpacing: -0.8 },
-  heroBody: { color: "#B8B2C4", fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16, maxWidth: 205, marginTop: 10 },
-  heroButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8, backgroundColor: "#F4C469", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, marginTop: 14 },
-  heroButtonPressed: { backgroundColor: CORAL },
-  heroButtonText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
-  heroDisc: { width: 120, justifyContent: "center", alignItems: "center", marginRight: -5 },
-  discOuter: { width: 126, height: 126, borderRadius: 70, backgroundColor: "#2C294B", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#514D70" },
-  discInner: { width: 97, height: 97, borderRadius: 55, backgroundColor: "#211E3B", alignItems: "center", justifyContent: "center", borderWidth: 7, borderColor: "#373359" },
-  discLabel: { width: 38, height: 38, borderRadius: 23, backgroundColor: "#F1BE68", alignItems: "center", justifyContent: "center" },
-  discNeedle: { position: "absolute", width: 5, height: 62, backgroundColor: CORAL, right: 7, top: 23, borderRadius: 5, transform: [{ rotate: "31deg" }] },
-  contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 22, marginBottom: 10 },
-  sectionEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25, marginBottom: 4 },
-  sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.65 },
+  pressed: { opacity: 0.72 },
+  loadingState: { alignItems: "center", justifyContent: "center", paddingVertical: 42, gap: 12 },
+  loadingLabel: { fontFamily: "Inter_500Medium", fontSize: 12 },
+  contentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 24, marginBottom: 12 },
+  sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 25, letterSpacing: -0.8 },
   featuredBlock: { marginTop: 20 },
   featuredHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, marginBottom: 10 },
-  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4, marginTop: 3 },
+  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4 },
   featuredRail: { paddingHorizontal: 20, gap: 12 },
-  featuredCard: { width: 112, paddingBottom: 5 },
+  featuredCard: { width: 124, paddingBottom: 8 },
   featuredCardTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginTop: 8 },
   featuredCardArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
   addButton: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: CORAL, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
   addButtonPressed: { backgroundColor: INK },
   addButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 11 },
   genreRail: { paddingHorizontal: 20, gap: 8, paddingBottom: 6 },
-  genreChip: { borderWidth: 1, borderColor: "#E2D8CE", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: PAPER },
+  genreChip: { borderWidth: 1, borderColor: "#E2D8CE", borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: PAPER },
   genreChipActive: { borderColor: INK, backgroundColor: INK },
   genreText: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 10 },
   genreTextActive: { color: PAPER },
-  listHint: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 11, marginBottom: 4 },
   trackList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
-  trackRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 82, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
+  trackRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 88, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E8DED4" },
   trackRowPressed: { opacity: 0.7, transform: [{ translateX: 2 }] },
   trackArt: { overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  artOrb: { position: "absolute", opacity: 0.92 },
-  artLine: { height: 3, position: "absolute", borderRadius: 4, opacity: 0.9 },
-  artInitials: { color: PAPER, fontFamily: "Inter_700Bold", letterSpacing: 0.5, zIndex: 1 },
+  artInitials: { color: "#FFFFFF", fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
   trackCopy: { flex: 1, minWidth: 0, gap: 3 },
   trackTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 14 },
   trackArtist: { color: "#645C55", fontFamily: "Inter_500Medium", fontSize: 11 },
@@ -863,22 +737,15 @@ const styles = StyleSheet.create({
   miniPlay: { width: 27, height: 27, borderRadius: 14, backgroundColor: CORAL, alignItems: "center", justifyContent: "center" },
   miniPlayPressed: { backgroundColor: INK, transform: [{ scale: 0.9 }] },
   priceText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
-  skeletonStack: { paddingHorizontal: 20, paddingTop: 14, gap: 14 },
-  skeletonRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  skeletonArt: { width: 64, height: 64, borderRadius: 16, backgroundColor: "#E9DED2" },
-  skeletonCopy: { flex: 1, gap: 9 },
-  skeletonLong: { height: 12, width: "58%", borderRadius: 6, backgroundColor: "#E9DED2" },
-  skeletonShort: { height: 9, width: "37%", borderRadius: 5, backgroundColor: "#EDE3D9" },
-  skeletonDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: "#EDE3D9" },
+
   emptyState: { alignItems: "center", paddingHorizontal: 45, paddingTop: 55 },
-  emptyIcon: { width: 55, height: 55, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
+  emptyIcon: { width: 55, height: 55, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
   emptyTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, textAlign: "center" },
   emptyMessage: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 7, maxWidth: 280 },
-  outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
+  outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
   outlineButtonText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 11 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(25,23,47,0.42)" },
-  purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 23, paddingTop: 10, paddingBottom: 30 },
-  sheetHandle: { width: 38, height: 4, borderRadius: 3, backgroundColor: "#D4C7BC", marginBottom: 21 },
+  purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 23, paddingTop: 24, paddingBottom: 30 },
   purchaseKicker: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.45, marginTop: 15 },
   purchaseTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 24, textAlign: "center", marginTop: 5, letterSpacing: -0.5 },
   purchaseArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 },
@@ -904,10 +771,15 @@ const styles = StyleSheet.create({
   playerUnavailableText: { color: "#D0CADC", fontFamily: "Inter_500Medium", fontSize: 11, textAlign: "center", flex: 1 },
   playerNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 21 },
   playerNoteText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
-  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
+  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 21, paddingTop: 24, paddingBottom: 27 },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
   formInput: { height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
+  uploadModeRow: { flexDirection: "row", borderWidth: 1, borderRadius: 4, overflow: "hidden" },
+  uploadModeOption: { flex: 1, paddingVertical: 10, paddingHorizontal: 12 },
+  uploadModeTitle: { fontFamily: "Inter_700Bold", fontSize: 12 },
+  uploadModeHint: { fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
+  uploadEligibility: { fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 7 },
   formGenreRail: { gap: 7, paddingBottom: 3 },
   formGenreChip: { borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, borderRadius: 13, paddingHorizontal: 11, paddingVertical: 8 },
   formGenreChipActive: { borderColor: INK, backgroundColor: INK },

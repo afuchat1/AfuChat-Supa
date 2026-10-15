@@ -10,6 +10,7 @@ export type AppNavItem = {
   key: string;
   label: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
+  activeIcon?: React.ComponentProps<typeof Ionicons>["name"];
   href: string;
 };
 
@@ -19,7 +20,7 @@ type Props = {
 };
 
 export default function AppBottomNav({ items, activeKey }: Props) {
-  const { colors, accent, isDark } = useTheme();
+  const { colors, accent } = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   // The bar is in normal flow, so adding a synthetic browser safe-area inset
@@ -28,29 +29,7 @@ export default function AppBottomNav({ items, activeKey }: Props) {
 
   return (
     <View style={[styles.rowWrap, { paddingBottom: bottomInset + 8 }]}>
-      <View
-        style={[
-          styles.bar,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            ...Platform.select({
-              ios: {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: isDark ? 0.35 : 0.12,
-                shadowRadius: 16,
-              },
-              android: { elevation: 8 },
-              web: {
-                boxShadow: isDark
-                  ? "0 4px 20px rgba(0,0,0,0.45)"
-                  : "0 4px 20px rgba(0,0,0,0.10)",
-              } as any,
-            }),
-          },
-        ]}
-      >
+      <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         {items.map((item) => {
           const active = activeKey === item.key || (!activeKey && pathname === item.href);
           return (
@@ -66,13 +45,10 @@ export default function AppBottomNav({ items, activeKey }: Props) {
               ]}
             >
               <View style={styles.iconWrap}>
-                {active && (
-                  <View style={[styles.activeIconOval, { backgroundColor: accent }]} />
-                )}
                 <Ionicons
-                  name={item.icon}
-                  size={21}
-                  color={active ? colors.bubbleText : colors.textMuted}
+                  name={active ? (item.activeIcon ?? item.icon) : item.icon}
+                  size={active ? 22 : 20}
+                  color={active ? accent : colors.textMuted}
                 />
               </View>
               <Text
@@ -91,21 +67,19 @@ export default function AppBottomNav({ items, activeKey }: Props) {
 
 const styles = StyleSheet.create({
   rowWrap: {
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    alignItems: "stretch",
+    paddingHorizontal: 0,
+    paddingTop: 0,
   },
   bar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    paddingTop: 9,
-    paddingHorizontal: 6,
+    paddingTop: 5,
+    paddingHorizontal: 8,
     width: "100%",
-    height: 56,
-    borderRadius: 999,
-    borderWidth: 1,
-    overflow: "hidden",
+    minHeight: 62,
+    borderTopWidth: 1,
   },
   item: {
     flex: 1,
@@ -116,26 +90,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   iconWrap: {
-    width: 44,
-    height: 30,
+    width: 36,
+    height: 26,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
-  activeIconOval: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 9999,
-  },
   label: {
     width: "100%",
-    fontSize: 9,
-    lineHeight: 12,
-    fontFamily: "Inter_700Bold",
-    fontWeight: "700",
-    letterSpacing: 0.2,
-    marginTop: 0,
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0,
+    marginTop: 1,
     textAlign: "center",
     includeFontPadding: false,
-    textTransform: "uppercase",
   },
 });
