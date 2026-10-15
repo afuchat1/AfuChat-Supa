@@ -95,6 +95,8 @@ import {
 import * as Haptics from "@/lib/haptics";
 import { VideoCommentsSheet } from "@/components/ui/VideoCommentsSheet";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
+import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
+import { listMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -118,11 +120,19 @@ type VideoPost = {
   id: string; author_id: string; content: string; video_url: string;
   image_url: string | null; created_at: string; view_count: number;
   audio_name: string | null;
+  music_track_id: string | null;
   profile: { display_name: string; handle: string; avatar_url: string | null; is_verified: boolean; is_organization_verified: boolean };
   liked: boolean; bookmarked: boolean; likeCount: number; replyCount: number;
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
+
+function readMusicTrackId(metadata: unknown): string | null {
+  try {
+    const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+    return parsed && typeof parsed.musicTrackId === "string" ? parsed.musicTrackId : null;
+  } catch { return null; }
+}
 
 function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -346,6 +356,7 @@ const VideoItem = React.memo(function VideoItem({
   commentsOpen?: boolean; squeezedH?: number;
 }) {
   const { accent } = useAppAccent();
+  const { playMusic } = useGlobalMusicPlayer();
   const insets = useSafeAreaInsets();
   // On web, create the player with its final stable source. expo-video's web
   // replace() calls HTMLMediaElement.play() without handling the returned
@@ -880,6 +891,26 @@ const VideoItem = React.memo(function VideoItem({
               </TouchableOpacity>
             </>
           )}
+          {!!item.audio_name && (
+            <TouchableOpacity
+              onPress={async () => {
+                if (!item.music_track_id) { router.push("/app/afumusic" as any); return; }
+                try {
+                  const tracks = await listMusicTracks();
+                  const track = tracks.find((entry) => entry.id === item.music_track_id);
+                  if (!track) { router.push("/app/afumusic" as any); return; }
+                  if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
+                  const uri = await getMusicPlaybackUri(track);
+                  if (uri) playMusic(track, uri);
+                } catch { router.push("/app/afumusic" as any); }
+              }}
+              activeOpacity={0.8}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 7, alignSelf: "flex-start", maxWidth: screenW * 0.72 }}
+            >
+              <Ionicons name="musical-notes" size={13} color="#fff" />
+              <Text numberOfLines={1} style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>♫ {item.audio_name}</Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
         {/* ── Seek bar — hidden by default, revealed on tap, draggable ─── */}
@@ -1194,6 +1225,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         created_at: new Date(e.cachedAt).toISOString(),
         view_count: 0,
         audio_name: null,
+        music_track_id: null,
         profile: {
           display_name: e.authorName ?? "Cached video",
           handle: e.authorHandle ?? "offline",
@@ -1235,6 +1267,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             created_at: local.created_at,
             view_count: local.view_count,
             audio_name: null,
+        music_track_id: null,
             profile: {
               display_name: local.author_name ?? "User",
               handle: local.author_handle ?? "user",
@@ -1305,7 +1338,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     let query = supabase
       .from("posts")
-      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
       .not("video_url", "is", null)
       .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false });
@@ -1378,7 +1411,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const allMapped: VideoPost[] = data.map((p: any) => ({
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
-        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
+        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null, music_track_id: readMusicTrackId(p.overlay_metadata),
         profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id), is_organization_verified: !!p.profiles?.is_organization_verified },
         liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
@@ -1491,7 +1524,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
               newVideos = [{
                 id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
                 video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
-                view_count: 0, audio_name: tRow.audio_name || null,
+                view_count: 0, audio_name: tRow.audio_name || null, music_track_id: readMusicTrackId(tRow.overlay_metadata),
                 profile: { display_name: (tRow.profiles as any)?.display_name || "User", handle: (tRow.profiles as any)?.handle || "user", avatar_url: (tRow.profiles as any)?.avatar_url || null, is_verified: !!(tRow.profiles as any)?.is_verified, is_organization_verified: !!(tRow.profiles as any)?.is_organization_verified },
                 liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
               }, ...newVideos];
