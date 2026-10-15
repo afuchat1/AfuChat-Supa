@@ -453,7 +453,7 @@ export default function AfuMusicApp({
     if (!result.canceled) {
       const file = result.assets[0];
       setUploadFile(file);
-      const titleFromFile = file.name.replace(/\\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+      const titleFromFile = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
       setUploadTitle(titleFromFile || file.name);
     }
   }, []);
