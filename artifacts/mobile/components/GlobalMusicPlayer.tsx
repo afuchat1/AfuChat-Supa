@@ -36,25 +36,25 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
       {activeMusic ? (
         <View pointerEvents="box-none" style={[styles.overlay, { bottom: Math.max(insets.bottom, 8) + 68 }]}>
           <View style={styles.player}>
-            <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
-              <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || "#F06451"} />
+            <View style={styles.trackHeader}>
+              <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || "#F06451"} />
+              </View>
+              <View style={styles.trackCopy}>
+                <Text numberOfLines={1} style={styles.trackTitle}>{activeMusic.track.title}</Text>
+                <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.close}>
+                <Ionicons name="close" size={18} color="#6B7280" />
+              </Pressable>
             </View>
-            <View style={styles.trackCopy}>
-              <Text numberOfLines={1} style={styles.trackTitle}>{activeMusic.track.title}</Text>
-              <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>
-            </View>
-            <View style={styles.controls}>
-              <AudioPlayer
-                key={activeMusic.track.id}
-                uri={activeMusic.uri}
-                tintColor="#19172F"
-                waveColor="#1F95FF"
-                autoPlay
-              />
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.close}>
-              <Ionicons name="close" size={18} color="#6B7280" />
-            </Pressable>
+            <AudioPlayer
+              key={activeMusic.track.id}
+              uri={activeMusic.uri}
+              tintColor="#19172F"
+              waveColor="#1F95FF"
+              autoPlay
+            />
           </View>
         </View>
       ) : null}
@@ -71,15 +71,18 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   player: {
-    minHeight: 62,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 7,
     backgroundColor: "#FFFFFF",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#D8DCE3",
+  },
+  trackHeader: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
   },
   art: {
     width: 38,
@@ -90,6 +93,5 @@ const styles = StyleSheet.create({
   trackCopy: { flex: 1, minWidth: 55 },
   trackTitle: { color: "#19172F", fontSize: 12, fontWeight: "700" },
   artist: { color: "#6B7280", fontSize: 11, marginTop: 2 },
-  controls: { maxWidth: 175 },
   close: { padding: 3 },
 });
