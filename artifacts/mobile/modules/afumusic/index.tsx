@@ -16,8 +16,8 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AudioPlayer from "@/components/AudioPlayer";
 import { showAlert } from "@/lib/alert";
+import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 
 type MusicSection = "discover" | "library" | "offline" | "studio";
 
@@ -283,46 +283,6 @@ function EmptyState({
   );
 }
 
-function PlayerSheet({
-  track,
-  onClose,
-}: {
-  track: AfuMusicTrack;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.playerSheet}>
-        <View style={styles.sheetHandle} />
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetEyebrow}>NOW LISTENING</Text>
-          <Pressable onPress={onClose} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable>
-        </View>
-        <TrackArt track={track} size={250} radius={34} />
-        <Text style={styles.playerTitle}>{track.title}</Text>
-        <Text style={styles.playerArtist}>{track.artist} · {track.genre}</Text>
-        {track.audioUrl ? (
-          <AudioPlayer
-            uri={track.audioUrl}
-            tintColor={PAPER}
-            waveColor={CORAL}
-            backgroundColor={INK}
-          />
-        ) : (
-          <View style={styles.playerUnavailable}>
-            <Ionicons name="musical-notes-outline" size={18} color={CORAL} />
-            <Text style={styles.playerUnavailableText}>Audio preview is not available for this track yet.</Text>
-          </View>
-        )}
-        <View style={styles.playerNote}>
-          <Ionicons name="lock-closed-outline" size={15} color={COBALT} />
-          <Text style={styles.playerNoteText}>Private listening inside AfuChat</Text>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 export default function AfuMusicApp({
   initialSection = "discover",
   onBrowse,
@@ -341,6 +301,7 @@ export default function AfuMusicApp({
   canMonetize = false,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
+  const { playMusic } = useGlobalMusicPlayer();
   const [section, setSection] = useState<MusicSection>(initialSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
   const [query, setQuery] = useState("");
@@ -351,7 +312,6 @@ export default function AfuMusicApp({
   const [cachedIds, setCachedIds] = useState<string[]>([]);
   const [offlineTracks, setOfflineTracks] = useState<AfuMusicTrack[]>([]);
   const [ownedIds, setOwnedIds] = useState<string[]>([]);
-  const [selectedTrack, setSelectedTrack] = useState<AfuMusicTrack | null>(null);
   const [purchaseTrack, setPurchaseTrack] = useState<AfuMusicTrack | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -443,21 +403,29 @@ export default function AfuMusicApp({
     }
     try {
       const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
+      if (!audioUrl) {
+        showAlert("Playback unavailable", "Audio is not available for this track yet.");
+        return;
+      }
+      playMusic(track, audioUrl);
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onResolveAudio, ownedIds]);
+  }, [onResolveAudio, ownedIds, playMusic]);
 
   const playTrack = useCallback(async (track: AfuMusicTrack) => {
     try {
       await onPlay?.(track);
       const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      setSelectedTrack({ ...track, audioUrl });
+      if (!audioUrl) {
+        showAlert("Playback unavailable", "Audio is not available for this track yet.");
+        return;
+      }
+      playMusic(track, audioUrl);
     } catch (error) {
       showAlert("Playback unavailable", error);
     }
-  }, [onPlay, onResolveAudio]);
+  }, [onPlay, onResolveAudio, playMusic]);
 
   const handleCache = useCallback(async (track: AfuMusicTrack) => {
     try {
@@ -735,7 +703,6 @@ export default function AfuMusicApp({
         />
       )}
 
-      {selectedTrack ? <PlayerSheet track={selectedTrack} onClose={() => setSelectedTrack(null)} /> : null}
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
