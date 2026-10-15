@@ -105,6 +105,7 @@ function TrackArt({
   size?: number;
   radius?: number;
 }) {
+  const { accent } = useTheme();
   return (
     <View
       style={[
@@ -113,55 +114,13 @@ function TrackArt({
           width: size,
           height: size,
           borderRadius: radius,
-          backgroundColor: track.coverColor || INK,
+          backgroundColor: track.coverColor || accent,
         },
       ]}
     >
-      <View
-        style={[
-          styles.artOrb,
-          {
-            backgroundColor: track.accentColor || CORAL,
-            width: size * 0.56,
-            height: size * 0.56,
-            borderRadius: size,
-            right: -size * 0.12,
-            top: size * 0.1,
-          },
-        ]}
-      />
-      <View
-        style={[
-          styles.artLine,
-          {
-            backgroundColor: track.accentColor || CORAL,
-            width: size * 0.7,
-            left: size * 0.12,
-            bottom: size * 0.18,
-            transform: [{ rotate: "-22deg" }],
-          },
-        ]}
-      />
-      <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.18) }]}>
+      <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.2) }]}>
         {initials(track.artist)}
       </Text>
-    </View>
-  );
-}
-
-function SkeletonRows() {
-  return (
-    <View style={styles.skeletonStack}>
-      {[1, 2, 3].map((item) => (
-        <View key={item} style={styles.skeletonRow}>
-          <View style={styles.skeletonArt} />
-          <View style={styles.skeletonCopy}>
-            <View style={styles.skeletonLong} />
-            <View style={styles.skeletonShort} />
-          </View>
-          <View style={styles.skeletonDot} />
-        </View>
-      ))}
     </View>
   );
 }
@@ -619,30 +578,15 @@ export default function AfuMusicApp({
         {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable> : null}
       </View>
 
-      <View style={styles.sectionRail}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionRailContent}>
-          <SectionPill label="Discover" icon="sparkles-outline" active={section === "discover"} onPress={() => setSection("discover")} />
-          <SectionPill label="Library" icon="albums-outline" active={section === "library"} onPress={() => setSection("library")} />
-          {Platform.OS !== "web" ? <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} /> : null}
-          <SectionPill label="Studio" icon="mic-outline" active={section === "studio"} onPress={() => setSection("studio")} />
-        </ScrollView>
-      </View>
-
       {section === "discover" && !query ? (
-        <View style={styles.heroCard}>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroEyebrow}>AfuMusic / 001</Text>
-            <Text style={styles.heroTitle}>Songs worth{`\n`}keeping close.</Text>
-            <Text style={styles.heroBody}>Independent sounds, shared privately. Unlock a track once and keep it with you offline.</Text>
-            <Pressable onPress={() => setSection("library")} style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}>
-              <Text style={styles.heroButtonText}>Open my library</Text>
-              <Ionicons name="arrow-forward" size={16} color={INK} />
-            </Pressable>
-          </View>
-          <View style={styles.heroDisc}>
-            <View style={styles.discOuter}><View style={styles.discInner}><View style={styles.discLabel}><Ionicons name="musical-notes" size={22} color={CORAL} /></View></View></View>
-            <View style={styles.discNeedle} />
-          </View>
+        <View style={[styles.heroSection, { borderBottomColor: colors.border }]}>
+          <Text style={[styles.heroEyebrow, { color: accent }]}>AFUCHAT · MUSIC</Text>
+          <Text style={[styles.heroTitle, { color: colors.text }]}>Your next favourite starts here.</Text>
+          <Text style={[styles.heroBody, { color: colors.textSecondary }]}>Discover independent artists, collect the tracks you love, and play them across AfuChat.</Text>
+          <Pressable onPress={() => setSection("library")} style={({ pressed }) => [styles.heroButton, { backgroundColor: accent }, pressed && styles.pressed]}>
+            <Text style={styles.heroButtonText}>Open my library</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+          </Pressable>
         </View>
       ) : null}
 
@@ -699,7 +643,10 @@ export default function AfuMusicApp({
       {section === "discover" && !query ? <Text style={[styles.listHint, { color: colors.textMuted }]}>Fresh from independent creators</Text> : null}
 
       {loading ? (
-        <SkeletonRows />
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="small" color={accent} />
+          <Text style={[styles.loadingLabel, { color: colors.textMuted }]}>Loading your music</Text>
+        </View>
       ) : loadError ? (
         <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadTracks }} />
       ) : filteredTracks.length === 0 ? (
@@ -792,26 +739,15 @@ const styles = StyleSheet.create({
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, marginHorizontal: 20, height: 46, paddingHorizontal: 13, borderRadius: 14, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
-  sectionRail: { marginTop: 15 },
-  sectionRailContent: { paddingHorizontal: 20, gap: 8 },
-  sectionPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, height: 35, borderRadius: 18, backgroundColor: "#EFE7DE" },
-  sectionPillActive: { backgroundColor: "#1018D8" },
-  sectionPillLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
-  sectionPillLabelActive: { color: PAPER },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  heroCard: { overflow: "hidden", flexDirection: "row", minHeight: 205, marginHorizontal: 20, marginTop: 17, borderRadius: 22, backgroundColor: "#1018D8", padding: 19 },
-  heroCopy: { flex: 1, zIndex: 2 },
-  heroEyebrow: { color: "#AFA9C9", fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
-  heroTitle: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 27, lineHeight: 29, letterSpacing: -0.8 },
-  heroBody: { color: "#B8B2C4", fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16, maxWidth: 205, marginTop: 10 },
-  heroButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8, backgroundColor: "#F4C469", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, marginTop: 14 },
-  heroButtonPressed: { backgroundColor: CORAL },
-  heroButtonText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
-  heroDisc: { width: 120, justifyContent: "center", alignItems: "center", marginRight: -5 },
-  discOuter: { width: 126, height: 126, borderRadius: 70, backgroundColor: "#2C294B", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#514D70" },
-  discInner: { width: 97, height: 97, borderRadius: 55, backgroundColor: "#211E3B", alignItems: "center", justifyContent: "center", borderWidth: 7, borderColor: "#373359" },
-  discLabel: { width: 38, height: 38, borderRadius: 23, backgroundColor: "#F1BE68", alignItems: "center", justifyContent: "center" },
-  discNeedle: { position: "absolute", width: 5, height: 62, backgroundColor: CORAL, right: 7, top: 23, borderRadius: 5, transform: [{ rotate: "31deg" }] },
+  pressed: { opacity: 0.72 },
+  heroSection: { marginHorizontal: 20, marginTop: 26, paddingBottom: 23, borderBottomWidth: 1 },
+  heroEyebrow: { fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 1.6, marginBottom: 11 },
+  heroTitle: { fontFamily: "Inter_700Bold", fontSize: 34, lineHeight: 37, letterSpacing: -1.25, maxWidth: 560 },
+  heroBody: { fontFamily: "Inter_500Medium", fontSize: 14, lineHeight: 21, maxWidth: 520, marginTop: 12 },
+  heroButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 9, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 10, marginTop: 18 },
+  heroButtonText: { color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 12 },
+  loadingState: { alignItems: "center", justifyContent: "center", paddingVertical: 42, gap: 12 },
+  loadingLabel: { fontFamily: "Inter_500Medium", fontSize: 12 },
   contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 22, marginBottom: 10 },
   sectionEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25, marginBottom: 4 },
   sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.65 },
@@ -835,9 +771,7 @@ const styles = StyleSheet.create({
   trackRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 82, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
   trackRowPressed: { opacity: 0.7, transform: [{ translateX: 2 }] },
   trackArt: { overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  artOrb: { position: "absolute", opacity: 0.92 },
-  artLine: { height: 3, position: "absolute", borderRadius: 4, opacity: 0.9 },
-  artInitials: { color: PAPER, fontFamily: "Inter_700Bold", letterSpacing: 0.5, zIndex: 1 },
+  artInitials: { color: "#FFFFFF", fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
   trackCopy: { flex: 1, minWidth: 0, gap: 3 },
   trackTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 14 },
   trackArtist: { color: "#645C55", fontFamily: "Inter_500Medium", fontSize: 11 },
@@ -846,13 +780,7 @@ const styles = StyleSheet.create({
   miniPlay: { width: 27, height: 27, borderRadius: 14, backgroundColor: CORAL, alignItems: "center", justifyContent: "center" },
   miniPlayPressed: { backgroundColor: INK, transform: [{ scale: 0.9 }] },
   priceText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
-  skeletonStack: { paddingHorizontal: 20, paddingTop: 14, gap: 14 },
-  skeletonRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  skeletonArt: { width: 64, height: 64, borderRadius: 16, backgroundColor: "#E9DED2" },
-  skeletonCopy: { flex: 1, gap: 9 },
-  skeletonLong: { height: 12, width: "58%", borderRadius: 6, backgroundColor: "#E9DED2" },
-  skeletonShort: { height: 9, width: "37%", borderRadius: 5, backgroundColor: "#EDE3D9" },
-  skeletonDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: "#EDE3D9" },
+
   emptyState: { alignItems: "center", paddingHorizontal: 45, paddingTop: 55 },
   emptyIcon: { width: 55, height: 55, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
   emptyTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, textAlign: "center" },
