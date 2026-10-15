@@ -49,28 +49,27 @@ export async function getLocalMessages(
   conversationId: string,
   limit = 100,
   beforeSentAt?: string,
+  afterSentAt?: string,
 ): Promise<LocalMessage[]> {
   try {
     const db = await getDB();
-    let rows: any[];
+    const conditions = ["conversation_id = ?"];
+    const params: (string | number)[] = [conversationId];
     if (beforeSentAt) {
-      rows = await db.getAllAsync<any>(
-        `SELECT * FROM messages
-         WHERE conversation_id = ? AND sent_at < ?
-         ORDER BY sent_at DESC LIMIT ?`,
-        [conversationId, beforeSentAt, limit],
-      );
-      rows.reverse();
-    } else {
-      rows = await db.getAllAsync<any>(
-        `SELECT * FROM (
-           SELECT * FROM messages
-           WHERE conversation_id = ?
-           ORDER BY sent_at DESC LIMIT ?
-         ) ORDER BY sent_at ASC`,
-        [conversationId, limit],
-      );
+      conditions.push("sent_at < ?");
+      params.push(beforeSentAt);
     }
+    if (afterSentAt) {
+      conditions.push("sent_at > ?");
+      params.push(afterSentAt);
+    }
+    const rows = await db.getAllAsync<any>(
+      `SELECT * FROM messages
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY sent_at DESC LIMIT ?`,
+      [...params, limit],
+    );
+    rows.reverse();
     return rows.map(rowToMsg);
   } catch {
     return [];

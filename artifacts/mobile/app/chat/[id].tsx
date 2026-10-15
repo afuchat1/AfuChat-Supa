@@ -2636,6 +2636,8 @@ function ChatScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const oldestCursorRef = useRef<string | null>(null);
+  const localHistoryExhaustedRef = useRef(false);
+  const paginationChatIdRef = useRef<string | null>(null);
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const autoSentInitialRef = useRef(false);
   const lensInjectedRef = useRef(false);
@@ -3005,8 +3007,12 @@ function ChatScreen() {
     {
       // getLocalMessages returns oldest-first (ASC). FlatList is inverted so index 0
       // must be the NEWEST message. Reverse to get newest-first.
-      const clearedAt = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
-      const allCached = await getLocalMessages(chatId, 5000);
+      // Keep the initial render bounded. Older cached history is paged from SQLite
+      // only if the user scrolls up, rather than mapping thousands of rows at open.
+      const [clearedAt, allCached] = await Promise.all([
+        AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null),
+        getLocalMessages(chatId, 100),
+      ]);
       if (!isCurrentLoad()) return;
       const cached = clearedAt ? allCached.filter((m) => m.sent_at > clearedAt) : allCached;
       if (cached.length > 0) {
@@ -3020,10 +3026,10 @@ function ChatScreen() {
         })));
         setLoading(false);
         // Seed the pagination cursor from the OLDEST cached message.
-        if (!oldestCursorRef.current) {
+        if (!oldestCursorRef.current || cached[0].sent_at < oldestCursorRef.current) {
           oldestCursorRef.current = cached[0].sent_at;
-          setHasMore(true);
         }
+        setHasMore(true);
         // Only pre-download recent attachments. Downloading the entire local
         // history on every chat open can create a large background burst.
         autoDownloadChatAttachments(cached.slice(-100).map((m) => ({
@@ -3263,16 +3269,127 @@ function ChatScreen() {
   const loadMoreMessages = useCallback(async () => {
     const chatId = isDraft ? realChatId : id;
     if (!chatId || !user || loadingMore || !hasMore || !oldestCursorRef.current) return;
+    const loadToken = chatLoadGenerationRef.current;
+    const isCurrentLoad = () => chatLoadGenerationRef.current === loadToken;
     setLoadingMore(true);
     try {
       const cursor = oldestCursorRef.current;
-      const { data } = await supabase
+      const clearedAt = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
+      if (!localHistoryExhaustedRef.current) {
+        const localPage = await getLocalMessages(chatId, 50, cursor, clearedAt ?? undefined);
+        if (!isCurrentLoad()) return;
+        if (localPage.length > 0) {
+          if (localPage.length < 50) localHistoryExhaustedRef.current = true;
+          oldestCursorRef.current = localPage[0].sent_at;
+          const mappedLocal = [...localPage].reverse().map((message) => {
+            const isBot = message.sender_id === AFUAI_BOT_ID;
+            const aiParsed = isBot ? parseAfuAiTags(message.content || "") : null;
+            return {
+              id: message.id,
+              chat_id: message.conversation_id,
+              sender_id: message.sender_id,
+              encrypted_content: aiParsed ? (aiParsed.text || message.content || "") : (message.content || ""),
+              sent_at: message.sent_at,
+              reply_to_message_id: message.reply_to_id,
+              attachment_url: message.attachment_url,
+              attachment_type: message.attachment_type,
+              edited_at: message.edited_at,
+              status: message.status as any,
+              reactions: [],
+              _pending: message.is_pending,
+              _isAi: isBot || undefined,
+              _aiActions: aiParsed && aiParsed.actions.length > 0 ? aiParsed.actions : undefined,
+              _aiInvoices: aiParsed && aiParsed.invoices.length > 0 ? aiParsed.invoices : undefined,
+            } satisfies Message;
+          });
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((message) => message.id));
+            return [...prev, ...mappedLocal.filter((message) => !existingIds.has(message.id))];
+          });
+          setHasMore(true);
+
+          const localIds = localPage
+            .map((message) => message.id)
+            .filter((messageId) => !messageId.startsWith("pending"));
+          if (isOnline() && localIds.length > 0) {
+            const notificationEventsRequest = isNotificationsChat
+              ? supabase
+                  .from("notification_events")
+                  .select("id, message_id, kind, cta_label, cta_route, entity_id, metadata, read_at")
+                  .eq("recipient_id", user.id)
+                  .in("message_id", localIds)
+              : Promise.resolve({ data: [] as any[] });
+            void Promise.all([
+              supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", localIds),
+              supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", localIds),
+              notificationEventsRequest,
+            ]).then(([{ data: reactions }, { data: statuses }, { data: notificationEvents }]) => {
+              if (!isCurrentLoad()) return;
+              const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
+              for (const reaction of (reactions || []) as any[]) {
+                if (!reactionMap[reaction.message_id]) reactionMap[reaction.message_id] = [];
+                const existing = reactionMap[reaction.message_id].find((entry) => entry.emoji === reaction.reaction);
+                if (existing) {
+                  existing.count++;
+                  if (reaction.user_id === user.id) existing.myReaction = true;
+                } else {
+                  reactionMap[reaction.message_id].push({
+                    emoji: reaction.reaction,
+                    count: 1,
+                    myReaction: reaction.user_id === user.id,
+                  });
+                }
+              }
+              const statusMap = new Map<string, { read_at: string | null; delivered_at: string | null }>();
+              for (const status of (statuses || []) as any[]) {
+                statusMap.set(status.message_id, {
+                  read_at: status.read_at || null,
+                  delivered_at: status.delivered_at || null,
+                });
+              }
+              const notificationMap = new Map<string, NotificationMessageData>();
+              for (const event of (notificationEvents || []) as any[]) {
+                if (event.message_id) notificationMap.set(event.message_id, event);
+              }
+              const localIdSet = new Set(localIds);
+              setMessages((prev) => prev.map((message) => {
+                if (!localIdSet.has(message.id)) return message;
+                const status = statusMap.get(message.id);
+                return {
+                  ...message,
+                  reactions: reactionMap[message.id] ?? message.reactions,
+                  status: message.sender_id === user.id
+                    ? (status?.read_at ? "read" : status?.delivered_at ? "delivered" : message.status || "sent")
+                    : message.status,
+                  read_at: message.sender_id === user.id ? (status?.read_at || message.read_at || null) : message.read_at,
+                  delivered_at: message.sender_id === user.id
+                    ? (status?.delivered_at || message.delivered_at || null)
+                    : message.delivered_at,
+                  _notification: notificationMap.get(message.id) ?? message._notification,
+                };
+              }));
+            }).catch(() => {});
+          }
+          return;
+        }
+        localHistoryExhaustedRef.current = true;
+      }
+
+      if (!isOnline()) {
+        setHasMore(false);
+        return;
+      }
+      let olderMessagesQuery = supabase
         .from("messages")
         .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
         .eq("chat_id", chatId)
         .lt("sent_at", cursor)
         .order("sent_at", { ascending: false })
         .limit(50);
+      if (clearedAt) olderMessagesQuery = olderMessagesQuery.gt("sent_at", clearedAt);
+      const { data, error } = await olderMessagesQuery;
+      if (!isCurrentLoad()) return;
+      if (error) return;
       if (data && data.length > 0) {
         const msgIds = data.map((m: any) => m.id);
         const [{ data: reactions }, { data: statuses }] = await Promise.all([
@@ -3323,7 +3440,7 @@ function ChatScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [id, user, isDraft, realChatId, loadingMore, hasMore]);
+  }, [id, user, isDraft, realChatId, loadingMore, hasMore, isNotificationsChat]);
 
   useEffect(() => {
     // Native-only: web has no offline queue and no connectivity events to handle.
@@ -3332,6 +3449,7 @@ function ChatScreen() {
       if (online && !isLocalNotes) {
         await syncPendingMessages().catch(() => {});
         setMessages((prev) => prev.filter((m) => !m._pending));
+        setHasMore(true);
         loadMessages();
       }
     });
@@ -3560,6 +3678,13 @@ function ChatScreen() {
   useEffect(() => {
     const activeChatId = isDraft ? realChatId : id;
     if (!activeChatId) return;
+    if (paginationChatIdRef.current !== activeChatId) {
+      paginationChatIdRef.current = activeChatId;
+      oldestCursorRef.current = null;
+      localHistoryExhaustedRef.current = false;
+      setHasMore(true);
+      setLoadingMore(false);
+    }
     const loadToken = ++chatLoadGenerationRef.current;
     const isCurrentSubscription = () => chatLoadGenerationRef.current === loadToken;
 
