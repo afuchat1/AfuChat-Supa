@@ -255,6 +255,7 @@ export default function AfuMusicApp({
   const [uploading, setUploading] = useState(false);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadGenre, setUploadGenre] = useState("Ambient");
+  const [uploadMode, setUploadMode] = useState<"free" | "paid">("free");
   const [uploadPrice, setUploadPrice] = useState("20");
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
 
@@ -449,11 +450,16 @@ export default function AfuMusicApp({
       copyToCacheDirectory: true,
       multiple: false,
     });
-    if (!result.canceled) setUploadFile(result.assets[0]);
+    if (!result.canceled) {
+      const file = result.assets[0];
+      setUploadFile(file);
+      const titleFromFile = file.name.replace(/\\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+      setUploadTitle(titleFromFile || file.name);
+    }
   }, []);
 
   const submitUpload = useCallback(async () => {
-    if (!canMonetize) {
+    if (uploadMode === "paid" && !canMonetize) {
       showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to sell music.", [
         { text: "Not now", style: "cancel" },
         ...(onOpenPlans ? [{ text: "View plans", onPress: onOpenPlans }] : []),
@@ -470,7 +476,7 @@ export default function AfuMusicApp({
       const payload = {
         title: uploadTitle.trim(),
         genre: uploadGenre,
-        price: Math.max(0, Number(uploadPrice) || 0),
+        price: uploadMode === "free" ? 0 : Math.max(1, Math.floor(Number(uploadPrice) || 0)),
         fileUri: uploadFile.uri,
         fileName: uploadFile.name,
         mimeType: uploadFile.mimeType,
@@ -487,6 +493,7 @@ export default function AfuMusicApp({
       }
       setUploadOpen(false);
       setUploadTitle("");
+      setUploadMode("free");
       setUploadFile(null);
       showAlert("Published to AfuMusic", "Your track is ready for listeners.");
     } catch {
@@ -494,7 +501,7 @@ export default function AfuMusicApp({
     } finally {
       setUploading(false);
     }
-  }, [canMonetize, onOpenPlans, onUpload, uploadFile, uploadGenre, uploadPrice, uploadTitle, uploading]);
+  }, [canMonetize, onOpenPlans, onUpload, uploadFile, uploadGenre, uploadMode, uploadPrice, uploadTitle, uploading]);
 
   const renderTrack = useCallback(({ item }: { item: AfuMusicTrack }) => (
     <TrackRow
@@ -571,10 +578,7 @@ export default function AfuMusicApp({
         </View>
         {section === "studio" ? (
           <Pressable
-            onPress={() => {
-              if (canMonetize) setUploadOpen(true);
-              else void submitUpload();
-            }}
+            onPress={() => setUploadOpen(true)}
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
           >
             <Ionicons name="add" size={19} color={PAPER} />
@@ -662,14 +666,28 @@ export default function AfuMusicApp({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
               {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
             </ScrollView>
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>Unlock price</Text>
-            <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Availability</Text>
+            <View style={[styles.uploadModeRow, { borderColor: colors.border }]}>
+              <Pressable onPress={() => setUploadMode("free")} style={[styles.uploadModeOption, uploadMode === "free" && { backgroundColor: accent }]}>
+                <Text style={[styles.uploadModeTitle, { color: uploadMode === "free" ? PAPER : colors.text }]}>Free</Text>
+                <Text style={[styles.uploadModeHint, { color: uploadMode === "free" ? PAPER : colors.textMuted }]}>Anyone can listen</Text>
+              </Pressable>
+              <Pressable onPress={() => setUploadMode("paid")} style={[styles.uploadModeOption, uploadMode === "paid" && { backgroundColor: accent }]}>
+                <Text style={[styles.uploadModeTitle, { color: uploadMode === "paid" ? PAPER : colors.text }]}>Paid</Text>
+                <Text style={[styles.uploadModeHint, { color: uploadMode === "paid" ? PAPER : colors.textMuted }]}>Unlock with ACoin</Text>
+              </Pressable>
+            </View>
+            {uploadMode === "paid" ? <>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Price</Text>
+              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+              {!canMonetize ? <Text style={[styles.uploadEligibility, { color: colors.textMuted }]}>Paid uploads require an active Standard or Pro plan, or a verified badge.</Text> : null}
+            </> : null}
             <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
               <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
               <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
-            <Pressable onPress={() => void submitUpload()} disabled={uploading || !canMonetize} style={({ pressed }) => [styles.publishButton, (pressed || !canMonetize) && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
+            <Pressable onPress={() => void submitUpload()} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish {uploadMode === "free" ? "free track" : "paid track"}</Text></>}</Pressable>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -757,6 +775,11 @@ const styles = StyleSheet.create({
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
   formInput: { height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
+  uploadModeRow: { flexDirection: "row", borderWidth: 1, borderRadius: 4, overflow: "hidden" },
+  uploadModeOption: { flex: 1, paddingVertical: 10, paddingHorizontal: 12 },
+  uploadModeTitle: { fontFamily: "Inter_700Bold", fontSize: 12 },
+  uploadModeHint: { fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
+  uploadEligibility: { fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 7 },
   formGenreRail: { gap: 7, paddingBottom: 3 },
   formGenreChip: { borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, borderRadius: 13, paddingHorizontal: 11, paddingVertical: 8 },
   formGenreChipActive: { borderColor: INK, backgroundColor: INK },
