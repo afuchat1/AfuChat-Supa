@@ -44,6 +44,7 @@ import AfuMusicApp from "@/modules/afumusic";
 import {
   cacheMusicTrackOffline,
   getMusicPlaybackUri,
+  listCreatorMusicTracks,
   listMusicTracks,
   listOfflineMusicTracks,
   publishMusicTrack,
@@ -176,6 +177,7 @@ function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
       initialSection={(initialSection as any) || "discover"}
       acoinBalance={profile?.acoin}
       onBrowse={listMusicTracks}
+      onListStudio={listCreatorMusicTracks}
       onSearch={searchMusicTracks}
       onPurchase={async (track) => {
         const result = await purchaseMusicTrack(track.id);

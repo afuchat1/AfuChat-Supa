@@ -45,6 +45,7 @@ export type AfuMusicTrack = {
 
 export type AfuMusicCallbacks = {
   onBrowse?: () => Promise<AfuMusicTrack[]>;
+  onListStudio?: () => Promise<AfuMusicTrack[]>;
   onSearch?: (query: string) => Promise<AfuMusicTrack[]>;
   onPurchase?: (track: AfuMusicTrack) => Promise<void | { alreadyOwned?: boolean }>;
   onCache?: (track: AfuMusicTrack) => Promise<void>;
@@ -119,7 +120,7 @@ function TrackArt({
       ]}
     >
       <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.2) }]}>
-        {initials(track.artist)}
+      {initials(track.title || track.artist)}
       </Text>
     </View>
   );
@@ -157,16 +158,30 @@ function TrackRow({
       </View>
       <View style={styles.rowActions}>
         {managed ? (
-          <Pressable
-            onPress={(event) => {
-              event.stopPropagation();
-              onDelete?.();
-            }}
-            hitSlop={8}
-            accessibilityLabel={`Remove ${track.title}`}
-          >
-            <Ionicons name="trash-outline" size={19} color={CORAL} />
-          </Pressable>
+          <View style={styles.managedActions}>
+            <Pressable
+              accessibilityLabel={`Play ${track.title}`}
+              onPress={(event) => {
+                event.stopPropagation();
+                onPlay();
+              }}
+              hitSlop={8}
+              style={({ pressed }) => [styles.miniPlay, { backgroundColor: accent }, pressed && styles.miniPlayPressed]}
+            >
+              <Ionicons name="play" size={13} color={PAPER} />
+            </Pressable>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                onDelete?.();
+              }}
+              hitSlop={8}
+              accessibilityLabel={`Remove ${track.title}`}
+              style={styles.removeTrackButton}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
         ) : owned ? (
           <Pressable
             accessibilityLabel={`Play ${track.title}`}
@@ -222,6 +237,7 @@ function EmptyState({
 export default function AfuMusicApp({
   initialSection = "discover",
   onBrowse,
+  onListStudio,
   onSearch,
   onPurchase,
   onCache,
@@ -239,8 +255,12 @@ export default function AfuMusicApp({
   const insets = useSafeAreaInsets();
   const { colors, accent, isDark } = useTheme();
   const { playMusic } = useGlobalMusicPlayer();
-  const [section, setSection] = useState<MusicSection>(Platform.OS === "web" && initialSection === "offline" ? "discover" : initialSection);
+  const requestedSection = ["discover", "library", "offline", "studio"].includes(initialSection)
+    ? initialSection as MusicSection
+    : "discover";
+  const [section, setSection] = useState<MusicSection>(Platform.OS === "web" && requestedSection === "offline" ? "discover" : requestedSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
+  const [studioTracks, setStudioTracks] = useState<AfuMusicTrack[]>([]);
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -274,6 +294,19 @@ export default function AfuMusicApp({
     }
   }, [onBrowse]);
 
+  const loadStudioTracks = useCallback(async () => {
+    setLoadError(false);
+    setLoading(true);
+    try {
+      if (!onListStudio) throw new Error("AfuMusic Studio is not connected to your uploads.");
+      setStudioTracks(await onListStudio());
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [onListStudio]);
+
   const syncOffline = useCallback(async () => {
     if (!onListOffline) return;
     try {
@@ -288,19 +321,34 @@ export default function AfuMusicApp({
   }, [onListOffline]);
 
   useEffect(() => {
-    loadTracks();
+    const next = ["discover", "library", "offline", "studio"].includes(initialSection)
+      ? initialSection as MusicSection
+      : "discover";
+    setSection(Platform.OS === "web" && next === "offline" ? "discover" : next);
+  }, [initialSection]);
+
+  useEffect(() => {
+    if (section === "studio") void loadStudioTracks();
+    else void loadTracks();
     void syncOffline();
-  }, [loadTracks, syncOffline]);
+  }, [loadStudioTracks, loadTracks, section, syncOffline]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    await loadTracks();
-    setRefreshing(false);
-  }, [loadTracks]);
+    try {
+      if (section === "studio") await loadStudioTracks();
+      else await loadTracks();
+      await syncOffline();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadStudioTracks, loadTracks, section, syncOffline]);
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const source = section === "offline" && onListOffline ? offlineTracks : tracks;
+    const source = section === "studio"
+      ? studioTracks
+      : section === "offline" && onListOffline ? offlineTracks : tracks;
     return source.filter((track) => {
       const matchesGenre = genre === "All" || track.genre === genre;
       const matchesQuery = !normalized ||
@@ -308,11 +356,10 @@ export default function AfuMusicApp({
       const matchesSection =
         section === "library" ? ownedIds.includes(track.id) || track.isOwned :
         section === "offline" ? cachedIds.includes(track.id) :
-        section === "studio" ? track.handle === "@you" || track.artist === "You" || track.id.startsWith("local-") :
         true;
       return matchesGenre && matchesQuery && matchesSection;
     });
-  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, query, section, tracks]);
+  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, query, section, studioTracks, tracks]);
 
   const featuredTracks = useMemo(() => (
     tracks
@@ -397,6 +444,7 @@ export default function AfuMusicApp({
           try {
             await onDeleteUpload?.(track);
             setTracks((current) => current.filter((item) => item.id !== track.id));
+            setStudioTracks((current) => current.filter((item) => item.id !== track.id));
           } catch {
             showAlert("Could not remove track", "Try again in a moment.");
           }
@@ -485,11 +533,13 @@ export default function AfuMusicApp({
       if (!onUpload) throw new Error("AfuMusic publishing is unavailable.");
       const result = await onUpload(payload);
       if (result) {
-        setTracks((current) => [{
+        const publishedTrack = {
           ...result,
           artist: result.artist || "You",
           handle: result.handle || "@you",
-        }, ...current]);
+        };
+        setTracks((current) => [publishedTrack, ...current]);
+        setStudioTracks((current) => [publishedTrack, ...current.filter((item) => item.id !== publishedTrack.id)]);
       }
       setUploadOpen(false);
       setUploadTitle("");
@@ -575,6 +625,11 @@ export default function AfuMusicApp({
       <View style={styles.contentHeader}>
         <View>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</Text>
+          {section === "studio" ? (
+            <Text style={[styles.studioSummary, { color: colors.textMuted }]}>
+              {studioTracks.length} {studioTracks.length === 1 ? "release" : "releases"} in your catalog
+            </Text>
+          ) : null}
         </View>
         {section === "studio" ? (
           <Pressable
@@ -608,8 +663,8 @@ export default function AfuMusicApp({
       ) : filteredTracks.length === 0 ? (
         <EmptyState
           icon={section === "offline" ? "cloud-download-outline" : section === "studio" ? "mic-outline" : "albums-outline"}
-          title={section === "offline" ? "Nothing saved offline" : section === "library" ? "Your library is waiting" : section === "studio" ? "No published tracks" : "No tracks found"}
-          message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : "Try another search or publish your first track."}
+          title={section === "offline" ? "Nothing saved offline" : section === "library" ? "Your library is waiting" : section === "studio" ? "Your studio is ready" : "No tracks found"}
+          message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : section === "studio" ? "Tracks you publish will appear here. Choose an audio file to release your first track." : "Try another search or publish your first track."}
           action={section === "studio" ? { label: "Publish a track", onPress: () => setUploadOpen(true) } : undefined}
         />
       ) : (
@@ -709,6 +764,7 @@ const styles = StyleSheet.create({
   loadingLabel: { fontFamily: "Inter_500Medium", fontSize: 12 },
   contentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 24, marginBottom: 12 },
   sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 25, letterSpacing: -0.8 },
+  studioSummary: { fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 4 },
   featuredBlock: { marginTop: 20 },
   featuredHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, marginBottom: 10 },
   featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4 },
@@ -734,6 +790,8 @@ const styles = StyleSheet.create({
   trackArtist: { color: "#645C55", fontFamily: "Inter_500Medium", fontSize: 11 },
   trackMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10 },
   rowActions: { flexDirection: "row", alignItems: "center", gap: 9 },
+  managedActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  removeTrackButton: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
   miniPlay: { width: 27, height: 27, borderRadius: 14, backgroundColor: CORAL, alignItems: "center", justifyContent: "center" },
   miniPlayPressed: { backgroundColor: INK, transform: [{ scale: 0.9 }] },
   priceText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },

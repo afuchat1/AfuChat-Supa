@@ -121,6 +121,28 @@ export async function listMusicTracks() {
   return loadTracks();
 }
 
+export async function listCreatorMusicTracks(): Promise<AfuMusicTrack[]> {
+  const userId = await currentUserId();
+  const [{ data: rows, error }, offline] = await Promise.all([
+    supabase
+      .from("music_tracks")
+      .select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,created_at")
+      .eq("creator_id", userId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    getOfflineMusicEntries(userId),
+  ]);
+  if (error) throw error;
+
+  const cached = new Set(offline.map((entry) => entry.trackId));
+  return ((rows ?? []) as MusicRow[]).map((row) => ({
+    ...rowToTrack(row, new Set([row.id]), cached, userId),
+    artist: "You",
+    handle: "@you",
+  }));
+}
+
 export async function searchMusicTracks(query: string) {
   return loadTracks(query);
 }
