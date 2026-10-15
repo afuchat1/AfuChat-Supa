@@ -30,7 +30,7 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
   });
   const floatingPositionRef = useRef(floatingPosition);
   floatingPositionRef.current = floatingPosition;
-  const [floatingDrag] = useState(() => new Animated.ValueXY(floatingPosition));
+  const [floatingDrag] = useState(() => new Animated.ValueXY({ x: 0, y: 0 }));
   const floatingPanResponder = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => false,
     onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
@@ -180,7 +180,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#D8DCE3",
   },
-  playerMinimized: { paddingVertical: 4, gap: 0 },
   playerExpanded: { paddingTop: 10, paddingBottom: 14 },
   action: { padding: 4 },
   controls: { opacity: 1 },
