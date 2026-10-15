@@ -161,7 +161,6 @@ export default function FullAppRoute() {
     }),
   ) as Record<string, string>;
   if (!rawId || !isAppId(rawId)) return null;
-  if (rawId === "afumusic" && Platform.OS === "web") return <Redirect href="/" />;
   return (
     <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afumusic"}>
       <AppContent appId={rawId} section={section} params={routeParams} />
