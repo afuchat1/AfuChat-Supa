@@ -524,10 +524,7 @@ export default function AfuMusicApp({
         keyboardShouldPersistTaps="handled"
       >
       <View style={styles.topBar}>
-        <View>
-          <Text style={[styles.wordmark, { color: colors.text }]}></Text>
-        </View>
-        <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
+<View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="flash" size={13} color={GOLD} />
           <Text style={[styles.coinText, { color: colors.text }]}>
             {typeof acoinBalance === "number" ? `${Math.floor(acoinBalance)} AC` : "ACoin"}
@@ -553,7 +550,6 @@ export default function AfuMusicApp({
         <View style={styles.featuredBlock}>
           <View style={styles.featuredHeader}>
             <View>
-              <Text style={styles.sectionEyebrow}></Text>
               <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured tracks</Text>
             </View>
           </View>
@@ -571,7 +567,6 @@ export default function AfuMusicApp({
 
       <View style={styles.contentHeader}>
         <View>
-          <Text style={styles.sectionEyebrow}>{section === "studio" ? "" : ""}</Text>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
@@ -687,28 +682,18 @@ const styles = StyleSheet.create({
   pageScroll: { flex: 1, width: "100%" },
   pageContent: { paddingBottom: 24, width: "100%", maxWidth: 1120, alignSelf: "center" },
   topBar: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 15, paddingBottom: 14 },
-  wordmark: { color: INK, fontFamily: "Inter_700Bold", fontSize: 29, letterSpacing: -1.3 },
-  wordmarkAccent: { color: CORAL },
-  privateLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 8, letterSpacing: 1.4, marginTop: 3 },
   coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 4, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 46, paddingHorizontal: 12, borderRadius: 4, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
   pressed: { opacity: 0.72 },
-  heroSection: { marginHorizontal: 20, marginTop: 26, paddingBottom: 23, borderBottomWidth: 1 },
-  heroEyebrow: { fontFamily: "Inter_700Bold", fontSize: 10, letterSpacing: 1.6, marginBottom: 11 },
-  heroTitle: { fontFamily: "Inter_700Bold", fontSize: 34, lineHeight: 37, letterSpacing: -1.25, maxWidth: 560 },
-  heroBody: { fontFamily: "Inter_500Medium", fontSize: 14, lineHeight: 21, maxWidth: 520, marginTop: 12 },
-  heroButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 9, paddingHorizontal: 15, paddingVertical: 12, borderRadius: 10, marginTop: 18 },
-  heroButtonText: { color: "#FFFFFF", fontFamily: "Inter_700Bold", fontSize: 12 },
   loadingState: { alignItems: "center", justifyContent: "center", paddingVertical: 42, gap: 12 },
   loadingLabel: { fontFamily: "Inter_500Medium", fontSize: 12 },
-  contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 28, marginBottom: 12 },
-  sectionEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25, marginBottom: 4 },
+  contentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 24, marginBottom: 12 },
   sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 25, letterSpacing: -0.8 },
   featuredBlock: { marginTop: 20 },
   featuredHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, marginBottom: 10 },
-  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4, marginTop: 3 },
+  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4 },
   featuredRail: { paddingHorizontal: 20, gap: 12 },
   featuredCard: { width: 124, paddingBottom: 8 },
   featuredCardTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginTop: 8 },
@@ -721,7 +706,6 @@ const styles = StyleSheet.create({
   genreChipActive: { borderColor: INK, backgroundColor: INK },
   genreText: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 10 },
   genreTextActive: { color: PAPER },
-  listHint: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 11, marginBottom: 4 },
   trackList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
   trackRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 88, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E8DED4" },
   trackRowPressed: { opacity: 0.7, transform: [{ translateX: 2 }] },
