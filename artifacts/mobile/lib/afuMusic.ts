@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { cacheMusicFile, getOfflineMusicEntries, getOfflineMusicUri } from "./musicCache";
@@ -214,9 +215,23 @@ export async function publishMusicTrack(input: {
   if (!Number.isFinite(input.price) || input.price < 0 || input.price > 100000) {
     throw new Error("Choose a price from 0 to 100,000 ACoin.");
   }
-  const info = await FileSystem.getInfoAsync(input.fileUri);
-  if (!info.exists) throw new Error("The selected audio file is no longer available.");
-  const fileSize = Number((info as any).size ?? input.fileSize ?? 0);
+  let fileSize = Number(input.fileSize ?? 0);
+  if (Platform.OS === "web" && (input.fileUri.startsWith("blob:") || input.fileUri.startsWith("data:"))) {
+    // Browser DocumentPicker returns blob/data URLs; expo-file-system cannot stat them.
+    // mediaUpload.ts already streams these URLs through the existing upload service.
+    try {
+      const response = await fetch(input.fileUri);
+      if (!response.ok) throw new Error("Could not read selected audio.");
+      const blob = await response.blob();
+      fileSize = blob.size || fileSize;
+    } catch {
+      if (!fileSize) throw new Error("The selected audio file is no longer available.");
+    }
+  } else {
+    const info = await FileSystem.getInfoAsync(input.fileUri);
+    if (!info.exists) throw new Error("The selected audio file is no longer available.");
+    fileSize = Number((info as any).size ?? fileSize);
+  }
   if (fileSize > MAX_AUDIO_BYTES) throw new Error("Audio files must be 100 MB or smaller.");
 
   const extension = audioExtension(input.fileName, mimeType);
