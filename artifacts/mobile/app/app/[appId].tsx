@@ -1,6 +1,5 @@
 import React from "react";
-import { Platform } from "react-native";
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
