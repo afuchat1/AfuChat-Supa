@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "@/lib/alert";
 import { safeRouter } from "@/lib/navUtils";
@@ -258,8 +257,7 @@ export default function AfuMusicApp({
   const { colors, accent, isDark } = useTheme();
   const { playMusic } = useGlobalMusicPlayer();
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else safeRouter.replace("/apps" as any);
+    safeRouter.back("/apps");
   }, []);
   const requestedSection = ["discover", "library", "offline", "studio"].includes(initialSection)
     ? initialSection as MusicSection
@@ -593,11 +591,13 @@ export default function AfuMusicApp({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            testID="afumusic-back-button"
             onPress={handleBack}
             hitSlop={8}
             style={[styles.backButton, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
           >
             <Ionicons name="arrow-back" size={18} color={colors.text} />
+            <Text style={[styles.backLabel, { color: colors.text }]}>Back</Text>
           </Pressable>
           <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="flash" size={13} color={GOLD} />
@@ -775,7 +775,8 @@ const styles = StyleSheet.create({
   pageContent: { paddingBottom: 24, width: "100%", maxWidth: 1120, alignSelf: "center" },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 15, paddingBottom: 14 },
   topBarStart: { flexDirection: "row", alignItems: "center", gap: 8 },
-  backButton: { width: 34, height: 34, borderRadius: 17, borderWidth: 0.5, alignItems: "center", justifyContent: "center" },
+  backButton: { minWidth: 66, height: 34, paddingHorizontal: 10, borderRadius: 17, borderWidth: 0.5, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
+  backLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 4, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
   searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 46, paddingHorizontal: 12, borderRadius: 4, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },

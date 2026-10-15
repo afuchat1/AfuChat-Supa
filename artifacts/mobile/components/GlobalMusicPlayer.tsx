@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
@@ -40,6 +40,73 @@ export function useGlobalMusicPlayer() {
 function formatMusicTime(milliseconds: number) {
   const seconds = Math.floor(Math.max(0, milliseconds) / 1000);
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, "0")}`;
+}
+
+function SlidingTrackTitle({ title, color }: { title: string; color: string }) {
+  const offset = useRef(new Animated.Value(0)).current;
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [measurement, setMeasurement] = useState({ title: "", width: 0 });
+  const titleWidth = measurement.title === title ? measurement.width : 0;
+
+  useEffect(() => {
+    offset.stopAnimation();
+    offset.setValue(0);
+    if (viewportWidth <= 0 || titleWidth <= viewportWidth + 1) return;
+
+    const cycleDistance = titleWidth + 28;
+    const marquee = Animated.loop(Animated.sequence([
+      Animated.delay(800),
+      Animated.timing(offset, {
+        toValue: -cycleDistance,
+        duration: Math.max(4500, cycleDistance * 32),
+        useNativeDriver: false,
+      }),
+      Animated.delay(900),
+    ]));
+    marquee.start();
+    return () => marquee.stop();
+  }, [offset, title, titleWidth, viewportWidth]);
+
+  const measureTitle = (event: LayoutChangeEvent) => {
+    const width = event.nativeEvent.layout.width;
+    setMeasurement((current) => (
+      current.title === title && Math.abs(current.width - width) < 1
+        ? current
+        : { title, width }
+    ));
+  };
+
+  return (
+    <View
+      style={styles.titleViewport}
+      onLayout={(event) => {
+        const width = event.nativeEvent.layout.width;
+        setViewportWidth((current) => Math.abs(current - width) < 1 ? current : width);
+      }}
+    >
+      <Animated.View style={[styles.titleMarqueeTrack, { transform: [{ translateX: offset }] }]}>
+        <Text
+          numberOfLines={1}
+          onLayout={measureTitle}
+          style={[styles.miniTrackTitle, { color }]}
+        >
+          {title}
+        </Text>
+        {titleWidth > viewportWidth + 1 ? (
+          <>
+            <View style={styles.marqueeGap} />
+            <Text
+              numberOfLines={1}
+              accessible={false}
+              style={[styles.miniTrackTitle, { color }]}
+            >
+              {title}
+            </Text>
+          </>
+        ) : null}
+      </Animated.View>
+    </View>
+  );
 }
 
 function MusicTransport({
@@ -445,9 +512,7 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
                       <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
                         <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || accent} />
                       </View>
-                      <Text numberOfLines={1} style={[styles.miniTrackTitle, { color: colors.text }]}>
-                        {activeMusic.track.title}
-                      </Text>
+                      <SlidingTrackTitle title={activeMusic.track.title} color={colors.text} />
                     </Pressable>
                   ) : null}
                 </View>
@@ -550,7 +615,10 @@ const styles = StyleSheet.create({
   playerControlsRowExpanded: { flexDirection: "column", alignItems: "stretch", paddingHorizontal: 8, paddingBottom: 3 },
   compactInfoSlot: { flex: 1, minWidth: 0, height: 42, justifyContent: "center" },
   compactTrackInfo: { flex: 1, flexDirection: "row", alignItems: "center", gap: 9, minWidth: 0 },
-  miniTrackTitle: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: "700" },
+  titleViewport: { flex: 1, minWidth: 0, overflow: "hidden", justifyContent: "center" },
+  titleMarqueeTrack: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", flexShrink: 0 },
+  miniTrackTitle: { flexGrow: 0, flexShrink: 0, fontSize: 12, fontWeight: "700" },
+  marqueeGap: { width: 28 },
   hiddenControlSlot: { width: 0, height: 0, opacity: 0, overflow: "hidden" },
   compactTransport: { width: 110, flex: 0, justifyContent: "center" },
   expandedTransport: { width: "100%", gap: 13 },
