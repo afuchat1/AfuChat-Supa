@@ -724,15 +724,15 @@ export default function AfuMusicApp({
             <View style={styles.sheetHandle} />
             {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={20} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
-            <Text style={styles.purchaseTitle}>{purchaseTrack?.title}</Text>
-            <Text style={styles.purchaseArtist}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
+            <Text style={[styles.purchaseTitle, { color: colors.text }]}>{purchaseTrack?.title}</Text>
+            <Text style={[styles.purchaseArtist, { color: colors.textMuted }]}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
             <View style={styles.purchaseRule} />
-            <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>One-time access</Text><Text style={styles.purchaseValue}>{purchaseTrack?.price} ACoin</Text></View>
-            <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
+            <View style={styles.purchaseRow}><Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>One-time access</Text><Text style={[styles.purchaseValue, { color: colors.text }]}>{purchaseTrack?.price} ACoin</Text></View>
+            <View style={styles.purchaseRow}><Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
             {typeof acoinBalance === "number" ? (
               <View style={styles.balanceRow}>
-                <Text style={styles.purchaseLabel}>Your balance</Text>
-                <Text style={[styles.purchaseValue, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
+                <Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>Your balance</Text>
+                <Text style={[styles.purchaseValue, { color: colors.text }, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
               </View>
             ) : null}
             {typeof acoinBalance === "number" && acoinBalance < (purchaseTrack?.price ?? 0) ? (
@@ -749,7 +749,7 @@ export default function AfuMusicApp({
             >
               {purchasing ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="flash" size={16} color={PAPER} /><Text style={styles.purchaseButtonText}>Unlock for {purchaseTrack?.price} AC</Text></>}
             </Pressable>
-            <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={styles.cancelText}>Not now</Text></Pressable>
+            <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={[styles.cancelText, { color: colors.text }]}>Not now</Text></Pressable>
           </View>
         </View>
       </Modal>
@@ -758,18 +758,18 @@ export default function AfuMusicApp({
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
           <View style={[styles.uploadSheet, { backgroundColor: colors.background }]}>
             <View style={styles.sheetHandle} />
-            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
-            <Text style={styles.fieldLabel}>Track title</Text>
-            <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={MUTED} style={styles.formInput} />
-            <Text style={styles.fieldLabel}>Genre</Text>
+            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={[styles.purchaseTitle, { color: colors.text }]}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Track title</Text>
+            <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={colors.textMuted} style={[styles.formInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]} />
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Genre</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
               {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
             </ScrollView>
-            <Text style={styles.fieldLabel}>Unlock price</Text>
-            <View style={styles.priceInput}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" style={styles.priceTextInput} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
-            <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, pressed && styles.pressed]}>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Unlock price</Text>
+            <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+            <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
               <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
-              <View style={styles.filePickerCopy}><Text style={styles.filePickerTitle}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={styles.filePickerSub}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
+              <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
             <Pressable onPress={() => void submitUpload()} disabled={uploading || !canMonetize} style={({ pressed }) => [styles.publishButton, (pressed || !canMonetize) && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
