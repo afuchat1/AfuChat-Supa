@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -307,16 +307,19 @@ function ListHandleSheet({
   const [selectedHandle, setSelectedHandle] = useState("");
   const [price, setPrice] = useState("");
   const [busy, setBusy] = useState(false);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
       setSelectedHandle(handles[0] ?? "");
       setPrice("");
       setBusy(false);
+      submitLockRef.current = false;
     }
   }, [visible, handles]);
 
   const submit = async () => {
+    if (submitLockRef.current) return;
     if (!userId) {
       showAlert("Sign in required", "Sign in before listing a username.");
       return;
@@ -345,21 +348,29 @@ function ListHandleSheet({
     }
 
     Keyboard.dismiss();
+    submitLockRef.current = true;
     setBusy(true);
-    const { error } = await supabase.rpc("create_username_listing", {
-      p_username: username,
-      p_price: amount,
-      p_is_auction: false,
-      p_duration_hours: null,
-    });
-    setBusy(false);
-    if (error) {
-      showAlert("Could not list username", friendlyError(error.message));
-      return;
+    try {
+      const { data, error } = await supabase.rpc("create_username_listing", {
+        p_username: username,
+        p_price: amount,
+        p_is_auction: false,
+        p_duration_hours: null,
+      });
+      const listing = Array.isArray(data) ? data[0] : data;
+      if (error || !listing?.id || listing.seller_id !== userId || Number(listing.price) !== amount || listing.is_active !== true) {
+        showAlert("Could not list username", error ? friendlyError(error.message) : "The server did not confirm this listing.");
+        return;
+      }
+      onClose();
+      onDone();
+      showAlert("Listing published", `@${username} is available for ${money(amount)} ACoin. There is no listing fee.`);
+    } catch (error) {
+      showAlert("Could not list username", error instanceof Error ? friendlyError(error.message) : "The listing could not be confirmed.");
+    } finally {
+      submitLockRef.current = false;
+      setBusy(false);
     }
-    onClose();
-    onDone();
-    showAlert("Listing published", `@${username} is available for ${money(amount)} ACoin. There is no listing fee.`);
   };
 
   return (
@@ -439,11 +450,12 @@ function PurchaseSheet({
   colors: any;
 }) {
   const [busy, setBusy] = useState(false);
+  const purchaseLockRef = useRef(false);
   if (!item) return null;
 
   const canAfford = balance >= item.price;
   const buy = async () => {
-    if (busy) return;
+    if (purchaseLockRef.current || busy) return;
     if (!userId) {
       showAlert("Sign in required", "Sign in before buying a username.");
       return;
@@ -452,29 +464,41 @@ function PurchaseSheet({
       showAlert("Listing unavailable", "This username is above the 1,000 ACoin marketplace price limit.");
       return;
     }
+    purchaseLockRef.current = true;
     setBusy(true);
-    const currentBalance = await onRefreshBalance();
-    if (currentBalance === null) {
-      setBusy(false);
-      showAlert("Wallet unavailable", "We could not verify your wallet balance. Nothing was charged.");
-      return;
-    }
-    if (currentBalance < item.price) {
-      setBusy(false);
-      showAlert("Not enough ACoin", `You need ${money(item.price)} ACoin, but your wallet has ${money(currentBalance)}.`);
-      return;
-    }
+    try {
+      const currentBalance = await onRefreshBalance();
+      if (currentBalance === null) {
+        showAlert("Wallet unavailable", "We could not verify your wallet balance. Nothing was charged.");
+        return;
+      }
+      if (currentBalance < item.price) {
+        showAlert("Not enough ACoin", `You need ${money(item.price)} ACoin, but your wallet has ${money(currentBalance)}.`);
+        return;
+      }
 
-    const { error } = await supabase.rpc("purchase_username", { p_listing_id: item.id });
-    setBusy(false);
-    if (error) {
-      showAlert("Purchase not completed", friendlyError(error.message));
+      const { data, error } = await supabase.rpc("purchase_username", { p_listing_id: item.id });
+      const purchase = Array.isArray(data) ? data[0] : data;
+      if (error) {
+        onDone();
+        showAlert("Purchase not completed", friendlyError(error.message));
+        return;
+      }
+      if (!purchase?.id || purchase.id !== item.id || purchase.is_active !== false) {
+        onDone();
+        showAlert("Purchase status not confirmed", "Refresh My Usernames and AfuPay before trying again, to avoid submitting the purchase twice.");
+        return;
+      }
+      onClose();
       onDone();
-      return;
+      showAlert("Username secured", `@${item.username} now belongs to your account.`);
+    } catch {
+      onDone();
+      showAlert("Purchase status not confirmed", "Check My Usernames and AfuPay before trying again, to avoid submitting the purchase twice.");
+    } finally {
+      purchaseLockRef.current = false;
+      setBusy(false);
     }
-    onClose();
-    onDone();
-    showAlert("Username secured", `@${item.username} now belongs to your account.`);
   };
 
   return (

@@ -375,9 +375,20 @@ export default function PremiumScreen() {
                 acoin_paid: price,
               }, { onConflict: "user_id" });
               if (subErr) {
-                await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: price });
+                let refundError: unknown = null;
+                try {
+                  const result = await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: price });
+                  refundError = result.error;
+                } catch (error) {
+                  refundError = error;
+                }
                 deducted = false;
-                showAlert("Subscription not activated", "The plan could not be activated. ACoin was refunded.");
+                showAlert(
+                  refundError ? "Subscription failed — refund not confirmed" : "Subscription not activated",
+                  refundError
+                    ? "The plan was not activated, and the wallet refund could not be confirmed. Check AfuPay before retrying."
+                    : "The plan could not be activated. ACoin was refunded."
+                );
                 return;
               }
               deducted = false;
@@ -402,10 +413,21 @@ export default function PremiumScreen() {
                 [{ text: "Done", onPress: () => router.back() }]
               );
             } catch (error) {
+              let refundFailed = false;
               if (deducted) {
-                await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: price }).catch(() => {});
+                try {
+                  const result = await supabase.rpc("credit_acoin", { p_user_id: profile.id, p_amount: price });
+                  refundFailed = !!result.error;
+                } catch {
+                  refundFailed = true;
+                }
               }
-              showAlert("Subscription not completed", error instanceof Error ? error.message : "The transaction could not be completed.");
+              showAlert(
+                refundFailed ? "Subscription failed — refund not confirmed" : "Subscription not completed",
+                refundFailed
+                  ? "The subscription could not be completed, and the wallet refund could not be confirmed. Check AfuPay before retrying."
+                  : error instanceof Error ? error.message : "The transaction could not be completed."
+              );
             } finally {
               subscribeLockRef.current = false;
               setSubscribing(false);

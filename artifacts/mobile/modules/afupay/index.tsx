@@ -768,8 +768,12 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
         showAlert("Error", "The transfer could not be recorded. Your Nexa was restored."); setSending(false); return;
       }
     } else {
-      const { error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: amt }).maybeSingle();
-      if (deductErr) { showAlert("Error", "Could not deduct ACoin."); setSending(false); return; }
+      const { data: deduction, error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: amt }).maybeSingle();
+      if (deductErr || (deduction as any)?.success !== true) {
+        showAlert("Error", (deduction as any)?.message || "Could not deduct ACoin.");
+        setSending(false);
+        return;
+      }
       const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: recipient.id, p_amount: amt });
       if (creditErr) {
         await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: amt }).then(null, () => {});

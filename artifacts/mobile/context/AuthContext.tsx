@@ -31,7 +31,10 @@ import { clearProfileCache } from "@/lib/profileCache";
 import { startOfflineSync, stopOfflineSync } from "@/lib/offlineSync";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
 import { safeRouter } from "@/lib/navUtils";
-import { isVerifiedCreator as resolveCreatorVerification } from "@/lib/creatorEntitlements";
+import {
+  getActivePlanTier,
+  isVerifiedCreator as resolveCreatorVerification,
+} from "@/lib/creatorEntitlements";
 
 type Profile = {
   id: string;
@@ -1033,7 +1036,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   // Premium status is based only on an active paid subscription.
-  const isPremium = subscription !== null;
+  const isPremium = getActivePlanTier(subscription) !== "free";
   const isVerifiedCreator = resolveCreatorVerification(profile?.is_verified, subscription);
 
   const contextValue = useMemo(

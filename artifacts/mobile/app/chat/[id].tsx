@@ -122,7 +122,7 @@ import { GIPHY_API_KEY } from "@/lib/env";
 import { BlurView } from "expo-blur";
 import WallpaperOverlay from "@/components/chat/WallpaperOverlay";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
-import { getSubscriptionPrice } from "@/lib/creatorEntitlements";
+import { getActivePlanTier, getSubscriptionPrice } from "@/lib/creatorEntitlements";
 import EmojiStickerPicker from "@/components/chat/EmojiStickerPicker";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
@@ -4460,10 +4460,17 @@ function ChatScreen() {
         const exp = new Date(); exp.setDate(exp.getDate() + p.duration_days);
         const { error: subErr } = await supabase.from("user_subscriptions").upsert({ user_id: user.id, plan_id: p.id, started_at: new Date().toISOString(), expires_at: exp.toISOString(), is_active: true, acoin_paid: price }, { onConflict: "user_id" });
         if (subErr) {
+          let refundConfirmed = false;
           try {
-            await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: price });
+            const { error: refundError } = await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: price });
+            refundConfirmed = !refundError;
           } catch {}
-          return { success: false, message: "Could not activate subscription. ACoin was refunded." };
+          return {
+            success: false,
+            message: refundConfirmed
+              ? "Could not activate subscription. ACoin was refunded."
+              : "Could not activate subscription, and the ACoin refund could not be confirmed. Check AfuPay before retrying.",
+          };
         }
         const { error: txErr } = await supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -price, transaction_type: "subscription", metadata: { plan_name: planTier === "silver" ? "Standard" : planTier === "gold" ? "Pro" : p.name, plan_tier: p.tier, duration_days: p.duration_days } });
         const planName = planTier === "silver" ? "Standard" : planTier === "gold" ? "Pro" : p.name;
@@ -5694,7 +5701,7 @@ STRICT RULES:
     }
 
     if (isAfuAiDirectChat) {
-      const aiTier = (subscription?.plan_tier as "free" | "silver" | "gold" | "platinum") || "free";
+      const aiTier = getActivePlanTier(subscription) as "free" | "silver" | "gold" | "platinum";
       const aiUsage = await getDailyUsage("afuai_messages", aiTier);
       if (!aiUsage.allowed) {
         const nextTier = aiTier === "free" ? "Standard" : aiTier === "silver" ? "Pro" : "Platinum";
