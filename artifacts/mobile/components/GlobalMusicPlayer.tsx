@@ -72,66 +72,76 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
   return (
     <GlobalMusicContext.Provider value={value}>
       {children}
-      {activeMusic ? minimized ? (
-        <Animated.View
-          {...floatingPanResponder.panHandlers}
-          pointerEvents="box-none"
-          style={[styles.floatingPlayer, { transform: floatingDrag.getTranslateTransform() }]}
-        >
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open current song: ${activeMusic.track.title}`}
-            onPress={() => { setExpanded(true); setMinimized(false); }}
-            style={[styles.floatingButton, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}
+      {activeMusic ? (
+        <>
+          <View
+            pointerEvents={minimized ? "none" : "box-none"}
+            style={[
+              styles.overlay,
+              { bottom: Math.max(insets.bottom, 8) + 68 },
+              minimized && styles.hiddenOverlay,
+            ]}
           >
-            <Ionicons name="musical-notes" size={23} color={activeMusic.track.accentColor || "#F06451"} />
-            <View style={styles.floatingIndicator} />
-          </Pressable>
-        </Animated.View>
-      ) : (
-        <View pointerEvents="box-none" style={[styles.overlay, { bottom: Math.max(insets.bottom, 8) + 68 }]}>
-          <View style={[styles.player, expanded && styles.playerExpanded]}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={expanded ? "Current song details" : "Open current song"}
-              onPress={() => { setExpanded((value) => !value); setMinimized(false); }}
-              style={styles.trackHeader}
-            >
-              <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
-                <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || "#F06451"} />
-              </View>
-              <View style={styles.trackCopy}>
-                <Text numberOfLines={1} style={styles.trackTitle}>{activeMusic.track.title}</Text>
-                <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>
-              </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Minimize player to floating button" onPress={() => { setExpanded(false); setMinimized(true); }} hitSlop={8} style={styles.action}>
-                <Ionicons name="chevron-down" size={19} color="#6B7280" />
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.action}>
-                <Ionicons name="close" size={18} color="#6B7280" />
-              </Pressable>
-            </Pressable>
-            <View style={styles.controls}>
-              <AudioPlayer
-                key={activeMusic.track.id}
-                uri={activeMusic.uri}
-                tintColor="#19172F"
-                waveColor="#1F95FF"
-                autoPlay
-              />
-            </View>
-            {expanded && !minimized ? (
-              <View style={styles.songSheet}>
-                <View style={[styles.largeArt, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
-                  <Ionicons name="musical-notes" size={42} color={activeMusic.track.accentColor || "#F06451"} />
+            <View style={[styles.player, expanded && styles.playerExpanded]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={expanded ? "Current song details" : "Open current song"}
+                onPress={() => { setExpanded((value) => !value); setMinimized(false); }}
+                style={styles.trackHeader}
+              >
+                <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                  <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || "#F06451"} />
                 </View>
-                <Text numberOfLines={2} style={styles.sheetTitle}>{activeMusic.track.title}</Text>
-                <Text numberOfLines={1} style={styles.sheetArtist}>{activeMusic.track.artist}</Text>
-                <Text style={styles.sheetHint}>Now playing on AfuChat</Text>
+                <View style={styles.trackCopy}>
+                  <Text numberOfLines={1} style={styles.trackTitle}>{activeMusic.track.title}</Text>
+                  <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel="Minimize player to floating button" onPress={() => { setExpanded(false); setMinimized(true); }} hitSlop={8} style={styles.action}>
+                  <Ionicons name="chevron-down" size={19} color="#6B7280" />
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.action}>
+                  <Ionicons name="close" size={18} color="#6B7280" />
+                </Pressable>
+              </Pressable>
+              <View style={styles.controls}>
+                <AudioPlayer
+                  key={activeMusic.track.id}
+                  uri={activeMusic.uri}
+                  tintColor="#19172F"
+                  waveColor="#1F95FF"
+                  autoPlay
+                />
               </View>
-            ) : null}
+              {expanded && !minimized ? (
+                <View style={styles.songSheet}>
+                  <View style={[styles.largeArt, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                    <Ionicons name="musical-notes" size={42} color={activeMusic.track.accentColor || "#F06451"} />
+                  </View>
+                  <Text numberOfLines={2} style={styles.sheetTitle}>{activeMusic.track.title}</Text>
+                  <Text numberOfLines={1} style={styles.sheetArtist}>{activeMusic.track.artist}</Text>
+                  <Text style={styles.sheetHint}>Now playing on AfuChat</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-        </View>
+          {minimized ? (
+            <Animated.View
+              {...floatingPanResponder.panHandlers}
+              pointerEvents="box-none"
+              style={[styles.floatingPlayer, { transform: floatingDrag.getTranslateTransform() }]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open current song: ${activeMusic.track.title}`}
+                onPress={() => { setExpanded(true); setMinimized(false); }}
+                style={[styles.floatingButton, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}
+              >
+                <Ionicons name="musical-notes" size={23} color={activeMusic.track.accentColor || "#F06451"} />
+                <View style={styles.floatingIndicator} />
+              </Pressable>
+            </Animated.View>
+          ) : null}
+        </>
       ) : null}
     </GlobalMusicContext.Provider>
   );
@@ -171,6 +181,11 @@ const styles = StyleSheet.create({
     right: 10,
     zIndex: 1000,
     elevation: 12,
+  },
+  hiddenOverlay: {
+    height: 0,
+    opacity: 0,
+    overflow: "hidden",
   },
   player: {
     gap: 4,
