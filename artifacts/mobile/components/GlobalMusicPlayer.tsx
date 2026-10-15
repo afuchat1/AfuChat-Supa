@@ -1,6 +1,6 @@
-import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AudioPlayer from "@/components/AudioPlayer";
 import type { AfuMusicTrack } from "@/modules/afumusic";
@@ -22,7 +22,42 @@ export function useGlobalMusicPlayer() {
 
 export function GlobalMusicPlayerProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [activeMusic, setActiveMusic] = useState<ActiveMusic | null>(null);
+  const [floatingPosition, setFloatingPosition] = useState({
+    x: Math.max(8, windowWidth - 72),
+    y: Math.max(insets.top + 12, windowHeight - insets.bottom - 190),
+  });
+  const floatingPositionRef = useRef(floatingPosition);
+  floatingPositionRef.current = floatingPosition;
+  const [floatingDrag] = useState(() => new Animated.ValueXY(floatingPosition));
+  const floatingPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+    onPanResponderGrant: () => {
+      floatingDrag.setOffset(floatingPositionRef.current);
+      floatingDrag.setValue({ x: 0, y: 0 });
+    },
+    onPanResponderMove: Animated.event(
+      [null, { dx: floatingDrag.x, dy: floatingDrag.y }],
+      { useNativeDriver: false },
+    ),
+    onPanResponderRelease: (_event, gesture) => {
+      floatingDrag.flattenOffset();
+      const next = {
+        x: Math.max(8, Math.min(windowWidth - 64, floatingPositionRef.current.x + gesture.dx)),
+        y: Math.max(insets.top + 8, Math.min(windowHeight - insets.bottom - 64, floatingPositionRef.current.y + gesture.dy)),
+      };
+      floatingPositionRef.current = next;
+      setFloatingPosition(next);
+      floatingDrag.setValue(next);
+    },
+    onPanResponderTerminate: () => {
+      floatingDrag.flattenOffset();
+      const current = floatingPositionRef.current;
+      floatingDrag.setValue(current);
+    },
+  }), [floatingDrag, insets.bottom, insets.top, windowHeight, windowWidth]);
   const [expanded, setExpanded] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
@@ -37,30 +72,46 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
   return (
     <GlobalMusicContext.Provider value={value}>
       {children}
-      {activeMusic ? (
+      {activeMusic ? minimized ? (
+        <Animated.View
+          {...floatingPanResponder.panHandlers}
+          pointerEvents="box-none"
+          style={[styles.floatingPlayer, { transform: floatingDrag.getTranslateTransform() }]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open current song: ${activeMusic.track.title}`}
+            onPress={() => { setExpanded(true); setMinimized(false); }}
+            style={[styles.floatingButton, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}
+          >
+            <Ionicons name="musical-notes" size={23} color={activeMusic.track.accentColor || "#F06451"} />
+            <View style={styles.floatingIndicator} />
+          </Pressable>
+        </Animated.View>
+      ) : (
         <View pointerEvents="box-none" style={[styles.overlay, { bottom: Math.max(insets.bottom, 8) + 68 }]}>
-          <View style={[styles.player, minimized && styles.playerMinimized, expanded && styles.playerExpanded]}>
+          <View style={[styles.player, expanded && styles.playerExpanded]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={expanded ? "Current song details" : "Open current song"}
               onPress={() => { setExpanded((value) => !value); setMinimized(false); }}
               style={styles.trackHeader}
             >
-              <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }, minimized && styles.artMinimized]}>
-                <Ionicons name="musical-notes" size={minimized ? 15 : 18} color={activeMusic.track.accentColor || "#F06451"} />
+              <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || "#F06451"} />
               </View>
               <View style={styles.trackCopy}>
                 <Text numberOfLines={1} style={styles.trackTitle}>{activeMusic.track.title}</Text>
-                {!minimized && <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>}
+                <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel={minimized ? "Expand mini player" : "Minimize player"} onPress={() => { setExpanded(false); setMinimized((value) => !value); }} hitSlop={8} style={styles.action}>
-                <Ionicons name={minimized ? "chevron-up" : "chevron-down"} size={19} color="#6B7280" />
+              <Pressable accessibilityRole="button" accessibilityLabel="Minimize player to floating button" onPress={() => { setExpanded(false); setMinimized(true); }} hitSlop={8} style={styles.action}>
+                <Ionicons name="chevron-down" size={19} color="#6B7280" />
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.action}>
                 <Ionicons name="close" size={18} color="#6B7280" />
               </Pressable>
             </Pressable>
-            <View pointerEvents={minimized ? "none" : "auto"} style={minimized ? styles.hiddenControls : styles.controls}>
+            <View style={styles.controls}>
               <AudioPlayer
                 key={activeMusic.track.id}
                 uri={activeMusic.uri}
@@ -87,6 +138,33 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
 }
 
 const styles = StyleSheet.create({
+  floatingPlayer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    zIndex: 1100,
+    elevation: 16,
+  },
+  floatingButton: {
+    width: 56,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  floatingIndicator: {
+    position: "absolute",
+    right: 7,
+    bottom: 7,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: "#1F95FF",
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
   overlay: {
     position: "absolute",
     left: 10,
@@ -106,8 +184,6 @@ const styles = StyleSheet.create({
   playerExpanded: { paddingTop: 10, paddingBottom: 14 },
   action: { padding: 4 },
   controls: { opacity: 1 },
-  hiddenControls: { height: 0, opacity: 0, overflow: "hidden" },
-  artMinimized: { width: 30, height: 30 },
   songSheet: { alignItems: "center", paddingTop: 14, paddingBottom: 6 },
   largeArt: { width: 150, height: 150, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   sheetTitle: { color: "#19172F", fontSize: 17, fontWeight: "700", textAlign: "center", maxWidth: "95%" },
