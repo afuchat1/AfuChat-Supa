@@ -97,7 +97,7 @@ async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
     .limit(100);
   if (query?.trim()) {
     const escaped = query.trim().replace(/[%_,]/g, "");
-    if (escaped) request = request.or(`title.ilike.%${escaped}%,genre.ilike.%${escaped}%`);
+    if (escaped) request = request.or(`title.ilike.%${escaped}%,artist.ilike.%${escaped}%,genre.ilike.%${escaped}%`);
   }
   const [{ data: rows, error }, { data: purchases }, { data: profiles }, offline] = await Promise.all([
     request,
