@@ -149,7 +149,7 @@ function TrackRow({
   const { colors, accent } = useTheme();
   return (
     <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, { borderBottomColor: colors.border }, pressed && styles.trackRowPressed]}>
-      <TrackArt track={track} size={64} radius={16} />
+      <TrackArt track={track} size={64} radius={6} />
       <View style={styles.trackCopy}>
         <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
         <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>{track.artist} · {track.genre}</Text>
@@ -526,7 +526,6 @@ export default function AfuMusicApp({
       <View style={styles.topBar}>
         <View>
           <Text style={[styles.wordmark, { color: colors.text }]}>Afu<Text style={[styles.wordmarkAccent, { color: accent }]}>Music</Text></Text>
-          <Text style={[styles.privateLabel, { color: colors.textMuted }]}>MUSIC, BUILT INTO AFUCHAT</Text>
         </View>
         <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="flash" size={13} color={GOLD} />
@@ -552,13 +551,8 @@ export default function AfuMusicApp({
 
       {section === "discover" && !query ? (
         <View style={[styles.heroSection, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.heroEyebrow, { color: accent }]}>AFUCHAT · MUSIC</Text>
           <Text style={[styles.heroTitle, { color: colors.text }]}>Your next favourite starts here.</Text>
           <Text style={[styles.heroBody, { color: colors.textSecondary }]}>Discover independent artists, collect the tracks you love, and play them across AfuChat.</Text>
-          <Pressable onPress={() => setSection("library")} style={({ pressed }) => [styles.heroButton, { backgroundColor: accent }, pressed && styles.pressed]}>
-            <Text style={styles.heroButtonText}>Open my library</Text>
-            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-          </Pressable>
         </View>
       ) : null}
 
@@ -569,12 +563,11 @@ export default function AfuMusicApp({
               <Text style={styles.sectionEyebrow}>EDITOR'S PICKS</Text>
               <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured this week</Text>
             </View>
-            <Ionicons name="headset-outline" size={19} color={CORAL} />
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>
             {featuredTracks.map((track) => (
               <Pressable key={track.id} onPress={() => { void openTrack(track); }} style={({ pressed }) => [styles.featuredCard, pressed && styles.pressed]}>
-                <TrackArt track={track} size={78} radius={18} />
+                <TrackArt track={track} size={78} radius={6} />
                 <Text style={[styles.featuredCardTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
                 <Text style={[styles.featuredCardArtist, { color: colors.textMuted }]} numberOfLines={1}>{track.artist}</Text>
               </Pressable>
@@ -612,7 +605,6 @@ export default function AfuMusicApp({
         </ScrollView>
       ) : null}
 
-      {section === "discover" && !query ? <Text style={[styles.listHint, { color: colors.textMuted }]}>Fresh from independent creators</Text> : null}
 
       {loading ? (
         <View style={styles.loadingState}>
@@ -640,7 +632,7 @@ export default function AfuMusicApp({
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
           <View style={[styles.purchaseSheet, { backgroundColor: colors.background }]}>
-            {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={20} /> : null}
+            {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={6} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
             <Text style={[styles.purchaseTitle, { color: colors.text }]}>{purchaseTrack?.title}</Text>
             <Text style={[styles.purchaseArtist, { color: colors.textMuted }]}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
@@ -675,7 +667,6 @@ export default function AfuMusicApp({
       <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => setUploadOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
           <View style={[styles.uploadSheet, { backgroundColor: colors.background }]}>
-            <View style={styles.sheetHandle} />
             <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={[styles.purchaseTitle, { color: colors.text }]}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Track title</Text>
             <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={colors.textMuted} style={[styles.formInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]} />
@@ -706,9 +697,9 @@ const styles = StyleSheet.create({
   wordmark: { color: INK, fontFamily: "Inter_700Bold", fontSize: 29, letterSpacing: -1.3 },
   wordmarkAccent: { color: CORAL },
   privateLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 8, letterSpacing: 1.4, marginTop: 3 },
-  coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, marginTop: 2 },
+  coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 4, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 48, paddingHorizontal: 14, borderRadius: 10, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 46, paddingHorizontal: 12, borderRadius: 4, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
   pressed: { opacity: 0.72 },
   heroSection: { marginHorizontal: 20, marginTop: 26, paddingBottom: 23, borderBottomWidth: 1 },
@@ -733,7 +724,7 @@ const styles = StyleSheet.create({
   addButtonPressed: { backgroundColor: INK },
   addButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 11 },
   genreRail: { paddingHorizontal: 20, gap: 8, paddingBottom: 6 },
-  genreChip: { borderWidth: 1, borderColor: "#E2D8CE", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: PAPER },
+  genreChip: { borderWidth: 1, borderColor: "#E2D8CE", borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: PAPER },
   genreChipActive: { borderColor: INK, backgroundColor: INK },
   genreText: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 10 },
   genreTextActive: { color: PAPER },
@@ -753,10 +744,10 @@ const styles = StyleSheet.create({
   priceText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
 
   emptyState: { alignItems: "center", paddingHorizontal: 45, paddingTop: 55 },
-  emptyIcon: { width: 55, height: 55, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
+  emptyIcon: { width: 55, height: 55, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
   emptyTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, textAlign: "center" },
   emptyMessage: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 7, maxWidth: 280 },
-  outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
+  outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
   outlineButtonText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 11 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(25,23,47,0.42)" },
   purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 23, paddingTop: 24, paddingBottom: 30 },
