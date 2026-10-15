@@ -202,6 +202,7 @@ function TrackRow({
   onPlay,
   onCache,
   onDelete,
+  canCache = true,
 }: {
   track: AfuMusicTrack;
   owned: boolean;
@@ -211,6 +212,7 @@ function TrackRow({
   onPlay: () => void;
   onCache: () => void;
   onDelete?: () => void;
+  canCache?: boolean;
 }) {
   return (
     <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, pressed && styles.trackRowPressed]}>
@@ -247,7 +249,7 @@ function TrackRow({
         ) : (
           <Text style={styles.priceText}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
         )}
-        {owned ? (
+        {owned && canCache ? (
           <Pressable onPress={onCache} hitSlop={8} accessibilityLabel={cached ? "Available offline" : "Save offline"}>
             <Ionicons name={cached ? "arrow-down-circle" : "arrow-down-circle-outline"} size={21} color={cached ? COBALT : MUTED} />
           </Pressable>
@@ -302,7 +304,7 @@ export default function AfuMusicApp({
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
   const { playMusic } = useGlobalMusicPlayer();
-  const [section, setSection] = useState<MusicSection>(initialSection);
+  const [section, setSection] = useState<MusicSection>(Platform.OS === "web" && initialSection === "offline" ? "discover" : initialSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("All");
@@ -495,7 +497,9 @@ export default function AfuMusicApp({
         result?.alreadyOwned ? "Already in your library" : "Purchase complete",
         result?.alreadyOwned
           ? `${purchaseTrack.title} was already owned, so no ACoin was charged.`
-          : `${purchaseTrack.title} is now in your library and available offline.`,
+          : Platform.OS === "web"
+            ? `${purchaseTrack.title} is now in your library and ready to play on the web.`
+            : `${purchaseTrack.title} is now in your library and available offline.`,
       );
     } catch {
       showAlert("Purchase could not be completed", "Your ACoin balance was not changed. Try again.");
@@ -566,6 +570,7 @@ export default function AfuMusicApp({
       onOpen={() => { void openTrack(item); }}
       onPlay={() => { void playTrack(item); }}
       onCache={() => handleCache(item)}
+      canCache={Platform.OS !== "web"}
       onDelete={() => handleDeleteUpload(item)}
     />
   ), [cachedIds, handleCache, handleDeleteUpload, openTrack, ownedIds, playTrack, section]);
@@ -607,7 +612,7 @@ export default function AfuMusicApp({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionRailContent}>
           <SectionPill label="Discover" icon="sparkles-outline" active={section === "discover"} onPress={() => setSection("discover")} />
           <SectionPill label="Library" icon="albums-outline" active={section === "library"} onPress={() => setSection("library")} />
-          <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} />
+          {Platform.OS !== "web" ? <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} /> : null}
           <SectionPill label="Studio" icon="mic-outline" active={section === "studio"} onPress={() => setSection("studio")} />
         </ScrollView>
       </View>
