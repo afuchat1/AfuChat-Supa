@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getLocalConversations, type LocalConversation } from "@/lib/storage/localConversations";
 import { updateNativeShareShortcuts, type ShareShortcutChat } from "@/lib/nativeShareShortcuts";
+import { cacheChatListRows, getRecentChatListRows } from "@/lib/chatListSnapshot";
 
 function conversationToShortcut(conversation: Partial<LocalConversation> & Record<string, any>): ShareShortcutChat | null {
   if (!conversation.id || conversation.kind === "notes" || !conversation.last_message_at) return null;
@@ -38,6 +39,20 @@ function serverRowToShortcut(row: any): ShareShortcutChat | null {
   });
 }
 
+function updateShortcutsFromServerRows(rows: any[]): void {
+  updateNativeShareShortcuts(
+    rows
+      .filter((row) => !row.is_archived && row.last_message_at)
+      .sort((a, b) => {
+        const aTime = new Date(a.last_message_at || a.chat_updated_at || 0).getTime();
+        const bTime = new Date(b.last_message_at || b.chat_updated_at || 0).getTime();
+        return bTime - aTime;
+      })
+      .map(serverRowToShortcut)
+      .filter(Boolean) as ShareShortcutChat[],
+  );
+}
+
 /**
  * Keeps Android Direct Share targets warm even when the user has not opened
  * the chats tab in this app session. The local cache is published first and
@@ -68,21 +83,20 @@ export default function NativeShareShortcutSync() {
                 .filter(Boolean) as ShareShortcutChat[],
             );
 
-            const { data } = await supabase.rpc("get_chat_list", {
+            const recentRows = getRecentChatListRows(user.id);
+            if (recentRows) {
+              updateShortcutsFromServerRows(recentRows);
+              return;
+            }
+
+            const { data, error } = await supabase.rpc("get_chat_list", {
               p_unread_excluded_ids: [],
             });
+            if (error) throw error;
             if (cancelled) return;
-            updateNativeShareShortcuts(
-              ((data ?? []) as any[])
-                 .filter((row) => !row.is_archived && row.last_message_at)
-                .sort((a, b) => {
-                  const aTime = new Date(a.last_message_at || a.chat_updated_at || 0).getTime();
-                  const bTime = new Date(b.last_message_at || b.chat_updated_at || 0).getTime();
-                  return bTime - aTime;
-                })
-                .map(serverRowToShortcut)
-                .filter(Boolean) as ShareShortcutChat[],
-            );
+            const rows = (data ?? []) as any[];
+            cacheChatListRows(user.id, rows);
+            updateShortcutsFromServerRows(rows);
           } catch {
             // The cached targets are sufficient for offline/background use.
           }

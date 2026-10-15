@@ -85,6 +85,7 @@ import { usePhonebookNames } from "@/hooks/usePhonebookNames";
 import { setTotalUnread } from "@/lib/chatUnreadEvents";
 import { prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { updateNativeShareShortcuts } from "@/lib/nativeShareShortcuts";
+import { cacheChatListRows } from "@/lib/chatListSnapshot";
 
 
 function stripMdPreview(s: string): string {
@@ -649,22 +650,26 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     if (!user) return;
     const offline = !isOnline();
 
-    // Offline users must be able to open the durable chat cache even when the
-    // auth token has not yet been restored. Session verification is only
-    // required before a server request, never before local hydration.
-    // Native SQLite can be delayed by migrations on a release first launch.
-    // Cache hydration is an enhancement, never a reason to block Supabase.
-    const localNotes = await waitForRequest(
+    // Start all local reads before waiting on any one of them. My Notes can
+    // involve AsyncStorage plus SQLite, so it must not serialize the regular
+    // conversation cache or the authenticated server refresh.
+    const localNotesPromise = waitForRequest(
       getLocalNotesConversation(user.id),
       LOCAL_CHAT_HYDRATION_TIMEOUT_MS,
       () => {},
     );
+    const cachedConversationsPromise: Promise<any[] | null | undefined> = !background
+      ? hasPreloadedConversations()
+        ? Promise.resolve(getPreloadedConversations())
+        : waitForRequest(
+            getLocalConversations(),
+            LOCAL_CHAT_HYDRATION_TIMEOUT_MS,
+            () => {},
+          )
+      : Promise.resolve(null);
 
-    if (!background) {
-      const cacheStartedAt = Date.now();
-      const cached = hasPreloadedConversations()
-        ? getPreloadedConversations()
-        : await waitForRequest(getLocalConversations(), LOCAL_CHAT_HYDRATION_TIMEOUT_MS, () => {}) ?? [];
+    const renderCachedConversations = (cached: any[] | null | undefined, localNotes: any) => {
+      if (!cached) return;
       const cachedItems = cached
         .filter((item: any) =>
           (localNotes || !isLocalNotesId(item.id)) &&
@@ -678,12 +683,48 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         setChats(cachedItems as any);
         setLoading(false);
       }
-      if (__DEV__) {
-        console.log("[ChatPerf] cache render", Date.now() - cacheStartedAt, "ms", "chats", cachedItems.length);
-      }
+    };
+
+    let cachedSnapshot: any[] | null | undefined;
+    let cacheSnapshotReady = false;
+    let resolvedLocalNotes: any = null;
+    let localNotesReady = false;
+    let serverSnapshotApplied = false;
+
+    // Paint durable conversations without waiting for My Notes or Supabase.
+    // The fully reconciled snapshot below can still add Notes and fresh server
+    // metadata when those requests finish.
+    if (!background) {
+      const cacheStartedAt = Date.now();
+      void cachedConversationsPromise.then((cached) => {
+        cachedSnapshot = cached;
+        cacheSnapshotReady = true;
+        if (!serverSnapshotApplied) {
+          renderCachedConversations(
+            cached,
+            localNotesReady ? resolvedLocalNotes : null,
+          );
+        }
+        if (__DEV__) {
+          console.log(
+            "[ChatPerf] cache render",
+            Date.now() - cacheStartedAt,
+            "ms",
+            "chats",
+            cached?.length ?? 0,
+          );
+        }
+      });
     }
 
     if (offline) {
+      const [localNotes, cached] = await Promise.all([
+        localNotesPromise,
+        cachedConversationsPromise,
+      ]);
+      resolvedLocalNotes = localNotes;
+      localNotesReady = true;
+      renderCachedConversations(cached, localNotes);
       setChats((prev) => {
         const withoutNotes = prev.filter((item) => !isLocalNotesId(item.id));
         return localNotes ? [...withoutNotes, localNotesToChatItem(localNotes)] : withoutNotes;
@@ -695,8 +736,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
     // AuthContext can briefly lag behind Supabase's native session storage
     // after a sign-in or a cold start on a new device. Check the authoritative
-    // session directly before the server query, but only after local hydration
-    // has already made cached chats visible.
+    // session directly before the server query. This check runs alongside the
+    // local reads above rather than holding them up.
     if (!hasVerifiedSession) {
       let liveSessionUserId: string | null = null;
       try {
@@ -706,6 +747,19 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         liveSessionUserId = null;
       }
       if (liveSessionUserId !== user.id) {
+        const [localNotes, cached] = await Promise.all([
+          localNotesPromise,
+          cachedConversationsPromise,
+        ]);
+        resolvedLocalNotes = localNotes;
+        localNotesReady = true;
+        renderCachedConversations(cached, localNotes);
+        if (localNotes) {
+          setChats((prev) => [
+            ...prev.filter((item) => !isLocalNotesId(item.id)),
+            localNotesToChatItem(localNotes),
+          ]);
+        }
         setLoading(false);
         setRefreshing(false);
         return;
@@ -719,18 +773,33 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
     const rpcStartedAt = Date.now();
     if (__DEV__) console.log("[ChatPerf] server RPC start");
-    let chatRows: any[] | null = null;
-    let chatError: { message?: string } | null = null;
-    try {
-      const result = await supabase.rpc(
-        "get_chat_list",
-        { p_unread_excluded_ids: unreadExcludedIds },
-      );
-      chatRows = result.data as any[] | null;
-      chatError = result.error;
-    } catch (error) {
-      chatError = { message: error instanceof Error ? error.message : String(error) };
+    const rpcPromise = (async () => {
+      try {
+        const result = await supabase.rpc(
+          "get_chat_list",
+          { p_unread_excluded_ids: unreadExcludedIds },
+        );
+        return {
+          chatRows: result.data as any[] | null,
+          chatError: result.error,
+        };
+      } catch (error) {
+        return {
+          chatRows: null,
+          chatError: { message: error instanceof Error ? error.message : String(error) },
+        };
+      }
+    })();
+    const [localNotes, rpcResult] = await Promise.all([
+      localNotesPromise,
+      rpcPromise,
+    ]);
+    resolvedLocalNotes = localNotes;
+    localNotesReady = true;
+    if (cacheSnapshotReady && !serverSnapshotApplied) {
+      renderCachedConversations(cachedSnapshot, localNotes);
     }
+    const { chatRows, chatError } = rpcResult;
     if (__DEV__) {
       console.log(
         "[ChatPerf] server RPC end",
@@ -770,6 +839,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       setRefreshing(false);
       return;
     }
+
+    cacheChatListRows(user.id, chatRows);
 
     // The RPC includes chat membership, profile metadata, latest message,
     // delivery/read state, unread count, and mute state in one server query.
@@ -923,6 +994,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       }
     });
 
+    serverSnapshotApplied = true;
     setChats(finalItems);
     // Reconciliation complete — allow realtime events to increment unread again.
     suppressUnreadIncrementRef.current = false;
