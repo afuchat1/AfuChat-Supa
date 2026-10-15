@@ -161,7 +161,7 @@ export default function FullAppRoute() {
   ) as Record<string, string>;
   if (!rawId || !isAppId(rawId)) return null;
   return (
-    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afumusic"}>
+    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)}>
       <AppContent appId={rawId} section={section} params={routeParams} />
     </AppPageShell>
   );
