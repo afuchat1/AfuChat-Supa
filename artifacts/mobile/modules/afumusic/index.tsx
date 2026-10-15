@@ -177,18 +177,19 @@ function SectionPill({
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
 }) {
+  const { colors, accent } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.sectionPill,
-        active && styles.sectionPillActive,
+        { backgroundColor: active ? accent : colors.inputBg },
         pressed && styles.pressed,
       ]}
     >
-      <Ionicons name={icon} size={15} color={active ? PAPER : INK} />
-      <Text style={[styles.sectionPillLabel, active && styles.sectionPillLabelActive]}>{label}</Text>
+      <Ionicons name={icon} size={15} color={active ? "#FFFFFF" : colors.text} />
+      <Text style={[styles.sectionPillLabel, { color: active ? "#FFFFFF" : colors.text }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -214,13 +215,14 @@ function TrackRow({
   onDelete?: () => void;
   canCache?: boolean;
 }) {
+  const { colors, accent } = useTheme();
   return (
-    <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, pressed && styles.trackRowPressed]}>
+    <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, { borderBottomColor: colors.border }, pressed && styles.trackRowPressed]}>
       <TrackArt track={track} size={64} radius={16} />
       <View style={styles.trackCopy}>
-        <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
-        <Text style={styles.trackArtist} numberOfLines={1}>{track.artist} · {track.genre}</Text>
-        <Text style={styles.trackMeta}>{formatPlays(track.plays)}{track.duration ? ` · ${track.duration}` : ""}</Text>
+        <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
+        <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>{track.artist} · {track.genre}</Text>
+        <Text style={[styles.trackMeta, { color: colors.textMuted }]}>{formatPlays(track.plays)}{track.duration ? ` · ${track.duration}` : ""}</Text>
       </View>
       <View style={styles.rowActions}>
         {managed ? (
@@ -242,12 +244,12 @@ function TrackRow({
               onPlay();
             }}
             hitSlop={8}
-            style={({ pressed }) => [styles.miniPlay, pressed && styles.miniPlayPressed]}
+            style={({ pressed }) => [styles.miniPlay, { backgroundColor: accent }, pressed && styles.miniPlayPressed]}
           >
             <Ionicons name="play" size={13} color={PAPER} />
           </Pressable>
         ) : (
-          <Text style={styles.priceText}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
+          <Text style={[styles.priceText, { color: accent }]}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
         )}
         {owned && canCache ? (
           <Pressable onPress={onCache} hitSlop={8} accessibilityLabel={cached ? "Available offline" : "Save offline"}>
@@ -271,11 +273,12 @@ function EmptyState({
   message: string;
   action?: { label: string; onPress: () => void };
 }) {
+  const { colors, accent } = useTheme();
   return (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIcon}><Ionicons name={icon} size={25} color={CORAL} /></View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyMessage}>{message}</Text>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.inputBg }]}><Ionicons name={icon} size={25} color={accent} /></View>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.emptyMessage, { color: colors.textMuted }]}>{message}</Text>
       {action ? (
         <Pressable onPress={action.onPress} style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}>
           <Text style={styles.outlineButtonText}>{action.label}</Text>
@@ -648,7 +651,7 @@ export default function AfuMusicApp({
           <View style={styles.featuredHeader}>
             <View>
               <Text style={styles.sectionEyebrow}>EDITOR'S PICKS</Text>
-              <Text style={styles.featuredTitle}>Featured this week</Text>
+              <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured this week</Text>
             </View>
             <Ionicons name="headset-outline" size={19} color={CORAL} />
           </View>
@@ -656,8 +659,8 @@ export default function AfuMusicApp({
             {featuredTracks.map((track) => (
               <Pressable key={track.id} onPress={() => { void openTrack(track); }} style={({ pressed }) => [styles.featuredCard, pressed && styles.pressed]}>
                 <TrackArt track={track} size={78} radius={18} />
-                <Text style={styles.featuredCardTitle} numberOfLines={1}>{track.title}</Text>
-                <Text style={styles.featuredCardArtist} numberOfLines={1}>{track.artist}</Text>
+                <Text style={[styles.featuredCardTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
+                <Text style={[styles.featuredCardArtist, { color: colors.textMuted }]} numberOfLines={1}>{track.artist}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -667,7 +670,7 @@ export default function AfuMusicApp({
       <View style={styles.contentHeader}>
         <View>
           <Text style={styles.sectionEyebrow}>{section === "studio" ? "PUBLISH & MANAGE" : "YOUR NEXT LISTEN"}</Text>
-          <Text style={styles.sectionTitle}>{sectionTitle}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
           <Pressable
@@ -686,8 +689,8 @@ export default function AfuMusicApp({
       {section === "discover" && !query ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreRail}>
           {GENRES.map((item) => (
-            <Pressable key={item} onPress={() => setGenre(item)} style={[styles.genreChip, genre === item && styles.genreChipActive]}>
-              <Text style={[styles.genreText, genre === item && styles.genreTextActive]}>{item}</Text>
+            <Pressable key={item} onPress={() => setGenre(item)} style={[styles.genreChip, { backgroundColor: genre === item ? accent : colors.inputBg, borderColor: genre === item ? accent : colors.border }]}>
+              <Text style={[styles.genreText, { color: genre === item ? "#FFFFFF" : colors.text }]}>{item}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -717,7 +720,7 @@ export default function AfuMusicApp({
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.purchaseSheet}>
+          <View style={[styles.purchaseSheet, { backgroundColor: colors.background }]}>
             <View style={styles.sheetHandle} />
             {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={20} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
@@ -753,9 +756,9 @@ export default function AfuMusicApp({
 
       <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => setUploadOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
-          <View style={styles.uploadSheet}>
+          <View style={[styles.uploadSheet, { backgroundColor: colors.background }]}>
             <View style={styles.sheetHandle} />
-            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable></View>
+            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
             <Text style={styles.fieldLabel}>Track title</Text>
             <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={MUTED} style={styles.formInput} />
             <Text style={styles.fieldLabel}>Genre</Text>
@@ -792,7 +795,7 @@ const styles = StyleSheet.create({
   sectionRail: { marginTop: 15 },
   sectionRailContent: { paddingHorizontal: 20, gap: 8 },
   sectionPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, height: 35, borderRadius: 18, backgroundColor: "#EFE7DE" },
-  sectionPillActive: { backgroundColor: INK },
+  sectionPillActive: { backgroundColor: "#1018D8" },
   sectionPillLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
   sectionPillLabelActive: { color: PAPER },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
