@@ -23,11 +23,15 @@ export function useGlobalMusicPlayer() {
 export function GlobalMusicPlayerProvider({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
   const [activeMusic, setActiveMusic] = useState<ActiveMusic | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
   const playMusic = useCallback((track: AfuMusicTrack, uri: string) => {
     setActiveMusic({ track, uri });
+    setExpanded(false);
+    setMinimized(false);
   }, []);
-  const stopMusic = useCallback(() => setActiveMusic(null), []);
+  const stopMusic = useCallback(() => { setActiveMusic(null); setExpanded(false); setMinimized(false); }, []);
   const value = useMemo(() => ({ activeMusic, playMusic, stopMusic }), [activeMusic, playMusic, stopMusic]);
 
   return (
@@ -35,26 +39,46 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
       {children}
       {activeMusic ? (
         <View pointerEvents="box-none" style={[styles.overlay, { bottom: Math.max(insets.bottom, 8) + 68 }]}>
-          <View style={styles.player}>
-            <View style={styles.trackHeader}>
-              <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
-                <Ionicons name="musical-notes" size={18} color={activeMusic.track.accentColor || "#F06451"} />
+          <View style={[styles.player, minimized && styles.playerMinimized, expanded && styles.playerExpanded]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={expanded ? "Current song details" : "Open current song"}
+              onPress={() => { setExpanded((value) => !value); setMinimized(false); }}
+              style={styles.trackHeader}
+            >
+              <View style={[styles.art, { backgroundColor: activeMusic.track.coverColor || "#19172F" }, minimized && styles.artMinimized]}>
+                <Ionicons name="musical-notes" size={minimized ? 15 : 18} color={activeMusic.track.accentColor || "#F06451"} />
               </View>
               <View style={styles.trackCopy}>
                 <Text numberOfLines={1} style={styles.trackTitle}>{activeMusic.track.title}</Text>
-                <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>
+                {!minimized && <Text numberOfLines={1} style={styles.artist}>{activeMusic.track.artist}</Text>}
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.close}>
+              <Pressable accessibilityRole="button" accessibilityLabel={minimized ? "Expand mini player" : "Minimize player"} onPress={() => { setExpanded(false); setMinimized((value) => !value); }} hitSlop={8} style={styles.action}>
+                <Ionicons name={minimized ? "chevron-up" : "chevron-down"} size={19} color="#6B7280" />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Stop music" onPress={stopMusic} hitSlop={8} style={styles.action}>
                 <Ionicons name="close" size={18} color="#6B7280" />
               </Pressable>
+            </Pressable>
+            <View pointerEvents={minimized ? "none" : "auto"} style={minimized ? styles.hiddenControls : styles.controls}>
+              <AudioPlayer
+                key={activeMusic.track.id}
+                uri={activeMusic.uri}
+                tintColor="#19172F"
+                waveColor="#1F95FF"
+                autoPlay
+              />
             </View>
-            <AudioPlayer
-              key={activeMusic.track.id}
-              uri={activeMusic.uri}
-              tintColor="#19172F"
-              waveColor="#1F95FF"
-              autoPlay
-            />
+            {expanded && !minimized ? (
+              <View style={styles.songSheet}>
+                <View style={[styles.largeArt, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}>
+                  <Ionicons name="musical-notes" size={42} color={activeMusic.track.accentColor || "#F06451"} />
+                </View>
+                <Text numberOfLines={2} style={styles.sheetTitle}>{activeMusic.track.title}</Text>
+                <Text numberOfLines={1} style={styles.sheetArtist}>{activeMusic.track.artist}</Text>
+                <Text style={styles.sheetHint}>Now playing on AfuChat</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       ) : null}
@@ -78,6 +102,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#D8DCE3",
   },
+  playerMinimized: { paddingVertical: 4, gap: 0 },
+  playerExpanded: { paddingTop: 10, paddingBottom: 14 },
+  action: { padding: 4 },
+  controls: { opacity: 1 },
+  hiddenControls: { height: 0, opacity: 0, overflow: "hidden" },
+  artMinimized: { width: 30, height: 30 },
+  songSheet: { alignItems: "center", paddingTop: 14, paddingBottom: 6 },
+  largeArt: { width: 150, height: 150, alignItems: "center", justifyContent: "center", marginBottom: 14 },
+  sheetTitle: { color: "#19172F", fontSize: 17, fontWeight: "700", textAlign: "center", maxWidth: "95%" },
+  sheetArtist: { color: "#6B7280", fontSize: 13, marginTop: 5 },
+  sheetHint: { color: "#1F95FF", fontSize: 11, marginTop: 10 },
   trackHeader: {
     minHeight: 38,
     flexDirection: "row",
