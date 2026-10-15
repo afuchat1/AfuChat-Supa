@@ -1518,7 +1518,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           } else if (existingIdx === -1) {
             const { data: tRow } = await supabase
               .from("posts")
-              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
               .eq("id", id).not("video_url", "is", null).maybeSingle();
             if (tRow) {
               newVideos = [{
