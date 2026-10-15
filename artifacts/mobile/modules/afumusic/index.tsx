@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "@/lib/alert";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
+import { useTheme } from "@/hooks/useTheme";
 
 type MusicSection = "discover" | "library" | "offline" | "studio";
 
@@ -71,13 +71,13 @@ type Props = AfuMusicCallbacks & {
   canMonetize?: boolean;
 };
 
-const INK = "#19172F";
-const CORAL = "#F06451";
+const INK = "#000000";
+const CORAL = "#1018D8";
 const COBALT = "#1018D8";
-const GOLD = "#D8A746";
-const CANVAS = "#F7F1E9";
-const PAPER = "#FFF9F1";
-const MUTED = "#8D847B";
+const GOLD = "#D4A853";
+const CANVAS = "#F5F0E8";
+const PAPER = "#FFFFFF";
+const MUTED = "#8C7F6A";
 
 const GENRES = ["All", "Ambient", "Electronic", "R&B", "Acoustic", "Lo-fi"];
 
@@ -303,6 +303,7 @@ export default function AfuMusicApp({
   canMonetize = false,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
+  const { colors, accent, isDark } = useTheme();
   const { playMusic } = useGlobalMusicPlayer();
   const [section, setSection] = useState<MusicSection>(Platform.OS === "web" && initialSection === "offline" ? "discover" : initialSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
@@ -580,32 +581,39 @@ export default function AfuMusicApp({
     section === "offline" ? "Ready without signal" : "Your studio";
 
   return (
-    <View style={[styles.root, { backgroundColor: CANVAS, paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <ScrollView
+        style={styles.pageScroll}
+        contentContainerStyle={styles.pageContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={accent} />}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={styles.topBar}>
         <View>
-          <Text style={styles.wordmark}>Afu<Text style={styles.wordmarkAccent}>Music</Text></Text>
-          <Text style={styles.privateLabel}>A PRIVATE LISTENING SPACE</Text>
+          <Text style={[styles.wordmark, { color: colors.text }]}>Afu<Text style={[styles.wordmarkAccent, { color: accent }]}>Music</Text></Text>
+          <Text style={[styles.privateLabel, { color: colors.textMuted }]}>MUSIC, BUILT INTO AFUCHAT</Text>
         </View>
-        <View style={styles.coinBadge}>
+        <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="flash" size={13} color={GOLD} />
-          <Text style={styles.coinText}>
+          <Text style={[styles.coinText, { color: colors.text }]}>
             {typeof acoinBalance === "number" ? `${Math.floor(acoinBalance)} AC` : "ACoin"}
           </Text>
         </View>
       </View>
 
-      <View style={styles.searchWrap}>
-        <Ionicons name="search" size={18} color={MUTED} />
+      <View style={[styles.searchWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
           value={query}
           onChangeText={handleSearch}
           placeholder="Search tracks, artists, sounds"
-          placeholderTextColor={MUTED}
-          style={styles.searchInput}
+          placeholderTextColor={colors.textMuted}
+          style={[styles.searchInput, { color: colors.text }]}
           returnKeyType="search"
           accessibilityLabel="Search AfuMusic"
         />
-        {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={MUTED} /></Pressable> : null}
+        {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable> : null}
       </View>
 
       <View style={styles.sectionRail}>
@@ -685,6 +693,8 @@ export default function AfuMusicApp({
         </ScrollView>
       ) : null}
 
+      {section === "discover" && !query ? <Text style={[styles.listHint, { color: colors.textMuted }]}>Fresh from independent creators</Text> : null}
+
       {loading ? (
         <SkeletonRows />
       ) : loadError ? (
@@ -697,17 +707,13 @@ export default function AfuMusicApp({
           action={section === "studio" ? { label: "Publish a track", onPress: () => setUploadOpen(true) } : undefined}
         />
       ) : (
-        <FlatList
-          data={filteredTracks}
-          renderItem={renderTrack}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.trackList}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={CORAL} />}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={section === "discover" && !query ? <Text style={styles.listHint}>Fresh from independent creators</Text> : null}
-        />
+        <View style={styles.trackList}>
+          {filteredTracks.map((track) => (
+            <React.Fragment key={track.id}>{renderTrack({ item: track })}</React.Fragment>
+          ))}
+        </View>
       )}
-
+      </ScrollView>
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
@@ -772,14 +778,16 @@ export default function AfuMusicApp({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, width: "100%" },
+  pageScroll: { flex: 1, width: "100%" },
+  pageContent: { paddingBottom: 24, width: "100%", maxWidth: 1120, alignSelf: "center" },
   topBar: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 15, paddingBottom: 14 },
   wordmark: { color: INK, fontFamily: "Inter_700Bold", fontSize: 29, letterSpacing: -1.3 },
   wordmarkAccent: { color: CORAL },
   privateLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 8, letterSpacing: 1.4, marginTop: 3 },
   coinBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F0E3C6", paddingHorizontal: 11, paddingVertical: 8, borderRadius: 16, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, marginHorizontal: 20, height: 45, paddingHorizontal: 13, borderRadius: 14, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, marginHorizontal: 20, height: 46, paddingHorizontal: 13, borderRadius: 14, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
   sectionRail: { marginTop: 15 },
   sectionRailContent: { paddingHorizontal: 20, gap: 8 },
@@ -788,7 +796,7 @@ const styles = StyleSheet.create({
   sectionPillLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
   sectionPillLabelActive: { color: PAPER },
   pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  heroCard: { overflow: "hidden", flexDirection: "row", minHeight: 205, marginHorizontal: 20, marginTop: 17, borderRadius: 25, backgroundColor: INK, padding: 19 },
+  heroCard: { overflow: "hidden", flexDirection: "row", minHeight: 205, marginHorizontal: 20, marginTop: 17, borderRadius: 22, backgroundColor: "#1018D8", padding: 19 },
   heroCopy: { flex: 1, zIndex: 2 },
   heroEyebrow: { color: "#AFA9C9", fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
   heroTitle: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 27, lineHeight: 29, letterSpacing: -0.8 },
