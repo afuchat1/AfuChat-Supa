@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { navigateToProfile } from "@/lib/navigateToProfile";
+import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import * as Haptics from "@/lib/haptics";
 import { safeRouter } from "@/lib/navUtils";
 
@@ -149,6 +149,41 @@ function dateRangeCutoff(range: DateRange): string | null {
   if (range === "all") return null;
   const ms = range === "24h" ? 86400000 : range === "7d" ? 604800000 : 2592000000;
   return new Date(Date.now() - ms).toISOString();
+}
+
+function buildSearchTermSuggestions(query: string, candidates: string[]): string[] {
+  const trimmed = query.trim();
+  const normalizedQuery = trimmed.toLowerCase();
+  if (normalizedQuery.length < 2) return [];
+
+  const hashtagQuery = normalizedQuery.startsWith("#");
+  const needle = normalizedQuery.replace(/^#+/, "");
+  if (!needle) return [];
+
+  const prefixMatches: string[] = [];
+  const wordMatches: string[] = [];
+  const seen = new Set<string>();
+
+  for (const rawCandidate of candidates) {
+    const raw = rawCandidate.trim();
+    if (!raw) continue;
+    const value = hashtagQuery
+      ? `#${raw.replace(/^#+/, "")}`
+      : raw.replace(/^#+/, "");
+    const key = value.toLowerCase();
+    const comparable = key.replace(/^#+/, "");
+    if (!comparable || comparable === needle || seen.has(key)) continue;
+
+    const isPrefix = comparable.startsWith(needle);
+    const isWordPrefix = comparable.split(/[\s_#]+/).some((word) => word.startsWith(needle));
+    if (hashtagQuery && !isPrefix) continue;
+    if (!isPrefix && !isWordPrefix) continue;
+
+    seen.add(key);
+    (isPrefix ? prefixMatches : wordMatches).push(value);
+  }
+
+  return [...prefixMatches, ...wordMatches].slice(0, 5);
 }
 
 // ─── AI Insight Fetcher ───────────────────────────────────────────────────────
@@ -317,6 +352,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const inputRef    = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
+  const suggestionRequestRef = useRef(0);
 
   const [query,        setQuery]        = useState("");
   const [tab,          setTab]          = useState<SearchTab>(initialTab ?? "all");
@@ -368,6 +404,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     loadInitial();
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      suggestionRequestRef.current += 1;
     };
   }, []);
 
@@ -378,6 +415,18 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     loadTrendingHashtags();
     loadTrendingVideos();
     getPersonalizedTags(14).then((tags) => { if (tags.length > 0) setPersonalizedTags(tags); }).catch(() => {});
+  }
+
+  function localSuggestionsFor(text: string, recentTerms: string[] = []): string[] {
+    const candidates = [
+      ...recentTerms,
+      ...history,
+      ...personalizedTags,
+      ...FALLBACK_TAGS,
+      ...trendingHashtags.map(({ tag }) => tag),
+      ...trendingPeople.flatMap((person) => [person.display_name, `@${person.handle}`]),
+    ];
+    return buildSearchTermSuggestions(text, candidates);
   }
 
   async function loadTrendingPeople() {
@@ -713,11 +762,20 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   function onChangeText(t: string) {
     setQuery(t);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    searchIdRef.current += 1;
     if (t.trim().length === 0) {
       setResults(EMPTY); setHasSearched(false); setTotalCount(0);
+      suggestionRequestRef.current += 1;
       setSearchSuggestions([]); return;
     }
-    getSearchSuggestions(t).then(setSearchSuggestions).catch(() => {});
+    const requestId = ++suggestionRequestRef.current;
+    setSearchSuggestions(localSuggestionsFor(t));
+    if (t.trim().length >= 2) {
+      getSearchSuggestions(t).then((recentTerms) => {
+        if (requestId !== suggestionRequestRef.current) return;
+        setSearchSuggestions(localSuggestionsFor(t, recentTerms));
+      }).catch(() => {});
+    }
     debounceRef.current = setTimeout(() => {
       performSearch(t, tab, verifiedOnly, sortMode, dateRange);
     }, 520);
@@ -725,23 +783,33 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
   function onSubmit() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    suggestionRequestRef.current += 1;
+    setSearchSuggestions([]);
     performSearch(query, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
 
   function clearSearch() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
-    setTotalCount(0);
+    setTotalCount(0); setSearchSuggestions([]);
     inputRef.current?.focus();
   }
 
   function onHistoryPress(term: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    suggestionRequestRef.current += 1;
+    setSearchSuggestions([]);
     setQuery(term);
     performSearch(term, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
 
   function onTagPress(tag: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    suggestionRequestRef.current += 1;
+    setSearchSuggestions([]);
     const q = `#${tag}`;
     setQuery(q); setTab("posts");
     performSearch(q, "posts", verifiedOnly, sortMode, dateRange);
@@ -885,7 +953,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     const per = p as PersonResult;
     return (
       <View >
-        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => navigateToProfile(per.handle, true).catch(() => {})} activeOpacity={0.75}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => navigateToKnownProfile(per)} activeOpacity={0.75}>
           <View style={{ position: "relative" }}>
             <Avatar uri={per.avatar_url} name={per.display_name} size={48} square={per.is_organization_verified} userId={per.id} />
             {per.is_verified && (
@@ -1617,7 +1685,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
                 <TouchableOpacity
                   key={p.id}
                   style={{ width: 148, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: 0.5, borderColor: colors.border }}
-                  onPress={() => navigateToProfile(p.handle, true).catch(() => {})}
+                  onPress={() => navigateToKnownProfile(p)}
                   activeOpacity={0.8}
                 >
                   {/* Gradient top band */}
@@ -1794,25 +1862,39 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         )}
 
         {/* Inline search suggestions — appear while typing, before submitting */}
-        {query.length > 1 && !hasSearched && searchSuggestions.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="always"
-            contentContainerStyle={{ gap: 6, paddingVertical: 6 }}
-          >
-            {searchSuggestions.map((s) => (
-              <TouchableOpacity
-                key={s}
-                onPress={() => { setQuery(s); setSearchSuggestions([]); performSearch(s, tab, verifiedOnly, sortMode, dateRange); inputRef.current?.blur(); }}
-                style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.border }}
-                activeOpacity={0.75}
-              >
-                <Ionicons name="time" size={13} color={colors.textMuted} />
-                <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        {query.length > 1 && searchSuggestions.length > 0 && (
+          <View style={{ paddingTop: 8, paddingBottom: 2 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: 6 }}>
+              Suggestions
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="always"
+              contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+            >
+              {searchSuggestions.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  onPress={() => {
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    suggestionRequestRef.current += 1;
+                    setQuery(s);
+                    setSearchSuggestions([]);
+                    performSearch(s, tab, verifiedOnly, sortMode, dateRange);
+                    inputRef.current?.blur();
+                  }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: colors.border }}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Search for ${s}`}
+                >
+                  <Ionicons name={s.startsWith("#") ? "pricetag-outline" : "search-outline"} size={13} color={colors.textMuted} />
+                  <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
         )}
 
         {/* Filter pills — only shown when actively searching */}

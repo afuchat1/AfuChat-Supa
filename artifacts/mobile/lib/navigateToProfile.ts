@@ -7,8 +7,10 @@
  * cannot be mistaken for a missing profile.
  */
 
+import { router } from "expo-router";
 import { showToast } from "@/lib/toast";
 import { notificationAsync, NotificationFeedbackType } from "@/lib/haptics";
+import { setProfileCache, type CachedProfile } from "@/lib/profileCache";
 import {
   navigateToUsernameTarget,
   resolveUsernameTarget,
@@ -16,6 +18,20 @@ import {
 } from "@/lib/usernameResolver";
 
 let latestRequest = 0;
+
+type KnownProfilePreview = Pick<CachedProfile, "id" | "display_name" | "handle" | "avatar_url"> &
+  Partial<CachedProfile>;
+
+/**
+ * Use this when a screen already has a profile row and its ID.
+ * Avoid resolving a known profile's handle against profiles/channels/groups
+ * before navigation, and seed the profile screen's in-memory preview cache.
+ */
+export function navigateToKnownProfile(profile: KnownProfilePreview): void {
+  if (!profile.id) return;
+  setProfileCache(profile.id, profile);
+  router.push({ pathname: "/contact/[id]", params: { id: profile.id } } as any);
+}
 
 export async function navigateToProfile(
   handle: string,

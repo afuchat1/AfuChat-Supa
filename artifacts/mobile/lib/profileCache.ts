@@ -18,9 +18,11 @@ export type CachedProfile = {
   display_name: string;
   handle: string;
   avatar_url: string | null;
+  banner_url?: string | null;
   is_verified?: boolean;
   is_organization_verified?: boolean;
   is_business_mode?: boolean;
+  is_private?: boolean;
   bio?: string | null;
   country?: string | null;
   website_url?: string | null;

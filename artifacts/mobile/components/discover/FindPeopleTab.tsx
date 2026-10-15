@@ -13,7 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
-import { navigateToProfile } from "@/lib/navigateToProfile";
+import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
@@ -480,7 +480,7 @@ export default function FindPeopleTab() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void loadPeople(); }} tintColor={accent} />}
           renderItem={({ item }) => (
             <View style={[styles.personCard, { backgroundColor: colors.surface }]}>
-              <TouchableOpacity style={styles.personIdentity} onPress={() => navigateToProfile(item.handle, true).catch(() => {})} activeOpacity={0.75}>
+              <TouchableOpacity style={styles.personIdentity} onPress={() => navigateToKnownProfile(item)} activeOpacity={0.75}>
                 <View><Avatar person={item} accent={accent} />{isOnline(item.last_seen) && <View style={[styles.onlineDot, { backgroundColor: "#36C96F", borderColor: colors.surface }]} />}</View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.nameRow}><Text style={[styles.personName, { color: colors.text }]} numberOfLines={1}>{item.display_name}</Text>{(item.is_verified || item.is_organization_verified) && <Ionicons name="checkmark-circle" size={15} color={accent} />}</View>

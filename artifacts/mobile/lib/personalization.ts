@@ -136,10 +136,26 @@ export async function getSearchSuggestions(partialQuery: string): Promise<string
   const q = partialQuery.trim().toLowerCase();
   if (q.length < 2) return [];
   const searches = await getRecentEvents("search", 150);
-  return searches
+  const matches = searches
     .map((e) => (e.data.query as string) || "")
-    .filter((s) => s && s.toLowerCase().includes(q) && s.toLowerCase() !== q)
-    .filter((s, i, arr) => arr.indexOf(s) === i)
+    .filter((s) => {
+      const normalized = s.trim().toLowerCase();
+      return normalized !== q &&
+        (normalized.startsWith(q) || normalized.split(/[\s#_]+/).some((part) => part.startsWith(q)));
+    });
+  const seen = new Set<string>();
+  return matches
+    .filter((s) => {
+      const key = s.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      const aPrefix = a.trim().toLowerCase().startsWith(q) ? 1 : 0;
+      const bPrefix = b.trim().toLowerCase().startsWith(q) ? 1 : 0;
+      return bPrefix - aPrefix;
+    })
     .slice(0, 5);
 }
 

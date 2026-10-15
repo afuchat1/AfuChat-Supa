@@ -186,7 +186,7 @@ export default function ContactScreen() {
 
   // ── Load aliases + mutuals ────────────────────────────────────────────────
   useEffect(() => {
-    if (!id || loading) return;
+    if (!id || loading || typeof profile?.is_private !== "boolean") return;
     setMutualExpanded(false);
     (async () => {
       const dismissed = await AsyncStorage.getItem(`afu_mutuals_dismissed_${id}`).catch(() => null);
@@ -213,11 +213,16 @@ export default function ContactScreen() {
         }
       }
     })().catch(() => {});
-  }, [id, loading, user?.id, isSelf, profile?.handle]);
+  }, [id, loading, user?.id, isSelf, profile?.handle, profile?.is_private]);
 
   // ── Load grid (fetch all post types once so tab switching is instant) ────
   useEffect(() => {
-    if (!id || loading) return;
+    if (!id || loading || typeof profile?.is_private !== "boolean") return;
+    if (profile.is_private && !isSelf && !isFollowing) {
+      setAllGridPosts([]);
+      setGridLoading(false);
+      return;
+    }
     setGridLoading(true);
     supabase.from("posts")
       .select("id,image_url,article_cover_url,video_url,post_type,content,article_title")
@@ -226,7 +231,7 @@ export default function ContactScreen() {
       .order("created_at", { ascending: false })
       .limit(90)
       .then(({ data }) => { setAllGridPosts((data as GridPost[]) ?? []); setGridLoading(false); }, () => { setAllGridPosts([]); setGridLoading(false); });
-  }, [id, loading]);
+  }, [id, loading, profile?.is_private, isFollowing, isSelf]);
 
   // ── Derive visible posts for the active tab (instant, no network) ─────────
   const gridPosts = React.useMemo(() => {
