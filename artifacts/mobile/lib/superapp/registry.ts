@@ -41,7 +41,7 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
   {
     id: "afusearch",
     name: "AfuSearch",
-    description: "Find people, posts, channels, events and more.",
+    description: "Discover trending videos, posts, and creators.",
     version: "1.0.0",
     icon: "search",
     gradient: ["#5856D6", "#6E6CD3"] as const,

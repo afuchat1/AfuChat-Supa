@@ -1497,6 +1497,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   // ─── Discovery (idle) view ────────────────────────────────────────────────────
 
   function renderDiscovery() {
+    const isAfuSearch = title === "AfuSearch";
     const displayTags = trendingHashtags.length > 0
       ? trendingHashtags.slice(0, 10)
       : (personalizedTags.length > 0 ? personalizedTags : FALLBACK_TAGS).slice(0, 10).map(t => ({ tag: t, count: 0 }));
@@ -1538,7 +1539,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             {/* Label + sub */}
             <View>
               <Text style={{ fontSize: h > 105 ? 16 : 13, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -0.2 }}>{cat.label}</Text>
-              {h > 105 && (
+              {h > 105 && !isAfuSearch && (
                 <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.78)", fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>
                   {CAT_SUB[cat.id]}
                 </Text>
@@ -1548,6 +1549,40 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         </TouchableOpacity>
       );
     }
+
+    const browseGrid = (
+      <View style={{ paddingTop: 22, paddingHorizontal: PH }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", marginBottom: 16 }}>
+          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, flex: 1, letterSpacing: -0.5 }}>
+            {isAfuSearch ? "Explore content" : "Browse"}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: "row", gap: G }}>
+          {CATEGORIES.slice(0, 2).map((cat) => (
+            <View key={cat.id}>
+              <BrowseCard cat={cat} w={half} h={130} iconSz={30} />
+            </View>
+          ))}
+        </View>
+
+        <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
+          {CATEGORIES.slice(2, 5).map((cat) => (
+            <View key={cat.id}>
+              <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
+            </View>
+          ))}
+        </View>
+
+        <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
+          {CATEGORIES.slice(5, 8).map((cat) => (
+            <View key={cat.id}>
+              <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
+            </View>
+          ))}
+        </View>
+      </View>
+    );
 
     return (
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scrollPB }}>
@@ -1604,39 +1639,8 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           </View>
         )}
 
-        {/* ── Browse — Bento grid ── */}
-        <View style={{ paddingTop: 22, paddingHorizontal: PH }}>
-          <View style={{ flexDirection: "row", alignItems: "flex-end", marginBottom: 16 }}>
-            <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, flex: 1, letterSpacing: -0.5 }}>Browse</Text>
-          </View>
-
-          {/* Row 1: 2 large tall cards */}
-          <View style={{ flexDirection: "row", gap: G }}>
-            {CATEGORIES.slice(0, 2).map((cat, i) => (
-              <View key={cat.id} >
-                <BrowseCard cat={cat} w={half} h={130} iconSz={30} />
-              </View>
-            ))}
-          </View>
-
-          {/* Row 2: 3 medium cards */}
-          <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
-            {CATEGORIES.slice(2, 5).map((cat, i) => (
-              <View key={cat.id} >
-                <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
-              </View>
-            ))}
-          </View>
-
-          {/* Row 3: 3 medium cards */}
-          <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
-            {CATEGORIES.slice(5, 8).map((cat, i) => (
-              <View key={cat.id} >
-                <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
-              </View>
-            ))}
-          </View>
-        </View>
+        {/* AfuSearch leads with live discovery content; categories stay available below. */}
+        {!isAfuSearch && browseGrid}
 
         {/* ── Trending hashtags — 2-col ranked grid ── */}
         {displayTags.length > 0 && (
@@ -1792,6 +1796,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           </View>
         )}
 
+        {isAfuSearch && browseGrid}
         <View style={{ height: 24 }} />
       </ScrollView>
     );
