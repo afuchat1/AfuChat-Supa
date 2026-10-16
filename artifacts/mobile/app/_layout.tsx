@@ -556,6 +556,33 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
+  // Drop decoded bitmap cache after the app has been backgrounded for a short
+  // time. Keep the disk cache intact so returning to the app can reuse files
+  // without holding the image memory cache while Android may reclaim the app.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    let trimTimer: ReturnType<typeof setTimeout> | null = null;
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        if (trimTimer) clearTimeout(trimTimer);
+        trimTimer = null;
+        return;
+      }
+      if (nextState !== "background") return;
+      if (trimTimer) clearTimeout(trimTimer);
+      trimTimer = setTimeout(() => {
+        trimTimer = null;
+        void import("expo-image")
+          .then(({ Image }) => Image.clearMemoryCache())
+          .catch(() => {});
+      }, 3_000);
+    });
+    return () => {
+      if (trimTimer) clearTimeout(trimTimer);
+      sub.remove();
+    };
+  }, []);
+
   useEffect(() => {
     if (!rootNavigationState?.key) return;
     // Do not compete with the first route for the JS/native bridge. Auth starts

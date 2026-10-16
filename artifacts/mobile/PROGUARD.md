@@ -4,9 +4,9 @@
 
 | Setting | Value |
 |---|---|
-| R8 enabled | **No** (disabled for startup-compatible release builds) |
+| R8 enabled | **Yes** (release DEX optimization, code shrinking, and obfuscation) |
 | Resource shrinking | **No** (`enableShrinkResourcesInReleaseBuilds: false`) |
-| JS minification | **No** (`enableMinifyInReleaseBuilds: false`) |
+| Android code minification | **Yes** (`enableMinifyInReleaseBuilds: true`) |
 | Android Gradle Plugin | **8.10.1** (forced by the CNG config plugin) |
 | Mapping file | Generated automatically on every release build |
 | Config mechanism | Expo config plugin (`plugins/withProguardRules.js`) |
@@ -15,8 +15,11 @@
 
 ## Release shrinker status
 
-R8 is intentionally disabled via `expo-build-properties` in `app.json`
-while Android startup stability is being diagnosed:
+R8 is enabled in Android release builds to meet Google Play's upcoming DEX
+optimization requirement. The app config and `withAndroidBuildOptimization`
+plugin both set `enableMinifyInReleaseBuilds` to `true`; the plugin also selects
+the optimized Android ProGuard template. Resource shrinking remains disabled
+because it is a separate optimization and is not required for DEX coverage:
 
 ```json
 {
@@ -24,7 +27,7 @@ while Android startup stability is being diagnosed:
     "plugins": [
       ["expo-build-properties", {
         "android": {
-          "enableMinifyInReleaseBuilds": false,
+          "enableMinifyInReleaseBuilds": true,
           "enableShrinkResourcesInReleaseBuilds": false
         }
       }]
@@ -33,12 +36,11 @@ while Android startup stability is being diagnosed:
 }
 ```
 
-These flags instruct Expo's prebuild step to keep `minifyEnabled false` and
-`shrinkResources false` in the `release` buildType inside
-`android/app/build.gradle`.
-
-This avoids release-only class/resource removal while native startup is being
-isolated. The custom rules remain available for a later controlled re-enable.
+Before publishing the next Android release, build and smoke-test a release
+artifact. R8 can expose reflection/JNI assumptions that do not appear in a
+development build. After uploading the AAB, confirm the measured DEX
+optimization coverage in Play Console; enabling R8 alone does not guarantee
+the required 25% coverage for every bundle.
 
 ---
 

@@ -106,11 +106,10 @@ function withReleaseOptimizations(config) {
       }
     };
 
-    // Keep R8 out of the startup diagnostic builds. Several native modules in
-    // this app are discovered across the JS/TurboModule boundary, and a
-    // release-only shrinker failure otherwise looks like an instant launch
-    // crash with no JavaScript stack.
-    ensureProperty("android.enableMinifyInReleaseBuilds", "false");
+    // Enable R8 for release DEX optimization, shrinking, and obfuscation to
+    // meet the upcoming Google Play optimization threshold. Keep resource
+    // shrinking off separately; it is not required for DEX optimization.
+    ensureProperty("android.enableMinifyInReleaseBuilds", "true");
     ensureProperty("android.enableShrinkResourcesInReleaseBuilds", "false");
     return config;
   });
