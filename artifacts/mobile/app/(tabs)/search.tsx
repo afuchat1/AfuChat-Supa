@@ -103,6 +103,7 @@ type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number
 type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
 type JobResult     = { id:string; title:string; job_type:string|null; location:string|null; description:string|null; apply_url:string|null; created_at:string; company_name:string; company_logo:string|null; company_slug:string|null };
 type AiInsight = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string; actions:string[]; navigateTo?:string; navigateLabel?:string; directAnswer?:string };
+type DidYouMeanState = { original: string; suggested: string };
 type LensResult = {
   title: string;
   description: string;
@@ -184,6 +185,75 @@ function buildSearchTermSuggestions(query: string, candidates: string[]): string
   }
 
   return [...prefixMatches, ...wordMatches].slice(0, 5);
+}
+
+const SEARCH_STOP_WORDS = new Set([
+  "about", "after", "again", "also", "because", "before", "being", "could",
+  "from", "have", "here", "into", "just", "like", "more", "most", "only",
+  "other", "over", "some", "such", "than", "that", "their", "them", "there",
+  "these", "they", "this", "those", "through", "under", "very", "what",
+  "when", "where", "which", "while", "with", "would", "your", "https", "www",
+]);
+
+function extractSearchableTerms(values: Array<string | null | undefined>): string[] {
+  const terms = new Set<string>();
+  for (const value of values) {
+    if (!value) continue;
+    const words = value.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || [];
+    for (const word of words) {
+      if (!SEARCH_STOP_WORDS.has(word)) terms.add(word);
+    }
+  }
+  return Array.from(terms);
+}
+
+function editDistanceWithin(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    let rowMinimum = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost,
+      );
+      rowMinimum = Math.min(rowMinimum, current[j]);
+    }
+    if (rowMinimum > limit) return limit + 1;
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+function findRelatedSearchQuery(query: string, candidates: string[]): string | null {
+  const parts = query.trim().split(/\s+/);
+  let best: { index: number; prefix: string; suffix: string; term: string; score: number } | null = null;
+
+  for (let index = 0; index < parts.length; index++) {
+    const match = parts[index].match(/^([#@]*)([\p{L}\p{N}]+)(.*)$/u);
+    if (!match) continue;
+    const originalWord = match[2].toLowerCase();
+    if (originalWord.length < 4) continue;
+
+    const maxDistance = originalWord.length < 8 ? 1 : 2;
+    for (const candidate of candidates) {
+      const term = candidate.toLowerCase();
+      if (term === originalWord || term.length < 4 || Math.abs(term.length - originalWord.length) > maxDistance) continue;
+      const distance = editDistanceWithin(originalWord, term, maxDistance);
+      const score = 1 - distance / Math.max(originalWord.length, term.length);
+      if (distance > maxDistance || score < 0.72) continue;
+      if (!best || score > best.score) {
+        best = { index, prefix: match[1], suffix: match[3], term, score };
+      }
+    }
+  }
+
+  if (!best) return null;
+  parts[best.index] = `${best.prefix}${best.term}${best.suffix}`;
+  return parts.join(" ");
 }
 
 // ─── AI Insight Fetcher ───────────────────────────────────────────────────────
@@ -368,11 +438,15 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const [saved,            setSaved]            = useState<SavedSearch[]>([]);
   const [personalizedTags, setPersonalizedTags] = useState<string[]>([]);
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const relatedTermsRef = useRef({ all: [] as string[], posts: [] as string[], people: [] as string[], videos: [] as string[] });
+  const relatedIndexReadyRef = useRef<Promise<void> | null>(null);
+  const [didYouMean, setDidYouMean] = useState<DidYouMeanState | null>(null);
 
   useEffect(() => {
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
+  const [trendingPosts,    setTrendingPosts]    = useState<PostResult[]>([]);
   const [trendingPeople,   setTrendingPeople]   = useState<PersonResult[]>([]);
   const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
   const [trendingVideos,   setTrendingVideos]   = useState<VideoResult[]>([]);
@@ -409,12 +483,16 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   }, []);
 
   async function loadInitial() {
-    const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
-    setHistory(h); setSaved(s);
-    loadTrendingPeople();
-    loadTrendingHashtags();
+    const peopleLoad = loadTrendingPeople();
+    const postIndexLoad = loadTrendingHashtags();
+    relatedIndexReadyRef.current = Promise.all([peopleLoad, postIndexLoad])
+      .then(() => {})
+      .catch(() => {});
     loadTrendingVideos();
     getPersonalizedTags(14).then((tags) => { if (tags.length > 0) setPersonalizedTags(tags); }).catch(() => {});
+
+    const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
+    setHistory(h); setSaved(s);
   }
 
   function localSuggestionsFor(text: string, recentTerms: string[] = []): string[] {
@@ -429,6 +507,15 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     return buildSearchTermSuggestions(text, candidates);
   }
 
+  function updateRelatedTerms(scope: "posts" | "people" | "videos", values: Array<string | null | undefined>) {
+    relatedTermsRef.current[scope] = extractSearchableTerms(values).slice(0, 1500);
+    relatedTermsRef.current.all = Array.from(new Set([
+      ...relatedTermsRef.current.posts,
+      ...relatedTermsRef.current.videos,
+      ...relatedTermsRef.current.people,
+    ])).slice(0, 3000);
+  }
+
   async function loadTrendingPeople() {
     const { data } = await supabase
       .from("profiles")
@@ -437,18 +524,26 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       .or("hide_from_search.is.null,hide_from_search.eq.false")
       .order("xp", { ascending: false })
       .limit(12);
-    if (data) setTrendingPeople(data.map((p: any) => ({ ...p, kind: "profile" })));
+    if (data) {
+      setTrendingPeople(data.map((p: any) => ({ ...p, kind: "profile" })));
+      updateRelatedTerms("people", data.flatMap((p: any) => [p.display_name, p.handle]));
+    }
   }
 
   async function loadTrendingHashtags() {
     try {
       const { data } = await supabase.from("posts")
-        .select("content, view_count")
-        .ilike("content", "%#%")
+        .select("id, content, article_title, post_type, view_count, image_url, author_id, created_at")
         .eq("visibility", "public")
         .order("created_at", { ascending: false })
         .limit(500);
       if (!data) return;
+      updateRelatedTerms("posts", data
+        .filter((post: any) => post.post_type !== "video")
+        .flatMap((post: any) => [post.content, post.article_title]));
+      updateRelatedTerms("videos", data
+        .filter((post: any) => post.post_type === "video")
+        .map((post: any) => post.content));
       const RE = /#(\w{2,30})/g;
       const scores: Record<string, number> = {};
       for (const p of data) {
@@ -466,7 +561,36 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           .slice(0, 20)
           .map(([tag, score]) => ({ tag, count: Math.max(1, Math.round(score)) }))
       );
+      const featured = data
+        .filter((post: any) => post.post_type !== "video" && (post.content || post.article_title))
+        .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0))
+        .slice(0, 5);
+      if (featured.length > 0) void loadFeaturedPosts(featured).catch(() => {});
     } catch {}
+  }
+
+  async function loadFeaturedPosts(posts: any[]) {
+    const authorIds = [...new Set(posts.map((post) => post.author_id).filter(Boolean))] as string[];
+    const { data: profiles } = authorIds.length
+      ? await supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", authorIds)
+      : { data: [] as any[] };
+    const profileById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
+    setTrendingPosts(posts.map((post) => {
+      const author = profileById.get(post.author_id) || {} as any;
+      return {
+        id: post.id,
+        content: post.content || post.article_title || "",
+        image_url: post.image_url || null,
+        author_id: post.author_id,
+        author_handle: author.handle || "",
+        author_name: author.display_name || "",
+        author_avatar: author.avatar_url || null,
+        view_count: post.view_count || 0,
+        created_at: post.created_at,
+        post_type: post.post_type || "text",
+        article_title: post.article_title || null,
+      };
+    }));
   }
 
   async function loadTrendingVideos() {
@@ -483,7 +607,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       const ids = [...new Set(data.map((v: any) => v.author_id))] as string[];
       const { data: profiles } = await supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", ids);
       const pm = new Map((profiles || []).map((p: any) => [p.id, p]));
-      setTrendingVideos(data.map((v: any) => {
+      const videos: VideoResult[] = data.map((v: any) => {
         const a = pm.get(v.author_id) || {} as any;
         return {
           id: v.id, content: v.content || "", video_url: v.video_url,
@@ -492,18 +616,27 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           author_avatar: a.avatar_url || null, view_count: v.view_count || 0,
           created_at: v.created_at, audio_name: v.audio_name || null, duration_seconds: null,
         };
-      }));
+      });
+      setTrendingVideos(videos);
+      updateRelatedTerms("videos", videos.flatMap((video) => [video.content, video.audio_name]));
     } catch {}
   }
 
   // ── Main search ─────────────────────────────────────────────────────────────
 
-  const performSearch = useCallback(async (
-    q: string, currentTab: SearchTab, vOnly: boolean, sort: SortMode, dr: DateRange,
-  ) => {
+  const performSearch = useCallback(async function runSearch(
+    q: string,
+    currentTab: SearchTab,
+    vOnly: boolean,
+    sort: SortMode,
+    dr: DateRange,
+    allowDidYouMean = true,
+    fallbackFor?: DidYouMeanState,
+  ): Promise<void> {
     const trimmed = q.trim();
+    if (!fallbackFor) setDidYouMean(null);
     if (trimmed.length < 1 && currentTab !== "videos" && currentTab !== "jobs") {
-      setResults(EMPTY); setHasSearched(false); setTotalCount(0); return;
+      setResults(EMPTY); setHasSearched(false); setTotalCount(0); setDidYouMean(null); return;
     }
 
     const id = ++searchIdRef.current;
@@ -553,7 +686,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             ? (() => {
                 let pq = supabase.from("posts")
                   .select("id, content, image_url, author_id, view_count, created_at, post_type, article_title")
-                  .ilike("content", pat)
+                  .or(`content.ilike.${pat},article_title.ilike.${pat}`)
                   .eq("visibility", "public")
                   .neq("post_type", "video");
                 if (cutoff) pq = pq.gte("created_at", cutoff);
@@ -743,17 +876,46 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs, music };
       if (id !== searchIdRef.current) return;
 
-      setResults(finalResults);
       const total = people.length + posts.length + videos.length + channels.length + groups.length
         + events.length + gifts.length + marketItems.length + jobs.length + music.length;
+      if (total === 0 && title === "AfuSearch" && allowDidYouMean && trimmed.length >= 4) {
+        await relatedIndexReadyRef.current?.catch(() => {});
+        if (id !== searchIdRef.current) return;
+        const candidates = currentTab === "people"
+          ? relatedTermsRef.current.people
+          : currentTab === "posts"
+            ? relatedTermsRef.current.posts
+            : currentTab === "videos"
+              ? relatedTermsRef.current.videos
+              : currentTab === "all"
+                ? relatedTermsRef.current.all
+                : [];
+        const suggested = findRelatedSearchQuery(trimmed, candidates);
+        if (suggested && suggested.toLowerCase() !== trimmed.toLowerCase()) {
+          addToHistory(trimmed).then(setHistory);
+          trackEvent("search", { query: trimmed, tab: currentTab, results_count: 0, suggested_query: suggested });
+          await runSearch(suggested, currentTab, vOnly, sort, dr, false, { original: trimmed, suggested });
+          return;
+        }
+      }
+
+      setResults(finalResults);
       setTotalCount(total);
       setLoading(false);
+      if (fallbackFor) setDidYouMean(total > 0 ? fallbackFor : null);
       if (trimmed.length > 0) {
-        addToHistory(trimmed).then(setHistory);
+        if (!fallbackFor) addToHistory(trimmed).then(setHistory);
         trackEvent("search", { query: trimmed, tab: currentTab, results_count: total });
       }
     } catch {
-      if (id === searchIdRef.current) setLoading(false);
+      if (id === searchIdRef.current) {
+        setLoading(false);
+        if (fallbackFor) {
+          setDidYouMean(null);
+          setResults(EMPTY);
+          setTotalCount(0);
+        }
+      }
     }
   }, []);
 
@@ -761,6 +923,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
   function onChangeText(t: string) {
     setQuery(t);
+    setDidYouMean(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     searchIdRef.current += 1;
     if (t.trim().length === 0) {
@@ -793,7 +956,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
-    setTotalCount(0); setSearchSuggestions([]);
+    setTotalCount(0); setSearchSuggestions([]); setDidYouMean(null);
     inputRef.current?.focus();
   }
 
@@ -1390,11 +1553,50 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Ionicons name="search" size={13} color={BRAND} />
             <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text>{" "}results for{" "}
-              <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{query.trim()}"</Text>
+              {didYouMean
+                ? <>
+                    Showing <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text> results for{" "}
+                    <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{didYouMean.suggested}"</Text>
+                  </>
+                : <>
+                    <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text>{" "}results for{" "}
+                    <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{query.trim()}"</Text>
+                  </>}
             </Text>
           </View>
         </View>
+
+        {didYouMean && (
+          <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>No exact match for "{didYouMean.original}". Did you mean</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Use suggested keyword ${didYouMean.suggested}`}
+                onPress={() => {
+                  const suggested = didYouMean.suggested;
+                  setQuery(suggested);
+                  setDidYouMean(null);
+                  performSearch(suggested, tab, verifiedOnly, sortMode, dateRange, false);
+                }}
+              >
+                <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_700Bold" }}>"{didYouMean.suggested}"?</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Search for ${didYouMean.original} instead`}
+              onPress={() => {
+                const original = didYouMean.original;
+                setDidYouMean(null);
+                performSearch(original, tab, verifiedOnly, sortMode, dateRange, false);
+              }}
+              style={{ alignSelf: "flex-start", paddingTop: 6 }}
+            >
+              <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Search for "{didYouMean.original}" instead</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {(lensResult || lensLoading) && <View style={{ paddingHorizontal: 14, paddingTop: 14 }}><LensCard /></View>}
 
@@ -1641,6 +1843,18 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
         {/* AfuSearch leads with live discovery content; categories stay available below. */}
         {!isAfuSearch && browseGrid}
+
+        {isAfuSearch && trendingPosts.length > 0 && (
+          <View style={{ paddingTop: 24 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: PH, marginBottom: 12 }}>
+              <Ionicons name="document-text" size={18} color={BRAND} />
+              <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: -0.5 }}>Posts to explore</Text>
+            </View>
+            <View style={{ paddingHorizontal: 12, gap: 10 }}>
+              {trendingPosts.map((post, index) => <PostCard key={post.id} p={post} i={index} />)}
+            </View>
+          </View>
+        )}
 
         {/* ── Trending hashtags — 2-col ranked grid ── */}
         {displayTags.length > 0 && (
