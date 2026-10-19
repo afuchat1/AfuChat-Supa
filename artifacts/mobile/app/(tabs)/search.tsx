@@ -30,6 +30,16 @@ import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
 import { getEngagera } from "@/lib/engagera";
 import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
 import {
+  getRankedSearchSuggestions,
+  getSearchProfileSuggestions,
+  getSimilarSearchTerms,
+  recordSearchResultEngagement,
+  recordSearchSubmission,
+  type RankedSearchTerm,
+  type SearchProfileSuggestion,
+} from "@/lib/searchEngine";
+import { normalizeSearchTerm } from "@/lib/searchNormalization";
+import {
   getSearchHistory,
   addToHistory,
   removeFromHistory,
@@ -42,7 +52,7 @@ import { trackEvent } from "@/lib/activityTracker";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
 import { Avatar } from "@/components/ui/Avatar";
 import UserName from "@/components/ui/UserName";
-import { getPersonalizedTags, getSearchSuggestions } from "@/lib/personalization";
+import { getPersonalizedTags } from "@/lib/personalization";
 import Colors from "@/constants/colors";
 import { searchMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
 import type { AfuMusicTrack } from "@/modules/afumusic";
@@ -92,7 +102,7 @@ const TABS: { id: SearchTab; label: string; icon: string }[] = [
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PersonResult  = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number; kind:"profile" };
+type PersonResult  = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; show_bio_publicly?:boolean; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number; kind:"profile" };
 type OrgPageResult = { id:string; name:string; slug:string; logo_url:string|null; description:string|null; kind:"org" };
 type PostResult    = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
 type VideoResult   = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null; duration_seconds:number|null };
@@ -104,6 +114,9 @@ type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:
 type JobResult     = { id:string; title:string; job_type:string|null; location:string|null; description:string|null; apply_url:string|null; created_at:string; company_name:string; company_logo:string|null; company_slug:string|null };
 type AiInsight = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string; actions:string[]; navigateTo?:string; navigateLabel?:string; directAnswer?:string };
 type DidYouMeanState = { original: string; suggested: string };
+type SearchSuggestionItem =
+  | { kind: "term"; term: string; score: number; growth: number; engagementRate: number; exactMatch: boolean }
+  | { kind: "profile"; profile: SearchProfileSuggestion };
 type LensResult = {
   title: string;
   description: string;
@@ -438,7 +451,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const [history,          setHistory]          = useState<string[]>([]);
   const [saved,            setSaved]            = useState<SavedSearch[]>([]);
   const [personalizedTags, setPersonalizedTags] = useState<string[]>([]);
-  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestionItem[]>([]);
   const relatedTermsRef = useRef({ all: [] as string[], posts: [] as string[], people: [] as string[], videos: [] as string[] });
   const relatedIndexReadyRef = useRef<Promise<void> | null>(null);
   const [didYouMean, setDidYouMean] = useState<DidYouMeanState | null>(null);
@@ -451,6 +464,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const [trendingPeople,   setTrendingPeople]   = useState<PersonResult[]>([]);
   const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
   const [trendingVideos,   setTrendingVideos]   = useState<VideoResult[]>([]);
+  const [trendingSearches, setTrendingSearches] = useState<RankedSearchTerm[]>([]);
 
   const [lensResult, setLensResult] = useState<LensResult | null>(null);
   const [lensImageUri, setLensImageUri] = useState<string | null>(null);
@@ -484,13 +498,20 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   }, []);
 
   async function loadInitial() {
-    const peopleLoad = loadTrendingPeople();
     const postIndexLoad = loadTrendingHashtags();
-    relatedIndexReadyRef.current = Promise.all([peopleLoad, postIndexLoad])
-      .then(() => {})
-      .catch(() => {});
-    loadTrendingVideos();
-    getPersonalizedTags(14).then((tags) => { if (tags.length > 0) setPersonalizedTags(tags); }).catch(() => {});
+    if (isAfuSearch) {
+      relatedIndexReadyRef.current = postIndexLoad.then(() => {}).catch(() => {});
+      getRankedSearchSuggestions("", 8)
+        .then(setTrendingSearches)
+        .catch((error) => console.warn("[AfuSearch] Could not load shared trends:", error?.message || error));
+    } else {
+      const peopleLoad = loadTrendingPeople();
+      relatedIndexReadyRef.current = Promise.all([peopleLoad, postIndexLoad])
+        .then(() => {})
+        .catch(() => {});
+      loadTrendingVideos();
+      getPersonalizedTags(14).then((tags) => { if (tags.length > 0) setPersonalizedTags(tags); }).catch(() => {});
+    }
 
     const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
     setHistory(h); setSaved(s);
@@ -525,6 +546,57 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     return buildSearchTermSuggestions(text, candidates);
   }
 
+  function mergeSuggestionItems(
+    text: string,
+    rankedTerms: RankedSearchTerm[],
+    profiles: SearchProfileSuggestion[],
+    localTerms: string[],
+  ): SearchSuggestionItem[] {
+    const normalizedQuery = normalizeSearchTerm(text);
+    const profileQuery = normalizedQuery.replace(/^@+/, "");
+    const orderedProfiles = [...profiles].sort((a, b) => {
+      const aExact = normalizeSearchTerm(a.handle) === profileQuery
+        || normalizeSearchTerm(a.display_name) === normalizedQuery;
+      const bExact = normalizeSearchTerm(b.handle) === profileQuery
+        || normalizeSearchTerm(b.display_name) === normalizedQuery;
+      return Number(bExact) - Number(aExact);
+    });
+    const exactProfiles = orderedProfiles.filter((profile) =>
+      normalizeSearchTerm(profile.handle) === profileQuery
+      || normalizeSearchTerm(profile.display_name) === normalizedQuery,
+    );
+    const partialProfiles = orderedProfiles.filter((profile) => !exactProfiles.includes(profile));
+    const items: SearchSuggestionItem[] = [
+      ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
+      ...rankedTerms.slice(0, 5).map((row) => ({
+        kind: "term" as const,
+        term: row.term,
+        score: row.score,
+        growth: row.growth,
+        engagementRate: row.engagementRate,
+        exactMatch: row.exactMatch,
+      })),
+      ...partialProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
+      ...localTerms.map((term) => ({
+        kind: "term" as const,
+        term,
+        score: 0,
+        growth: 0,
+        engagementRate: 0,
+        exactMatch: false,
+      })),
+    ];
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const key = item.kind === "profile"
+        ? `profile:${item.profile.profile_id}`
+        : `term:${normalizeSearchTerm(item.term)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 6);
+  }
+
   function updateRelatedTerms(scope: "posts" | "people" | "videos", values: Array<string | null | undefined>) {
     relatedTermsRef.current[scope] = extractSearchableTerms(values).slice(0, 1500);
     relatedTermsRef.current.all = Array.from(new Set([
@@ -537,13 +609,17 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   async function loadTrendingPeople() {
     const { data } = await supabase
       .from("profiles")
-      .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country, xp")
+        .select("id, handle, display_name, avatar_url, bio, show_bio_publicly, is_verified, is_organization_verified, current_grade, country, xp")
       .eq("is_verified", true)
       .or("hide_from_search.is.null,hide_from_search.eq.false")
       .order("xp", { ascending: false })
       .limit(12);
     if (data) {
-      setTrendingPeople(data.map((p: any) => ({ ...p, kind: "profile" })));
+      setTrendingPeople(data.map((p: any) => ({
+        ...p,
+        bio: p.show_bio_publicly === false ? null : p.bio,
+        kind: "profile",
+      })));
       updateRelatedTerms("people", data.flatMap((p: any) => [p.display_name, p.handle]));
     }
   }
@@ -554,7 +630,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         .select("id, content, article_title, post_type, view_count, image_url, author_id, created_at")
         .eq("visibility", "public")
         .order("created_at", { ascending: false })
-        .limit(500);
+        .limit(80);
       if (!data) return;
       updateRelatedTerms("posts", data
         .filter((post: any) => post.post_type !== "video")
@@ -650,6 +726,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     dr: DateRange,
     allowDidYouMean = true,
     fallbackFor?: DidYouMeanState,
+    recordExplicitSubmission = false,
   ): Promise<void> {
     const trimmed = q.trim();
     if (!fallbackFor) setDidYouMean(null);
@@ -682,15 +759,11 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes, musicRes] =
         await Promise.all([
           wantsPeople
-            ? (() => {
-                let pq = supabase.from("profiles")
-                  .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country, xp")
-                  .or(`handle.ilike.${handlePat},display_name.ilike.${pat},bio.ilike.${pat}`)
-                  .or("hide_from_search.is.null,hide_from_search.eq.false");
-                if (vOnly) pq = pq.eq("is_verified", true);
-                pq = pq.order("xp", { ascending: false });
-                return pq.limit(all ? 5 : 25);
-              })()
+            ? supabase.rpc("search_profiles", {
+                p_query: trimmed,
+                p_verified_only: vOnly,
+                p_limit: all ? 5 : 25,
+              })
             : Promise.resolve({ data: [] }),
 
           wantsPeople
@@ -896,10 +969,13 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
       const total = people.length + posts.length + videos.length + channels.length + groups.length
         + events.length + gifts.length + marketItems.length + jobs.length + music.length;
+      if (recordExplicitSubmission && trimmed.length > 0) {
+        addToHistory(trimmed).then(setHistory).catch(() => {});
+      }
       if (total === 0 && title === "AfuSearch" && allowDidYouMean && trimmed.length >= 4) {
         await relatedIndexReadyRef.current?.catch(() => {});
         if (id !== searchIdRef.current) return;
-        const candidates = currentTab === "people"
+        const localCandidates = currentTab === "people"
           ? relatedTermsRef.current.people
           : currentTab === "posts"
             ? relatedTermsRef.current.posts
@@ -908,11 +984,17 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
               : currentTab === "all"
                 ? relatedTermsRef.current.all
                 : [];
+        const similarTerms = await getSimilarSearchTerms(trimmed, 12).catch((error) => {
+          console.warn("[AfuSearch] Could not load related search terms:", error?.message || error);
+          return [] as RankedSearchTerm[];
+        });
+        const candidates = [
+          ...localCandidates,
+          ...similarTerms.map((item) => item.term),
+        ];
         const suggested = findRelatedSearchQuery(trimmed, candidates);
         if (suggested && suggested.toLowerCase() !== trimmed.toLowerCase()) {
-          addToHistory(trimmed).then(setHistory);
-          trackEvent("search", { query: trimmed, tab: currentTab, results_count: 0, suggested_query: suggested });
-          await runSearch(suggested, currentTab, vOnly, sort, dr, false, { original: trimmed, suggested });
+          await runSearch(suggested, currentTab, vOnly, sort, dr, false, { original: trimmed, suggested }, false);
           return;
         }
       }
@@ -921,9 +1003,16 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       setTotalCount(total);
       setLoading(false);
       if (fallbackFor) setDidYouMean(total > 0 ? fallbackFor : null);
-      if (trimmed.length > 0) {
-        if (!fallbackFor) addToHistory(trimmed).then(setHistory);
-        trackEvent("search", { query: trimmed, tab: currentTab, results_count: total });
+      if (recordExplicitSubmission && trimmed.length > 0 && total > 0 && user) {
+        void recordSearchSubmission(trimmed, total)
+          .then((submission) => {
+            if (submission.analytics_enabled) {
+              trackEvent("search", { query: trimmed, tab: currentTab, results_count: total });
+            }
+          })
+          .catch((error) => {
+            console.warn("[AfuSearch] Could not record submitted search:", error?.message || error);
+          });
       }
     } catch {
       if (id === searchIdRef.current) {
@@ -935,47 +1024,88 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         }
       }
     }
-  }, []);
+  }, [user, title]);
 
   // ── Event handlers ───────────────────────────────────────────────────────────
+
+  function trackSearchClick() {
+    if (!user || !query.trim()) return;
+    void recordSearchResultEngagement(query).catch((error) => {
+      console.warn("[AfuSearch] Could not record result engagement:", error?.message || error);
+    });
+  }
 
   function onChangeText(t: string) {
     setQuery(t);
     setDidYouMean(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     searchIdRef.current += 1;
+    setResults(EMPTY);
+    setHasSearched(false);
+    setTotalCount(0);
+    setLoading(false);
     if (t.trim().length === 0) {
-      setResults(EMPTY); setHasSearched(false); setTotalCount(0);
       suggestionRequestRef.current += 1;
       setSearchSuggestions([]); return;
     }
     const requestId = ++suggestionRequestRef.current;
-    setSearchSuggestions(localSuggestionsFor(t));
+    setSearchSuggestions(mergeSuggestionItems(t, [], [], localSuggestionsFor(t)));
     if (t.trim().length >= 2) {
-      getSearchSuggestions(t).then((recentTerms) => {
+      debounceRef.current = setTimeout(async () => {
+        const [rankedTerms, profileSuggestions] = await Promise.all([
+          getRankedSearchSuggestions(t, 6).catch((error) => {
+            console.warn("[AfuSearch] Ranked suggestions unavailable:", error?.message || error);
+            return [] as RankedSearchTerm[];
+          }),
+          getSearchProfileSuggestions(t, user?.id, 4).catch((error) => {
+            console.warn("[AfuSearch] Profile suggestions unavailable:", error?.message || error);
+            return [] as SearchProfileSuggestion[];
+          }),
+        ]);
         if (requestId !== suggestionRequestRef.current) return;
-        setSearchSuggestions(localSuggestionsFor(t, recentTerms));
-      }).catch(() => {});
+        setSearchSuggestions(mergeSuggestionItems(
+          t,
+          rankedTerms,
+          profileSuggestions,
+          localSuggestionsFor(t),
+        ));
+      }, 220);
     }
-    debounceRef.current = setTimeout(() => {
-      performSearch(t, tab, verifiedOnly, sortMode, dateRange);
-    }, 520);
   }
 
   function onSubmit() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
-    performSearch(query, tab, verifiedOnly, sortMode, dateRange);
+    performSearch(query, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
 
-  function onSuggestionPress(suggestion: string) {
+  function onSuggestionPress(suggestion: SearchSuggestionItem) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
-    setQuery(suggestion);
     setSearchSuggestions([]);
-    performSearch(suggestion, tab, verifiedOnly, sortMode, dateRange);
+    if (suggestion.kind === "profile") {
+      const profile = suggestion.profile;
+      setQuery(profile.display_name || `@${profile.handle}`);
+      inputRef.current?.blur();
+      navigateToKnownProfile({
+        id: profile.profile_id,
+        handle: profile.handle,
+        display_name: profile.display_name,
+        avatar_url: profile.avatar_url,
+        bio: null,
+        show_bio_publicly: true,
+        is_verified: profile.is_verified,
+        is_organization_verified: profile.is_organization_verified,
+        current_grade: "",
+        country: null,
+        kind: "profile",
+      });
+      return;
+    }
+    setQuery(suggestion.term);
+    performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
 
@@ -992,7 +1122,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     setQuery(term);
-    performSearch(term, tab, verifiedOnly, sortMode, dateRange);
+    performSearch(term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
 
@@ -1002,7 +1132,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     setSearchSuggestions([]);
     const q = `#${tag}`;
     setQuery(q); setTab("posts");
-    performSearch(q, "posts", verifiedOnly, sortMode, dateRange);
+    performSearch(q, "posts", verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
 
