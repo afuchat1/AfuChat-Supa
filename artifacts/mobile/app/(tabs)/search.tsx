@@ -399,6 +399,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   // Shadow the module-level BRAND constant so every reference inside this
   // component (and all its inner functions) uses the user's chosen accent.
   const BRAND = colors.accent;
+  const isAfuSearch = title === "AfuSearch";
 
   const CATEGORIES = [
     { id: "people",   label: "People",   icon: "people",        gradient: [BRAND,  Colors.brandDark]   as [string,string] },
@@ -496,13 +497,30 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   }
 
   function localSuggestionsFor(text: string, recentTerms: string[] = []): string[] {
+    if (isAfuSearch && text.trim().startsWith("#")) {
+      const tagCandidates = [
+        ...recentTerms.filter((term) => term.trim().startsWith("#")),
+        ...history.filter((term) => term.trim().startsWith("#")),
+        ...personalizedTags.map((tag) => `#${tag.replace(/^#+/, "")}`),
+        ...trendingHashtags.map(({ tag }) => `#${tag}`),
+      ];
+      return buildSearchTermSuggestions(text, tagCandidates);
+    }
+
     const candidates = [
       ...recentTerms,
       ...history,
       ...personalizedTags,
-      ...FALLBACK_TAGS,
+      ...(isAfuSearch ? [] : FALLBACK_TAGS),
       ...trendingHashtags.map(({ tag }) => tag),
       ...trendingPeople.flatMap((person) => [person.display_name, `@${person.handle}`]),
+      ...(isAfuSearch
+        ? [
+            ...relatedTermsRef.current.posts,
+            ...relatedTermsRef.current.videos,
+            ...relatedTermsRef.current.people,
+          ]
+        : []),
     ];
     return buildSearchTermSuggestions(text, candidates);
   }
@@ -949,6 +967,15 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     performSearch(query, tab, verifiedOnly, sortMode, dateRange);
+    inputRef.current?.blur();
+  }
+
+  function onSuggestionPress(suggestion: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    suggestionRequestRef.current += 1;
+    setQuery(suggestion);
+    setSearchSuggestions([]);
+    performSearch(suggestion, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
 
@@ -1699,7 +1726,6 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   // ─── Discovery (idle) view ────────────────────────────────────────────────────
 
   function renderDiscovery() {
-    const isAfuSearch = title === "AfuSearch";
     const displayTags = trendingHashtags.length > 0
       ? trendingHashtags.slice(0, 10)
       : (personalizedTags.length > 0 ? personalizedTags : FALLBACK_TAGS).slice(0, 10).map(t => ({ tag: t, count: 0 }));
@@ -2082,38 +2108,69 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
         {/* Inline search suggestions — appear while typing, before submitting */}
         {query.length > 1 && searchSuggestions.length > 0 && (
-          <View style={{ paddingTop: 8, paddingBottom: 2 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: 6 }}>
-              Suggestions
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="always"
-              contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
-            >
-              {searchSuggestions.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  onPress={() => {
-                    if (debounceRef.current) clearTimeout(debounceRef.current);
-                    suggestionRequestRef.current += 1;
-                    setQuery(s);
-                    setSearchSuggestions([]);
-                    performSearch(s, tab, verifiedOnly, sortMode, dateRange);
-                    inputRef.current?.blur();
-                  }}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: colors.border }}
-                  activeOpacity={0.75}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Search for ${s}`}
-                >
-                  <Ionicons name={s.startsWith("#") ? "pricetag-outline" : "search-outline"} size={13} color={colors.textMuted} />
-                  <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+          isAfuSearch ? (
+            <View style={{ paddingTop: 8, paddingBottom: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7, paddingHorizontal: 3 }}>
+                <Ionicons name="search-outline" size={13} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 }}>
+                  Suggestions
+                </Text>
+              </View>
+              <View style={{ backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: 5, paddingVertical: 3, gap: 2 }}>
+                {searchSuggestions.slice(0, 5).map((suggestion) => {
+                  const icon = suggestion.startsWith("#")
+                    ? "pricetag-outline"
+                    : suggestion.startsWith("@")
+                      ? "person-outline"
+                      : "search-outline";
+                  return (
+                    <TouchableOpacity
+                      key={suggestion}
+                      onPress={() => onSuggestionPress(suggestion)}
+                      style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 8, paddingVertical: 8 }}
+                      activeOpacity={0.72}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Search for ${suggestion}`}
+                    >
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }}>
+                        <Ionicons name={icon as any} size={14} color={colors.textMuted} />
+                      </View>
+                      <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>
+                        {suggestion}
+                      </Text>
+                      <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : (
+            <View style={{ paddingTop: 8, paddingBottom: 2 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold", marginBottom: 6 }}>
+                Suggestions
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="always"
+                contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+              >
+                {searchSuggestions.map((suggestion) => (
+                  <TouchableOpacity
+                    key={suggestion}
+                    onPress={() => onSuggestionPress(suggestion)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: colors.border }}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Search for ${suggestion}`}
+                  >
+                    <Ionicons name={suggestion.startsWith("#") ? "pricetag-outline" : "search-outline"} size={13} color={colors.textMuted} />
+                    <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{suggestion}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )
         )}
 
         {/* Filter pills — only shown when actively searching */}
