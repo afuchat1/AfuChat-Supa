@@ -448,6 +448,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const [results,     setResults]     = useState<AllResults>(EMPTY);
   const [hasSearched, setHasSearched] = useState(false);
   const [totalCount,  setTotalCount]  = useState(0);
+  const isAfuSearchTyping = isAfuSearch && query.trim().length > 0 && !hasSearched;
 
   const [history,          setHistory]          = useState<string[]>([]);
   const [saved,            setSaved]            = useState<SavedSearch[]>([]);
@@ -1116,6 +1117,54 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     setQuery(suggestion.term);
     performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
+  }
+
+  function renderSuggestionRow(suggestion: SearchSuggestionItem, index: number) {
+    const profile = suggestion.kind === "profile" ? suggestion.profile : null;
+    const term = suggestion.kind === "term" ? suggestion.term : "";
+    const label = suggestion.kind === "profile"
+      ? suggestion.profile.display_name || `@${suggestion.profile.handle}`
+      : suggestion.term;
+    const isTrending = suggestion.kind === "term" && suggestion.growth > 0.35;
+    const icon = suggestion.kind === "profile"
+      ? "person-outline"
+      : term.startsWith("#")
+        ? "pricetag-outline"
+        : isTrending
+          ? "trending-up"
+          : "search-outline";
+
+    return (
+      <TouchableOpacity
+        key={`${suggestion.kind}-${suggestion.kind === "profile" ? suggestion.profile.profile_id : normalizeSearchTerm(suggestion.term)}-${index}`}
+        testID={`search-suggestion-${index}`}
+        onPress={() => onSuggestionPress(suggestion)}
+        style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 }}
+        activeOpacity={0.72}
+        accessibilityRole="button"
+        accessibilityLabel={profile ? `Open ${label}` : `Search for ${label}`}
+      >
+        {profile ? (
+          <Avatar uri={profile.avatar_url} name={label} size={32} userId={profile.profile_id} />
+        ) : (
+          <Ionicons name={icon as any} size={18} color={isTrending ? BRAND : colors.textMuted} />
+        )}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
+            {label}
+          </Text>
+          {profile && (
+            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+              @{profile.handle}
+            </Text>
+          )}
+        </View>
+        {profile?.is_verified && (
+          <Ionicons name="checkmark-circle" size={15} color={profile.is_organization_verified ? GOLD : BRAND} />
+        )}
+        <Ionicons name="arrow-forward-outline" size={16} color={colors.textMuted} />
+      </TouchableOpacity>
+    );
   }
 
   function clearSearch() {
@@ -2359,6 +2408,38 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     );
   }
 
+  function renderSuggestionPage() {
+    const normalizedQuery = normalizeSearchTerm(query);
+    const suggestions = searchSuggestions.filter((suggestion) =>
+      suggestion.kind !== "term" || normalizeSearchTerm(suggestion.term) !== normalizedQuery,
+    );
+
+    return (
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 6, paddingBottom: scrollPB }}
+        keyboardShouldPersistTaps="always"
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableOpacity
+          onPress={onSubmit}
+          style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 }}
+          activeOpacity={0.72}
+          accessibilityRole="button"
+          accessibilityLabel={`Search for ${query.trim()}`}
+          testID="search-submit-suggestion"
+        >
+          <Ionicons name="search-outline" size={18} color={BRAND} />
+          <Text style={{ flex: 1, color: colors.text, fontSize: 15, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
+            Search for “{query.trim()}”
+          </Text>
+          <Ionicons name="arrow-forward-outline" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        {suggestions.map(renderSuggestionRow)}
+      </ScrollView>
+    );
+  }
+
   // ─── Main render ──────────────────────────────────────────────────────────────
   return (
     <View style={[ss.root, { backgroundColor: colors.backgroundSecondary }]}>
@@ -2430,64 +2511,8 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           </View>
         )}
 
-        {/* Global terms and live profiles; typing never submits a search. */}
-        {query.length > 1 && searchSuggestions.length > 0 && (
-          <View style={{ paddingTop: 5, paddingBottom: 4 }}>
-            {searchSuggestions.map((suggestion, index) => {
-              const isTerm = suggestion.kind === "term";
-              const profile = isTerm ? null : suggestion.profile;
-              const term = isTerm ? suggestion.term : "";
-              const label = suggestion.kind === "term"
-                ? suggestion.term
-                : suggestion.profile.display_name || `@${suggestion.profile.handle}`;
-              const key = suggestion.kind === "term"
-                ? `term-${normalizeSearchTerm(suggestion.term)}`
-                : `profile-${suggestion.profile.profile_id}`;
-              const icon = !isTerm
-                ? "person-outline"
-                : term.startsWith("#")
-                  ? "pricetag-outline"
-                  : suggestion.growth > 0.35
-                    ? "trending-up"
-                    : "search-outline";
-              return (
-                <TouchableOpacity
-                  key={`${key}-${index}`}
-                  onPress={() => onSuggestionPress(suggestion)}
-                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 }}
-                  activeOpacity={0.72}
-                  accessibilityRole="button"
-                  accessibilityLabel={profile ? `Open ${label}` : `Search for ${label}`}
-                >
-                  {profile ? (
-                    <Avatar uri={profile.avatar_url} name={label} size={30} userId={profile.profile_id} />
-                  ) : (
-                    <Ionicons
-                      name={icon as any}
-                      size={17}
-                      color={isTerm && suggestion.growth > 0.35 ? BRAND : colors.textMuted}
-                    />
-                  )}
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
-                      {label}
-                    </Text>
-                    {profile && (
-                      <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-                        @{profile.handle}
-                      </Text>
-                    )}
-                  </View>
-                  {profile?.is_verified && <Ionicons name="checkmark-circle" size={14} color={profile.is_organization_verified ? GOLD : BRAND} />}
-                  <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
         {/* Filter pills — only shown when actively searching */}
-        {(query.length > 0 || hasSearched) && (
+        {(query.length > 0 || hasSearched) && !isAfuSearchTyping && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 6 }}>
           <TouchableOpacity
             style={[ss.filterPill, verifiedOnly && { backgroundColor: BRAND, borderColor: BRAND }]}
@@ -2549,20 +2574,22 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         </View>
       )}
 
-      {(lensResult || lensLoading) && !hasSearched && (
+      {(lensResult || lensLoading) && !hasSearched && !isAfuSearchTyping && (
         <View style={{ paddingHorizontal: 14, paddingTop: 14 }}>
           <LensCard />
         </View>
       )}
 
       {/* Content area */}
-      {loading
-        ? <View style={{ flex: 1 }}>
-            {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} bg={colors.inputBg} />)}
-          </View>
-        : hasSearched
-          ? renderResults()
-          : renderDiscovery()}
+      {isAfuSearchTyping
+        ? renderSuggestionPage()
+        : loading
+          ? <View style={{ flex: 1 }}>
+              {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} bg={colors.inputBg} />)}
+            </View>
+          : hasSearched
+            ? renderResults()
+            : renderDiscovery()}
     </View>
   );
 }
