@@ -1296,35 +1296,53 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     setLensResult(null);
     setLensLoading(true);
     setLensError(null);
+    const requestController = new AbortController();
+    let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+    const timeoutError = new Error("Visual search took too long. Please try again.");
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      requestTimeout = setTimeout(() => {
+        requestController.abort();
+        reject(timeoutError);
+      }, 20_000);
+    });
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) {
-        throw new Error("Please sign in again to search images.");
-      }
-      const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
-        method: "POST",
-        headers: edgeHeadersWithAuth(session.access_token),
-        body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
-      const matches: VisualMatch[] = Array.isArray(payload.matches)
-        ? payload.matches.filter((match: any) =>
-            typeof match?.postId === "string" &&
-            typeof match?.imageUrl === "string" &&
-            typeof match?.distance === "number"
-          )
-        : [];
-      setLensResult({
-        title: matches.length ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}` : "No close visual matches yet",
-        description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
-        matches,
-        indexedThisRequest: Number(payload.indexedThisRequest) || 0,
-        algorithm: String(payload.algorithm || "dhash"),
-      });
+      const searchPromise = (async () => {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session?.access_token) {
+          throw new Error("Please sign in again to search images.");
+        }
+        if (requestController.signal.aborted) throw timeoutError;
+        const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
+          method: "POST",
+          headers: edgeHeadersWithAuth(session.access_token),
+          signal: requestController.signal,
+          body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (requestController.signal.aborted) throw timeoutError;
+        if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
+        const matches: VisualMatch[] = Array.isArray(payload.matches)
+          ? payload.matches.filter((match: any) =>
+              typeof match?.postId === "string" &&
+              typeof match?.imageUrl === "string" &&
+              typeof match?.distance === "number"
+            )
+          : [];
+        setLensResult({
+          title: matches.length ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}` : "No close visual matches yet",
+          description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
+          matches,
+          indexedThisRequest: Number(payload.indexedThisRequest) || 0,
+          algorithm: String(payload.algorithm || "dhash"),
+        });
+      })();
+      await Promise.race([searchPromise, timeoutPromise]);
     } catch (error: any) {
-      setLensError(error?.message || "Visual image search failed. Please try again.");
+      setLensError(requestController.signal.aborted
+        ? timeoutError.message
+        : error?.message || "Visual image search failed. Please try again.");
     } finally {
+      if (requestTimeout) clearTimeout(requestTimeout);
       setLensLoading(false);
     }
   }
