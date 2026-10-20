@@ -869,13 +869,15 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
     setTimeout(() => router.push({ pathname: "/post/[id]", params: { id: meta.postId } } as any), 120);
   }, [meta?.postId, onClose]);
 
-  if (!visible || images.length === 0) return null;
-  const hasMultiple = images.length > 1;
   const openVisualSearch = useCallback(() => {
     const imageUrl = images[index];
     onClose();
     setTimeout(() => router.push({ pathname: "/app/afusearch", params: { imageUrl } } as any), 120);
   }, [images, index, onClose]);
+
+  if (!visible || images.length === 0) return null;
+  const hasMultiple = images.length > 1;
+
 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose} hardwareAccelerated>
@@ -989,6 +991,12 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
     onClose();
     setTimeout(() => router.push({ pathname: "/post/[id]", params: { id: meta.postId } } as any), 120);
   }, [meta?.postId, onClose]);
+
+  const openVisualSearch = useCallback(() => {
+    const imageUrl = images[index];
+    onClose();
+    setTimeout(() => router.push({ pathname: "/app/afusearch", params: { imageUrl } } as any), 120);
+  }, [images, index, onClose]);
 
   if (!visible || images.length === 0) return null;
   const hasMultiple = images.length > 1;
