@@ -46,11 +46,11 @@ The JSON must have exactly these fields:
 - "description": string — 2-3 sentence description of the image
 - "facts": string[] — 3-5 interesting, accurate facts (each max 120 chars)
 - "category": string — exactly one of: food, plant, animal, place, product, person, artwork, text, object, other
-- "searchQuery": string — optimal Google search query to learn more about this (max 80 chars)
+- "searchQuery": string — concise AfuChat internal-search query (2–6 useful terms, max 80 chars) that can find related public posts, videos, products, and captions; prioritize the visible object's name, brand/model when confidently readable, category, and distinctive visual attributes. Do not format this as a Google/web search query.
 - "confidence": string — exactly one of: high, medium, low
 - "answer": string — ${hasQuery ? `direct answer to the user's question: "${query?.trim()}"` : "empty string (no question was asked)"}
 
-Be accurate and specific. If confidence is low, say so. Never hallucinate details.`;
+Be accurate and specific. If confidence is low, say so. Never hallucinate details. The searchQuery is for AfuChat content discovery, not web search: prefer a short, high-signal query that is likely to match user-generated captions, product names, hashtags, and post text.`;
 
     const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
       { type: "image_url", image_url: { url: dataUrl } },
