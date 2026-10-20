@@ -759,17 +759,23 @@ function TopBar({
   hasMultiple,
   insets,
   onClose,
+  onVisualSearch,
 }: {
   images: string[];
   index: number;
   hasMultiple: boolean;
   insets: ReturnType<typeof useSafeAreaInsets>;
   onClose: () => void;
+  onVisualSearch: () => void;
 }) {
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
       <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.glassBtn}>
         <Ionicons name="arrow-back" size={20} color="#fff" />
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={onVisualSearch} hitSlop={12} style={styles.glassBtn} accessibilityRole="button" accessibilityLabel="Find similar images with AfuSearch">
+        <Ionicons name="scan-outline" size={20} color="#fff" />
       </TouchableOpacity>
 
       {hasMultiple ? (
@@ -865,6 +871,11 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
 
   if (!visible || images.length === 0) return null;
   const hasMultiple = images.length > 1;
+  const openVisualSearch = useCallback(() => {
+    const imageUrl = images[index];
+    onClose();
+    setTimeout(() => router.push({ pathname: "/app/afusearch", params: { imageUrl } } as any), 120);
+  }, [images, index, onClose]);
 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose} hardwareAccelerated>
@@ -905,7 +916,7 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
           {/* Top bar */}
           <TopBar
             images={images} index={index} hasMultiple={hasMultiple}
-            insets={insets} onClose={onClose}
+            insets={insets} onClose={onClose} onVisualSearch={openVisualSearch}
           />
 
           {/* Side nav arrows */}
@@ -1018,7 +1029,7 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
         >
           <TopBar
             images={images} index={index} hasMultiple={hasMultiple}
-            insets={insets} onClose={onClose}
+            insets={insets} onClose={onClose} onVisualSearch={openVisualSearch}
           />
 
           {hasMultiple && (
