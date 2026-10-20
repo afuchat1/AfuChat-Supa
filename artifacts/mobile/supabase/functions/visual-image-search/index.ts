@@ -5,6 +5,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import jpeg from "npm:jpeg-js@0.4.4";
 import { PNG } from "npm:pngjs@7.0.0";
+import { Buffer } from "node:buffer";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +39,7 @@ function decodeBase64(value: string): Uint8Array {
 function decodePixels(bytes: Uint8Array, mimeType = ""): { data: Uint8Array; width: number; height: number } {
   const type = mimeType.toLowerCase();
   if (type.includes("png") || (bytes[0] === 0x89 && bytes[1] === 0x50)) {
-    const decoded = PNG.sync.read(bytes);
+    const decoded = PNG.sync.read(Buffer.from(bytes));
     return { data: decoded.data, width: decoded.width, height: decoded.height };
   }
   if (type.includes("jpeg") || type.includes("jpg") || (bytes[0] === 0xff && bytes[1] === 0xd8)) {
