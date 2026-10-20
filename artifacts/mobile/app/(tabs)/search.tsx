@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1251,8 +1252,15 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         : await ImagePicker.launchImageLibraryAsync(options);
       if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
       const asset = pickerResult.assets[0];
-      if (!asset.base64) throw new Error("That image could not be read. Please try another photo.");
-      await analyzeLensImage(asset.uri, asset.base64, asset.mimeType || "image/jpeg");
+      // Normalize camera/gallery inputs to JPEG so the non-AI pixel-hash engine
+      // receives a predictable format, regardless of the source image encoding.
+      const normalized = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [],
+        { compress: 0.82, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+      if (!normalized.base64) throw new Error("That image could not be read. Please try another photo.");
+      await analyzeLensImage(asset.uri, normalized.base64, "image/jpeg");
     } catch (error: any) {
       setLensError(error?.message || "Image search is unavailable right now. Please try again.");
     }
