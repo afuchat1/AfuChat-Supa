@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   ScrollView,
@@ -120,6 +121,7 @@ type SearchSuggestionItem =
 type LensResult = {
   title: string;
   description: string;
+  searchQuery?: string;
   facts?: string[];
   category?: string;
   confidence?: "high" | "medium" | "low";
@@ -427,9 +429,10 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
   const insets = useSafeAreaInsets();
   const { width: SW } = useWindowDimensions();
-  const { tag: incomingTag, q: incomingQ } = useLocalSearchParams<{ tag?: string; q?: string }>();
+  const { tag: incomingTag, q: incomingQ, imageUrl: incomingImageUrl } = useLocalSearchParams<{ tag?: string; q?: string; imageUrl?: string }>();
   const handledTagRef = useRef<string | null>(null);
   const handledQRef   = useRef<string | null>(null);
+  const handledImageRef = useRef<string | null>(null);
 
   const scrollPB = insets.bottom + 90;
 
@@ -490,6 +493,13 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       performSearch(incomingQ, tab, verifiedOnly, sortMode, dateRange);
     }
   }, [incomingQ]);
+
+  useEffect(() => {
+    if (incomingImageUrl && incomingImageUrl !== handledImageRef.current) {
+      handledImageRef.current = incomingImageUrl;
+      void searchImageUri(incomingImageUrl);
+    }
+  }, [incomingImageUrl]);
 
   useEffect(() => {
     loadInitial();
@@ -1205,69 +1215,100 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     if (lensLoading) return;
     Haptics.selectionAsync();
     setLensError(null);
+    if (Platform.OS === "web") {
+      await openLensWithSource("gallery");
+      return;
+    }
+    Alert.alert("Search with an image", "Choose where to get the image.", [
+      { text: "Take photo", onPress: () => { void openLensWithSource("camera"); } },
+      { text: "Choose from gallery", onPress: () => { void openLensWithSource("gallery"); } },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
 
+  async function openLensWithSource(source: "camera" | "gallery") {
+    if (lensLoading) return;
+    setLensError(null);
     try {
-      let permission;
-      let pickerResult;
-      if (Platform.OS === "web") {
-        permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          setLensError("Allow photo access to search with an image.");
-          return;
-        }
-        pickerResult = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"] as any,
-          allowsEditing: false,
-          quality: 0.75,
-          base64: true,
-        });
-      } else {
-        permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          setLensError("Allow camera access to search with an image.");
-          return;
-        }
-        pickerResult = await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"] as any,
-          allowsEditing: false,
-          quality: 0.75,
-          base64: true,
-        });
-      }
-
-      if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
-      const asset = pickerResult.assets[0];
-      if (!asset.base64) {
-        setLensError("That image could not be read. Please try another photo.");
+      const permission = source === "camera"
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setLensError(source === "camera"
+          ? "Allow camera access to search with a photo."
+          : "Allow photo access to search with an image.");
         return;
       }
+      const options = { mediaTypes: ["images"] as any, allowsEditing: false, quality: 0.75 as const, base64: true };
+      const pickerResult = source === "camera"
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+      if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
+      const asset = pickerResult.assets[0];
+      if (!asset.base64) throw new Error("That image could not be read. Please try another photo.");
+      await analyzeLensImage(asset.uri, asset.base64, asset.mimeType || "image/jpeg");
+    } catch (error: any) {
+      setLensError(error?.message || "Image search is unavailable right now. Please try again.");
+    }
+  }
 
-      setLensImageUri(asset.uri);
-      setLensLoading(true);
+  async function searchImageUri(uri: string) {
+    if (lensLoading) return;
+    setLensError(null);
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) throw new Error("This image could not be loaded for visual search.");
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = typeof reader.result === "string" ? reader.result : "";
+          const comma = dataUrl.indexOf(",");
+          if (comma < 0) reject(new Error("This image could not be read for visual search."));
+          else resolve(dataUrl.slice(comma + 1));
+        };
+        reader.onerror = () => reject(new Error("This image could not be read for visual search."));
+        reader.readAsDataURL(blob);
+      });
+      await analyzeLensImage(uri, base64, blob.type || "image/jpeg");
+    } catch (error: any) {
+      setLensError(error?.message || "Could not search this image. Try another image.");
+    }
+  }
+
+  async function analyzeLensImage(uri: string, imageBase64: string, mimeType: string) {
+    if (lensLoading) return;
+    setLensImageUri(uri);
+    setLensResult(null);
+    setLensLoading(true);
+    try {
       const response = await fetch(`${getEdgeFnBase()}/ai-lens`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...edgeHeaders() },
-        body: JSON.stringify({ imageBase64: asset.base64, mimeType: asset.mimeType || "image/jpeg" }),
+        body: JSON.stringify({ imageBase64, mimeType }),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload) {
-        throw new Error(payload?.error || "Image search failed");
-      }
+      if (!response.ok || !payload) throw new Error(payload?.error || "Image search failed");
+      const searchQuery = String(payload.searchQuery || payload.title || "").trim();
       setLensResult({
         title: payload.title || payload.name || "Image result",
-        description: payload.description || payload.answer || "AfuSearch found information about this image.",
+        description: payload.description || "AfuSearch is finding related content.",
         facts: Array.isArray(payload.facts) ? payload.facts : [],
         category: payload.category,
         confidence: payload.confidence,
         answer: payload.answer,
+        searchQuery,
       });
-    } catch {
-      setLensError("Image search is unavailable right now. Please try again.");
+      if (!searchQuery) throw new Error("No searchable details were found in this image.");
+      setQuery(searchQuery);
+      setTab("all");
+      await performSearch(searchQuery, "all", verifiedOnly, sortMode, dateRange);
+    } catch (error: any) {
+      setLensError(error?.message || "Image search is unavailable right now. Please try again.");
     } finally {
       setLensLoading(false);
     }
   }
-
   function onSortPress(s: SortMode) {
     setSortMode(s);
     if (hasSearched) performSearch(query, tab, verifiedOnly, s, dateRange);
@@ -1684,7 +1725,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
             <Ionicons name="scan-outline" size={16} color={BRAND} />
-            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>LENS RESULT</Text>
+            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>AFUSEARCH VISUAL SEARCH</Text>
           </View>
           <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
@@ -2487,7 +2528,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             onPress={openLens}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={Platform.OS === "web" ? "Search with an image" : "Search with camera"}
+            accessibilityLabel="Search AfuChat with an image"
             hitSlop={8}
             style={[
               ss.lensInlineButton,
