@@ -102,6 +102,13 @@ export async function getRankedSearchSuggestions(
   return rows;
 }
 
+export function getSimilarSearchTerms(
+  query: string,
+  limit = 10,
+): Promise<RankedSearchTerm[]> {
+  return getRankedSearchSuggestions(query, limit, true);
+}
+
 export async function getSearchProfileSuggestions(
   query: string,
   userId: string | undefined,

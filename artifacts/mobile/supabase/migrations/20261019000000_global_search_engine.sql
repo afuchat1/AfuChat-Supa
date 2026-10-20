@@ -68,7 +68,7 @@ AS $$
   SELECT lower(
     btrim(
       regexp_replace(
-        regexp_replace(normalize(coalesce(p_query, ''), NFC), '[[:cntrl:]]', ' ', 'g'),
+        regexp_replace(normalize(coalesce(p_query, ''), NFKC), '[[:cntrl:]]', ' ', 'g'),
         '[[:space:]]+',
         ' ',
         'g'
@@ -113,6 +113,7 @@ RETURNS TABLE (
   avatar_url text,
   bio text,
   show_bio_publicly boolean,
+  is_private boolean,
   is_verified boolean,
   is_organization_verified boolean,
   current_grade text,
@@ -127,7 +128,7 @@ AS $$
   WITH normalized AS (
     SELECT
       lower(btrim(regexp_replace(
-        regexp_replace(normalize(coalesce(p_query, ''), NFC), '[[:cntrl:]]', ' ', 'g'),
+        regexp_replace(normalize(coalesce(p_query, ''), NFKC), '[[:cntrl:]]', ' ', 'g'),
         '[[:space:]]+',
         ' ',
         'g'
@@ -154,6 +155,7 @@ AS $$
     p.avatar_url,
     CASE WHEN coalesce(p.show_bio_publicly, true) THEN p.bio ELSE NULL END,
     coalesce(p.show_bio_publicly, true),
+    p.is_private,
     p.is_verified,
     p.is_organization_verified,
     p.current_grade,
@@ -329,7 +331,7 @@ AS $$
   WITH normalized AS (
     SELECT
       lower(btrim(regexp_replace(
-        regexp_replace(normalize(coalesce(p_query, ''), NFC), '[[:cntrl:]]', ' ', 'g'),
+        regexp_replace(normalize(coalesce(p_query, ''), NFKC), '[[:cntrl:]]', ' ', 'g'),
         '[[:space:]]+',
         ' ',
         'g'
@@ -413,7 +415,7 @@ BEGIN
   END IF;
 
   v_display := btrim(regexp_replace(
-    regexp_replace(normalize(coalesce(p_query, ''), NFC), '[[:cntrl:]]', ' ', 'g'),
+    regexp_replace(normalize(coalesce(p_query, ''), NFKC), '[[:cntrl:]]', ' ', 'g'),
     '[[:space:]]+',
     ' ',
     'g'
