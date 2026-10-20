@@ -29,6 +29,10 @@ function json(body: unknown, status = 200): Response {
 }
 
 function decodeBase64(value: string): Uint8Array {
+  // Reject oversized input before atob allocates a decoded string.
+  if (value.length > Math.ceil(MAX_INPUT_BYTES / 3) * 4) {
+    throw new Error("Image is too large. Choose an image under 8 MB.");
+  }
   const raw = atob(value);
   if (raw.length > MAX_INPUT_BYTES) throw new Error("Image is too large. Choose an image under 8 MB.");
   const bytes = new Uint8Array(raw.length);
@@ -86,18 +90,38 @@ function allowedImageUrl(value: unknown): value is string {
   }
 }
 
-async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
+async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
   if (!allowedImageUrl(url)) return null;
   try {
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(5000) });
     if (!response.ok) return null;
-    const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
-    if (!contentType.startsWith("image/jpeg") && !contentType.startsWith("image/png")) return null;
+    const rawContentType = response.headers.get("content-type") ?? "";
+    const mimeType = rawContentType.split(";")[0].trim().toLowerCase();
+    if (mimeType !== "image/jpeg" && mimeType !== "image/png") return null;
     const length = Number(response.headers.get("content-length") ?? 0);
     if (length > MAX_IMAGE_BYTES) return null;
-    const buffer = new Uint8Array(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) return null;
-    return buffer;
+    const reader = response.body?.getReader();
+    if (!reader) return null;
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_IMAGE_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    if (!totalBytes) return null;
+    const bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { bytes, mimeType };
   } catch {
     return null;
   }
@@ -121,7 +145,10 @@ Deno.serve(async (req: Request) => {
   });
 
   try {
-    if (!(await verifyUser(req, admin))) return json({ error: "Please sign in to search images." }, 401);
+    if (!(await verifyUser(req, admin))) {
+      console.warn("[visual-image-search] rejected request without a valid user session");
+      return json({ error: "Please sign in to search images." }, 401);
+    }
 
     const body = await req.json();
     if (typeof body.imageBase64 !== "string" || !body.imageBase64) {
@@ -186,14 +213,13 @@ Deno.serve(async (req: Request) => {
     for (let offset = 0; offset < pendingRows.length; offset += 4) {
       const batch = pendingRows.slice(offset, offset + 4);
       const computed = await Promise.all(batch.map(async ([url, owner]) => {
-        const bytes = await fetchImageBytes(url);
-        if (!bytes) return null;
+        const fetched = await fetchImageBytes(url);
+        if (!fetched) return null;
         try {
-          const contentType = url.toLowerCase().split("?")[0].endsWith(".png") ? "image/png" : "image/jpeg";
           return {
             image_url: url,
             post_id: owner.post_id,
-            perceptual_hash: differenceHash(bytes, contentType),
+            perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
           };
         } catch {
           return null;

@@ -28,7 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
-import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
+import { getEdgeFnBase, edgeHeadersWithAuth } from "@/lib/aiHelper";
 import { getEngagera } from "@/lib/engagera";
 import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
 import {
@@ -1297,9 +1297,13 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     setLensLoading(true);
     setLensError(null);
     try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error("Please sign in again to search images.");
+      }
       const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...edgeHeaders() },
+        headers: edgeHeadersWithAuth(session.access_token),
         body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
       });
       const payload = await response.json().catch(() => null);

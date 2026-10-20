@@ -17,3 +17,6 @@ enabled = true
 
 [functions.support-ai-reply]
 verify_jwt = true
+
+[functions.visual-image-search]
+verify_jwt = true
