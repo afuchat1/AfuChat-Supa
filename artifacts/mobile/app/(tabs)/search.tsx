@@ -118,14 +118,20 @@ type DidYouMeanState = { original: string; suggested: string };
 type SearchSuggestionItem =
   | { kind: "term"; term: string; score: number; growth: number; engagementRate: number; exactMatch: boolean }
   | { kind: "profile"; profile: SearchProfileSuggestion };
+type VisualMatch = {
+  postId: string;
+  imageUrl: string;
+  content: string;
+  createdAt: string;
+  distance: number;
+  similarity: number;
+};
 type LensResult = {
   title: string;
   description: string;
-  searchQuery?: string;
-  facts?: string[];
-  category?: string;
-  confidence?: "high" | "medium" | "low";
-  answer?: string;
+  matches: VisualMatch[];
+  indexedThisRequest?: number;
+  algorithm?: string;
 };
 
 type AllResults = {
@@ -1281,30 +1287,31 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     setLensImageUri(uri);
     setLensResult(null);
     setLensLoading(true);
+    setLensError(null);
     try {
-      const response = await fetch(`${getEdgeFnBase()}/ai-lens`, {
+      const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...edgeHeaders() },
-        body: JSON.stringify({ imageBase64, mimeType }),
+        body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload) throw new Error(payload?.error || "Image search failed");
-      const searchQuery = String(payload.searchQuery || payload.title || "").trim();
+      if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
+      const matches: VisualMatch[] = Array.isArray(payload.matches)
+        ? payload.matches.filter((match: any) =>
+            typeof match?.postId === "string" &&
+            typeof match?.imageUrl === "string" &&
+            typeof match?.distance === "number"
+          )
+        : [];
       setLensResult({
-        title: payload.title || payload.name || "Image result",
-        description: payload.description || "AfuSearch is finding related content.",
-        facts: Array.isArray(payload.facts) ? payload.facts : [],
-        category: payload.category,
-        confidence: payload.confidence,
-        answer: payload.answer,
-        searchQuery,
+        title: matches.length ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}` : "No close visual matches yet",
+        description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
+        matches,
+        indexedThisRequest: Number(payload.indexedThisRequest) || 0,
+        algorithm: String(payload.algorithm || "dhash"),
       });
-      if (!searchQuery) throw new Error("No searchable details were found in this image.");
-      setQuery(searchQuery);
-      setTab("all");
-      await performSearch(searchQuery, "all", verifiedOnly, sortMode, dateRange);
     } catch (error: any) {
-      setLensError(error?.message || "Image search is unavailable right now. Please try again.");
+      setLensError(error?.message || "Visual image search failed. Please try again.");
     } finally {
       setLensLoading(false);
     }
@@ -1713,40 +1720,56 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: BRAND + "0A" }]}>
           <ActivityIndicator size="small" color={BRAND} />
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>
-            Looking for matches in this image…
+            Comparing image pixels with AfuChat images…
           </Text>
         </View>
       );
     }
     if (!lensResult) return null;
     return (
-      <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: colors.surface }]}>
-        {lensImageUri && <ExpoImage source={{ uri: lensImageUri }} style={ss.lensImage} contentFit="cover" />}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
-            <Ionicons name="scan-outline" size={16} color={BRAND} />
-            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>AFUSEARCH VISUAL SEARCH</Text>
-          </View>
-          <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
-          {!!lensResult.facts?.length && (
-            <View style={{ marginTop: 9, gap: 5 }}>
-              {lensResult.facts.slice(0, 3).map((fact, i) => (
-                <View key={`${fact}-${i}`} style={{ flexDirection: "row", gap: 6 }}>
-                  <Text style={{ color: BRAND, fontSize: 13 }}>•</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, flex: 1 }}>{fact}</Text>
-                </View>
-              ))}
+      <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: colors.surface, flexDirection: "column", alignItems: "stretch" }]}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+          {lensImageUri && <ExpoImage source={{ uri: lensImageUri }} style={ss.lensImage} contentFit="cover" />}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
+              <Ionicons name="scan-outline" size={16} color={BRAND} />
+              <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>AFUSEARCH VISUAL SEARCH</Text>
             </View>
-          )}
+            <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
+          </View>
+          <TouchableOpacity onPress={() => { setLensResult(null); setLensImageUri(null); setLensError(null); }} hitSlop={10}>
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => { setLensResult(null); setLensImageUri(null); }} hitSlop={10}>
-          <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
+        {!!lensResult.matches.length && (
+          <View style={{ marginTop: 12, gap: 8 }}>
+            {lensResult.matches.slice(0, 8).map((match) => (
+              <TouchableOpacity
+                key={match.imageUrl}
+                onPress={() => router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Open visually matching AfuChat post"
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 }}
+              >
+                <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg }} contentFit="cover" />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text numberOfLines={2} style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+                    {match.content || "Open matching post"}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    {match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     );
   }
-
   // ─── No Results ──────────────────────────────────────────────────────────────
 
   function NoResults() {
