@@ -45,7 +45,7 @@ AS $$
       i.indexed_at,
       (
         SELECT count(*)::integer
-        FROM generate_series(0, 63) AS bit_pos
+        FROM generate_series(0, 63) AS bits(bit_pos)
         WHERE get_bit(decode(i.perceptual_hash, 'hex'), bit_pos)
           <> get_bit(decode(p_hash, 'hex'), bit_pos)
       ) AS distance
