@@ -88,18 +88,20 @@ async function currentUserId(): Promise<string> {
   return data.user.id;
 }
 
-async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
+async function loadTracks(query?: string, ids?: string[]): Promise<AfuMusicTrack[]> {
   const userId = await currentUserId();
   let request = supabase
     .from("music_tracks")
     .select("id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,created_at")
-    .eq("status", "published")
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (query?.trim()) {
+    .eq("status", "published");
+  if (ids) {
+    if (!ids.length) return [];
+    request = request.in("id", ids);
+  } else if (query?.trim()) {
     const escaped = query.trim().replace(/[%_,]/g, "");
     if (escaped) request = request.or(`title.ilike.%${escaped}%,artist.ilike.%${escaped}%,genre.ilike.%${escaped}%`);
   }
+  request = request.order("created_at", { ascending: false }).limit(100);
   const [{ data: rows, error }, { data: purchases }, { data: profiles }, offline] = await Promise.all([
     request,
     supabase.from("music_purchases").select("track_id").eq("buyer_id", userId),
@@ -145,6 +147,10 @@ export async function listCreatorMusicTracks(): Promise<AfuMusicTrack[]> {
 
 export async function searchMusicTracks(query: string) {
   return loadTracks(query);
+}
+
+export async function searchMusicTracksByIds(ids: string[]) {
+  return loadTracks(undefined, ids);
 }
 
 export async function purchaseMusicTrack(trackId: string) {

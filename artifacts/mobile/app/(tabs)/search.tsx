@@ -56,7 +56,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import UserName from "@/components/ui/UserName";
 import { getPersonalizedTags } from "@/lib/personalization";
 import Colors from "@/constants/colors";
-import { searchMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
+import { searchMusicTracksByIds, getMusicPlaybackUri } from "@/lib/afuMusic";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 
@@ -135,6 +135,7 @@ type LensResult = {
   algorithm?: string;
   indexing?: boolean;
 };
+type SearchIndexRow = { source_type: string; source_id: string; score: number };
 
 type AllResults = {
   people:   (PersonResult|OrgPageResult)[];
@@ -768,12 +769,6 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
     const id = ++searchIdRef.current;
     setLoading(true); setHasSearched(true);
-    const pat = `%${trimmed}%`;
-    // Handles are stored without the leading @, but users commonly search
-    // for them as @username. Keep the original query for text content and use
-    // the normalized value for every handle lookup.
-    const handleQuery = trimmed.replace(/^@+/, "").trim();
-    const handlePat = handleQuery ? `%${handleQuery}%` : pat;
     const all = currentTab === "all";
     const cutoff = dateRangeCutoff(dr);
 
@@ -788,105 +783,150 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       const wantsJobs     = all || currentTab === "jobs";
       const wantsMusic    = all || currentTab === "music";
 
+      const requestedTypes: string[] = [];
+      if (wantsPeople) requestedTypes.push("profile", "organization_page");
+      if (wantsPosts) requestedTypes.push("post");
+      if (wantsVideos) requestedTypes.push("video");
+      if (wantsChannels) requestedTypes.push("channel");
+      if (wantsChannels && trimmed.length > 0) requestedTypes.push("group");
+      if (wantsEvents) requestedTypes.push("event");
+      if (wantsGifts) requestedTypes.push("gift");
+      if (wantsJobs) requestedTypes.push("job");
+      if (wantsMarket) requestedTypes.push("product", "freelance", "paid_community");
+      if (wantsMusic && trimmed.length > 0) requestedTypes.push("music");
+
+      const { data: indexData, error: indexError } = await supabase.rpc("search_public_content", {
+        p_query: trimmed,
+        p_types: requestedTypes,
+        p_limit_per_type: all ? 6 : 30,
+        p_since: cutoff,
+        p_verified_only: vOnly,
+        p_sort_mode: sort,
+      });
+      if (indexError) throw indexError;
+      const indexRows: SearchIndexRow[] = Array.isArray(indexData) ? indexData : [];
+      const idsFor = (type: string) => indexRows
+        .filter((row) => row.source_type === type && typeof row.source_id === "string")
+        .map((row) => row.source_id);
+      const sortBySearchRank = <T extends { id: string }>(rows: T[], type: string): T[] => {
+        const rank = new Map(idsFor(type).map((sourceId, index) => [sourceId, index]));
+        return rows.slice().sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+      };
+
       const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes, musicRes] =
         await Promise.all([
           wantsPeople
-            ? supabase.rpc("search_profiles", {
-                p_query: trimmed,
-                p_verified_only: vOnly,
-                p_limit: all ? 5 : 25,
+            ? supabase.rpc("get_public_search_profiles", {
+                p_ids: idsFor("profile"),
               })
             : Promise.resolve({ data: [] }),
 
           wantsPeople
-            ? supabase.from("organization_pages")
+            ? idsFor("organization_page").length
+              ? supabase.from("organization_pages")
                 .select("id, name, slug, logo_url, description")
-                .or(`name.ilike.${pat},description.ilike.${pat}`)
-                .limit(all ? 3 : 10)
+                .in("id", idsFor("organization_page"))
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsPosts
-            ? (() => {
+            ? idsFor("post").length
+              ? (() => {
                 let pq = supabase.from("posts")
                   .select("id, content, image_url, author_id, view_count, created_at, post_type, article_title")
-                  .or(`content.ilike.${pat},article_title.ilike.${pat}`)
+                  .in("id", idsFor("post"))
                   .eq("visibility", "public")
+                  .or("is_blocked.is.null,is_blocked.eq.false")
                   .neq("post_type", "video");
                 if (cutoff) pq = pq.gte("created_at", cutoff);
-                pq = sort === "popular" ? pq.order("view_count", { ascending: false }) : pq.order("created_at", { ascending: false });
-                return pq.limit(all ? 5 : 30);
+                return pq;
               })()
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsVideos
-            ? (() => {
+            ? idsFor("video").length
+              ? (() => {
                 let vq = supabase.from("posts")
                   .select("id, content, video_url, image_url, author_id, view_count, created_at, audio_name, video_assets(duration_seconds)")
+                  .in("id", idsFor("video"))
                   .eq("post_type", "video")
                   .eq("visibility", "public")
+                  .or("is_blocked.is.null,is_blocked.eq.false")
                   .not("video_url", "is", null);
-                if (trimmed.length > 0) vq = vq.ilike("content", pat);
                 if (cutoff) vq = vq.gte("created_at", cutoff);
-                vq = sort === "recent" ? vq.order("created_at", { ascending: false }) : vq.order("view_count", { ascending: false });
-                return vq.limit(all ? 4 : 30);
+                return vq;
               })()
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsChannels
-            ? supabase.from("channels")
+            ? idsFor("channel").length
+              ? supabase.from("channels")
                 .select("id, name, handle, description, avatar_url, subscriber_count")
-                .or(`name.ilike.${pat},handle.ilike.${handlePat},description.ilike.${pat}`)
+                .in("id", idsFor("channel"))
                 .eq("is_public", true)
-                .order("subscriber_count", { ascending: false })
-                .limit(all ? 4 : 20)
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsChannels && trimmed.length >= 1
-            ? supabase.from("chats")
+            ? idsFor("group").length
+              ? supabase.from("chats")
                 .select("id, name, handle, description, avatar_url, chat_members(count)")
+                .in("id", idsFor("group"))
                 .eq("is_group", true)
-                .or("is_private.is.null,is_private.eq.false")
-                .or(`name.ilike.${pat},handle.ilike.${handlePat}`)
-                .limit(all ? 4 : 20)
+                .eq("is_private", false)
+                .or("is_channel.is.null,is_channel.eq.false")
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsEvents
-            ? supabase.from("digital_events")
+            ? idsFor("event").length
+              ? supabase.from("digital_events")
                 .select("id, title, description, emoji, price, event_date, capacity, tickets_sold, creator_id, category, profiles!digital_events_creator_id_fkey(display_name, handle)")
-                .or(`title.ilike.${pat},description.ilike.${pat}`)
+                .in("id", idsFor("event"))
+                .eq("is_active", true)
                 .gte("event_date", new Date().toISOString())
-                .order("event_date", { ascending: true })
-                .limit(all ? 3 : 20)
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsGifts
-            ? supabase.from("gifts")
+            ? idsFor("gift").length
+              ? supabase.from("gifts")
                 .select("id, name, emoji, base_xp_cost, rarity, description")
-                .or(`name.ilike.${pat},description.ilike.${pat}`)
-                .order("base_xp_cost", { ascending: true })
-                .limit(all ? 6 : 30)
+                .in("id", idsFor("gift"))
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsJobs
-            ? supabase.from("org_page_jobs")
+            ? idsFor("job").length
+              ? supabase.from("org_page_jobs")
                 .select("id, title, job_type, location, description, apply_url, created_at, organization_pages!org_page_jobs_page_id_fkey(name, logo_url, slug)")
+                .in("id", idsFor("job"))
                 .eq("is_active", true)
-                .or(trimmed.length > 0 ? `title.ilike.${pat},description.ilike.${pat}` : "id.neq.00000000-0000-0000-0000-000000000000")
-                .order("created_at", { ascending: false })
-                .limit(all ? 4 : 25)
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsMusic && trimmed.length > 0
-            ? searchMusicTracks(trimmed).catch(() => [] as AfuMusicTrack[])
+            ? searchMusicTracksByIds(idsFor("music")).catch(() => [] as AfuMusicTrack[])
             : Promise.resolve([] as AfuMusicTrack[]),
         ]);
 
       let marketItems: MarketResult[] = [];
       if (wantsMarket && trimmed.length > 0) {
+        const productIds = idsFor("product");
+        const freelanceIds = idsFor("freelance");
+        const communityIds = idsFor("paid_community");
         const [prods, frees, comms] = await Promise.all([
-          supabase.from("shop_products").select("id, name, description, images, price_acoin, seller_id").ilike("name", pat).eq("is_available", true).limit(all ? 3 : 15),
-          supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, profiles!freelance_listings_seller_id_fkey(display_name, handle)").or(`title.ilike.${pat},description.ilike.${pat}`).eq("is_active", true).limit(all ? 3 : 15),
-          supabase.from("paid_communities").select("id, name, description, emoji, price, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").or(`name.ilike.${pat},description.ilike.${pat}`).limit(all ? 2 : 10),
+          productIds.length
+            ? supabase.from("shop_products").select("id, name, description, images, price_acoin, seller_id").in("id", productIds).eq("is_available", true)
+            : Promise.resolve({ data: [] }),
+          freelanceIds.length
+            ? supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, profiles!freelance_listings_seller_id_fkey(display_name, handle)").in("id", freelanceIds).eq("is_active", true)
+            : Promise.resolve({ data: [] }),
+          communityIds.length
+            ? supabase.from("paid_communities").select("id, name, description, emoji, price, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").in("id", communityIds).eq("is_active", true)
+            : Promise.resolve({ data: [] }),
         ]);
         if (prods.data) marketItems.push(...prods.data.map((p: any) => ({
           id: p.id, kind: "product" as const, title: p.name, desc: p.description,
@@ -905,6 +945,12 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           badge: "Community", seller_name: (p.profiles as any)?.display_name || "",
           route: `/paid-communities`,
         })));
+        const marketRank = new Map(
+          [...productIds, ...freelanceIds, ...communityIds].map((sourceId, index) => [sourceId, index]),
+        );
+        marketItems.sort((a, b) =>
+          (marketRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (marketRank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+        );
       }
 
       if (id !== searchIdRef.current) return;
@@ -920,16 +966,16 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       }
 
       const people: (PersonResult | OrgPageResult)[] = [
-        ...((peopleRes.data || []) as any[]).map((p: any) => ({ ...p, kind: "profile" as const })),
-        ...((orgPageRes.data || []) as any[]).map((o: any) => ({ ...o, kind: "org" as const })),
+        ...sortBySearchRank((peopleRes.data || []) as any[], "profile").map((p: any) => ({ ...p, kind: "profile" as const })),
+        ...sortBySearchRank((orgPageRes.data || []) as any[], "organization_page").map((o: any) => ({ ...o, kind: "org" as const })),
       ];
 
-      const posts: PostResult[] = ((postsRes.data || []) as any[]).map((p: any) => {
+      const posts: PostResult[] = sortBySearchRank((postsRes.data || []) as any[], "post").map((p: any) => {
         const a = profiles2Map.get(p.author_id) || {};
         return { ...p, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null };
       });
 
-      const videos: VideoResult[] = ((videosRes.data || []) as any[]).map((v: any) => {
+      const videos: VideoResult[] = sortBySearchRank((videosRes.data || []) as any[], "video").map((v: any) => {
         const a = profiles2Map.get(v.author_id) || {};
         const dur = (v.video_assets as any[] | null)?.[0]?.duration_seconds ?? null;
         return {
@@ -949,7 +995,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             .in("channel_id", channelIds)
         : { data: [] as any[] };
       const subscribedChannelIds = new Set((channelSubscriptions || []).map((row: any) => row.channel_id));
-      const channels: ChannelResult[] = ((channelsRes.data || []) as any[]).map((ch: any) => {
+      const channels: ChannelResult[] = sortBySearchRank((channelsRes.data || []) as any[], "channel").map((ch: any) => {
         return {
           id: ch.id,
           name: ch.name,
@@ -961,7 +1007,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const groups: GroupResult[] = ((groupsRes.data || []) as any[]).map((c: any) => {
+      const groups: GroupResult[] = sortBySearchRank((groupsRes.data || []) as any[], "group").map((c: any) => {
         const countArr = c.chat_members;
         const member_count = Array.isArray(countArr) && countArr[0]?.count != null ? Number(countArr[0].count) : 0;
         return {
@@ -974,7 +1020,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const events: EventResult[] = ((eventsRes.data || []) as any[]).map((e: any) => {
+      const events: EventResult[] = sortBySearchRank((eventsRes.data || []) as any[], "event").map((e: any) => {
         const cr = (e.profiles as any) || {};
         return {
           id: e.id, title: e.title, description: e.description, emoji: e.emoji || "🎟️",
@@ -984,9 +1030,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const gifts: GiftResult[] = (giftsRes.data || []) as any[];
+      const gifts: GiftResult[] = sortBySearchRank((giftsRes.data || []) as any[], "gift") as any[];
 
-      const jobs: JobResult[] = ((jobsRes.data || []) as any[]).map((j: any) => {
+      const jobs: JobResult[] = sortBySearchRank((jobsRes.data || []) as any[], "job").map((j: any) => {
         const op = (j.organization_pages as any) || {};
         return {
           id: j.id, title: j.title, job_type: j.job_type || null, location: j.location || null,
@@ -995,7 +1041,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const music = (musicRes || []) as AfuMusicTrack[];
+      const music = sortBySearchRank((musicRes || []) as AfuMusicTrack[], "music");
       const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs, music };
       if (id !== searchIdRef.current) return;
 
