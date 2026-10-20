@@ -133,6 +133,7 @@ type LensResult = {
   matches: VisualMatch[];
   indexedThisRequest?: number;
   algorithm?: string;
+  indexing?: boolean;
 };
 
 type AllResults = {
@@ -482,6 +483,18 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const [lensImageUri, setLensImageUri] = useState<string | null>(null);
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
+  const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
+  const lensAutoRetryAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (!lensResult?.indexing || lensAutoRetryAttemptedRef.current || !lensRetryImageRef.current) return;
+    const retryImage = lensRetryImageRef.current;
+    const timeout = setTimeout(() => {
+      lensAutoRetryAttemptedRef.current = true;
+      void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
+    }, 2500);
+    return () => clearTimeout(timeout);
+  }, [lensResult?.indexing, lensLoading]);
 
 
   useEffect(() => {
@@ -1218,6 +1231,22 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
   }
 
+  function startVisualSearchWarmup() {
+    void (async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session?.access_token) return;
+        await fetch(`${getEdgeFnBase()}/visual-image-search`, {
+          method: "POST",
+          headers: edgeHeadersWithAuth(session.access_token),
+          body: JSON.stringify({ action: "warmup" }),
+        });
+      } catch (error) {
+        console.warn("[AfuSearch] Could not start visual image index warmup", error);
+      }
+    })();
+  }
+
   async function openLens() {
     if (lensLoading) return;
     Haptics.selectionAsync();
@@ -1236,6 +1265,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   async function openLensWithSource(source: "camera" | "gallery") {
     if (lensLoading) return;
     setLensError(null);
+    lensAutoRetryAttemptedRef.current = false;
+    lensRetryImageRef.current = null;
+    startVisualSearchWarmup();
     try {
       const permission = source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -1246,7 +1278,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           : "Allow photo access to search with an image.");
         return;
       }
-      const options = { mediaTypes: ["images"] as any, allowsEditing: false, quality: 0.75 as const, base64: true };
+      const options = { mediaTypes: ["images"] as any, allowsEditing: false, quality: 0.75 as const, base64: false };
       const pickerResult = source === "camera"
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
@@ -1256,8 +1288,8 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       // receives a predictable format, regardless of the source image encoding.
       const normalized = await ImageManipulator.manipulateAsync(
         asset.uri,
-        [],
-        { compress: 0.82, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        [{ resize: { width: 512 } }],
+        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       );
       if (!normalized.base64) throw new Error("That image could not be read. Please try another photo.");
       await analyzeLensImage(asset.uri, normalized.base64, "image/jpeg");
@@ -1269,6 +1301,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   async function searchImageUri(uri: string) {
     if (lensLoading) return;
     setLensError(null);
+    lensAutoRetryAttemptedRef.current = false;
+    lensRetryImageRef.current = null;
+    startVisualSearchWarmup();
     try {
       const response = await fetch(uri);
       if (!response.ok) throw new Error("This image could not be loaded for visual search.");
@@ -1292,6 +1327,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
   async function analyzeLensImage(uri: string, imageBase64: string, mimeType: string) {
     if (lensLoading) return;
+    lensRetryImageRef.current = { uri, imageBase64, mimeType };
     setLensImageUri(uri);
     setLensResult(null);
     setLensLoading(true);
@@ -1329,15 +1365,20 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             )
           : [];
         setLensResult({
-          title: matches.length ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}` : "No close visual matches yet",
+          title: matches.length
+            ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}`
+            : payload.indexing ? "Preparing visual matches…" : "No close visual matches yet",
           description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
           matches,
           indexedThisRequest: Number(payload.indexedThisRequest) || 0,
           algorithm: String(payload.algorithm || "dhash"),
+          indexing: Boolean(payload.indexing),
         });
+        if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
       })();
       await Promise.race([searchPromise, timeoutPromise]);
     } catch (error: any) {
+      lensRetryImageRef.current = null;
       setLensError(requestController.signal.aborted
         ? timeoutError.message
         : error?.message || "Visual image search failed. Please try again.");
@@ -1768,10 +1809,32 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
             <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
           </View>
-          <TouchableOpacity onPress={() => { setLensResult(null); setLensImageUri(null); setLensError(null); }} hitSlop={10}>
+          <TouchableOpacity onPress={() => {
+            setLensResult(null);
+            setLensImageUri(null);
+            setLensError(null);
+            lensRetryImageRef.current = null;
+          }} hitSlop={10}>
             <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
+        {lensResult.indexing && !!lensRetryImageRef.current && (
+          <TouchableOpacity
+            onPress={() => {
+              const retryImage = lensRetryImageRef.current;
+              if (!retryImage) return;
+              lensAutoRetryAttemptedRef.current = true;
+              void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
+            }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Check visual search again"
+            style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, paddingVertical: 5 }}
+          >
+            <Ionicons name="refresh-outline" size={15} color={BRAND} />
+            <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Check again</Text>
+          </TouchableOpacity>
+        )}
         {!!lensResult.matches.length && (
           <View style={{ marginTop: 12, gap: 8 }}>
             {lensResult.matches.slice(0, 8).map((match) => (

@@ -105,3 +105,4 @@
 - [AfuMusic schema drift](afumusic-schema-drift.md) — Supabase may already contain a legacy public music_tracks table; apply the private AfuMusic schema additively.
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
 - [AfuSearch content-first discovery](afusearch-content-first.md) — keep vertical, content-backed suggestions; only explicit, opted-in searches may shape shared trends.
+- [AfuSearch platform-wide scope](afusearch-platform-wide-scope.md) — AfuSearch is intended to index searchable content across the platform, not only image matches or suggestions.

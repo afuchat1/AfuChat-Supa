@@ -15,11 +15,13 @@ const CORS_HEADERS = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
-const MAX_INDEX_PER_REQUEST = 24;
+const MAX_INDEX_PER_WARMUP = 120;
+const INDEX_BATCH_SIZE = 8;
 const MAX_CANDIDATE_POSTS = 200;
 const MAX_SCAN_PAGES = 50;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const MAX_DISTANCE = 10;
+let indexWarmupPromise: Promise<void> | null = null;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -135,6 +137,114 @@ async function verifyUser(req: Request, admin: ReturnType<typeof createClient>):
   return !error && Boolean(data.user);
 }
 
+async function indexPublicImages(admin: ReturnType<typeof createClient>): Promise<number> {
+  const pending = new Map<string, { post_id: string }>();
+
+  for (let page = 0; page < MAX_SCAN_PAGES && pending.size < MAX_INDEX_PER_WARMUP; page++) {
+    const from = page * MAX_CANDIDATE_POSTS;
+    const { data: posts, error: postsError } = await admin
+      .from("posts")
+      .select("id,image_url,created_at,visibility,post_images(image_url,display_order)")
+      .or("visibility.eq.public,visibility.is.null")
+      .order("created_at", { ascending: false })
+      .range(from, from + MAX_CANDIDATE_POSTS - 1);
+    if (postsError) throw new Error(`Public image scan failed: ${postsError.message}`);
+    if (!posts?.length) break;
+
+    const pageOwners = new Map<string, { post_id: string }>();
+    for (const post of posts) {
+      const urls = [post.image_url, ...((post.post_images ?? []).map((item: { image_url?: string }) => item.image_url))];
+      for (const url of urls) {
+        if (allowedImageUrl(url) && !pageOwners.has(url)) pageOwners.set(url, { post_id: post.id });
+      }
+    }
+
+    const pageUrls = [...pageOwners.keys()];
+    const indexedUrls = new Set<string>();
+    for (let offset = 0; offset < pageUrls.length; offset += 200) {
+      const urlBatch = pageUrls.slice(offset, offset + 200);
+      const { data: existing, error: existingError } = await admin
+        .from("visual_image_index")
+        .select("image_url")
+        .in("image_url", urlBatch);
+      if (existingError) throw new Error(`Visual index lookup failed: ${existingError.message}`);
+      for (const row of existing ?? []) indexedUrls.add(row.image_url);
+    }
+
+    for (const [url, owner] of pageOwners) {
+      if (!indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
+      if (pending.size >= MAX_INDEX_PER_WARMUP) break;
+    }
+    if (posts.length < MAX_CANDIDATE_POSTS) break;
+  }
+
+  let indexedCount = 0;
+  const pendingRows = [...pending.entries()].slice(0, MAX_INDEX_PER_WARMUP);
+  for (let offset = 0; offset < pendingRows.length; offset += INDEX_BATCH_SIZE) {
+    const batch = pendingRows.slice(offset, offset + INDEX_BATCH_SIZE);
+    const computed = await Promise.all(batch.map(async ([url, owner]) => {
+      const fetched = await fetchImageBytes(url);
+      if (!fetched) return null;
+      try {
+        return {
+          image_url: url,
+          post_id: owner.post_id,
+          perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
+        };
+      } catch {
+        return null;
+      }
+    }));
+    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string } => Boolean(row));
+    if (!valid.length) continue;
+    const { error: upsertError } = await admin
+      .from("visual_image_index")
+      .upsert(valid, { onConflict: "image_url" });
+    if (upsertError) {
+      console.error("[visual-image-search] index write failed", upsertError.message);
+    } else {
+      indexedCount += valid.length;
+    }
+  }
+
+  return indexedCount;
+}
+
+function startIndexWarmup(admin: ReturnType<typeof createClient>): boolean {
+  if (indexWarmupPromise) return true;
+
+  let task: Promise<void>;
+  task = indexPublicImages(admin)
+    .then((count) => {
+      console.log(`[visual-image-search] background index warmup indexed ${count} images`);
+    })
+    .catch((error) => {
+      console.error("[visual-image-search] background index warmup failed", error instanceof Error ? error.message : error);
+    })
+    .finally(() => {
+      if (indexWarmupPromise === task) indexWarmupPromise = null;
+    });
+  indexWarmupPromise = task;
+
+  const edgeRuntime = (globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  if (typeof edgeRuntime?.waitUntil === "function") {
+    edgeRuntime.waitUntil(task);
+  } else {
+    void task;
+  }
+  return true;
+}
+
+function isMissingVisualIndexSchema(error: unknown): boolean {
+  const details = error as { code?: unknown; message?: unknown } | null;
+  const code = String(details?.code ?? "");
+  const message = String(details?.message ?? "");
+  return ["42P01", "42883", "PGRST202", "PGRST205"].includes(code) ||
+    /visual_image_index.*does not exist|find_visual_image_matches.*does not exist|could not find (the )?(table|function).*visual_image_index|could not find the function.*find_visual_image_matches/i.test(message);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
@@ -151,6 +261,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json();
+    if (body.action === "warmup") {
+      startIndexWarmup(admin);
+      return json({ indexing: true, message: "Visual search index warmup started." }, 202);
+    }
     if (typeof body.imageBase64 !== "string" || !body.imageBase64) {
       return json({ error: "Choose an image to search." }, 400);
     }
@@ -159,82 +273,9 @@ Deno.serve(async (req: Request) => {
     const targetHash = differenceHash(imageBytes, mimeType);
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
 
-    // Scan public posts in pages and index a small number of unseen images per request.
-    // This makes the searchable collection grow across the platform without downloading
-    // the entire library during one request.
-    const pending = new Map<string, { post_id: string }>();
-    for (let page = 0; page < MAX_SCAN_PAGES && pending.size < MAX_INDEX_PER_REQUEST; page++) {
-      const from = page * MAX_CANDIDATE_POSTS;
-      const { data: posts, error: postsError } = await admin
-        .from("posts")
-        .select("id,image_url,created_at,visibility,post_images(image_url,display_order)")
-        .or("visibility.eq.public,visibility.is.null")
-        .order("created_at", { ascending: false })
-        .range(from, from + MAX_CANDIDATE_POSTS - 1);
-      if (postsError) {
-        console.error("[visual-image-search] posts query failed", postsError.message);
-        return json({ error: "Could not load public images for visual search." }, 502);
-      }
-      if (!posts?.length) break;
-
-      const pageOwners = new Map<string, { post_id: string }>();
-      for (const post of posts) {
-        const urls = [post.image_url, ...((post.post_images ?? []).map((item: { image_url?: string }) => item.image_url))];
-        for (const url of urls) {
-          if (allowedImageUrl(url) && !pageOwners.has(url)) pageOwners.set(url, { post_id: post.id });
-        }
-      }
-
-      const pageUrls = [...pageOwners.keys()];
-      const indexedUrls = new Set<string>();
-      for (let offset = 0; offset < pageUrls.length; offset += 200) {
-        const urlBatch = pageUrls.slice(offset, offset + 200);
-        const { data: existing, error: existingError } = await admin
-          .from("visual_image_index")
-          .select("image_url")
-          .in("image_url", urlBatch);
-        if (existingError) {
-          console.error("[visual-image-search] index lookup failed", existingError.message);
-          return json({ error: "Visual search index is not ready. Apply the visual image index migration first." }, 503);
-        }
-        for (const row of existing ?? []) indexedUrls.add(row.image_url);
-      }
-
-      for (const [url, owner] of pageOwners) {
-        if (!indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
-        if (pending.size >= MAX_INDEX_PER_REQUEST) break;
-      }
-      if (posts.length < MAX_CANDIDATE_POSTS) break;
-    }
-
-    let indexedThisRequest = 0;
-    const pendingRows = [...pending.entries()].slice(0, MAX_INDEX_PER_REQUEST);
-    // Keep concurrent downloads bounded to avoid spiking the Edge Function.
-    for (let offset = 0; offset < pendingRows.length; offset += 4) {
-      const batch = pendingRows.slice(offset, offset + 4);
-      const computed = await Promise.all(batch.map(async ([url, owner]) => {
-        const fetched = await fetchImageBytes(url);
-        if (!fetched) return null;
-        try {
-          return {
-            image_url: url,
-            post_id: owner.post_id,
-            perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
-          };
-        } catch {
-          return null;
-        }
-      }));
-      const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string } => Boolean(row));
-      if (valid.length) {
-        const { error: upsertError } = await admin.from("visual_image_index").upsert(valid, { onConflict: "image_url" });
-        if (upsertError) {
-          console.error("[visual-image-search] index write failed", upsertError.message);
-        } else {
-          indexedThisRequest += valid.length;
-        }
-      }
-    }
+    // Match the already-indexed corpus immediately; public image indexing is
+    // scheduled separately so cold starts do not delay the user's search.
+    const indexing = startIndexWarmup(admin);
 
     const { data: matchedImages, error: matchError } = await admin.rpc("find_visual_image_matches", {
       p_hash: targetHash,
@@ -243,7 +284,10 @@ Deno.serve(async (req: Request) => {
     });
     if (matchError) {
       console.error("[visual-image-search] hash match query failed", matchError.message);
-      return json({ error: "Visual search matching is not ready. Apply the visual image index migration first." }, 503);
+      const errorMessage = isMissingVisualIndexSchema(matchError)
+        ? "Visual search index is not installed yet. Apply the visual image index migration."
+        : "Visual search is temporarily unavailable. Please try again shortly.";
+      return json({ error: errorMessage }, 503);
     }
     const candidates = (matchedImages ?? [])
       .filter((row: any) => row.image_url !== sourceImageUrl)
@@ -280,11 +324,14 @@ Deno.serve(async (req: Request) => {
 
     return json({
       algorithm: "dhash",
-      indexedThisRequest,
+      indexedThisRequest: 0,
+      indexing,
       matches,
       message: matches.length
         ? "Matches are ranked by visual fingerprint similarity."
-        : "No close visual matches found in the images indexed so far. The index grows as AfuSearch processes public images.",
+        : indexing
+          ? "AfuSearch is preparing the public image index in the background. This search will check again shortly."
+          : "No close visual matches found in the indexed public images.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Visual search failed.";
