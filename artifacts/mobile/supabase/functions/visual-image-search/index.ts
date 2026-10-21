@@ -6,6 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import jpeg from "npm:jpeg-js@0.4.4";
 import { PNG } from "npm:pngjs@7.0.0";
 import { Buffer } from "node:buffer";
+import { createWorker } from "npm:tesseract.js@5.1.1";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -14,14 +15,17 @@ const CORS_HEADERS = {
 };
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const AFUSEARCH_VISION_URL = (Deno.env.get("AFUSEARCH_VISION_URL") ?? "").replace(/\\/$/, "");
+const AFUSEARCH_VISION_KEY = Deno.env.get("AFUSEARCH_VISION_KEY") ?? "";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
-const MAX_INDEX_PER_WARMUP = 120;
-const INDEX_BATCH_SIZE = 8;
+const MAX_INDEX_PER_WARMUP = 12;
+const INDEX_BATCH_SIZE = 2;
 const MAX_CANDIDATE_POSTS = 200;
 const MAX_SCAN_PAGES = 50;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const MAX_DISTANCE = 10;
 let indexWarmupPromise: Promise<void> | null = null;
+let ocrWorkerPromise: ReturnType<typeof createWorker> | null = null;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -76,6 +80,86 @@ function differenceHash(bytes: Uint8Array, mimeType = ""): string {
   return hash.toString(16).padStart(16, "0");
 }
 
+
+async function getOcrWorker(): Promise<Awaited<ReturnType<typeof createWorker>>> {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = createWorker("eng", 1, {
+      // The OCR engine is the open-source Tesseract OCR runtime. Only the
+      // worker/runtime/language data are downloaded; user images stay in this function.
+      // Use the package's bundled worker/core paths for the server runtime.
+      langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      logger: () => undefined,
+    }).catch((error) => {
+      ocrWorkerPromise = null;
+      throw error;
+    });
+  }
+  return await ocrWorkerPromise;
+}
+
+async function extractImageText(bytes: Uint8Array): Promise<string> {
+  try {
+    const worker = await getOcrWorker();
+    const result = await worker.recognize(bytes);
+    // Keep the index bounded and strip control characters before database writes.
+    return String(result.data.text ?? "")
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 12000);
+  } catch (error) {
+    console.error("[visual-image-search] OCR extraction failed", error instanceof Error ? error.message : error);
+    throw error;
+  }
+}
+
+async function inferImageEmbedding(bytes: Uint8Array, mimeType: string): Promise<{ embedding: string; model: string } | null> {
+  if (!AFUSEARCH_VISION_URL || !AFUSEARCH_VISION_KEY) return null;
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([bytes], { type: mimeType || "image/jpeg" }), "query-image");
+    const response = await fetch(`${AFUSEARCH_VISION_URL}/v1/embed/image`, {
+      method: "POST",
+      headers: { "x-afusearch-key": AFUSEARCH_VISION_KEY },
+      body: form,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      console.error("[visual-image-search] vision embedding service returned", response.status);
+      return null;
+    }
+    const result = await response.json();
+    if (!Array.isArray(result.embedding) || result.embedding.length !== 512 ||
+        !result.embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) {
+      console.error("[visual-image-search] vision service returned an invalid embedding");
+      return null;
+    }
+    return { embedding: `[${result.embedding.join(",")}]`, model: String(result.model ?? "unknown") };
+  } catch (error) {
+    console.error("[visual-image-search] vision embedding unavailable", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+async function inferTextEmbedding(text: string): Promise<{ embedding: string; model: string } | null> {
+  if (!AFUSEARCH_VISION_URL || !AFUSEARCH_VISION_KEY || !text.trim()) return null;
+  try {
+    const response = await fetch(`${AFUSEARCH_VISION_URL}/v1/embed/text`, {
+      method: "POST",
+      headers: { "x-afusearch-key": AFUSEARCH_VISION_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text.slice(0, 1000) }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    if (!Array.isArray(result.embedding) || result.embedding.length !== 512 ||
+        !result.embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) return null;
+    return { embedding: `[${result.embedding.join(",")}]`, model: String(result.model ?? "unknown") };
+  } catch (error) {
+    console.error("[visual-image-search] text embedding unavailable", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
 
 function allowedImageUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length > 2048) return false;
@@ -166,11 +250,20 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
       const urlBatch = pageUrls.slice(offset, offset + INDEX_BATCH_SIZE);
       const { data: existing, error: existingError } = await admin
         .from("visual_image_index")
-        .select("image_url")
+        .select("image_url,ocr_processed_at,ocr_text,image_embedding,embedding_model")
         .in("image_url", urlBatch);
       if (existingError) throw new Error(`Visual index lookup failed: ${existingError.message}`);
 
-      const indexedUrls = new Set((existing ?? []).map((row) => row.image_url));
+      const retryCutoff = Date.now() - 6 * 60 * 60 * 1000;
+      const indexedUrls = new Set((existing ?? [])
+        .filter((row) => {
+          const ocrAlreadyProcessed = Boolean(String(row.ocr_text ?? "").trim()) ||
+            (row.ocr_processed_at && new Date(row.ocr_processed_at).getTime() > retryCutoff);
+          // Backfill existing OCR-only rows when learned vision is enabled.
+          const embeddingReady = !AFUSEARCH_VISION_URL || Boolean(row.image_embedding);
+          return ocrAlreadyProcessed && embeddingReady;
+        })
+        .map((row) => row.image_url));
       for (const url of urlBatch) {
         const owner = pageOwners.get(url);
         if (owner && !indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
@@ -188,16 +281,35 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
       const fetched = await fetchImageBytes(url);
       if (!fetched) return null;
       try {
+        const perceptualHash = differenceHash(fetched.bytes, fetched.mimeType);
+        const imageEmbedding = await inferImageEmbedding(fetched.bytes, fetched.mimeType);
+        let ocrText = "";
+        let ocrProcessedAt: string | null = null;
+        try {
+          ocrText = await extractImageText(fetched.bytes);
+          ocrProcessedAt = new Date().toISOString();
+        } catch {
+          // Keep dHash indexing available and record the attempt so failed OCR does not
+          // block the next images. Blank OCR entries become eligible again after six hours.
+          ocrProcessedAt = new Date().toISOString();
+        }
         return {
           image_url: url,
           post_id: owner.post_id,
-          perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
+          perceptual_hash: perceptualHash,
+          ocr_text: ocrText,
+          ocr_processed_at: ocrProcessedAt,
+          ...(imageEmbedding ? {
+            image_embedding: imageEmbedding.embedding,
+            embedding_model: imageEmbedding.model,
+            embedding_created_at: new Date().toISOString(),
+          } : {}),
         };
       } catch {
         return null;
       }
     }));
-    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string } => Boolean(row));
+    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string; ocr_text: string; ocr_processed_at: string | null } => Boolean(row));
     if (!valid.length) continue;
     const { error: upsertError } = await admin
       .from("visual_image_index")
@@ -273,6 +385,12 @@ Deno.serve(async (req: Request) => {
     const imageBytes = decodeBase64(body.imageBase64);
     const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
     const targetHash = differenceHash(imageBytes, mimeType);
+    let extractedQueryText = "";
+    try {
+      extractedQueryText = await extractImageText(imageBytes);
+    } catch {
+      // OCR is additive; a recognition failure must not break pixel-based image search.
+    }
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
 
     // Match the already-indexed corpus immediately; public image indexing is
@@ -291,25 +409,142 @@ Deno.serve(async (req: Request) => {
         : "Visual search is temporarily unavailable. Please try again shortly.";
       return json({ error: errorMessage }, 503);
     }
-    const candidates = (matchedImages ?? [])
-      .filter((row: any) => row.image_url !== sourceImageUrl)
-      .sort((a: any, b: any) => a.distance - b.distance)
-      .slice(0, 30);
+    const queryEmbedding = await inferImageEmbedding(imageBytes, mimeType);
+    let embeddingMatches: any[] = [];
+    if (queryEmbedding) {
+      const { data: embeddingRows, error: embeddingError } = await admin.rpc("find_visual_embedding_matches", {
+        p_embedding: queryEmbedding.embedding,
+        p_limit: 40,
+        p_min_similarity: 0.18,
+      });
+      if (embeddingError) {
+        console.error("[visual-image-search] embedding retrieval failed", embeddingError.message);
+      } else {
+        embeddingMatches = (embeddingRows ?? []).filter((row: any) => row.image_url !== sourceImageUrl);
+      }
+    }
+
+    // Fuse independent exact/near-duplicate and learned-embedding candidate sets.
+    // dHash catches edited copies; OpenCLIP catches semantically similar imagery.
+    const candidateByUrl = new Map<string, any>();
+    for (const row of (matchedImages ?? []).filter((item: any) => item.image_url !== sourceImageUrl)) {
+      candidateByUrl.set(row.image_url, { ...row, retrievalMethod: "dhash" });
+    }
+    for (const row of embeddingMatches) {
+      const prior = candidateByUrl.get(row.image_url);
+      const embeddingSimilarity = Number(row.similarity ?? 0);
+      if (prior) {
+        prior.embeddingSimilarity = embeddingSimilarity;
+        prior.retrievalMethod = "hybrid";
+      } else {
+        candidateByUrl.set(row.image_url, {
+          ...row,
+          distance: Math.max(0, Math.min(64, Math.round((1 - embeddingSimilarity) * 64))),
+          embeddingSimilarity,
+          retrievalMethod: "embedding",
+        });
+      }
+    }
+    const candidates = [...candidateByUrl.values()]
+      .sort((a: any, b: any) => {
+        const scoreA = a.embeddingSimilarity != null
+          ? 75 + Math.max(0, Math.min(25, Number(a.embeddingSimilarity) * 25))
+          : 100 - Number(a.distance);
+        const scoreB = b.embeddingSimilarity != null
+          ? 75 + Math.max(0, Math.min(25, Number(b.embeddingSimilarity) * 25))
+          : 100 - Number(b.distance);
+        return scoreB - scoreA;
+      })
+      .slice(0, 40);
+
+    // OCR words can also act as a text query in OpenCLIP's shared image/text space.
+    // This complements literal OCR search when a related image has different wording.
+    const ocrTextEmbedding = await inferTextEmbedding(extractedQueryText);
+    if (ocrTextEmbedding) {
+      const { data: textEmbeddingRows, error: textEmbeddingError } = await admin.rpc("find_visual_embedding_matches", {
+        p_embedding: ocrTextEmbedding.embedding,
+        p_limit: 25,
+        p_min_similarity: 0.18,
+      });
+      if (textEmbeddingError) {
+        console.error("[visual-image-search] OCR semantic retrieval failed", textEmbeddingError.message);
+      } else {
+        for (const row of (textEmbeddingRows ?? []).filter((item: any) => item.image_url !== sourceImageUrl)) {
+          const similarity = Number(row.similarity ?? 0);
+          const prior = candidateByUrl.get(row.image_url);
+          if (prior) {
+            prior.ocrSemanticSimilarity = similarity;
+            prior.retrievalMethod = "hybrid";
+          } else {
+            candidateByUrl.set(row.image_url, {
+              ...row,
+              distance: Math.max(0, Math.min(64, Math.round((1 - similarity) * 64))),
+              ocrSemanticSimilarity: similarity,
+              retrievalMethod: "ocr-semantic",
+            });
+          }
+        }
+      }
+    }
+    const fusedCandidates = [...candidateByUrl.values()]
+      .sort((a: any, b: any) => {
+        const scoreA = Math.max(
+          a.embeddingSimilarity != null ? 75 + Math.max(0, Math.min(25, Number(a.embeddingSimilarity) * 25)) : 0,
+          a.distance != null && a.retrievalMethod === "dhash" ? 100 - Number(a.distance) : 0,
+          a.ocrSemanticSimilarity != null ? 55 + Math.max(0, Math.min(25, Number(a.ocrSemanticSimilarity) * 25)) : 0,
+        );
+        const scoreB = Math.max(
+          b.embeddingSimilarity != null ? 75 + Math.max(0, Math.min(25, Number(b.embeddingSimilarity) * 25)) : 0,
+          b.distance != null && b.retrievalMethod === "dhash" ? 100 - Number(b.distance) : 0,
+          b.ocrSemanticSimilarity != null ? 55 + Math.max(0, Math.min(25, Number(b.ocrSemanticSimilarity) * 25)) : 0,
+        );
+        return scoreB - scoreA;
+      })
+      .slice(0, 40);
+    candidates.splice(0, candidates.length, ...fusedCandidates);
 
     const postIds = [...new Set(candidates.map((row) => row.post_id))];
+    let textMatches: any[] = [];
+    if (extractedQueryText.length >= 2) {
+      const { data: textRows, error: textError } = await admin.rpc("find_visual_text_matches", {
+        p_query: extractedQueryText,
+        p_limit: 30,
+      });
+      if (textError) {
+        console.error("[visual-image-search] OCR text query failed", textError.message);
+      } else {
+        textMatches = (textRows ?? []).filter((row: any) => row.image_url !== sourceImageUrl);
+      }
+    }
+    let captionMatches: any[] = [];
+    if (extractedQueryText.length >= 2) {
+      const { data: contentRows, error: contentError } = await admin.rpc("find_public_content_text_matches", {
+        p_query: extractedQueryText,
+        p_limit: 30,
+      });
+      if (contentError) {
+        console.error("[visual-image-search] public content text query failed", contentError.message);
+      } else {
+        captionMatches = contentRows ?? [];
+      }
+    }
+    const allPostIds = [...new Set([
+      ...postIds,
+      ...textMatches.map((row: any) => row.post_id),
+    ])];
     let postsById = new Map<string, any>();
-    if (postIds.length) {
+    if (allPostIds.length) {
       const { data: matchedPosts, error: matchedError } = await admin
         .from("posts")
         .select("id,content,article_title,created_at,visibility,author_id")
-        .in("id", postIds);
+        .in("id", allPostIds);
       if (matchedError) console.error("[visual-image-search] matched post lookup failed", matchedError.message);
       postsById = new Map((matchedPosts ?? [])
         .filter((post: any) => post.visibility === "public" || post.visibility == null)
         .map((post: any) => [post.id, post]));
     }
 
-    const matches = candidates
+    const visualResults = candidates
       .filter((row) => postsById.has(row.post_id))
       .map((row) => {
         const post = postsById.get(row.post_id);
@@ -319,18 +554,68 @@ Deno.serve(async (req: Request) => {
           content: String(post.content ?? post.article_title ?? "").slice(0, 220),
           createdAt: post.created_at,
           distance: row.distance,
-          similarity: Math.round((64 - row.distance) / 64 * 100),
+          similarity: row.embeddingSimilarity != null
+            ? Math.max(1, Math.min(99, Math.round(Number(row.embeddingSimilarity) * 100)))
+            : row.ocrSemanticSimilarity != null
+              ? Math.max(1, Math.min(99, Math.round(Number(row.ocrSemanticSimilarity) * 100)))
+              : Math.round((64 - row.distance) / 64 * 100),
+          rankScore: row.ocrSemanticSimilarity != null && row.embeddingSimilarity == null && row.retrievalMethod === "ocr-semantic"
+            ? 55 + Math.max(0, Math.min(25, Number(row.ocrSemanticSimilarity) * 25))
+            : row.embeddingSimilarity != null
+              ? 75 + Math.max(0, Math.min(25, Number(row.embeddingSimilarity) * 25))
+              : 100 - Number(row.distance),
+          matchType: row.retrievalMethod === "ocr-semantic"
+            ? "text-semantic"
+            : row.embeddingSimilarity != null
+              ? (row.retrievalMethod === "hybrid" ? "hybrid-visual" : "semantic-visual")
+              : "visual",
         };
-      })
-      .slice(0, 12);
+      });
+    const textResults = textMatches
+      .filter((row: any) => postsById.has(row.post_id))
+      .map((row: any) => {
+        const post = postsById.get(row.post_id);
+        return {
+          postId: row.post_id,
+          imageUrl: row.image_url,
+          content: String(post.content ?? post.article_title ?? row.ocr_text ?? "").slice(0, 220),
+          createdAt: post.created_at,
+          distance: 64,
+          similarity: Math.max(1, Math.min(99, Math.round(55 + Number(row.score ?? 0) * 40))),
+          rankScore: 65 + Math.min(30, Number(row.score ?? 0) * 30),
+          matchType: "text",
+        };
+      });
+    const indexedTextIds = new Set(textResults.map((row: any) => row.postId));
+    const captionResults = captionMatches.map((row: any) => ({
+      postId: row.source_id,
+      imageUrl: null,
+      content: String(row.title || row.body || row.source_type || "Matching AfuChat content").slice(0, 220),
+      createdAt: row.created_at,
+      distance: 64,
+      similarity: Math.max(1, Math.min(99, Math.round(45 + Number(row.score ?? 0) * 40))),
+      rankScore: 50 + Math.min(35, Number(row.score ?? 0) * 35),
+      matchType: "caption",
+      sourceType: row.source_type,
+    }));
+    const visualIds = new Set(visualResults.map((row) => row.postId));
+    const indexedTextPostIds = new Set([...visualIds, ...indexedTextIds]);
+    const matches = [
+      ...visualResults,
+      ...textResults.filter((row: any) => !visualIds.has(row.postId)),
+      ...captionResults.filter((row: any) =>
+        !((row.sourceType === "post" || row.sourceType === "video") && indexedTextPostIds.has(row.postId))
+      ),
+    ].sort((a: any, b: any) => Number(b.rankScore ?? 0) - Number(a.rankScore ?? 0)).slice(0, 12);
 
     return json({
-      algorithm: "dhash",
+      algorithm: queryEmbedding ? "openclip+dhash+ocr+hybrid-text" : "dhash+ocr+hybrid-text",
+      extractedText: extractedQueryText,
       indexedThisRequest: 0,
       indexing,
       matches,
       message: matches.length
-        ? "Matches are ranked by visual fingerprint similarity."
+        ? "Results combine traditional visual similarity and OCR text matches."
         : indexing
           ? "AfuSearch is preparing the public image index in the background. This search will check again shortly."
           : "No close visual matches found in the indexed public images.",

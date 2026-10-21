@@ -121,11 +121,13 @@ type SearchSuggestionItem =
   | { kind: "profile"; profile: SearchProfileSuggestion };
 type VisualMatch = {
   postId: string;
-  imageUrl: string;
+  imageUrl: string | null;
   content: string;
   createdAt: string;
   distance: number;
   similarity: number;
+  matchType?: "visual" | "text" | "caption";
+  sourceType?: string;
 };
 type LensResult = {
   title: string;
@@ -1406,15 +1408,15 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         const matches: VisualMatch[] = Array.isArray(payload.matches)
           ? payload.matches.filter((match: any) =>
               typeof match?.postId === "string" &&
-              typeof match?.imageUrl === "string" &&
+              (typeof match?.imageUrl === "string" || match?.imageUrl === null) &&
               typeof match?.distance === "number"
             )
           : [];
         setLensResult({
           title: matches.length
-            ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}`
-            : payload.indexing ? "Preparing visual matches…" : "No close visual matches yet",
-          description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
+            ? `${matches.length} match${matches.length === 1 ? "" : "es"}`
+            : payload.indexing ? "Preparing visual and text matches…" : "No close visual or text matches yet",
+          description: String(payload.message || "AfuSearch combines traditional image matching with OCR text search."),
           matches,
           indexedThisRequest: Number(payload.indexedThisRequest) || 0,
           algorithm: String(payload.algorithm || "dhash"),
@@ -1885,20 +1887,32 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <View style={{ marginTop: 12, gap: 8 }}>
             {lensResult.matches.slice(0, 8).map((match) => (
               <TouchableOpacity
-                key={match.imageUrl}
-                onPress={() => router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any)}
+                key={`${match.sourceType ?? match.matchType ?? "visual"}:${match.postId}:${match.imageUrl ?? ""}`}
+                onPress={() => {
+                  if (!match.sourceType || match.sourceType === "post" || match.sourceType === "video") {
+                    router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any);
+                  } else {
+                    router.push({ pathname: "/app/afusearch", params: { q: match.content.slice(0, 100) } } as any);
+                  }
+                }}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel="Open visually matching AfuChat post"
+                accessibilityLabel="Open matching AfuChat post"
                 style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 }}
               >
-                <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg }} contentFit="cover" />
+                {match.imageUrl ? (
+                  <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg }} contentFit="cover" />
+                ) : (
+                  <View style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="document-text-outline" size={22} color={colors.textMuted} />
+                  </View>
+                )}
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text numberOfLines={2} style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
                     {match.content || "Open matching post"}
                   </Text>
                   <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                    {match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
+                    {match.matchType === "text" ? "Text detected inside a matching image" : match.matchType === "caption" ? `Related ${(match.sourceType || "post").replace(/_/g, " ")} content` : match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
