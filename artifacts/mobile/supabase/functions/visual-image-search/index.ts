@@ -157,10 +157,11 @@ async function processPendingOcr(
   authorization: string,
   limit = 30,
 ): Promise<number> {
+  const retryBefore = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
   const { data: rows, error } = await admin
     .from("visual_image_index")
-    .select("image_url,post_id")
-    .is("ocr_processed_at", null)
+    .select("image_url,post_id,ocr_text")
+    .or(`ocr_processed_at.is.null,and(ocr_text.eq.,ocr_processed_at.lt.${retryBefore})`)
     .limit(Math.min(Math.max(limit, 1), 60));
   if (error) throw new Error(`Pending OCR lookup failed: ${error.message}`);
   let processed = 0;
@@ -169,9 +170,15 @@ async function processPendingOcr(
     const batch = pending.slice(offset, offset + 3);
     const outcomes = await Promise.all(batch.map(async (row) => {
       const fetched = await fetchImageBytes(row.image_url);
-      if (!fetched) return false;
-      const text = await extractImageText(fetched.bytes, authorization);
-      if (text === null) return false;
+      const text = fetched ? await extractImageText(fetched.bytes, authorization) : null;
+      if (text === null) {
+        const { error: retryError } = await admin
+          .from("visual_image_index")
+          .update({ ocr_processed_at: new Date().toISOString() })
+          .eq("image_url", row.image_url);
+        if (retryError) console.error("[visual-image-search] OCR retry timestamp failed", retryError.message);
+        return false;
+      }
       const { error: updateError } = await admin
         .from("visual_image_index")
         .update({ ocr_text: text, ocr_processed_at: new Date().toISOString() })
@@ -195,7 +202,7 @@ async function verifyUser(req: Request, admin: ReturnType<typeof createClient>):
   return !error && Boolean(data.user);
 }
 
-async function indexPublicImages(admin: ReturnType<typeof createClient>, authorization: string): Promise<number> {
+async function indexPublicImages(admin: ReturnType<typeof createClient>): Promise<number> {
   const pending = new Map<string, { post_id: string }>();
 
   for (let page = 0; page < MAX_SCAN_PAGES && pending.size < MAX_INDEX_PER_WARMUP; page++) {
@@ -276,7 +283,7 @@ function startIndexWarmup(admin: ReturnType<typeof createClient>, authorization:
   if (indexWarmupPromise) return true;
 
   let task: Promise<void>;
-  task = indexPublicImages(admin, authorization)
+  task = indexPublicImages(admin)
     .then(async (count) => {
       const ocrCount = await processPendingOcr(admin, authorization, 6);
       console.log(`[visual-image-search] warmup indexed ${count} images and OCR-processed ${ocrCount} existing images`);
