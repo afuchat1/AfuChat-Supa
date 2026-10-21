@@ -200,11 +200,15 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
       const urlBatch = pageUrls.slice(offset, offset + INDEX_BATCH_SIZE);
       const { data: existing, error: existingError } = await admin
         .from("visual_image_index")
-        .select("image_url,ocr_processed_at")
+        .select("image_url,ocr_processed_at,ocr_text")
         .in("image_url", urlBatch);
       if (existingError) throw new Error(`Visual index lookup failed: ${existingError.message}`);
 
-      const indexedUrls = new Set((existing ?? []).filter((row) => row.ocr_processed_at).map((row) => row.image_url));
+      const retryCutoff = Date.now() - 6 * 60 * 60 * 1000;
+      const indexedUrls = new Set((existing ?? [])
+        .filter((row) => Boolean(String(row.ocr_text ?? "").trim()) ||
+          (row.ocr_processed_at && new Date(row.ocr_processed_at).getTime() > retryCutoff))
+        .map((row) => row.image_url));
       for (const url of urlBatch) {
         const owner = pageOwners.get(url);
         if (owner && !indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
@@ -229,7 +233,9 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
           ocrText = await extractImageText(fetched.bytes);
           ocrProcessedAt = new Date().toISOString();
         } catch {
-          // Keep dHash indexing available if OCR cannot initialize; retry OCR on a later warmup.
+          // Keep dHash indexing available and record the attempt so failed OCR does not
+          // block the next images. Blank OCR entries become eligible again after six hours.
+          ocrProcessedAt = new Date().toISOString();
         }
         return {
           image_url: url,
