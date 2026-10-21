@@ -116,6 +116,10 @@ for (const filePath of files) {
   const copy = fallbackFor(route);
   const title = escapeAttribute(copy.title.trim());
   const description = escapeAttribute(copy.description);
+  const canonicalUrl = routeCopy[route] ? `https://afuchat.com${route === "/" ? "" : route}` : null;
+  const canonicalMetadata = canonicalUrl
+    ? `\n    <link rel="canonical" href="${escapeAttribute(canonicalUrl)}">\n    <meta property="og:url" content="${escapeAttribute(canonicalUrl)}">\n  `
+    : "";
   const fallback = `
     <noscript>
       <main id="afuchat-nojs-content" aria-label="${title}">
@@ -128,6 +132,7 @@ for (const filePath of files) {
     <meta name="description" content="${description}">
     <meta property="og:title" content="${title}">
     <meta property="og:description" content="${description}">
+    ${canonicalMetadata}
   `;
 
   const enhanced = html
@@ -137,4 +142,9 @@ for (const filePath of files) {
   updated += 1;
 }
 
-console.log(`[static-web] added crawlable fallback content to ${updated} HTML routes and prerendered ${generatedProfiles} public profiles`);
+const publicUrls = Object.keys(routeCopy).map((route) => `https://afuchat.com${route === "/" ? "" : route}`);
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${publicUrls.map((url) => `  <url><loc>${url}</loc></url>`).join("\n")}\n</urlset>\n`;
+await writeFile(join(root, "sitemap.xml"), sitemap);
+await writeFile(join(root, "robots.txt"), "User-agent: *\nAllow: /\nSitemap: https://afuchat.com/sitemap.xml\n");
+
+console.log(`[static-web] added crawlable fallback content to ${updated} HTML routes, prerendered ${generatedProfiles} public profiles, and generated canonical metadata plus sitemap.xml and robots.txt`);
