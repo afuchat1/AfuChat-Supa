@@ -39,11 +39,23 @@ export default {
 
     try {
 
-      const bytes = new Uint8Array(await request.arrayBuffer());
+      let bytes;
+      let mimeType;
+      if (testAuthorized && (request.headers.get("content-type") || "").includes("application/json")) {
+        const testBody = await request.json();
+        if (typeof testBody.base64 !== "string" || testBody.base64.length > 4_500_000) {
+          return new Response(JSON.stringify({ error: "Invalid test image payload" }), { status: 400, headers: cors });
+        }
+        const binary = atob(testBody.base64);
+        bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        mimeType = testBody.mimeType || "image/png";
+      } else {
+        bytes = new Uint8Array(await request.arrayBuffer());
+        mimeType = request.headers.get("x-image-mime-type") || request.headers.get("content-type") || "";
+      }
       if (bytes.length < 8 || bytes.length > 3145728) {
         return new Response(JSON.stringify({ error: "Image must be between 8 bytes and 3 MB" }), { status: 400, headers: cors });
       }
-      const mimeType = request.headers.get("x-image-mime-type") || request.headers.get("content-type") || "";
       if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType.split(";")[0].trim().toLowerCase())) {
         return new Response(JSON.stringify({ error: "Unsupported image type" }), { status: 415, headers: cors });
       }
