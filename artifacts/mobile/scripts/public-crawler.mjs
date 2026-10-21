@@ -4,7 +4,7 @@ const CACHE_TTL_MS = 60_000;
 const cache = new Map();
 
 const RESERVED_HANDLES = new Set([
-  "browser", "onboarding", "welcome", "settings", "wallet", "shop", "chat",
+  "browser", "onboarding", "welcome", "settings", "wallet", "shop", "chat", "music",
   "discover", "video", "shorts", "moments", "match", "games", "ai", "support",
   "company", "freelance", "article", "channel", "group", "join", "my-posts",
   "profile", "post", "stories", "red-envelope", "mini-programs", "gifts", "p",
