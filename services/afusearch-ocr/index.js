@@ -13,8 +13,8 @@ export default {
     if (!authorization.startsWith("Bearer ")) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
     try {
-      const authResponse = await fetch("https://rhnsjqqtdzlkvqazfcbg.supabase.co/auth/v1/user", {
-        headers: { apikey: "sb_publishable_9Rp_gUujXTZs7DCp6lbMrA_FCJPRah8", authorization },
+      const authResponse = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, authorization },
       });
       if (!authResponse.ok) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
