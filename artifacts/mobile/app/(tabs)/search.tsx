@@ -487,18 +487,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
   const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
-  const lensAutoRetryAttemptedRef = useRef(false);
-
-  useEffect(() => {
-    if (!lensResult?.indexing || lensAutoRetryAttemptedRef.current || !lensRetryImageRef.current) return;
-    const retryImage = lensRetryImageRef.current;
-    const timeout = setTimeout(() => {
-      lensAutoRetryAttemptedRef.current = true;
-      void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
-    }, 2500);
-    return () => clearTimeout(timeout);
-  }, [lensResult?.indexing, lensLoading]);
-
 
   useEffect(() => {
     if (incomingTag && incomingTag !== handledTagRef.current) {
@@ -1279,21 +1267,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
   }
 
-  function startVisualSearchWarmup() {
-    void (async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error || !session?.access_token) return;
-        await fetch(`${getEdgeFnBase()}/visual-image-search`, {
-          method: "POST",
-          headers: edgeHeadersWithAuth(session.access_token),
-          body: JSON.stringify({ action: "warmup" }),
-        });
-      } catch (error) {
-        console.warn("[AfuSearch] Could not start visual image index warmup", error);
-      }
-    })();
-  }
 
   async function openLens() {
     if (lensLoading) return;
@@ -1313,9 +1286,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function openLensWithSource(source: "camera" | "gallery") {
     if (lensLoading) return;
     setLensError(null);
-    lensAutoRetryAttemptedRef.current = false;
     lensRetryImageRef.current = null;
-    startVisualSearchWarmup();
     try {
       const permission = source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -1349,9 +1320,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function searchImageUri(uri: string) {
     if (lensLoading) return;
     setLensError(null);
-    lensAutoRetryAttemptedRef.current = false;
     lensRetryImageRef.current = null;
-    startVisualSearchWarmup();
     try {
       const response = await fetch(uri);
       if (!response.ok) throw new Error("This image could not be loaded for visual search.");
@@ -1382,49 +1351,45 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     setLensError(null);
     const requestController = new AbortController();
     let requestTimeout: ReturnType<typeof setTimeout> | undefined;
-    const timeoutError = new Error("Visual search took too long. Please try again.");
-    const timeoutPromise = new Promise<never>((_, reject) => {
+    const timeoutError = new Error("Visual search did not finish within 3 seconds. Please try another image later.");
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error("Please sign in again to search images.");
+      }
+
+      // Start the 3-second budget only when the actual request is about to begin.
+      // Session restoration must not consume the network search timeout.
       requestTimeout = setTimeout(() => {
         requestController.abort();
-        reject(timeoutError);
-      }, 20_000);
-    });
-    try {
-      const searchPromise = (async () => {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session?.access_token) {
-          throw new Error("Please sign in again to search images.");
-        }
-        if (requestController.signal.aborted) throw timeoutError;
-        const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
-          method: "POST",
-          headers: edgeHeadersWithAuth(session.access_token),
-          signal: requestController.signal,
-          body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
-        });
-        const payload = await response.json().catch(() => null);
-        if (requestController.signal.aborted) throw timeoutError;
-        if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
-        const matches: VisualMatch[] = Array.isArray(payload.matches)
-          ? payload.matches.filter((match: any) =>
-              typeof match?.postId === "string" &&
-              (typeof match?.imageUrl === "string" || match?.imageUrl === null) &&
-              typeof match?.distance === "number"
-            )
-          : [];
-        setLensResult({
-          title: matches.length
-            ? `${matches.length} match${matches.length === 1 ? "" : "es"}`
-            : payload.indexing ? "Preparing visual and text matches…" : "No close visual or text matches yet",
-          description: String(payload.message || "AfuSearch combines traditional image matching with OCR text search."),
-          matches,
-          indexedThisRequest: Number(payload.indexedThisRequest) || 0,
-          algorithm: String(payload.algorithm || "dhash"),
-          indexing: Boolean(payload.indexing),
-        });
-        if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
-      })();
-      await Promise.race([searchPromise, timeoutPromise]);
+      }, 3_000);
+      const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
+        method: "POST",
+        headers: edgeHeadersWithAuth(session.access_token),
+        signal: requestController.signal,
+        body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (requestController.signal.aborted) throw timeoutError;
+      if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
+      const matches: VisualMatch[] = Array.isArray(payload.matches)
+        ? payload.matches.filter((match: any) =>
+            typeof match?.postId === "string" &&
+            (typeof match?.imageUrl === "string" || match?.imageUrl === null) &&
+            typeof match?.distance === "number"
+          )
+        : [];
+      setLensResult({
+        title: matches.length
+          ? `${matches.length} match${matches.length === 1 ? "" : "es"}`
+          : payload.indexing ? "Preparing visual and text matches…" : "No close visual or text matches yet",
+        description: String(payload.message || "AfuSearch combines traditional image matching with OCR text search."),
+        matches,
+        indexedThisRequest: Number(payload.indexedThisRequest) || 0,
+        algorithm: String(payload.algorithm || "dhash"),
+        indexing: Boolean(payload.indexing),
+      });
+      if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
     } catch (error: any) {
       lensRetryImageRef.current = null;
       setLensError(requestController.signal.aborted
@@ -1435,6 +1400,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       setLensLoading(false);
     }
   }
+
   function onSortPress(s: SortMode) {
     setSortMode(s);
     if (hasSearched) performSearch(query, tab, verifiedOnly, s, dateRange);
@@ -1866,23 +1832,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
             <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
-        {lensResult.indexing && !!lensRetryImageRef.current && (
-          <TouchableOpacity
-            onPress={() => {
-              const retryImage = lensRetryImageRef.current;
-              if (!retryImage) return;
-              lensAutoRetryAttemptedRef.current = true;
-              void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
-            }}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="Check visual search again"
-            style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, paddingVertical: 5 }}
-          >
-            <Ionicons name="refresh-outline" size={15} color={BRAND} />
-            <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Check again</Text>
-          </TouchableOpacity>
-        )}
         {!!lensResult.matches.length && (
           <View style={{ marginTop: 12, gap: 8 }}>
             {lensResult.matches.slice(0, 8).map((match) => (
