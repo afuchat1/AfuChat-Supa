@@ -134,14 +134,18 @@ async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeTy
 async function extractImageText(bytes: Uint8Array, authorization: string, mimeType = "image/jpeg"): Promise<string | null> {
   if (bytes.byteLength < 8 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
   try {
+    const image = decodePixels(bytes, mimeType);
+    if (!image.width || !image.height || image.width * image.height > 8_000_000) return null;
     const response = await fetch(OCR_SERVICE_URL, {
       method: "POST",
       headers: {
         authorization,
         "content-type": "application/octet-stream",
+        "x-image-width": String(image.width),
+        "x-image-height": String(image.height),
         "x-image-mime-type": mimeType,
       },
-      body: bytes,
+      body: image.data,
       signal: AbortSignal.timeout(25_000),
     });
     if (!response.ok) {
