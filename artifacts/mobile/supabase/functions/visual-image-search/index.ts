@@ -279,7 +279,7 @@ function startIndexWarmup(admin: ReturnType<typeof createClient>, authorization:
   let task: Promise<void>;
   task = indexPublicImages(admin, authorization)
     .then(async (count) => {
-      const ocrCount = await processPendingOcr(admin, authorization, 60);
+      const ocrCount = await processPendingOcr(admin, authorization, 12);
       console.log(`[visual-image-search] warmup indexed ${count} images and OCR-processed ${ocrCount} existing images`);
     })
     .catch((error) => {
@@ -337,6 +337,7 @@ Deno.serve(async (req: Request) => {
     const targetHash = differenceHash(imageBytes, mimeType);
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
     const authorization = req.headers.get("authorization") ?? "";
+    startIndexWarmup(admin, authorization);
     const imageText = await extractImageText(imageBytes, authorization);
 
     // Match the already-indexed corpus immediately; public image indexing is
