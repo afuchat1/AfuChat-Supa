@@ -39,6 +39,7 @@ import {
   getSimilarSearchTerms,
   recordSearchResultEngagement,
   recordSearchSubmission,
+  recordSearchSuggestionSelection,
   type RankedSearchTerm,
   type SearchProfileSuggestion,
 } from "@/lib/searchEngine";
@@ -1180,11 +1181,20 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     inputRef.current?.blur();
   }
 
+  function trackSuggestionSelection(sourceType: string) {
+    const submittedText = query.trim();
+    if (!submittedText) return;
+    void recordSearchSuggestionSelection(submittedText, sourceType).catch((error) => {
+      console.warn("[AfuSearch] Could not record suggestion selection:", error?.message || error);
+    });
+  }
+
   function onSuggestionPress(suggestion: SearchSuggestionItem) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     if (suggestion.kind === "profile") {
+      trackSuggestionSelection("profile");
       const profile = suggestion.profile;
       setQuery(profile.display_name || `@${profile.handle}`);
       inputRef.current?.blur();
@@ -1198,6 +1208,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     }
     if (suggestion.kind === "content") {
       const content = suggestion.content;
+      trackSuggestionSelection(content.source_type);
       if (content.source_type === "feature" && content.target_path?.startsWith("/")) {
         inputRef.current?.blur();
         router.push(content.target_path as any);
@@ -1214,12 +1225,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         : "all";
       setQuery(content.title);
       setTab(targetTab);
-      performSearch(content.title, targetTab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+      performSearch(content.title, targetTab, verifiedOnly, sortMode, dateRange, true, undefined, false);
       inputRef.current?.blur();
       return;
     }
+    trackSuggestionSelection("search_term");
     setQuery(suggestion.term);
-    performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+    performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, false);
     inputRef.current?.blur();
   }
 
