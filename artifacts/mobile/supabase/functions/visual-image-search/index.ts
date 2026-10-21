@@ -16,7 +16,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const OCR_SERVICE_URL = "https://afusearch-ocr.afuchatgroup.workers.dev";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
-const MAX_INDEX_PER_WARMUP = 12;
+const MAX_INDEX_PER_WARMUP = 6;
+const MAX_WARMUP_DEPTH = 20;
 const INDEX_BATCH_SIZE = 2;
 const MAX_CANDIDATE_POSTS = 200;
 const MAX_SCAN_PAGES = 50;
@@ -130,13 +131,21 @@ async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeTy
   }
 }
 
-async function extractImageText(bytes: Uint8Array, authorization: string): Promise<string | null> {
+async function extractImageText(bytes: Uint8Array, authorization: string, mimeType = "image/jpeg"): Promise<string | null> {
   if (bytes.byteLength < 8 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
   try {
+    const image = decodePixels(bytes, mimeType);
+    if (!image.width || !image.height || image.width * image.height > 8_000_000) return null;
     const response = await fetch(OCR_SERVICE_URL, {
       method: "POST",
-      headers: { authorization, "content-type": "application/octet-stream" },
-      body: bytes,
+      headers: {
+        authorization,
+        "content-type": "application/octet-stream",
+        "x-image-width": String(image.width),
+        "x-image-height": String(image.height),
+        "x-image-mime-type": mimeType,
+      },
+      body: image.data,
       signal: AbortSignal.timeout(25_000),
     });
     if (!response.ok) {
@@ -150,6 +159,16 @@ async function extractImageText(bytes: Uint8Array, authorization: string): Promi
     console.error("[visual-image-search] OCR request failed", error instanceof Error ? error.message : error);
     return null;
   }
+}
+
+async function countPendingOcr(admin: ReturnType<typeof createClient>): Promise<number> {
+  const retryBefore = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await admin
+    .from("visual_image_index")
+    .select("image_url", { count: "exact", head: true })
+    .or(`ocr_processed_at.is.null,and(ocr_text.eq.,ocr_processed_at.lt.${retryBefore})`);
+  if (error) throw new Error(`Pending OCR count failed: ${error.message}`);
+  return count ?? 0;
 }
 
 async function processPendingOcr(
@@ -170,7 +189,7 @@ async function processPendingOcr(
     const batch = pending.slice(offset, offset + 3);
     const outcomes = await Promise.all(batch.map(async (row) => {
       const fetched = await fetchImageBytes(row.image_url);
-      const text = fetched ? await extractImageText(fetched.bytes, authorization) : null;
+      const text = fetched ? await extractImageText(fetched.bytes, authorization, fetched.mimeType) : null;
       if (text === null) {
         const { error: retryError } = await admin
           .from("visual_image_index")
@@ -279,31 +298,56 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
   return indexedCount;
 }
 
-function startIndexWarmup(admin: ReturnType<typeof createClient>, authorization: string): boolean {
+function startIndexWarmup(
+  admin: ReturnType<typeof createClient>,
+  authorization: string,
+  apiKey: string,
+  depth = 0,
+): boolean {
   if (indexWarmupPromise) return true;
 
+  const warmupDepth = Math.max(0, Math.min(Math.trunc(depth), MAX_WARMUP_DEPTH));
+  let shouldContinue = false;
   let task: Promise<void>;
-  task = indexPublicImages(admin)
-    .then(async (count) => {
-      const ocrCount = await processPendingOcr(admin, authorization, 6);
-      console.log(`[visual-image-search] warmup indexed ${count} images and OCR-processed ${ocrCount} existing images`);
-    })
+  task = (async () => {
+    const pendingBefore = await countPendingOcr(admin);
+    // Drain existing OCR work first. Once it is empty, index the next small
+    // public-image batch and OCR that batch, avoiding an ever-growing backlog.
+    const indexedCount = pendingBefore === 0 ? await indexPublicImages(admin) : 0;
+    const ocrCount = await processPendingOcr(admin, authorization, 6);
+    const pendingAfter = await countPendingOcr(admin);
+    shouldContinue = pendingBefore > 0 || pendingAfter > 0 || indexedCount >= MAX_INDEX_PER_WARMUP;
+    console.log(`[visual-image-search] warmup depth=${warmupDepth}, indexed=${indexedCount}, OCR-processed=${ocrCount}, pending=${pendingAfter}`);
+  })()
     .catch((error) => {
       console.error("[visual-image-search] background index warmup failed", error instanceof Error ? error.message : error);
     })
-    .finally(() => {
+    .finally(async () => {
       if (indexWarmupPromise === task) indexWarmupPromise = null;
+      if (!shouldContinue || warmupDepth >= MAX_WARMUP_DEPTH || !authorization || !apiKey) return;
+      try {
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/visual-image-search`, {
+          method: "POST",
+          headers: {
+            authorization,
+            apikey: apiKey,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ action: "warmup", warmupDepth: warmupDepth + 1 }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) console.error("[visual-image-search] OCR continuation failed", response.status);
+      } catch (error) {
+        console.error("[visual-image-search] OCR continuation request failed", error instanceof Error ? error.message : error);
+      }
     });
-  indexWarmupPromise = task;
 
+  indexWarmupPromise = task;
   const edgeRuntime = (globalThis as typeof globalThis & {
     EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
   }).EdgeRuntime;
-  if (typeof edgeRuntime?.waitUntil === "function") {
-    edgeRuntime.waitUntil(task);
-  } else {
-    void task;
-  }
+  if (typeof edgeRuntime?.waitUntil === "function") edgeRuntime.waitUntil(task);
+  else void task;
   return true;
 }
 
@@ -332,7 +376,12 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     if (body.action === "warmup") {
-      startIndexWarmup(admin, req.headers.get("authorization") ?? "");
+      startIndexWarmup(
+        admin,
+        req.headers.get("authorization") ?? "",
+        req.headers.get("apikey") ?? "",
+        Number.isFinite(body.warmupDepth) ? Number(body.warmupDepth) : 0,
+      );
       return json({ indexing: true, message: "Visual search index warmup started." }, 202);
     }
     if (typeof body.imageBase64 !== "string" || !body.imageBase64) {
@@ -343,8 +392,8 @@ Deno.serve(async (req: Request) => {
     const targetHash = differenceHash(imageBytes, mimeType);
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
     const authorization = req.headers.get("authorization") ?? "";
-    startIndexWarmup(admin, authorization);
-    const imageText = await extractImageText(imageBytes, authorization);
+    startIndexWarmup(admin, authorization, req.headers.get("apikey") ?? "", 0);
+    const imageText = await extractImageText(imageBytes, authorization, mimeType);
 
     // Match the already-indexed corpus immediately; public image indexing is
     // scheduled separately so cold starts do not delay the user's search.

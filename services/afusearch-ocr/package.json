@@ -1,0 +1,15 @@
+{
+  "name": "afusearch-ocr",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy --config wrangler.toml"
+  },
+  "dependencies": {
+    "tesseract-wasm": "0.11.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.0"
+  }
+}
