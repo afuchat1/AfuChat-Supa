@@ -56,13 +56,48 @@ export default {
       let height;
       if (testAuthorized && (request.headers.get("content-type") || "").includes("application/json")) {
         const testBody = await request.json();
-        if (typeof testBody.pixelsBase64 !== "string" || testBody.pixelsBase64.length > 500_000) {
-          return new Response(JSON.stringify({ error: "Invalid test pixel payload" }), { status: 400, headers: cors });
+        if (typeof testBody.text === "string") {
+          const glyphs = {
+            A: ["01110","10001","10001","11111","10001","10001","10001"],
+            F: ["11111","10000","10000","11110","10000","10000","10000"],
+            U: ["10001","10001","10001","10001","10001","10001","01110"],
+            C: ["01111","10000","10000","10000","10000","10000","01111"],
+            H: ["10001","10001","10001","11111","10001","10001","10001"],
+            T: ["11111","00100","00100","00100","00100","00100","00100"],
+            " ": ["00000","00000","00000","00000","00000","00000","00000"],
+          };
+          const scale = 4;
+          const chars = testBody.text.toUpperCase().slice(0, 20).split("");
+          width = 24 + chars.length * 6 * scale;
+          height = 24 + 7 * scale;
+          pixels = new Uint8Array(width * height * 4);
+          for (let i = 0; i < pixels.length; i += 4) {
+            pixels[i] = 255; pixels[i + 1] = 255; pixels[i + 2] = 255; pixels[i + 3] = 255;
+          }
+          chars.forEach((char, index) => {
+            const glyph = glyphs[char];
+            if (!glyph) return;
+            glyph.forEach((row, y) => {
+              for (let x = 0; x < 5; x++) {
+                if (row[x] !== "1") continue;
+                for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++) {
+                  const px = 12 + index * 6 * scale + x * scale + sx;
+                  const py = 12 + y * scale + sy;
+                  const offset = (py * width + px) * 4;
+                  pixels[offset] = 0; pixels[offset + 1] = 0; pixels[offset + 2] = 0; pixels[offset + 3] = 255;
+                }
+              }
+            });
+          });
+        } else {
+          if (typeof testBody.pixelsBase64 !== "string" || testBody.pixelsBase64.length > 500_000) {
+            return new Response(JSON.stringify({ error: "Invalid test pixel payload" }), { status: 400, headers: cors });
+          }
+          const binary = atob(testBody.pixelsBase64);
+          pixels = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+          width = Number(testBody.width);
+          height = Number(testBody.height);
         }
-        const binary = atob(testBody.pixelsBase64);
-        pixels = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-        width = Number(testBody.width);
-        height = Number(testBody.height);
       } else {
         pixels = new Uint8Array(await request.arrayBuffer());
         width = Number(request.headers.get("x-image-width"));
