@@ -127,6 +127,7 @@ type VisualMatch = {
   distance: number;
   similarity: number;
   matchType?: "visual" | "text" | "caption";
+  sourceType?: string;
 };
 type LensResult = {
   title: string;
@@ -1887,7 +1888,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
             {lensResult.matches.slice(0, 8).map((match) => (
               <TouchableOpacity
                 key={match.postId}
-                onPress={() => router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any)}
+                onPress={() => {
+                  if (!match.sourceType || match.sourceType === "post" || match.sourceType === "video") {
+                    router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any);
+                  } else {
+                    router.push({ pathname: "/app/afusearch", params: { q: match.content.slice(0, 100) } } as any);
+                  }
+                }}
                 activeOpacity={0.75}
                 accessibilityRole="button"
                 accessibilityLabel="Open matching AfuChat post"
@@ -1905,7 +1912,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
                     {match.content || "Open matching post"}
                   </Text>
                   <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                    {match.matchType === "text" ? "Text detected inside a matching image" : match.matchType === "caption" ? "Related post text" : match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
+                    {match.matchType === "text" ? "Text detected inside a matching image" : match.matchType === "caption" ? `Related ${(match.sourceType || "post").replace(/_/g, " ")} content` : match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
