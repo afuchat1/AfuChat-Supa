@@ -596,7 +596,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     const partialProfiles = orderedProfiles.filter((profile) => !exactProfiles.includes(profile));
     const items: SearchSuggestionItem[] = [
       // Shared, completed-search trends always lead the list.
-      ...rankedTerms.slice(0, 5).map((row) => ({
+      ...rankedTerms.slice(0, 3).map((row) => ({
         kind: "term" as const,
         term: row.term,
         score: row.score,
@@ -604,7 +604,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         engagementRate: row.engagementRate,
         exactMatch: row.exactMatch,
       })),
-      ...contentSuggestions.slice(0, 6).map((content) => ({ kind: "content" as const, content })),
+      ...contentSuggestions.slice(0, 4).map((content) => ({ kind: "content" as const, content })),
       ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
       ...partialProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
       ...localTerms.map((term) => ({
@@ -626,7 +626,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).slice(0, 6);
+    }).slice(0, 8);
   }
 
   function updateRelatedTerms(scope: "posts" | "people" | "videos", values: Array<string | null | undefined>) {
@@ -1203,8 +1203,18 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         router.push(content.target_path as any);
         return;
       }
+      const targetTab: SearchTab = content.source_type === "music" ? "music"
+        : content.source_type === "post" ? "posts"
+        : content.source_type === "video" ? "videos"
+        : content.source_type === "gift" ? "gifts"
+        : content.source_type === "event" ? "events"
+        : content.source_type === "job" ? "jobs"
+        : ["product", "freelance", "paid_community"].includes(content.source_type) ? "market"
+        : ["channel", "group"].includes(content.source_type) ? "channels"
+        : "all";
       setQuery(content.title);
-      performSearch(content.title, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+      setTab(targetTab);
+      performSearch(content.title, targetTab, verifiedOnly, sortMode, dateRange, true, undefined, true);
       inputRef.current?.blur();
       return;
     }
