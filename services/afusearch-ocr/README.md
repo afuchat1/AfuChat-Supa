@@ -22,3 +22,6 @@ npx wrangler deploy --config wrangler.toml
 ```
 
 The Supabase `visual-image-search` Edge Function calls `https://afusearch-ocr.afuchatgroup.workers.dev`.
+
+
+Temporary smoke-test auth bypass is enabled only when the private `OCR_TEST_SECRET` Worker secret exists; remove that secret and the conditional test path before merging the final production version.
