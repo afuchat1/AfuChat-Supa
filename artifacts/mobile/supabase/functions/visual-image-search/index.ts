@@ -230,14 +230,19 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
       const urlBatch = pageUrls.slice(offset, offset + INDEX_BATCH_SIZE);
       const { data: existing, error: existingError } = await admin
         .from("visual_image_index")
-        .select("image_url,ocr_processed_at,ocr_text")
+        .select("image_url,ocr_processed_at,ocr_text,image_embedding,embedding_model")
         .in("image_url", urlBatch);
       if (existingError) throw new Error(`Visual index lookup failed: ${existingError.message}`);
 
       const retryCutoff = Date.now() - 6 * 60 * 60 * 1000;
       const indexedUrls = new Set((existing ?? [])
-        .filter((row) => Boolean(String(row.ocr_text ?? "").trim()) ||
-          (row.ocr_processed_at && new Date(row.ocr_processed_at).getTime() > retryCutoff))
+        .filter((row) => {
+          const ocrAlreadyProcessed = Boolean(String(row.ocr_text ?? "").trim()) ||
+            (row.ocr_processed_at && new Date(row.ocr_processed_at).getTime() > retryCutoff);
+          // Backfill existing OCR-only rows when learned vision is enabled.
+          const embeddingReady = !AFUSEARCH_VISION_URL || Boolean(row.image_embedding);
+          return ocrAlreadyProcessed && embeddingReady;
+        })
         .map((row) => row.image_url));
       for (const url of urlBatch) {
         const owner = pageOwners.get(url);
