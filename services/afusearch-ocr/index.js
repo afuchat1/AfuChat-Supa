@@ -44,7 +44,7 @@ function resizeRgbaIfNeeded(source, width, height) {
       const x0 = Math.max(0, Math.floor(sx)), x1 = Math.min(width - 1, Math.max(0, Math.floor(sx) + 1));
       const fx = Math.max(0, sx - x0);
       const a = (y0 * width + x0) * 4, b = (y0 * width + x1) * 4;
-      const d = (y0 * width + x0) * 4, e = (y1 * width + x1) * 4;
+      const d = (y1 * width + x0) * 4, e = (y1 * width + x1) * 4;
       const out = (y * targetWidth + x) * 4;
       for (let ch = 0; ch < 4; ch++) {
         const top = source[a + ch] * (1 - fx) + source[b + ch] * fx;
