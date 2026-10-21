@@ -230,26 +230,13 @@ export default function FindPeopleTab() {
 
   useEffect(() => {
     if (!user) return;
-    // Keep the current user eligible for the live feed while this tab is open.
-    const heartbeat = () => {
-      supabase.rpc("update_last_seen").then(() => {}, () => {});
-    };
-    heartbeat();
-    const heartbeatTimer = setInterval(heartbeat, 60_000);
-    const pollTimer = setInterval(() => void loadPeople(true), 30_000);
-    const channel = supabase
-      .channel(`find-presence-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chats" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_members" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "channel_subscriptions" }, () => void loadPeople(true))
-      .subscribe();
-    return () => {
-      clearInterval(heartbeatTimer);
-      clearInterval(pollTimer);
-      supabase.removeChannel(channel);
-    };
+
+    // AuthContext owns the single last_seen heartbeat for the signed-in user.
+    // Do not create a second writer here: every profile heartbeat can fan out
+    // through Realtime and make every open Discover screen reload all datasets.
+    // Presence is refreshed with the same cadence as the authoritative heartbeat.
+    const pollTimer = setInterval(() => void loadPeople(true), 60_000);
+    return () => clearInterval(pollTimer);
   }, [loadPeople, user]);
 
   const visiblePeople = useMemo(() => {
