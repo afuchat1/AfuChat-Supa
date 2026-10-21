@@ -141,6 +141,26 @@ async function inferImageEmbedding(bytes: Uint8Array, mimeType: string): Promise
   }
 }
 
+async function inferTextEmbedding(text: string): Promise<{ embedding: string; model: string } | null> {
+  if (!AFUSEARCH_VISION_URL || !AFUSEARCH_VISION_KEY || !text.trim()) return null;
+  try {
+    const response = await fetch(`${AFUSEARCH_VISION_URL}/v1/embed/text`, {
+      method: "POST",
+      headers: { "x-afusearch-key": AFUSEARCH_VISION_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text.slice(0, 1000) }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    if (!Array.isArray(result.embedding) || result.embedding.length !== 512 ||
+        !result.embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) return null;
+    return { embedding: `[${result.embedding.join(",")}]`, model: String(result.model ?? "unknown") };
+  } catch (error) {
+    console.error("[visual-image-search] text embedding unavailable", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 function allowedImageUrl(value: unknown): value is string {
   if (typeof value !== "string" || value.length > 2048) return false;
   try {
@@ -436,6 +456,53 @@ Deno.serve(async (req: Request) => {
         return scoreB - scoreA;
       })
       .slice(0, 40);
+
+    // OCR words can also act as a text query in OpenCLIP's shared image/text space.
+    // This complements literal OCR search when a related image has different wording.
+    const ocrTextEmbedding = await inferTextEmbedding(extractedQueryText);
+    if (ocrTextEmbedding) {
+      const { data: textEmbeddingRows, error: textEmbeddingError } = await admin.rpc("find_visual_embedding_matches", {
+        p_embedding: ocrTextEmbedding.embedding,
+        p_limit: 25,
+        p_min_similarity: 0.18,
+      });
+      if (textEmbeddingError) {
+        console.error("[visual-image-search] OCR semantic retrieval failed", textEmbeddingError.message);
+      } else {
+        for (const row of (textEmbeddingRows ?? []).filter((item: any) => item.image_url !== sourceImageUrl)) {
+          const similarity = Number(row.similarity ?? 0);
+          const prior = candidateByUrl.get(row.image_url);
+          if (prior) {
+            prior.ocrSemanticSimilarity = similarity;
+            prior.retrievalMethod = "hybrid";
+          } else {
+            candidateByUrl.set(row.image_url, {
+              ...row,
+              distance: Math.max(0, Math.min(64, Math.round((1 - similarity) * 64))),
+              embeddingSimilarity: similarity,
+              ocrSemanticSimilarity: similarity,
+              retrievalMethod: "ocr-semantic",
+            });
+          }
+        }
+      }
+    }
+    const fusedCandidates = [...candidateByUrl.values()]
+      .sort((a: any, b: any) => {
+        const scoreA = Math.max(
+          a.embeddingSimilarity != null ? 75 + Math.max(0, Math.min(25, Number(a.embeddingSimilarity) * 25)) : 0,
+          a.distance != null && a.retrievalMethod === "dhash" ? 100 - Number(a.distance) : 0,
+          a.ocrSemanticSimilarity != null ? 55 + Math.max(0, Math.min(25, Number(a.ocrSemanticSimilarity) * 25)) : 0,
+        );
+        const scoreB = Math.max(
+          b.embeddingSimilarity != null ? 75 + Math.max(0, Math.min(25, Number(b.embeddingSimilarity) * 25)) : 0,
+          b.distance != null && b.retrievalMethod === "dhash" ? 100 - Number(b.distance) : 0,
+          b.ocrSemanticSimilarity != null ? 55 + Math.max(0, Math.min(25, Number(b.ocrSemanticSimilarity) * 25)) : 0,
+        );
+        return scoreB - scoreA;
+      })
+      .slice(0, 40);
+    candidates.splice(0, candidates.length, ...fusedCandidates);
 
     const postIds = [...new Set(candidates.map((row) => row.post_id))];
     let textMatches: any[] = [];
