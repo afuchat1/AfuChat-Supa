@@ -411,7 +411,7 @@ Deno.serve(async (req: Request) => {
         const post = postsById.get(row.post_id);
         return {
           postId: row.post_id,
-          imageUrl: post.image_url ?? null,
+          imageUrl: row.image_url ?? null,
           content: String(row.content ?? post.content ?? post.article_title ?? "").slice(0, 220),
           createdAt: post.created_at,
           distance: 64,
