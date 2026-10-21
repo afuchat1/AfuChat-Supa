@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { injectMeta, publicProfileSummaries, profileContent } from "./public-crawler.mjs";
+import { injectMeta, publicProfileSummaries, profileContent, publicMusicTracks } from "./public-crawler.mjs";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 
@@ -180,9 +180,62 @@ for (const filePath of files) {
   updated += 1;
 }
 
+
+// Generate standalone, login-free pages only for published tracks priced at zero ACoin.
+// Paid tracks are deliberately excluded from both the pages and sitemap.
+let generatedFreeMusic = 0;
+const musicUrls = [];
+try {
+  const tracks = await publicMusicTracks();
+  const musicRoot = join(root, "music");
+  await (await import("node:fs/promises")).mkdir(musicRoot, { recursive: true });
+  const escapeHtml = (value) => String(value ?? "")
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+  const musicItems = [];
+  for (const track of Array.isArray(tracks) ? tracks : []) {
+    const id = String(track?.id || "").trim();
+    if (!/^[a-zA-Z0-9-]{8,80}$/.test(id) || Number(track.price_acoin) !== 0 || track.status !== "published") continue;
+    const title = String(track.title || "Free track").trim();
+    const creator = track.creator?.display_name || track.creator?.handle || track.artist || "AfuMusic creator";
+    const artistHandle = track.creator?.handle ? `@${track.creator.handle}` : "";
+    const canonicalUrl = `https://afuchat.com/music/${encodeURIComponent(id)}/`;
+    const audioUrl = typeof track.audio_url === "string" && /^https:\/\//i.test(track.audio_url) ? track.audio_url : "";
+    const duration = Number(track.duration_seconds) > 0 ? `${Math.floor(Number(track.duration_seconds) / 60)}:${String(Math.floor(Number(track.duration_seconds) % 60)).padStart(2, "0")}` : "";
+    const pageTitle = escapeHtml(`${title} by ${creator} — Free AfuMusic`);
+    const description = escapeHtml(`Listen to ${title} by ${creator} for free on AfuChat AfuMusic.`);
+    const target = join(musicRoot, id);
+    await (await import("node:fs/promises")).mkdir(target, { recursive: true });
+    const trackPage = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${pageTitle}</title><meta name="description" content="${description}">
+<link rel="canonical" href="${canonicalUrl}"><meta name="robots" content="index,follow">
+<meta property="og:type" content="music.song"><meta property="og:site_name" content="AfuChat">
+<meta property="og:title" content="${pageTitle}"><meta property="og:description" content="${description}">
+<meta property="og:url" content="${canonicalUrl}">
+<style>*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#172033;font:16px/1.6 system-ui,sans-serif}header{padding:18px 22px;background:#fff;border-bottom:1px solid #e5e9f0}header a{color:#2458d3;text-decoration:none;font-weight:800;font-size:20px}main{max-width:760px;margin:32px auto;padding:28px;background:#fff;border:1px solid #e5e9f0;border-radius:16px}h1{line-height:1.2}p{color:#4b5563}audio{width:100%;margin:18px 0}a{color:#2458d3}@media(max-width:600px){main{margin:16px;padding:20px;border-radius:12px}}</style></head>
+<body><header><a href="/">AfuChat</a> / <a href="/music/">AfuMusic</a></header><main>
+<p>FREE · AfuMusic</p><h1>${pageTitle}</h1><p>By ${escapeHtml(creator)} ${escapeHtml(artistHandle)}</p>
+<p>Genre: ${escapeHtml(track.genre || "Other")}${duration ? ` · Duration: ${duration}` : ""}${Number(track.play_count ?? track.usage_count ?? 0) > 0 ? ` · ${Number(track.play_count ?? track.usage_count)} plays` : ""}</p>
+${audioUrl ? `<audio controls preload="none" src="${escapeHtml(audioUrl)}">Your browser does not support audio playback.</audio>` : "<p>Audio preview is not available on this page yet.</p>"}
+<p>This track is published as free music on AfuChat. <a href="/welcome">Open AfuChat</a></p>
+</main></body></html>`;
+    await writeFile(join(target, "index.html"), trackPage);
+    musicItems.push({ id, title, creator, genre: track.genre || "Other", url: canonicalUrl });
+    musicUrls.push(canonicalUrl);
+    generatedFreeMusic += 1;
+  }
+  const listing = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Free Music — AfuMusic</title><meta name="description" content="Discover and listen to free music from independent creators on AfuChat AfuMusic."><link rel="canonical" href="https://afuchat.com/music/"><meta name="robots" content="index,follow"><style>*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#172033;font:16px/1.6 system-ui,sans-serif}header{padding:18px 22px;background:#fff;border-bottom:1px solid #e5e9f0}header a{color:#2458d3;text-decoration:none;font-weight:800;font-size:20px}main{max-width:900px;margin:30px auto;padding:24px}li{margin:0;padding:14px 0;border-bottom:1px solid #e5e9f0}a{color:#2458d3;font-weight:650}</style></head><body><header><a href="/">AfuChat</a> / AfuMusic</header><main><h1>Free music on AfuChat</h1><p>Listen to published tracks offered at no cost by independent creators.</p>${musicItems.length ? `<ul>${musicItems.map(item => `<li><a href="${item.url}">${escapeHtml(item.title)}</a> — ${escapeHtml(item.creator)} · ${escapeHtml(item.genre)}</li>`).join("")}</ul>` : "<p>No free tracks are currently available.</p>"}</main></body></html>`;
+  await writeFile(join(musicRoot, "index.html"), listing);
+  musicUrls.push("https://afuchat.com/music/");
+} catch (error) {
+  console.warn(`[static-web] free music prerender skipped: ${error?.message || error}`);
+}
+
 const publicUrls = Object.keys(routeCopy).map((route) => `https://afuchat.com${route === "/" ? "" : route}`);
+publicUrls.push(...musicUrls);
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${publicUrls.map((url) => `  <url><loc>${url}</loc></url>`).join("\n")}\n</urlset>\n`;
 await writeFile(join(root, "sitemap.xml"), sitemap);
 await writeFile(join(root, "robots.txt"), "User-agent: *\nAllow: /\nSitemap: https://afuchat.com/sitemap.xml\n");
 
-console.log(`[static-web] added crawlable fallback content to ${updated} HTML routes, prerendered ${generatedProfiles} public profiles, and generated canonical metadata plus sitemap.xml and robots.txt`);
+console.log(`[static-web] added crawlable fallback content to ${updated} HTML routes, prerendered ${generatedProfiles} public profiles and ${generatedFreeMusic} free music pages, and generated canonical metadata plus sitemap.xml and robots.txt`);
