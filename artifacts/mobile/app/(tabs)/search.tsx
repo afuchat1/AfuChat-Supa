@@ -1887,7 +1887,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <View style={{ marginTop: 12, gap: 8 }}>
             {lensResult.matches.slice(0, 8).map((match) => (
               <TouchableOpacity
-                key={match.postId}
+                key={`${match.sourceType ?? match.matchType ?? "visual"}:${match.postId}:${match.imageUrl ?? ""}`}
                 onPress={() => {
                   if (!match.sourceType || match.sourceType === "post" || match.sourceType === "video") {
                     router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any);
