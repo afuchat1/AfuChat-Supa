@@ -267,3 +267,97 @@ $$;
 
 REVOKE ALL ON FUNCTION public.get_platform_search_suggestions(text, integer) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_platform_search_suggestions(text, integer) TO authenticated;
+
+-- Suggestion taps are measured separately and never inflate submitted-search popularity.
+CREATE TABLE IF NOT EXISTS search_private.search_suggestion_selection_stats (
+  normalized_term text NOT NULL,
+  source_type text NOT NULL,
+  selection_day date NOT NULL,
+  unique_selectors integer NOT NULL DEFAULT 0 CHECK (unique_selectors >= 0),
+  PRIMARY KEY (normalized_term, source_type, selection_day)
+);
+
+CREATE TABLE IF NOT EXISTS search_private.search_suggestion_selection_contributors (
+  normalized_term text NOT NULL,
+  source_type text NOT NULL,
+  selection_day date NOT NULL,
+  contributor_hash text NOT NULL,
+  PRIMARY KEY (normalized_term, source_type, selection_day, contributor_hash)
+);
+
+ALTER TABLE search_private.search_suggestion_selection_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE search_private.search_suggestion_selection_contributors ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON ALL TABLES IN SCHEMA search_private FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.record_search_suggestion_selection(
+  p_query text,
+  p_source_type text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, search_private
+AS $
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_analytics_enabled boolean;
+  v_term text := search_private.normalize_term(coalesce(p_query, ''));
+  v_source text := lower(btrim(coalesce(p_source_type, '')));
+  v_day date := (statement_timestamp() AT TIME ZONE 'UTC')::date;
+  v_salt text;
+  v_contributor_hash text;
+  v_inserted boolean;
+BEGIN
+  IF v_user_id IS NULL OR char_length(v_term) < 2 OR char_length(v_term) > 64
+    OR v_source NOT IN ('search_term', 'profile', 'music', 'organization_page', 'post',
+      'video', 'gift', 'feature', 'channel', 'group', 'event', 'job', 'product',
+      'freelance', 'paid_community')
+  THEN
+    RETURN false;
+  END IF;
+
+  SELECT coalesce(p.data_analytics, true)
+    INTO v_analytics_enabled
+  FROM public.profiles AS p
+  WHERE p.id = v_user_id;
+
+  IF NOT FOUND OR NOT v_analytics_enabled THEN
+    RETURN false;
+  END IF;
+
+  SELECT c.hash_salt INTO v_salt
+  FROM search_private.search_config AS c
+  WHERE c.singleton = true;
+
+  v_contributor_hash := md5(v_salt || ':' || v_user_id::text || ':' || v_day::text);
+
+  INSERT INTO search_private.search_suggestion_selection_contributors (
+    normalized_term, source_type, selection_day, contributor_hash
+  ) VALUES (v_term, v_source, v_day, v_contributor_hash)
+  ON CONFLICT DO NOTHING
+  RETURNING true INTO v_inserted;
+
+  IF NOT coalesce(v_inserted, false) THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO search_private.search_suggestion_selection_stats (
+    normalized_term, source_type, selection_day, unique_selectors
+  ) VALUES (v_term, v_source, v_day, 1)
+  ON CONFLICT (normalized_term, source_type, selection_day)
+  DO UPDATE SET unique_selectors =
+    search_private.search_suggestion_selection_stats.unique_selectors + 1;
+
+  IF pg_try_advisory_xact_lock(871203764512346::bigint) THEN
+    DELETE FROM search_private.search_suggestion_selection_stats
+    WHERE selection_day < v_day - 60;
+    DELETE FROM search_private.search_suggestion_selection_contributors
+    WHERE selection_day < v_day - 60;
+  END IF;
+
+  RETURN true;
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.record_search_suggestion_selection(text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.record_search_suggestion_selection(text, text) TO authenticated;
