@@ -131,12 +131,16 @@ async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeTy
   }
 }
 
-async function extractImageText(bytes: Uint8Array, authorization: string): Promise<string | null> {
+async function extractImageText(bytes: Uint8Array, authorization: string, mimeType = "image/jpeg"): Promise<string | null> {
   if (bytes.byteLength < 8 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
   try {
     const response = await fetch(OCR_SERVICE_URL, {
       method: "POST",
-      headers: { authorization, "content-type": "application/octet-stream" },
+      headers: {
+        authorization,
+        "content-type": "application/octet-stream",
+        "x-image-mime-type": mimeType,
+      },
       body: bytes,
       signal: AbortSignal.timeout(25_000),
     });
@@ -181,7 +185,7 @@ async function processPendingOcr(
     const batch = pending.slice(offset, offset + 3);
     const outcomes = await Promise.all(batch.map(async (row) => {
       const fetched = await fetchImageBytes(row.image_url);
-      const text = fetched ? await extractImageText(fetched.bytes, authorization) : null;
+      const text = fetched ? await extractImageText(fetched.bytes, authorization, fetched.mimeType) : null;
       if (text === null) {
         const { error: retryError } = await admin
           .from("visual_image_index")
@@ -385,7 +389,7 @@ Deno.serve(async (req: Request) => {
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
     const authorization = req.headers.get("authorization") ?? "";
     startIndexWarmup(admin, authorization, req.headers.get("apikey") ?? "", 0);
-    const imageText = await extractImageText(imageBytes, authorization);
+    const imageText = await extractImageText(imageBytes, authorization, mimeType);
 
     // Match the already-indexed corpus immediately; public image indexing is
     // scheduled separately so cold starts do not delay the user's search.
