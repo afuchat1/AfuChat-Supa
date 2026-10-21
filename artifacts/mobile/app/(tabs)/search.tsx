@@ -53,6 +53,7 @@ import {
 import { trackEvent } from "@/lib/activityTracker";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
 import { Avatar } from "@/components/ui/Avatar";
+import { Skeleton } from "@/components/ui/Skeleton";
 import UserName from "@/components/ui/UserName";
 import { getPersonalizedTags } from "@/lib/personalization";
 import Colors from "@/constants/colors";
@@ -404,13 +405,13 @@ function AvatarPlaceholder({ name, size, color }: { name: string; size: number; 
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
 
-function RowSkeleton({ bg }: { bg: string }) {
+function RowSkeleton() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: bg, opacity: 0.5 }} />
+      <Skeleton width={48} height={48} borderRadius={24} />
       <View style={{ flex: 1, gap: 8 }}>
-        <View style={{ width: "60%", height: 13, borderRadius: 6, backgroundColor: bg, opacity: 0.5 }} />
-        <View style={{ width: "40%", height: 11, borderRadius: 6, backgroundColor: bg, opacity: 0.4 }} />
+        <Skeleton width="60%" height={13} borderRadius={6} />
+        <Skeleton width="40%" height={11} borderRadius={6} />
       </View>
     </View>
   );
@@ -2751,7 +2752,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         ? renderSuggestionPage()
         : loading
           ? <View style={{ flex: 1 }}>
-              {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} bg={colors.inputBg} />)}
+              {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} />)}
             </View>
           : hasSearched
             ? renderResults()
