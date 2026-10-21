@@ -1267,21 +1267,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
   }
 
-  function startVisualSearchWarmup() {
-    void (async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error || !session?.access_token) return;
-        await fetch(`${getEdgeFnBase()}/visual-image-search`, {
-          method: "POST",
-          headers: edgeHeadersWithAuth(session.access_token),
-          body: JSON.stringify({ action: "warmup" }),
-        });
-      } catch (error) {
-        console.warn("[AfuSearch] Could not start visual image index warmup", error);
-      }
-    })();
-  }
 
   async function openLens() {
     if (lensLoading) return;
@@ -1336,7 +1321,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     if (lensLoading) return;
     setLensError(null);
     lensRetryImageRef.current = null;
-    startVisualSearchWarmup();
     try {
       const response = await fetch(uri);
       if (!response.ok) throw new Error("This image could not be loaded for visual search.");
