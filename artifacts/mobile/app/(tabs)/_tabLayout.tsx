@@ -43,7 +43,7 @@ function normalizeTabPath(p: string): string {
   if (p === "/shorts"   || p === "/(tabs)/shorts")   return "/(tabs)/shorts";
   if (p === "/apps"     || p === "/(tabs)/apps")     return "/(tabs)/apps";
   if (p === "/me"       || p === "/(tabs)/me")       return "/(tabs)/me";
-  if (p === "/search"   || p === "/(tabs)/search")   return "/(tabs)/search";
+  if (p === "/search"   || p === "/(tabs)/search")   return "/app/afusearch";
   return p;
 }
 

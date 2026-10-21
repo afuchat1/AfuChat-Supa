@@ -141,7 +141,7 @@ const ROUTE_MAP: Array<{ match: RegExp; name: string; summary: string }> = [
   { match: /^\/contacts/, name: "Contacts", summary: "Your contacts and friends list." },
   { match: /^\/(tabs\/)?apps/, name: "Apps", summary: "Access Wallet and AfuChat's other built-in apps." },
   { match: /^\/me$/, name: "My Profile", summary: "Your personal AfuChat profile, posts, followers, and stats." },
-  { match: /^\/search/, name: "Search", summary: "Find people, posts, videos, jobs, events, and more across AfuChat." },
+  { match: /^\/app\/afusearch(?:\/|$)/, name: "AfuSearch", summary: "Find public people, posts, videos, jobs, events, and more across AfuChat." },
 
   // Handle-based profile routes — /@handle or /[handle]
   { match: /^\/@/, name: "User Profile", summary: "A user's public AfuChat profile page." },

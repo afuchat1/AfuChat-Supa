@@ -160,20 +160,22 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
     }
 
     const pageUrls = [...pageOwners.keys()];
-    const indexedUrls = new Set<string>();
-    for (let offset = 0; offset < pageUrls.length; offset += 200) {
-      const urlBatch = pageUrls.slice(offset, offset + 200);
+    for (let offset = 0; offset < pageUrls.length && pending.size < MAX_INDEX_PER_WARMUP; offset += INDEX_BATCH_SIZE) {
+      // PostgREST encodes .in() values into the request URL. Keep each lookup
+      // small so a large page of public image URLs cannot exceed URL limits.
+      const urlBatch = pageUrls.slice(offset, offset + INDEX_BATCH_SIZE);
       const { data: existing, error: existingError } = await admin
         .from("visual_image_index")
         .select("image_url")
         .in("image_url", urlBatch);
       if (existingError) throw new Error(`Visual index lookup failed: ${existingError.message}`);
-      for (const row of existing ?? []) indexedUrls.add(row.image_url);
-    }
 
-    for (const [url, owner] of pageOwners) {
-      if (!indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
-      if (pending.size >= MAX_INDEX_PER_WARMUP) break;
+      const indexedUrls = new Set((existing ?? []).map((row) => row.image_url));
+      for (const url of urlBatch) {
+        const owner = pageOwners.get(url);
+        if (owner && !indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
+        if (pending.size >= MAX_INDEX_PER_WARMUP) break;
+      }
     }
     if (posts.length < MAX_CANDIDATE_POSTS) break;
   }

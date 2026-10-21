@@ -61,3 +61,5 @@ $$;
 
 REVOKE ALL ON FUNCTION public.find_visual_image_matches(text, integer, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.find_visual_image_matches(text, integer, integer) TO service_role;
+
+NOTIFY pgrst, 'reload schema';

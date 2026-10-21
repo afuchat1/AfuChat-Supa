@@ -1919,7 +1919,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             </TouchableOpacity>
           </View>
           <View style={mStyles.headerRight}>
-            <TouchableOpacity hitSlop={8} onPress={() => router.push("/search" as any)}>
+            <TouchableOpacity hitSlop={8} onPress={() => router.push("/app/afusearch" as any)}>
               <Ionicons name="search" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -1953,7 +1953,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           </TouchableOpacity>
         </View>
         <View style={mStyles.headerRight}>
-          <TouchableOpacity hitSlop={8} onPress={() => router.push("/search" as any)}>
+          <TouchableOpacity hitSlop={8} onPress={() => router.push("/app/afusearch" as any)}>
             <Ionicons name="search" size={20} color="#fff" />
           </TouchableOpacity>
         </View>

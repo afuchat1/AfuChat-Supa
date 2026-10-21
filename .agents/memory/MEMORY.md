@@ -106,3 +106,4 @@
 - [Chat media cache ownership](chat-media-cache-ownership.md) — received attachments need one canonical app cache; gallery copies are explicit and idempotent.
 - [AfuSearch content-first discovery](afusearch-content-first.md) — keep vertical, content-backed suggestions; only explicit, opted-in searches may shape shared trends.
 - [AfuSearch platform-wide scope](afusearch-platform-wide-scope.md) — AfuSearch is intended to index searchable content across the platform, not only image matches or suggestions.
+- [Visual index warmup batching](visual-index-warmup-batching.md) — Large PostgREST image URL `.in()` lookups can exceed URL limits; batch them into small requests.

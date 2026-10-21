@@ -18,7 +18,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import * as Haptics from "@/lib/haptics";
 import { safeRouter } from "@/lib/navUtils";
@@ -416,7 +416,7 @@ function RowSkeleton({ bg }: { bg: string }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function SearchScreen({ title = "Search", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
+export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
   const { playMusic } = useGlobalMusicPlayer();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
@@ -2798,7 +2798,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 }
 
 export default function SearchRoute() {
-  return <SearchScreen />;
+  const params = useLocalSearchParams<{ tag?: string; q?: string; imageUrl?: string; section?: string }>();
+  // Keep old links working without rendering a second search experience.
+  return <Redirect href={{ pathname: "/app/afusearch", params } as any} />;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

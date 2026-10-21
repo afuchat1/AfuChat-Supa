@@ -68,7 +68,7 @@ const NAV_TESTS: NavTest[] = [
   // ── Tab screens ─────────────────────────────────────────────────────────
   { url: "afuchat://discover",     expectedType: "navigate", expectedPath: "/(tabs)/discover",   description: "Discover tab" },
   { url: "afuchat://chats",        expectedType: "navigate", expectedPath: "/(tabs)/chats",      description: "Chats tab" },
-  { url: "afuchat://search",       expectedType: "navigate", expectedPath: "/(tabs)/search",     description: "Search tab" },
+  { url: "afuchat://search",       expectedType: "navigate", expectedPath: "/app/afusearch",     description: "AfuSearch app" },
   { url: "afuchat://new-chat",     expectedType: "navigate", expectedPath: "/chat/new",          description: "New chat shortcut" },
   { url: "afuchat://shorts",       expectedType: "navigate", expectedPath: "/(tabs)/shorts",     description: "Shorts tab" },
   { url: "afuchat://communities",  expectedType: "navigate", expectedPath: "/(tabs)/communities",description: "Communities tab" },

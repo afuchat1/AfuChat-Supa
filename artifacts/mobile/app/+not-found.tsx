@@ -79,7 +79,7 @@ export default function NotFoundScreen() {
               { label: "Chats", icon: "chatbubble" as const, path: "/(tabs)/chats" as const },
               { label: "Apps", icon: "grid" as const, path: "/apps" as const },
               { label: "Moments", icon: "images" as const, path: "/moments" as const },
-              { label: "Search", icon: "search" as const, path: "/(tabs)/search" as const },
+              { label: "Search", icon: "search" as const, path: "/app/afusearch" as const },
             ].map((s) => (
               <TouchableOpacity
                 key={s.label}

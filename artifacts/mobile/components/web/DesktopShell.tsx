@@ -233,7 +233,7 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
           </View>
           <View style={styles.topBarActions}>
             <Pressable
-              onPress={() => safeRouter.push("/search" as any)}
+              onPress={() => safeRouter.push("/app/afusearch" as any)}
               accessibilityRole="button"
               accessibilityLabel={t("Search")}
               style={({ hovered, pressed }) => [

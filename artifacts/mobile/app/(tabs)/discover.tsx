@@ -2830,7 +2830,7 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.push("/search" as any); }}
+            onPress={() => { Haptics.selectionAsync(); router.push("/app/afusearch" as any); }}
             style={[
               styles.searchBtn,
               isCompactHeader && styles.searchBtnCompact,
