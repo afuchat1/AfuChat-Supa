@@ -479,7 +479,6 @@ Deno.serve(async (req: Request) => {
             candidateByUrl.set(row.image_url, {
               ...row,
               distance: Math.max(0, Math.min(64, Math.round((1 - similarity) * 64))),
-              embeddingSimilarity: similarity,
               ocrSemanticSimilarity: similarity,
               retrievalMethod: "ocr-semantic",
             });
@@ -557,13 +556,19 @@ Deno.serve(async (req: Request) => {
           distance: row.distance,
           similarity: row.embeddingSimilarity != null
             ? Math.max(1, Math.min(99, Math.round(Number(row.embeddingSimilarity) * 100)))
-            : Math.round((64 - row.distance) / 64 * 100),
-          rankScore: row.embeddingSimilarity != null
-            ? 75 + Math.max(0, Math.min(25, Number(row.embeddingSimilarity) * 25))
-            : 100 - Number(row.distance),
-          matchType: row.embeddingSimilarity != null
-            ? (row.retrievalMethod === "hybrid" ? "hybrid-visual" : "semantic-visual")
-            : "visual",
+            : row.ocrSemanticSimilarity != null
+              ? Math.max(1, Math.min(99, Math.round(Number(row.ocrSemanticSimilarity) * 100)))
+              : Math.round((64 - row.distance) / 64 * 100),
+          rankScore: row.ocrSemanticSimilarity != null && row.embeddingSimilarity == null && row.retrievalMethod === "ocr-semantic"
+            ? 55 + Math.max(0, Math.min(25, Number(row.ocrSemanticSimilarity) * 25))
+            : row.embeddingSimilarity != null
+              ? 75 + Math.max(0, Math.min(25, Number(row.embeddingSimilarity) * 25))
+              : 100 - Number(row.distance),
+          matchType: row.retrievalMethod === "ocr-semantic"
+            ? "text-semantic"
+            : row.embeddingSimilarity != null
+              ? (row.retrievalMethod === "hybrid" ? "hybrid-visual" : "semantic-visual")
+              : "visual",
         };
       });
     const textResults = textMatches
