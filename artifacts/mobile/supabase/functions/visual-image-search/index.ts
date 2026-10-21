@@ -399,6 +399,7 @@ Deno.serve(async (req: Request) => {
           createdAt: post.created_at,
           distance: row.distance,
           similarity: Math.round((64 - row.distance) / 64 * 100),
+          rankScore: 100 - Number(row.distance),
           matchType: "visual",
         };
       });
@@ -412,7 +413,8 @@ Deno.serve(async (req: Request) => {
           content: String(post.content ?? post.article_title ?? row.ocr_text ?? "").slice(0, 220),
           createdAt: post.created_at,
           distance: 64,
-          similarity: Math.max(1, Math.min(99, Math.round(Number(row.score ?? 0) * 100))),
+          similarity: Math.max(1, Math.min(99, Math.round(55 + Number(row.score ?? 0) * 40))),
+          rankScore: 65 + Math.min(30, Number(row.score ?? 0) * 30),
           matchType: "text",
         };
       });
@@ -423,7 +425,8 @@ Deno.serve(async (req: Request) => {
       content: String(row.title || row.body || row.source_type || "Matching AfuChat content").slice(0, 220),
       createdAt: row.created_at,
       distance: 64,
-      similarity: Math.max(1, Math.min(99, Math.round(Number(row.score ?? 0) * 100))),
+      similarity: Math.max(1, Math.min(99, Math.round(45 + Number(row.score ?? 0) * 40))),
+      rankScore: 50 + Math.min(35, Number(row.score ?? 0) * 35),
       matchType: "caption",
       sourceType: row.source_type,
     }));
@@ -435,7 +438,7 @@ Deno.serve(async (req: Request) => {
       ...captionResults.filter((row: any) =>
         !((row.sourceType === "post" || row.sourceType === "video") && indexedTextPostIds.has(row.postId))
       ),
-    ].slice(0, 12);
+    ].sort((a: any, b: any) => Number(b.rankScore ?? 0) - Number(a.rankScore ?? 0)).slice(0, 12);
 
     return json({
       algorithm: "dhash+ocr",
