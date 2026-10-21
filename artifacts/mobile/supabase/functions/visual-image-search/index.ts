@@ -1,6 +1,5 @@
-// AfuSearch visual-image-search — traditional computer vision only.
-// Computes a difference hash (dHash) from pixels and compares it with indexed public AfuChat images.
-// No AI models, AI APIs, generated captions, or AI-generated search terms are used.
+// AfuSearch visual-image-search combines perceptual hashing, OCR, and the public AfuChat search index.
+
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import jpeg from "npm:jpeg-js@0.4.4";
@@ -15,6 +14,7 @@ const CORS_HEADERS = {
 };
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const OCR_SERVICE_URL = "https://afusearch-ocr.afuchatgroup.workers.dev";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_INDEX_PER_WARMUP = 12;
 const INDEX_BATCH_SIZE = 2;
@@ -130,6 +130,70 @@ async function fetchImageBytes(url: string): Promise<{ bytes: Uint8Array; mimeTy
   }
 }
 
+async function extractImageText(bytes: Uint8Array, authorization: string): Promise<string | null> {
+  if (bytes.byteLength < 8 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
+  try {
+    const response = await fetch(OCR_SERVICE_URL, {
+      method: "POST",
+      headers: { authorization, "content-type": "application/octet-stream" },
+      body: bytes,
+      signal: AbortSignal.timeout(25_000),
+    });
+    if (!response.ok) {
+      console.error("[visual-image-search] OCR service returned", response.status);
+      return null;
+    }
+    const payload = await response.json().catch(() => null);
+    if (!payload || typeof payload.text !== "string") return null;
+    return payload.text.replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, " ").trim().slice(0, 5000);
+  } catch (error) {
+    console.error("[visual-image-search] OCR request failed", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+async function processPendingOcr(
+  admin: ReturnType<typeof createClient>,
+  authorization: string,
+  limit = 30,
+): Promise<number> {
+  const retryBefore = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const { data: rows, error } = await admin
+    .from("visual_image_index")
+    .select("image_url,post_id,ocr_text")
+    .or(`ocr_processed_at.is.null,and(ocr_text.eq.,ocr_processed_at.lt.${retryBefore})`)
+    .limit(Math.min(Math.max(limit, 1), 60));
+  if (error) throw new Error(`Pending OCR lookup failed: ${error.message}`);
+  let processed = 0;
+  const pending = rows ?? [];
+  for (let offset = 0; offset < pending.length; offset += 3) {
+    const batch = pending.slice(offset, offset + 3);
+    const outcomes = await Promise.all(batch.map(async (row) => {
+      const fetched = await fetchImageBytes(row.image_url);
+      const text = fetched ? await extractImageText(fetched.bytes, authorization) : null;
+      if (text === null) {
+        const { error: retryError } = await admin
+          .from("visual_image_index")
+          .update({ ocr_processed_at: new Date().toISOString() })
+          .eq("image_url", row.image_url);
+        if (retryError) console.error("[visual-image-search] OCR retry timestamp failed", retryError.message);
+        return false;
+      }
+      const { error: updateError } = await admin
+        .from("visual_image_index")
+        .update({ ocr_text: text, ocr_processed_at: new Date().toISOString() })
+        .eq("image_url", row.image_url);
+      if (updateError) {
+        console.error("[visual-image-search] OCR index write failed", updateError.message);
+        return false;
+      }
+      return true;
+    }));
+    processed += outcomes.filter(Boolean).length;
+  }
+  return processed;
+}
+
 async function verifyUser(req: Request, admin: ReturnType<typeof createClient>): Promise<boolean> {
   const auth = req.headers.get("authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
@@ -193,12 +257,14 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
           image_url: url,
           post_id: owner.post_id,
           perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
+          ocr_text: "",
+          ocr_processed_at: null,
         };
       } catch {
         return null;
       }
     }));
-    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string } => Boolean(row));
+    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string; ocr_text: string; ocr_processed_at: string | null } => Boolean(row));
     if (!valid.length) continue;
     const { error: upsertError } = await admin
       .from("visual_image_index")
@@ -213,13 +279,14 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
   return indexedCount;
 }
 
-function startIndexWarmup(admin: ReturnType<typeof createClient>): boolean {
+function startIndexWarmup(admin: ReturnType<typeof createClient>, authorization: string): boolean {
   if (indexWarmupPromise) return true;
 
   let task: Promise<void>;
   task = indexPublicImages(admin)
-    .then((count) => {
-      console.log(`[visual-image-search] background index warmup indexed ${count} images`);
+    .then(async (count) => {
+      const ocrCount = await processPendingOcr(admin, authorization, 6);
+      console.log(`[visual-image-search] warmup indexed ${count} images and OCR-processed ${ocrCount} existing images`);
     })
     .catch((error) => {
       console.error("[visual-image-search] background index warmup failed", error instanceof Error ? error.message : error);
@@ -265,7 +332,7 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     if (body.action === "warmup") {
-      startIndexWarmup(admin);
+      startIndexWarmup(admin, req.headers.get("authorization") ?? "");
       return json({ indexing: true, message: "Visual search index warmup started." }, 202);
     }
     if (typeof body.imageBase64 !== "string" || !body.imageBase64) {
@@ -275,16 +342,27 @@ Deno.serve(async (req: Request) => {
     const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
     const targetHash = differenceHash(imageBytes, mimeType);
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
+    const authorization = req.headers.get("authorization") ?? "";
+    startIndexWarmup(admin, authorization);
+    const imageText = await extractImageText(imageBytes, authorization);
 
     // Match the already-indexed corpus immediately; public image indexing is
     // scheduled separately so cold starts do not delay the user's search.
     // Never run index maintenance inside a user's search request. Warmup is triggered separately.
 
-    const { data: matchedImages, error: matchError } = await admin.rpc("find_visual_image_matches", {
-      p_hash: targetHash,
-      p_max_distance: MAX_DISTANCE,
-      p_limit: 30,
-    });
+    const [visualResult, ocrResult, contentResult] = await Promise.all([
+      admin.rpc("find_visual_image_matches", {
+        p_hash: targetHash,
+        p_max_distance: MAX_DISTANCE,
+        p_limit: 30,
+      }),
+      imageText ? admin.rpc("find_visual_text_matches", { p_query: imageText, p_limit: 20 }) : Promise.resolve({ data: [], error: null }),
+      imageText ? admin.rpc("find_public_content_text_matches", { p_query: imageText, p_limit: 30 }) : Promise.resolve({ data: [], error: null }),
+    ]);
+    const matchedImages = visualResult.data;
+    const matchError = visualResult.error;
+    if (ocrResult.error) console.error("[visual-image-search] OCR text lookup failed", ocrResult.error.message);
+    if (contentResult.error) console.error("[visual-image-search] public content text lookup failed", contentResult.error.message);
     if (matchError) {
       console.error("[visual-image-search] hash match query failed", matchError.message);
       const errorMessage = isMissingVisualIndexSchema(matchError)
@@ -296,8 +374,18 @@ Deno.serve(async (req: Request) => {
       .filter((row: any) => row.image_url !== sourceImageUrl)
       .sort((a: any, b: any) => a.distance - b.distance)
       .slice(0, 30);
-
-    const postIds = [...new Set(candidates.map((row) => row.post_id))];
+    const ocrCandidates = (ocrResult.data ?? [])
+      .filter((row: any) => row.image_url !== sourceImageUrl)
+      .sort((a: any, b: any) => Number(b.score) - Number(a.score))
+      .slice(0, 20);
+    const publicContent = (contentResult.data ?? [])
+      .filter((row: any) => ["post", "video"].includes(row.source_type))
+      .slice(0, 20);
+    const postIds = [...new Set([
+      ...candidates.map((row: any) => row.post_id),
+      ...ocrCandidates.map((row: any) => row.post_id),
+      ...publicContent.map((row: any) => row.source_id),
+    ])];
     let postsById = new Map<string, any>();
     if (postIds.length) {
       const { data: matchedPosts, error: matchedError } = await admin
@@ -310,28 +398,75 @@ Deno.serve(async (req: Request) => {
         .map((post: any) => [post.id, post]));
     }
 
-    const matches = candidates
-      .filter((row) => postsById.has(row.post_id))
-      .map((row) => {
-        const post = postsById.get(row.post_id);
-        return {
+    const merged = new Map<string, any>();
+    for (const row of candidates) {
+      if (!postsById.has(row.post_id)) continue;
+      const post = postsById.get(row.post_id);
+      merged.set(row.post_id + "|" + row.image_url, {
+        postId: row.post_id,
+        imageUrl: row.image_url,
+        content: String(post.content ?? post.article_title ?? "").slice(0, 220),
+        createdAt: post.created_at,
+        distance: row.distance,
+        similarity: Math.round((64 - row.distance) / 64 * 100),
+        matchType: "visual",
+        score: (64 - row.distance) / 64,
+      });
+    }
+    for (const row of ocrCandidates) {
+      if (!postsById.has(row.post_id)) continue;
+      const post = postsById.get(row.post_id);
+      const key = row.post_id + "|" + row.image_url;
+      const score = Math.max(0, Math.min(1, Number(row.score) || 0));
+      const prior = merged.get(key);
+      if (prior) {
+        prior.score = Math.max(prior.score, score);
+        prior.matchType = prior.matchType === "visual" ? "visual+text" : "text";
+      } else {
+        merged.set(key, {
           postId: row.post_id,
           imageUrl: row.image_url,
-          content: String(post.content ?? post.article_title ?? "").slice(0, 220),
+          content: String(post.content ?? post.article_title ?? row.ocr_text ?? "").slice(0, 220),
           createdAt: post.created_at,
-          distance: row.distance,
-          similarity: Math.round((64 - row.distance) / 64 * 100),
-        };
-      })
+          distance: 64 - Math.round(score * 64),
+          similarity: Math.round(score * 100),
+          matchType: "text",
+          score,
+        });
+      }
+    }
+    for (const row of publicContent) {
+      if (!postsById.has(row.source_id)) continue;
+      const post = postsById.get(row.source_id);
+      const key = row.source_id + "|content";
+      if (merged.has(key)) continue;
+      const score = Math.max(0, Math.min(1, Number(row.score) || 0));
+      merged.set(key, {
+        postId: row.source_id,
+        imageUrl: null,
+        content: String(row.title || row.body || post.content || post.article_title || "").slice(0, 220),
+        createdAt: row.created_at || post.created_at,
+        distance: 64 - Math.round(score * 64),
+        similarity: Math.round(score * 100),
+        matchType: "content-text",
+        sourceType: row.source_type,
+        score,
+      });
+    }
+    const matches = [...merged.values()]
+      .sort((a, b) => b.score - a.score)
       .slice(0, 12);
 
     return json({
-      algorithm: "dhash",
+      algorithm: "dhash+ocr+public-text",
       indexedThisRequest: 0,
+      ocrTextAvailable: Boolean(imageText),
       matches,
       message: matches.length
-        ? "Matches are ranked by visual fingerprint similarity."
-        : "No close visual matches found in the indexed public images.",
+        ? "Results combine visual similarity, text detected in images, and matching public AfuChat posts."
+        : imageText
+          ? "No close visual or text matches yet. OCR was read, but no matching public results were found."
+          : "No close visual matches yet. Text extraction was unavailable for this image; try a smaller JPEG or PNG.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Visual search failed.";

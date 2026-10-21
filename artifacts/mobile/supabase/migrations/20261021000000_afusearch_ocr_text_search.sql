@@ -1,5 +1,5 @@
--- AfuSearch OCR-backed text-in-image search using traditional OCR and SQL only.
--- No AI models, embeddings, or generated descriptions are used.
+-- AfuSearch OCR-backed text-in-image retrieval.
+-- Image text is extracted by the authenticated Cloudflare OCR Worker; SQL performs retrieval and ranking.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 

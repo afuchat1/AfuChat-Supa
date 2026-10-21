@@ -131,7 +131,7 @@ type VisualMatch = {
   createdAt: string;
   distance: number;
   similarity: number;
-  matchType?: "visual" | "text" | "caption";
+  matchType?: "visual" | "text" | "caption" | "visual+text" | "content-text";
   sourceType?: string;
 };
 type LensResult = {
@@ -1425,7 +1425,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     setLensError(null);
     const requestController = new AbortController();
     let requestTimeout: ReturnType<typeof setTimeout> | undefined;
-    const timeoutError = new Error("Visual search did not finish within 3 seconds. Please try another image later.");
+    const timeoutError = new Error("Visual and text search did not finish within 30 seconds. Please try again.");
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
@@ -1436,7 +1436,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       // Session restoration must not consume the network search timeout.
       requestTimeout = setTimeout(() => {
         requestController.abort();
-      }, 3_000);
+      }, 30_000);
       const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
         method: "POST",
         headers: edgeHeadersWithAuth(session.access_token),
@@ -1879,7 +1879,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: BRAND + "0A" }]}>
           <ActivityIndicator size="small" color={BRAND} />
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>
-            Comparing image pixels with AfuChat images…
+            Comparing image similarity and reading text in the image…
           </Text>
         </View>
       );
@@ -1935,7 +1935,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
                     {match.content || "Open matching post"}
                   </Text>
                   <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                    {match.matchType === "text" ? "Text detected inside a matching image" : match.matchType === "caption" ? `Related ${(match.sourceType || "post").replace(/_/g, " ")} content` : match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
+                    {match.matchType === "text" ? "Text detected inside a matching image" : match.matchType === "content-text" ? "Text matched in public AfuChat content" : match.matchType === "visual+text" ? "Visual and text match" : match.matchType === "caption" ? `Related ${(match.sourceType || "post").replace(/_/g, " ")} content` : match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
