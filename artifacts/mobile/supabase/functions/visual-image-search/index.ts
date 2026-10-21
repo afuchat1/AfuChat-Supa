@@ -6,7 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import jpeg from "npm:jpeg-js@0.4.4";
 import { PNG } from "npm:pngjs@7.0.0";
 import { Buffer } from "node:buffer";
-import { createWorker, type Worker } from "npm:tesseract.js@5.1.1";
+import { createWorker } from "npm:tesseract.js@5.1.1";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -23,7 +23,7 @@ const MAX_SCAN_PAGES = 50;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 const MAX_DISTANCE = 10;
 let indexWarmupPromise: Promise<void> | null = null;
-let ocrWorkerPromise: Promise<Worker> | null = null;
+let ocrWorkerPromise: ReturnType<typeof createWorker> | null = null;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -84,8 +84,7 @@ async function getOcrWorker(): Promise<Worker> {
     ocrWorkerPromise = createWorker("eng", 1, {
       // The OCR engine is the open-source Tesseract OCR runtime. Only the
       // worker/runtime/language data are downloaded; user images stay in this function.
-      workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
-      corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
+      // Use the package's bundled worker/core paths for the server runtime.
       langPath: "https://tessdata.projectnaptha.com/4.0.0",
       logger: () => undefined,
     }).catch((error) => {
