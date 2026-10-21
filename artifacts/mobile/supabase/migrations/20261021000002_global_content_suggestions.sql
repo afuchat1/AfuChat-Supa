@@ -131,13 +131,40 @@ ON CONFLICT (slug) DO UPDATE SET
   is_enabled = true,
   updated_at = statement_timestamp();
 
--- Populate the new index fields for existing published tracks.
+-- Keep artist matching aligned with AfuMusic's displayed artist: creator display name,
+-- then creator handle, then the track's explicit artist field.
 UPDATE search_private.search_documents AS d
-SET artist_name = mt.artist
+SET
+  artist_name = coalesce(
+    nullif(btrim(p.display_name), ''),
+    nullif(btrim(p.handle), ''),
+    nullif(btrim(mt.artist), '')
+  ),
+  body = concat_ws(
+    ' ',
+    nullif(btrim(p.display_name), ''),
+    nullif(btrim(p.handle), ''),
+    nullif(btrim(mt.artist), ''),
+    nullif(btrim(mt.genre), '')
+  )
 FROM public.music_tracks AS mt
+LEFT JOIN public.profiles AS p ON p.id = mt.creator_id
 WHERE d.source_type = 'music'
   AND d.source_id = mt.id
-  AND d.artist_name IS DISTINCT FROM mt.artist;
+  AND (
+    d.artist_name IS DISTINCT FROM coalesce(
+      nullif(btrim(p.display_name), ''),
+      nullif(btrim(p.handle), ''),
+      nullif(btrim(mt.artist), '')
+    )
+    OR d.body IS DISTINCT FROM concat_ws(
+      ' ',
+      nullif(btrim(p.display_name), ''),
+      nullif(btrim(p.handle), ''),
+      nullif(btrim(mt.artist), ''),
+      nullif(btrim(mt.genre), '')
+    )
+  );
 
 CREATE OR REPLACE FUNCTION search_private.sync_music_artist_search_fields()
 RETURNS trigger
@@ -145,6 +172,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, search_private, public
 AS $$
+DECLARE
+  v_artist text;
 BEGIN
   IF TG_OP = 'DELETE' THEN
     UPDATE search_private.search_documents
@@ -153,8 +182,26 @@ BEGIN
     RETURN OLD;
   END IF;
 
+  SELECT coalesce(
+    nullif(btrim(p.display_name), ''),
+    nullif(btrim(p.handle), ''),
+    nullif(btrim(NEW.artist), '')
+  )
+  INTO v_artist
+  FROM public.profiles AS p
+  WHERE p.id = NEW.creator_id;
+
+  v_artist := coalesce(v_artist, nullif(btrim(NEW.artist), ''));
+
   UPDATE search_private.search_documents
-  SET artist_name = NEW.artist
+  SET
+    artist_name = v_artist,
+    body = concat_ws(
+      ' ',
+      v_artist,
+      nullif(btrim(NEW.artist), ''),
+      nullif(btrim(NEW.genre), '')
+    )
   WHERE source_type = 'music' AND source_id = NEW.id;
 
   RETURN NEW;
@@ -165,8 +212,48 @@ REVOKE ALL ON FUNCTION search_private.sync_music_artist_search_fields() FROM PUB
 
 DROP TRIGGER IF EXISTS z_search_music_artist_fields_sync ON public.music_tracks;
 CREATE TRIGGER z_search_music_artist_fields_sync
-AFTER INSERT OR UPDATE OF title, artist, genre, status OR DELETE ON public.music_tracks
+AFTER INSERT OR UPDATE OF title, artist, genre, status, creator_id OR DELETE ON public.music_tracks
 FOR EACH ROW EXECUTE FUNCTION search_private.sync_music_artist_search_fields();
+
+-- Creator names are what AfuMusic displays as the artist when no explicit artist
+-- override exists, so keep existing track suggestions current after profile edits.
+CREATE OR REPLACE FUNCTION search_private.sync_music_artist_profile_search_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, search_private, public
+AS $$
+BEGIN
+  UPDATE search_private.search_documents AS d
+  SET
+    artist_name = coalesce(
+      nullif(btrim(NEW.display_name), ''),
+      nullif(btrim(NEW.handle), ''),
+      nullif(btrim(mt.artist), '')
+    ),
+    body = concat_ws(
+      ' ',
+      nullif(btrim(NEW.display_name), ''),
+      nullif(btrim(NEW.handle), ''),
+      nullif(btrim(mt.artist), ''),
+      nullif(btrim(mt.genre), '')
+    )
+  FROM public.music_tracks AS mt
+  WHERE d.source_type = 'music'
+    AND d.source_id = mt.id
+    AND mt.creator_id = NEW.id
+    AND mt.status = 'published';
+
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION search_private.sync_music_artist_profile_search_fields() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS z_search_music_artist_profile_fields_sync ON public.profiles;
+CREATE TRIGGER z_search_music_artist_profile_fields_sync
+AFTER UPDATE OF display_name, handle ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION search_private.sync_music_artist_profile_search_fields();
 
 CREATE OR REPLACE FUNCTION public.get_platform_search_suggestions(
   p_query text,
