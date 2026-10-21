@@ -1,11 +1,12 @@
 import { enableOcr, extractBytes, initWasm } from "@kreuzberg/wasm";
+import wasmModule from "@kreuzberg/wasm/kreuzberg_wasm_bg.wasm";
 
 let ocrInitialization;
 
 async function initializeOcr() {
   if (!ocrInitialization) {
     ocrInitialization = (async () => {
-      await initWasm("https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@4.10.2/dist/pkg/kreuzberg_wasm_bg.wasm");
+      await initWasm({ wasmModule });
       await enableOcr();
     })();
   }
