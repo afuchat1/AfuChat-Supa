@@ -14,7 +14,7 @@
   },
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "EXPO_OFFLINE=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000",
+    "dev": "if [ -n \"$REPLIT_EXPO_SESSION_SECRET\" ]; then create-launch login --session \"$REPLIT_EXPO_SESSION_SECRET\" || true; fi; EXPO_OFFLINE=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm exec expo start --go --tunnel --port 8000",
     "build:web": "EXPO_OFFLINE=1 EXPO_NO_LAZY=1 expo export -p web --output-dir dist && node scripts/prepare-static-web.mjs",
     "build:apk": "bash scripts/eas-build.sh",
     "audit:i18n": "node scripts/audit-localization.js",
@@ -37,6 +37,7 @@
     "@types/react-dom": "^19.2.7",
     "@ungap/structured-clone": "^1.3.0",
     "babel-plugin-transform-remove-console": "^6.9.4",
+    "create-launch": "^0.4.1",
     "expo": "~57.0.30",
     "expo-blur": "~57.0.3",
     "expo-constants": "~57.0.22",
