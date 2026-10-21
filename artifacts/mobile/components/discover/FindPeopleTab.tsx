@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 type Person = {
   id: string;
@@ -459,7 +460,26 @@ export default function FindPeopleTab() {
       </Text>
 
       {loading && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
-        <View style={styles.center}><ActivityIndicator color={accent} /><Text style={[styles.subtitle, { color: colors.textMuted }]}>Loading discover results…</Text></View>
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.mixedRail}
+          accessibilityLabel="Loading discover results"
+        >
+          {[0, 1, 2, 3].map((item) => (
+            <View key={item} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
+              <Skeleton width={58} height={58} borderRadius={16} />
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <Skeleton width={124} height={14} borderRadius={5} />
+                <Skeleton width={88} height={11} borderRadius={4} />
+                <Skeleton width={148} height={11} borderRadius={4} />
+                <Skeleton width={104} height={11} borderRadius={4} />
+              </View>
+              <Skeleton width="100%" height={31} borderRadius={16} style={{ marginTop: 10 }} />
+            </View>
+          ))}
+        </ScrollView>
       ) : error && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} />
