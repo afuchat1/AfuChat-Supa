@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -349,8 +348,35 @@ export default function FindPeopleTab() {
     );
   }
 
+  const mixedItems = useMemo(() => {
+    const items: Array<
+      | { kind: "person"; value: Person }
+      | { kind: "group"; value: PublicGroup }
+      | { kind: "channel"; value: PublicChannel }
+    > = [];
+    const count = Math.max(visiblePeople.length, visibleGroups.length, visibleChannels.length);
+    for (let index = 0; index < count; index++) {
+      if (visiblePeople[index]) items.push({ kind: "person", value: visiblePeople[index] });
+      if (visibleGroups[index]) items.push({ kind: "group", value: visibleGroups[index] });
+      if (visibleChannels[index]) items.push({ kind: "channel", value: visibleChannels[index] });
+    }
+    return items;
+  }, [visiblePeople, visibleGroups, visibleChannels]);
+
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <ScrollView
+      style={[styles.root, { backgroundColor: colors.background }]}
+      contentContainerStyle={[styles.pageContent, { paddingBottom: insets.bottom + 112 }]}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); void loadPeople(); }}
+          tintColor={accent}
+        />
+      }
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.searchRow}>
         <View style={[styles.searchBox, { backgroundColor: colors.surface, flex: 1 }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -363,146 +389,162 @@ export default function FindPeopleTab() {
             returnKeyType="search"
           />
           {!!query && (
-            <TouchableOpacity onPress={() => setQuery("")}>
+            <TouchableOpacity onPress={() => setQuery("")} accessibilityLabel="Clear search">
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={[styles.refreshButton, { backgroundColor: accent + "14" }]} onPress={() => { setRefreshing(true); void loadPeople(); }} accessibilityLabel="Refresh live users">
+        <TouchableOpacity
+          style={[styles.refreshButton, { backgroundColor: accent + "14" }]}
+          onPress={() => { setRefreshing(true); void loadPeople(); }}
+          accessibilityLabel="Refresh discover results"
+        >
           <Ionicons name="refresh" size={20} color={accent} />
         </TouchableOpacity>
       </View>
 
-      {(visibleGroups.length > 0 || visibleChannels.length > 0) && (
-        <View style={styles.communitiesSection}>
-          <View style={styles.sectionHeading}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Communities</Text>
-            <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>Public spaces to join</Text>
-          </View>
-          {visibleGroups.length > 0 && (
-            <>
-              <Text style={[styles.communityType, { color: colors.textMuted }]}>Groups</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.communityRail}>
-                {visibleGroups.map((group) => (
-                  <View key={group.id} style={[styles.communityCard, { backgroundColor: colors.surface }]}>
-                    <TouchableOpacity onPress={() => void joinGroup(group)} activeOpacity={0.75}>
-                      {group.avatar_url ? (
-                        <ExpoImage source={{ uri: group.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
-                      ) : (
-                        <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "18" }]}>
-                          <Ionicons name="people" size={25} color={accent} />
-                        </View>
-                      )}
-                      <Text style={[styles.communityName, { color: colors.text }]} numberOfLines={1}>{group.name}</Text>
-                      <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>
-                        {group.description || "Public group"}
-                      </Text>
-                      <Text style={[styles.communityMeta, { color: accent }]}>
-                        {group.member_count.toLocaleString()} members
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.communityAction, { backgroundColor: group.is_member ? colors.inputBg : accent }]}
-                      onPress={() => void joinGroup(group)}
-                      disabled={joiningId === group.id}
-                    >
-                      {joiningId === group.id
-                        ? <ActivityIndicator size="small" color={group.is_member ? colors.textMuted : "#fff"} />
-                        : <Text style={{ color: group.is_member ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{group.is_member ? "Open" : "Join"}</Text>}
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            </>
-          )}
-          {visibleChannels.length > 0 && (
-            <>
-              <Text style={[styles.communityType, { color: colors.textMuted }]}>Channels</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.communityRail}>
-                {visibleChannels.map((channel) => (
-                  <View key={channel.id} style={[styles.communityCard, { backgroundColor: colors.surface }]}>
-                    <TouchableOpacity onPress={() => openChannel(channel)} activeOpacity={0.75}>
-                      {channel.avatar_url ? (
-                        <ExpoImage source={{ uri: channel.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
-                      ) : (
-                        <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: "#8B5CF618" }]}>
-                          <Ionicons name="megaphone" size={25} color="#8B5CF6" />
-                        </View>
-                      )}
-                      <View style={styles.communityNameRow}>
-                        <Text style={[styles.communityName, { color: colors.text, flex: 1 }]} numberOfLines={1}>{channel.name}</Text>
-                        {channel.is_verified && <Ionicons name="checkmark-circle" size={14} color="#8B5CF6" />}
-                      </View>
-                      {channel.handle ? (
-                        <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>@{channel.handle}</Text>
-                      ) : null}
-                      <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>
-                        {channel.description || "Public channel"}
-                      </Text>
-                      <Text style={[styles.communityMeta, { color: "#8B5CF6" }]}>
-                        {channel.subscriber_count.toLocaleString()} subscribers
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.communityAction, { backgroundColor: channel.is_subscriber ? colors.inputBg : "#8B5CF6" }]}
-                      onPress={() => openChannel(channel)}
-                    >
-                      <Text style={{ color: channel.is_subscriber ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{channel.is_subscriber ? "Open" : "View"}</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            </>
-          )}
-        </View>
-      )}
+      <View style={styles.sectionHeading}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Discover</Text>
+        <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
+          People, groups and channels
+        </Text>
+      </View>
 
       <View style={styles.filterRow}>
-        {([["all", "Everyone"], ["online", "Online now"], ["recent", "Active today"]] as const).map(([value, label]) => (
-          <TouchableOpacity key={value} onPress={() => setFilter(value)} style={[styles.filterChip, { backgroundColor: filter === value ? accent : colors.surface }]}>
+        {([[ "all", "Everyone" ], [ "online", "Online now" ], [ "recent", "Active today" ]] as const).map(([value, label]) => (
+          <TouchableOpacity
+            key={value}
+            onPress={() => setFilter(value)}
+            style={[styles.filterChip, { backgroundColor: filter === value ? accent : colors.surface }]}
+          >
             {value === "online" && <View style={[styles.tinyDot, { backgroundColor: filter === value ? "#fff" : "#36C96F" }]} />}
             <Text style={[styles.filterText, { color: filter === value ? "#fff" : colors.textMuted }]}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
-      <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 10 }]}>People</Text>
-      {loading && people.length === 0 ? <View style={styles.center}><ActivityIndicator color={accent} /></View> : error && people.length === 0 ? (
-        <View style={styles.center}><Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} /><Text style={[styles.subtitle, { color: colors.textMuted }]}>{error}</Text><TouchableOpacity onPress={() => void loadPeople()}><Text style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>Try again</Text></TouchableOpacity></View>
+      <Text style={[styles.sectionCaption, { color: colors.textMuted, marginBottom: 10 }]}>
+        Activity filters apply to people. Search filters all results.
+      </Text>
+
+      {loading && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
+        <View style={styles.center}><ActivityIndicator color={accent} /><Text style={[styles.subtitle, { color: colors.textMuted }]}>Loading discover results…</Text></View>
+      ) : error && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} />
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>{error}</Text>
+          <TouchableOpacity onPress={() => void loadPeople()}><Text style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>Try again</Text></TouchableOpacity>
+        </View>
+      ) : mixedItems.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="search-outline" size={34} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Nothing found</Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+            {query ? "Try another name, username, group or channel." : "New people and public spaces will appear here."}
+          </Text>
+        </View>
       ) : (
-        <FlatList
-          data={visiblePeople}
-          keyExtractor={(item) => item.id}
-          style={styles.peopleList}
-          contentContainerStyle={visiblePeople.length
-            ? [styles.list, { paddingBottom: insets.bottom + 112 }]
-            : [styles.emptyList, { paddingBottom: insets.bottom + 112 }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void loadPeople(); }} tintColor={accent} />}
-          renderItem={({ item }) => (
-            <View style={[styles.personCard, { backgroundColor: colors.surface }]}>
-              <TouchableOpacity style={styles.personIdentity} onPress={() => navigateToKnownProfile(item)} activeOpacity={0.75}>
-                <View><Avatar person={item} accent={accent} />{isOnline(item.last_seen) && <View style={[styles.onlineDot, { backgroundColor: "#36C96F", borderColor: colors.surface }]} />}</View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.nameRow}><Text style={[styles.personName, { color: colors.text }]} numberOfLines={1}>{item.display_name}</Text>{(item.is_verified || item.is_organization_verified) && <Ionicons name="checkmark-circle" size={15} color={accent} />}</View>
-                  <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>@{item.handle} · {item.follower_count} followers</Text>
-                  <Text style={[styles.activity, { color: isOnline(item.last_seen) ? "#36C96F" : colors.textMuted }]}>{relativeSeen(item.last_seen)}</Text>
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.mixedRail}
+        >
+          {mixedItems.map((item) => {
+            if (item.kind === "person") {
+              const person = item.value;
+              return (
+                <View key={`person-${person.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
+                  <TouchableOpacity style={styles.mixedIdentity} onPress={() => navigateToKnownProfile(person)} activeOpacity={0.75}>
+                    <View>
+                      <Avatar person={person} accent={accent} />
+                      {isOnline(person.last_seen) && <View style={[styles.onlineDot, { backgroundColor: "#36C96F", borderColor: colors.surface }]} />}
+                    </View>
+                    <View style={styles.mixedNameRow}>
+                      <Text style={[styles.communityName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{person.display_name}</Text>
+                      {(person.is_verified || person.is_organization_verified) && <Ionicons name="checkmark-circle" size={14} color={accent} />}
+                    </View>
+                    <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>@{person.handle}</Text>
+                    <Text style={[styles.communityDescription, { color: isOnline(person.last_seen) ? "#36C96F" : colors.textMuted }]} numberOfLines={2}>
+                      {relativeSeen(person.last_seen)} · {person.follower_count.toLocaleString()} followers
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.communityAction, { backgroundColor: person.is_following ? colors.inputBg : accent }]}
+                    onPress={() => void toggleFollow(person)}
+                    disabled={followBusy === person.id}
+                  >
+                    {followBusy === person.id
+                      ? <ActivityIndicator size="small" color={person.is_following ? colors.textMuted : "#fff"} />
+                      : <Text style={{ color: person.is_following ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
+                          {person.is_following && person.is_following_me ? "Friend" : person.is_following ? "Following" : person.is_following_me ? "Follow back" : "Follow"}
+                        </Text>}
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.followButton, { borderColor: item.is_following ? colors.border : accent, backgroundColor: item.is_following ? "transparent" : accent }]} onPress={() => void toggleFollow(item)} disabled={followBusy === item.id}>
-                {followBusy === item.id ? <ActivityIndicator size="small" color={item.is_following ? accent : "#fff"} /> : <Text style={{ color: item.is_following ? accent : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{item.is_following && item.is_following_me ? "Friend" : item.is_following ? "Following" : item.is_following_me ? "Follow back" : "Follow"}</Text>}
-              </TouchableOpacity>
-            </View>
-          )}
-          ListEmptyComponent={<View style={styles.center}><Ionicons name={filter === "online" ? "radio-outline" : "people-outline"} size={34} color={colors.textMuted} /><Text style={[styles.emptyTitle, { color: colors.text }]}>No users match this view</Text><Text style={[styles.subtitle, { color: colors.textMuted }]}>{query ? "Try a different name or username." : "Check back soon. People will appear here as they come online."}</Text></View>}
-        />
+              );
+            }
+            if (item.kind === "group") {
+              const group = item.value;
+              return (
+                <View key={`group-${group.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
+                  <TouchableOpacity onPress={() => void joinGroup(group)} activeOpacity={0.75}>
+                    {group.avatar_url
+                      ? <ExpoImage source={{ uri: group.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                      : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "18" }]}><Ionicons name="people" size={25} color={accent} /></View>}
+                    <Text style={[styles.communityName, { color: colors.text }]} numberOfLines={1}>{group.name}</Text>
+                    <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>{group.description || "Public group"}</Text>
+                    <Text style={[styles.communityMeta, { color: accent }]}>{group.member_count.toLocaleString()} members</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.communityAction, { backgroundColor: group.is_member ? colors.inputBg : accent }]}
+                    onPress={() => void joinGroup(group)}
+                    disabled={joiningId === group.id}
+                  >
+                    {joiningId === group.id
+                      ? <ActivityIndicator size="small" color={group.is_member ? colors.textMuted : "#fff"} />
+                      : <Text style={{ color: group.is_member ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{group.is_member ? "Open" : "Join"}</Text>}
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+            const channel = item.value;
+            return (
+              <View key={`channel-${channel.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
+                <TouchableOpacity onPress={() => openChannel(channel)} activeOpacity={0.75}>
+                  {channel.avatar_url
+                    ? <ExpoImage source={{ uri: channel.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                    : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: "#8B5CF618" }]}><Ionicons name="megaphone" size={25} color="#8B5CF6" /></View>}
+                  <View style={styles.communityNameRow}>
+                    <Text style={[styles.communityName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{channel.name}</Text>
+                    {channel.is_verified && <Ionicons name="checkmark-circle" size={14} color="#8B5CF6" />}
+                  </View>
+                  <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>{channel.handle ? `@${channel.handle}` : "Public channel"}</Text>
+                  <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>{channel.description || "Public channel"}</Text>
+                  <Text style={[styles.communityMeta, { color: "#8B5CF6" }]}>{channel.subscriber_count.toLocaleString()} subscribers</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.communityAction, { backgroundColor: channel.is_subscriber ? colors.inputBg : "#8B5CF6" }]}
+                  onPress={() => openChannel(channel)}
+                >
+                  <Text style={{ color: channel.is_subscriber ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{channel.is_subscriber ? "Open" : "View"}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </ScrollView>
       )}
-    </View>
+      {!!error && <Text style={[styles.inlineError, { color: colors.textMuted }]}>{error}</Text>}
+    </ScrollView>
   );
+}
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 16 },
-  peopleList: { flex: 1, minHeight: 0 },
+  pageContent: { flexGrow: 1 },
+  mixedRail: { gap: 10, paddingBottom: 8, paddingRight: 4 },
+  mixedCard: { width: 184, minHeight: 224, borderRadius: 17, padding: 12, justifyContent: "space-between" },
+  mixedIdentity: { alignItems: "flex-start" },
+  inlineError: { fontSize: 12, marginTop: 8, marginBottom: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 14 },
   heroIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
   title: { fontSize: 22, fontFamily: "Inter_700Bold" },
@@ -531,8 +573,6 @@ const styles = StyleSheet.create({
   filterChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
   filterText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   tinyDot: { width: 6, height: 6, borderRadius: 3 },
-  list: { paddingBottom: 24, gap: 10 },
-  emptyList: { flexGrow: 1 },
   personCard: { borderRadius: 17, padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
   personIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 11 },
   avatar: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
