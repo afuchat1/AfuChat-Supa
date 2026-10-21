@@ -1050,7 +1050,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         item.kind === "org" || (item as PersonResult).is_private !== true,
       ).length
         + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length;
+        + events.length + gifts.length + marketItems.length + jobs.length + music.length;
       if (recordExplicitSubmission && trimmed.length > 0) {
         addToHistory(trimmed).then(setHistory).catch(() => {});
       }
