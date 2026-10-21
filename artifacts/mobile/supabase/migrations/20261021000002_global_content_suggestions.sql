@@ -297,7 +297,7 @@ RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public, search_private
-AS $
+AS $$
 DECLARE
   v_user_id uuid := auth.uid();
   v_analytics_enabled boolean;
@@ -357,7 +357,11 @@ BEGIN
 
   RETURN true;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.record_search_suggestion_selection(text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.record_search_suggestion_selection(text, text) TO authenticated;
+
+
+-- Make the new RPC visible to PostgREST immediately after the migration commits.
+NOTIFY pgrst, 'reload schema';
