@@ -246,13 +246,12 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>, authori
       const fetched = await fetchImageBytes(url);
       if (!fetched) return null;
       try {
-        const ocrText = await extractImageText(fetched.bytes, authorization);
         return {
           image_url: url,
           post_id: owner.post_id,
           perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
-          ocr_text: ocrText ?? "",
-          ocr_processed_at: ocrText === null ? null : new Date().toISOString(),
+          ocr_text: "",
+          ocr_processed_at: null,
         };
       } catch {
         return null;
@@ -279,7 +278,7 @@ function startIndexWarmup(admin: ReturnType<typeof createClient>, authorization:
   let task: Promise<void>;
   task = indexPublicImages(admin, authorization)
     .then(async (count) => {
-      const ocrCount = await processPendingOcr(admin, authorization, 12);
+      const ocrCount = await processPendingOcr(admin, authorization, 6);
       console.log(`[visual-image-search] warmup indexed ${count} images and OCR-processed ${ocrCount} existing images`);
     })
     .catch((error) => {
