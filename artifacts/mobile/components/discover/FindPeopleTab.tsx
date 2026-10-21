@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -235,8 +236,16 @@ export default function FindPeopleTab() {
     // Do not create a second writer here: every profile heartbeat can fan out
     // through Realtime and make every open Discover screen reload all datasets.
     // Presence is refreshed with the same cadence as the authoritative heartbeat.
-    const pollTimer = setInterval(() => void loadPeople(true), 60_000);
-    return () => clearInterval(pollTimer);
+    const pollTimer = setInterval(() => {
+      if (AppState.currentState === "active") void loadPeople(true);
+    }, 60_000);
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void loadPeople(true);
+    });
+    return () => {
+      clearInterval(pollTimer);
+      appStateSubscription.remove();
+    };
   }, [loadPeople, user]);
 
   const visiblePeople = useMemo(() => {
