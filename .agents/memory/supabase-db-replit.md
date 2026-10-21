@@ -15,3 +15,10 @@ Never use a direct PostgreSQL connection (`pg` pool / `node-postgres`) from Repl
 - For auth.users lookups: use `supabase.auth.admin.getUserById(userId)`.
 - Do NOT import from `lib/db.ts` in any route or service — that file uses `pg.Pool` which cannot connect.
 - Do NOT gate background services on `SUPABASE_DB_URL` — use `SUPABASE_SERVICE_ROLE_KEY` as the availability signal instead.
+
+## Applying a single remote migration from Replit
+The Supabase CLI may not infer the linked project from the existing local link file. For a targeted SQL migration, use `supabase db query --linked --project-ref <ref> --file <migration.sql>` with `SUPABASE_ACCESS_TOKEN` set; passing only `--linked` may fail, and `--project-ref` requires `--linked`. This executes that SQL file without applying unrelated pending migrations.
+
+**Why:** the CLI did not recognize the existing project link in this Replit workspace, while explicitly combining `--linked` and `--project-ref` succeeded.
+
+**How to apply:** confirm the project ref first, use the targeted file command instead of `db push` when only one migration is authorized, and never print or inspect the token value.
