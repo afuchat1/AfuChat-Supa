@@ -67,8 +67,9 @@ export default {
       const text = String(result.content || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").trim().slice(0, 5000);
       return new Response(JSON.stringify({ text, engine: "tesseract-wasm" }), { headers: cors });
     } catch (error) {
-      console.error("[afusearch-ocr] OCR failed", error instanceof Error ? error.message : error);
-      return new Response(JSON.stringify({ error: "OCR inference failed" }), { status: 502, headers: cors });
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("[afusearch-ocr] OCR failed", detail);
+      return new Response(JSON.stringify({ error: testAuthorized ? detail : "OCR inference failed" }), { status: 502, headers: cors });
     }
   },
 };
