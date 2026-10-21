@@ -188,6 +188,21 @@ export async function getPlatformSearchSuggestions(
   return rows;
 }
 
+export async function recordSearchSuggestionSelection(
+  query: string,
+  sourceType: string,
+): Promise<boolean> {
+  const normalized = normalizeSearchTerm(query);
+  if (!normalized || coreLength(normalized) < 2) return false;
+
+  const { data, error } = await supabase.rpc("record_search_suggestion_selection", {
+    p_query: normalized,
+    p_source_type: sourceType,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 export async function recordSearchSubmission(
   query: string,
   resultCount: number,
