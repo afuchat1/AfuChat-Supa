@@ -17,8 +17,8 @@ type SkeletonProps = {
 function SkeletonFallback({ width, height, borderRadius = 8, style, forceDark }: SkeletonProps) {
   const { isDark } = useTheme();
   const useDark = forceDark ?? isDark;
-  const baseColor      = useDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
-  const highlightColor = useDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.09)";
+  const baseColor      = useDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.09)";
+  const highlightColor = useDark ? "rgba(255,255,255,0.24)" : "rgba(0,0,0,0.15)";
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
