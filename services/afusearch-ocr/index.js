@@ -3,6 +3,7 @@ import { createOCREngine, supportsFastBuild } from "tesseract-wasm";
 const WASM_BASE = "https://cdn.jsdelivr.net/npm/tesseract-wasm@0.11.0/dist";
 const MODEL_URL = "https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/eng.traineddata";
 const MAX_PIXELS = 8_000_000;
+const MAX_OCR_PIXELS = 1_500_000;
 let wasmPromise;
 let modelPromise;
 
@@ -15,14 +16,44 @@ async function fetchBinary(url) {
 function loadWasm() {
   if (!wasmPromise) {
     const file = supportsFastBuild() ? "tesseract-core.wasm" : "tesseract-core-fallback.wasm";
-    wasmPromise = fetchBinary(`${WASM_BASE}/${file}`);
+    wasmPromise = fetchBinary(`${WASM_BASE}/${file}`).catch((error) => { wasmPromise = undefined; throw error; });
   }
   return wasmPromise;
 }
 
 function loadModel() {
-  if (!modelPromise) modelPromise = fetchBinary(MODEL_URL);
+  if (!modelPromise) modelPromise = fetchBinary(MODEL_URL).catch((error) => { modelPromise = undefined; throw error; });
   return modelPromise;
+}
+
+
+function resizeRgbaIfNeeded(source, width, height) {
+  const pixelCount = width * height;
+  if (pixelCount <= MAX_OCR_PIXELS) return { data: source, width, height, resized: false };
+  const scale = Math.sqrt(MAX_OCR_PIXELS / pixelCount);
+  const targetWidth = Math.max(1, Math.floor(width * scale));
+  const targetHeight = Math.max(1, Math.floor(height * scale));
+  const target = new Uint8Array(targetWidth * targetHeight * 4);
+  // Bilinear resampling preserves text strokes better than dropping pixels.
+  for (let y = 0; y < targetHeight; y++) {
+    const sy = (y + 0.5) * height / targetHeight - 0.5;
+    const y0 = Math.max(0, Math.floor(sy)), y1 = Math.min(height - 1, Math.max(0, Math.floor(sy) + 1));
+    const fy = Math.max(0, sy - y0);
+    for (let x = 0; x < targetWidth; x++) {
+      const sx = (x + 0.5) * width / targetWidth - 0.5;
+      const x0 = Math.max(0, Math.floor(sx)), x1 = Math.min(width - 1, Math.max(0, Math.floor(sx) + 1));
+      const fx = Math.max(0, sx - x0);
+      const a = (y0 * width + x0) * 4, b = (y0 * width + x1) * 4;
+      const d = (y0 * width + x0) * 4, e = (y1 * width + x1) * 4;
+      const out = (y * targetWidth + x) * 4;
+      for (let ch = 0; ch < 4; ch++) {
+        const top = source[a + ch] * (1 - fx) + source[b + ch] * fx;
+        const bottom = source[d + ch] * (1 - fx) + source[e + ch] * fx;
+        target[out + ch] = Math.round(top * (1 - fy) + bottom * fy);
+      }
+    }
+  }
+  return { data: target, width: targetWidth, height: targetHeight, resized: true };
 }
 
 export default {
@@ -51,7 +82,7 @@ export default {
 
     let stage = "validate-image";
     try {
-      const pixels = new Uint8Array(await request.arrayBuffer());
+      let pixels = new Uint8Array(await request.arrayBuffer());
       const width = Number(request.headers.get("x-image-width"));
       const height = Number(request.headers.get("x-image-height"));
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
@@ -59,19 +90,23 @@ export default {
         return new Response(JSON.stringify({ error: "Invalid RGBA image dimensions or size" }), { status: 400, headers: cors });
       }
 
+      stage = "resize-image";
+      const originalPixels = width * height;
+      const image = resizeRgbaIfNeeded(pixels, width, height);
+      pixels = image.data;
       stage = "fetch-assets";
       const [wasmBinary, model] = await Promise.all([loadWasm(), loadModel()]);
-      console.log("[afusearch-ocr] assets loaded", { wasmBytes: wasmBinary.byteLength, modelBytes: model.byteLength, width, height, pixelBytes: pixels.byteLength });
+      console.log("[afusearch-ocr] assets loaded", { wasmBytes: wasmBinary.byteLength, modelBytes: model.byteLength, originalPixels, width: image.width, height: image.height, pixelBytes: pixels.byteLength, resized: image.resized });
       stage = "initialize-engine";
       const engine = await createOCREngine({ wasmBinary });
       try {
         stage = "load-model";
         engine.loadModel(model);
         stage = "load-image";
-        engine.loadImage({ width, height, data: new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength) });
+        engine.loadImage({ width: image.width, height: image.height, data: new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength) });
         stage = "recognize-text";
-        const text = engine.getText().replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, " ").trim().slice(0, 5000);
-        console.log("[afusearch-ocr] OCR completed", { textLength: text.length, width, height });
+        const text = engine.getText().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").trim().slice(0, 5000);
+        console.log("[afusearch-ocr] OCR completed", { textLength: text.length, width: image.width, height: image.height });
         return new Response(JSON.stringify({ text, engine: "tesseract-wasm" }), { headers: cors });
       } finally {
         engine.destroy();
