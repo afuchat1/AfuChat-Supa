@@ -1227,10 +1227,10 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     const profile = suggestion.kind === "profile" ? suggestion.profile : null;
     const content = suggestion.kind === "content" ? suggestion.content : null;
     const term = suggestion.kind === "term" ? suggestion.term : "";
-    const label = profile
-      ? profile.display_name || `@${profile.handle}`
-      : content
-        ? content.title
+    const label = suggestion.kind === "profile"
+      ? suggestion.profile.display_name || `@${suggestion.profile.handle}`
+      : suggestion.kind === "content"
+        ? suggestion.content.title
         : suggestion.term;
     const isTrending = suggestion.kind === "term" && suggestion.growth > 0.35;
     const contentIcon: Record<string, string> = {
