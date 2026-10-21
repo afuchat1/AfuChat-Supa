@@ -72,7 +72,7 @@ type DMProfile = {
   handle: string;
   last_seen: string | null;
   show_online_status: boolean;
-  phone: string | null;
+  phone_number: string | null;
 };
 
 type ChannelStats = {
@@ -343,7 +343,7 @@ export default function ChatInfoScreen() {
       if (!c.is_group && !c.is_channel && op?.id) {
         const [pRes, postsRes] = await Promise.all([
           supabase.from("profiles")
-            .select("bio, handle, last_seen, show_online_status, phone")
+            .select("bio, handle, last_seen, show_online_status, phone_number")
             .eq("id", op.id).maybeSingle(),
           supabase.from("posts")
             .select("id, image_url, video_url, post_type")
@@ -625,10 +625,10 @@ export default function ChatInfoScreen() {
           ) : null}
 
           {/* Phone */}
-          {dmProfile?.phone ? (
+          {dmProfile?.phone_number ? (
             <InfoCard colors={colors}>
               <View style={s.bioRow}>
-                <Text style={[s.bioText, { color: colors.text }]}>{dmProfile.phone}</Text>
+                <Text style={[s.bioText, { color: colors.text }]}>{dmProfile.phone_number}</Text>
                 <Text style={[s.bioLabel, { color: colors.textMuted }]}>Mobile</Text>
               </View>
             </InfoCard>

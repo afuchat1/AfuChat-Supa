@@ -1399,16 +1399,21 @@ export default function DiscoverScreen() {
       if (viewFlushTimerRef.current === null) {
         viewFlushTimerRef.current = setTimeout(() => {
           viewFlushTimerRef.current = null;
-          const ids = pendingViewsRef.current.splice(0);
+          const ids = Array.from(new Set(pendingViewsRef.current.splice(0)));
           const uid = userIdRef.current;
           if (ids.length === 0 || !uid) return;
           supabase
             .from("post_views")
-            .insert(ids.map((id) => ({ post_id: id, viewer_id: uid })))
-            .then(() => {
-              const idSet = new Set(ids);
+            .upsert(
+              ids.map((id) => ({ post_id: id, viewer_id: uid })),
+              { onConflict: "post_id,viewer_id", ignoreDuplicates: true },
+            )
+            .select("post_id")
+            .then(({ data, error }) => {
+              if (error || !data?.length) return;
+              const insertedIds = new Set(data.map((row) => row.post_id));
               setPosts((prev) =>
-                prev.map((p) => idSet.has(p.id) ? { ...p, view_count: (p.view_count || 0) + 1 } : p)
+                prev.map((p) => insertedIds.has(p.id) ? { ...p, view_count: (p.view_count || 0) + 1 } : p)
               );
             });
         }, 3000);

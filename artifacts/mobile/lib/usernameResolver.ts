@@ -72,6 +72,7 @@ export async function resolveUsernameTarget(handle: string): Promise<UsernameTar
       .ilike("handle", cleanHandle)
       .eq("is_group", true)
       .eq("is_channel", false)
+      .eq("is_private", false)
       .limit(1),
     supabase
       .from("owned_usernames")

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -137,9 +138,10 @@ export default function FindPeopleTab() {
       ] = await Promise.all([
         supabase
           .from("chats")
-          .select("id, name, description, avatar_url, is_group, is_channel, is_public, chat_members(count)")
+          .select("id, name, description, avatar_url, is_group, is_channel, is_private, chat_members(count)")
           .eq("is_group", true)
-          .eq("is_public", true)
+          .eq("is_channel", false)
+          .eq("is_private", false)
           .order("updated_at", { ascending: false })
           .limit(30),
         supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
@@ -229,25 +231,20 @@ export default function FindPeopleTab() {
 
   useEffect(() => {
     if (!user) return;
-    // Keep the current user eligible for the live feed while this tab is open.
-    const heartbeat = () => {
-      supabase.rpc("update_last_seen").then(() => {}, () => {});
-    };
-    heartbeat();
-    const heartbeatTimer = setInterval(heartbeat, 60_000);
-    const pollTimer = setInterval(() => void loadPeople(true), 30_000);
-    const channel = supabase
-      .channel(`find-presence-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chats" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_members" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "channel_subscriptions" }, () => void loadPeople(true))
-      .subscribe();
+
+    // AuthContext owns the single last_seen heartbeat for the signed-in user.
+    // Do not create a second writer here: every profile heartbeat can fan out
+    // through Realtime and make every open Discover screen reload all datasets.
+    // Presence is refreshed with the same cadence as the authoritative heartbeat.
+    const pollTimer = setInterval(() => {
+      if (AppState.currentState === "active") void loadPeople(true);
+    }, 60_000);
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void loadPeople(true);
+    });
     return () => {
-      clearInterval(heartbeatTimer);
       clearInterval(pollTimer);
-      supabase.removeChannel(channel);
+      appStateSubscription.remove();
     };
   }, [loadPeople, user]);
 

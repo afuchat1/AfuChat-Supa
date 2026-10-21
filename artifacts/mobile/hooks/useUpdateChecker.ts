@@ -36,17 +36,21 @@ export function useUpdateChecker(): UpdateInfo | null {
           (Constants as any).manifest?.version ??
           "0.0.0";
 
-        const { data } = await supabase
-          .from("app_settings")
-          .select("latest_app_version, min_app_version, android_store_url")
-          .limit(1)
-          .maybeSingle();
+        // app_settings also stores private server configuration. Read only
+        // the public update fields through a narrowly allowlisted RPC.
+        const { data, error } = await supabase.rpc("get_public_app_update_info");
 
-        if (cancelled || !data) return;
+        if (cancelled || error) return;
 
-        const latest: string = data.latest_app_version ?? currentVersion;
-        const minVer: string = data.min_app_version ?? currentVersion;
-        const androidUrl: string = data.android_store_url ?? DEFAULT_ANDROID_URL;
+        const settings = new Map(
+          (data ?? []).map((row: { setting_key: string; setting_value: string | null }) => [
+            row.setting_key.toLowerCase(),
+            row.setting_value ?? "",
+          ]),
+        );
+        const latest = settings.get("latest_app_version") || currentVersion;
+        const minVer = settings.get("min_app_version") || currentVersion;
+        const androidUrl = settings.get("android_store_url") || DEFAULT_ANDROID_URL;
 
         const hasUpdate = semverCompare(currentVersion, latest) < 0;
         const isMandatory = semverCompare(currentVersion, minVer) < 0;
