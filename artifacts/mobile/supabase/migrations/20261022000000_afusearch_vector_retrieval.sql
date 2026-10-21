@@ -44,7 +44,7 @@ AS $$
   FROM public.visual_image_index AS i
   INNER JOIN public.posts AS p ON p.id = i.post_id
   WHERE i.image_embedding IS NOT NULL
-    AND p.visibility = 'public'
+    AND (p.visibility = 'public' OR p.visibility IS NULL)
     AND coalesce(p.is_blocked, false) = false
     AND p.id IS NOT NULL
     AND (1 - (i.image_embedding <=> p_embedding)) >= greatest(-1.0, least(1.0, coalesce(p_min_similarity, 0.18)))
