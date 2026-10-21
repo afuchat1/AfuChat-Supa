@@ -682,7 +682,7 @@ export default function UserDiscoveryScreen() {
           </Text>
         </View>
         <TouchableOpacity
-          onPress={() => router.push("/search" as any)}
+          onPress={() => router.push("/app/afusearch" as any)}
           hitSlop={10}
           style={styles.headerIcon}
         >

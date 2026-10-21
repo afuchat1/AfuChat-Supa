@@ -156,7 +156,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
           <Ionicons name="person-add-outline" size={16} color={colors.accent} />
           <Text style={[styles.title, { color: colors.text }]}>People to follow</Text>
         </View>
-        <TouchableOpacity onPress={() => safeRouter.push("/search" as any)} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => safeRouter.push("/app/afusearch" as any)} activeOpacity={0.7}>
           <Text style={[styles.seeAll, { color: colors.accent }]}>See all</Text>
         </TouchableOpacity>
       </View>

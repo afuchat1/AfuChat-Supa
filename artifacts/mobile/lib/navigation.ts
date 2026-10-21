@@ -109,7 +109,7 @@ export const Navigate = {
   // ── Search / discovery ───────────────────────────────────────────────────────
 
   toSearch() {
-    safeRouter.push("/search" as any);
+    safeRouter.push("/app/afusearch" as any);
   },
 
   toUserDiscovery() {

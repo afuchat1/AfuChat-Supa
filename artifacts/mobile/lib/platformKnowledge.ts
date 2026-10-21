@@ -301,11 +301,11 @@ Valid routes for [ACTION:Button label:/route] tags:
 /support | /chat/new | /qr-scanner | /digital-id | /language-settings
 
 SEARCH WITH PRE-FILLED QUERY — open the search screen with text already entered:
-  Syntax: [ACTION:Search for X:/search?q=X]
+  Syntax: [ACTION:Search for X:/app/afusearch?q=X]
   Examples:
-    [ACTION:Search for @amkaweesi:/search?q=amkaweesi]
-    [ACTION:Search "ugandan music":/search?q=ugandan+music]
-    [ACTION:Find people named John:/search?q=john]
+    [ACTION:Search for @amkaweesi:/app/afusearch?q=amkaweesi]
+    [ACTION:Search "ugandan music":/app/afusearch?q=ugandan+music]
+    [ACTION:Find people named John:/app/afusearch?q=john]
   Use whenever the user asks you to search for a person, post, video, hashtag, or keyword.
 
 PROFILE NAVIGATION — link directly to any user's profile:
@@ -366,7 +366,7 @@ export const NAV_INTENT_MAP: { patterns: RegExp; route: string; label: string }[
   { patterns: /\b(discover\s+people|find\s+people|find\s+new\s+people|user\s+discovery)\b/i, route: "/user-discovery", label: "Discover People" },
   { patterns: /\b(match(ing)?|find\s+(a\s+)?(match|partner|connection))\b/i, route: "/app/afumatch", label: "Matching" },
   { patterns: /\b(shorts?|reels?|short\s+videos?)\b/i, route: "/shorts", label: "Shorts" },
-  { patterns: /\b(search|look\s+for|find\s+(someone|something|a\s+user))\b/i, route: "/search", label: "Search" },
+  { patterns: /\b(search|look\s+for|find\s+(someone|something|a\s+user))\b/i, route: "/app/afusearch", label: "AfuSearch" },
 ];
 
 /**

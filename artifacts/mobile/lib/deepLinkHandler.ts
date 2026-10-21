@@ -71,7 +71,7 @@ const NAV_ROUTES: Record<string, string> = {
   discover:           "/(tabs)/discover",
   chats:              "/(tabs)/chats",
   chat:               "/(tabs)/chats",
-  search:             "/(tabs)/search",
+  search:             "/app/afusearch",
   "new-chat":         "/chat/new",
   communities:        "/(tabs)/communities",
   contacts:           "/(tabs)/contacts",

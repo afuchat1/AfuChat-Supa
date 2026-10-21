@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   ScrollView,
@@ -13,10 +14,11 @@ import {
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import * as Haptics from "@/lib/haptics";
 import { safeRouter } from "@/lib/navUtils";
@@ -26,7 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
-import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
+import { getEdgeFnBase, edgeHeadersWithAuth } from "@/lib/aiHelper";
 import { getEngagera } from "@/lib/engagera";
 import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
 import {
@@ -54,7 +56,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import UserName from "@/components/ui/UserName";
 import { getPersonalizedTags } from "@/lib/personalization";
 import Colors from "@/constants/colors";
-import { searchMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
+import { searchMusicTracksByIds, getMusicPlaybackUri } from "@/lib/afuMusic";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 
@@ -117,14 +119,23 @@ type DidYouMeanState = { original: string; suggested: string };
 type SearchSuggestionItem =
   | { kind: "term"; term: string; score: number; growth: number; engagementRate: number; exactMatch: boolean }
   | { kind: "profile"; profile: SearchProfileSuggestion };
+type VisualMatch = {
+  postId: string;
+  imageUrl: string;
+  content: string;
+  createdAt: string;
+  distance: number;
+  similarity: number;
+};
 type LensResult = {
   title: string;
   description: string;
-  facts?: string[];
-  category?: string;
-  confidence?: "high" | "medium" | "low";
-  answer?: string;
+  matches: VisualMatch[];
+  indexedThisRequest?: number;
+  algorithm?: string;
+  indexing?: boolean;
 };
+type SearchIndexRow = { source_type: string; source_id: string; score: number };
 
 type AllResults = {
   people:   (PersonResult|OrgPageResult)[];
@@ -405,7 +416,7 @@ function RowSkeleton({ bg }: { bg: string }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function SearchScreen({ title = "Search", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
+export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
   const { playMusic } = useGlobalMusicPlayer();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
@@ -427,9 +438,10 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
   const insets = useSafeAreaInsets();
   const { width: SW } = useWindowDimensions();
-  const { tag: incomingTag, q: incomingQ } = useLocalSearchParams<{ tag?: string; q?: string }>();
+  const { tag: incomingTag, q: incomingQ, imageUrl: incomingImageUrl } = useLocalSearchParams<{ tag?: string; q?: string; imageUrl?: string }>();
   const handledTagRef = useRef<string | null>(null);
   const handledQRef   = useRef<string | null>(null);
+  const handledImageRef = useRef<string | null>(null);
 
   const scrollPB = insets.bottom + 90;
 
@@ -472,6 +484,18 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
   const [lensImageUri, setLensImageUri] = useState<string | null>(null);
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
+  const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
+  const lensAutoRetryAttemptedRef = useRef(false);
+
+  useEffect(() => {
+    if (!lensResult?.indexing || lensAutoRetryAttemptedRef.current || !lensRetryImageRef.current) return;
+    const retryImage = lensRetryImageRef.current;
+    const timeout = setTimeout(() => {
+      lensAutoRetryAttemptedRef.current = true;
+      void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
+    }, 2500);
+    return () => clearTimeout(timeout);
+  }, [lensResult?.indexing, lensLoading]);
 
 
   useEffect(() => {
@@ -490,6 +514,13 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       performSearch(incomingQ, tab, verifiedOnly, sortMode, dateRange);
     }
   }, [incomingQ]);
+
+  useEffect(() => {
+    if (incomingImageUrl && incomingImageUrl !== handledImageRef.current) {
+      handledImageRef.current = incomingImageUrl;
+      void searchImageUri(incomingImageUrl);
+    }
+  }, [incomingImageUrl]);
 
   useEffect(() => {
     loadInitial();
@@ -738,12 +769,6 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 
     const id = ++searchIdRef.current;
     setLoading(true); setHasSearched(true);
-    const pat = `%${trimmed}%`;
-    // Handles are stored without the leading @, but users commonly search
-    // for them as @username. Keep the original query for text content and use
-    // the normalized value for every handle lookup.
-    const handleQuery = trimmed.replace(/^@+/, "").trim();
-    const handlePat = handleQuery ? `%${handleQuery}%` : pat;
     const all = currentTab === "all";
     const cutoff = dateRangeCutoff(dr);
 
@@ -758,105 +783,150 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       const wantsJobs     = all || currentTab === "jobs";
       const wantsMusic    = all || currentTab === "music";
 
+      const requestedTypes: string[] = [];
+      if (wantsPeople) requestedTypes.push("profile", "organization_page");
+      if (wantsPosts) requestedTypes.push("post");
+      if (wantsVideos) requestedTypes.push("video");
+      if (wantsChannels) requestedTypes.push("channel");
+      if (wantsChannels && trimmed.length > 0) requestedTypes.push("group");
+      if (wantsEvents) requestedTypes.push("event");
+      if (wantsGifts) requestedTypes.push("gift");
+      if (wantsJobs) requestedTypes.push("job");
+      if (wantsMarket) requestedTypes.push("product", "freelance", "paid_community");
+      if (wantsMusic && trimmed.length > 0) requestedTypes.push("music");
+
+      const { data: indexData, error: indexError } = await supabase.rpc("search_public_content", {
+        p_query: trimmed,
+        p_types: requestedTypes,
+        p_limit_per_type: all ? 6 : 30,
+        p_since: cutoff,
+        p_verified_only: vOnly,
+        p_sort_mode: sort,
+      });
+      if (indexError) throw indexError;
+      const indexRows: SearchIndexRow[] = Array.isArray(indexData) ? indexData : [];
+      const idsFor = (type: string) => indexRows
+        .filter((row) => row.source_type === type && typeof row.source_id === "string")
+        .map((row) => row.source_id);
+      const sortBySearchRank = <T extends { id: string }>(rows: T[], type: string): T[] => {
+        const rank = new Map(idsFor(type).map((sourceId, index) => [sourceId, index]));
+        return rows.slice().sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+      };
+
       const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes, musicRes] =
         await Promise.all([
           wantsPeople
-            ? supabase.rpc("search_profiles", {
-                p_query: trimmed,
-                p_verified_only: vOnly,
-                p_limit: all ? 5 : 25,
+            ? supabase.rpc("get_public_search_profiles", {
+                p_ids: idsFor("profile"),
               })
             : Promise.resolve({ data: [] }),
 
           wantsPeople
-            ? supabase.from("organization_pages")
+            ? idsFor("organization_page").length
+              ? supabase.from("organization_pages")
                 .select("id, name, slug, logo_url, description")
-                .or(`name.ilike.${pat},description.ilike.${pat}`)
-                .limit(all ? 3 : 10)
+                .in("id", idsFor("organization_page"))
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsPosts
-            ? (() => {
+            ? idsFor("post").length
+              ? (() => {
                 let pq = supabase.from("posts")
                   .select("id, content, image_url, author_id, view_count, created_at, post_type, article_title")
-                  .or(`content.ilike.${pat},article_title.ilike.${pat}`)
+                  .in("id", idsFor("post"))
                   .eq("visibility", "public")
+                  .or("is_blocked.is.null,is_blocked.eq.false")
                   .neq("post_type", "video");
                 if (cutoff) pq = pq.gte("created_at", cutoff);
-                pq = sort === "popular" ? pq.order("view_count", { ascending: false }) : pq.order("created_at", { ascending: false });
-                return pq.limit(all ? 5 : 30);
+                return pq;
               })()
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsVideos
-            ? (() => {
+            ? idsFor("video").length
+              ? (() => {
                 let vq = supabase.from("posts")
                   .select("id, content, video_url, image_url, author_id, view_count, created_at, audio_name, video_assets(duration_seconds)")
+                  .in("id", idsFor("video"))
                   .eq("post_type", "video")
                   .eq("visibility", "public")
+                  .or("is_blocked.is.null,is_blocked.eq.false")
                   .not("video_url", "is", null);
-                if (trimmed.length > 0) vq = vq.ilike("content", pat);
                 if (cutoff) vq = vq.gte("created_at", cutoff);
-                vq = sort === "recent" ? vq.order("created_at", { ascending: false }) : vq.order("view_count", { ascending: false });
-                return vq.limit(all ? 4 : 30);
+                return vq;
               })()
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsChannels
-            ? supabase.from("channels")
+            ? idsFor("channel").length
+              ? supabase.from("channels")
                 .select("id, name, handle, description, avatar_url, subscriber_count")
-                .or(`name.ilike.${pat},handle.ilike.${handlePat},description.ilike.${pat}`)
+                .in("id", idsFor("channel"))
                 .eq("is_public", true)
-                .order("subscriber_count", { ascending: false })
-                .limit(all ? 4 : 20)
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsChannels && trimmed.length >= 1
-            ? supabase.from("chats")
+            ? idsFor("group").length
+              ? supabase.from("chats")
                 .select("id, name, handle, description, avatar_url, chat_members(count)")
+                .in("id", idsFor("group"))
                 .eq("is_group", true)
-                .or("is_private.is.null,is_private.eq.false")
-                .or(`name.ilike.${pat},handle.ilike.${handlePat}`)
-                .limit(all ? 4 : 20)
+                .eq("is_private", false)
+                .or("is_channel.is.null,is_channel.eq.false")
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsEvents
-            ? supabase.from("digital_events")
+            ? idsFor("event").length
+              ? supabase.from("digital_events")
                 .select("id, title, description, emoji, price, event_date, capacity, tickets_sold, creator_id, category, profiles!digital_events_creator_id_fkey(display_name, handle)")
-                .or(`title.ilike.${pat},description.ilike.${pat}`)
+                .in("id", idsFor("event"))
+                .eq("is_active", true)
                 .gte("event_date", new Date().toISOString())
-                .order("event_date", { ascending: true })
-                .limit(all ? 3 : 20)
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsGifts
-            ? supabase.from("gifts")
+            ? idsFor("gift").length
+              ? supabase.from("gifts")
                 .select("id, name, emoji, base_xp_cost, rarity, description")
-                .or(`name.ilike.${pat},description.ilike.${pat}`)
-                .order("base_xp_cost", { ascending: true })
-                .limit(all ? 6 : 30)
+                .in("id", idsFor("gift"))
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsJobs
-            ? supabase.from("org_page_jobs")
+            ? idsFor("job").length
+              ? supabase.from("org_page_jobs")
                 .select("id, title, job_type, location, description, apply_url, created_at, organization_pages!org_page_jobs_page_id_fkey(name, logo_url, slug)")
+                .in("id", idsFor("job"))
                 .eq("is_active", true)
-                .or(trimmed.length > 0 ? `title.ilike.${pat},description.ilike.${pat}` : "id.neq.00000000-0000-0000-0000-000000000000")
-                .order("created_at", { ascending: false })
-                .limit(all ? 4 : 25)
+              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsMusic && trimmed.length > 0
-            ? searchMusicTracks(trimmed).catch(() => [] as AfuMusicTrack[])
+            ? searchMusicTracksByIds(idsFor("music")).catch(() => [] as AfuMusicTrack[])
             : Promise.resolve([] as AfuMusicTrack[]),
         ]);
 
       let marketItems: MarketResult[] = [];
       if (wantsMarket && trimmed.length > 0) {
+        const productIds = idsFor("product");
+        const freelanceIds = idsFor("freelance");
+        const communityIds = idsFor("paid_community");
         const [prods, frees, comms] = await Promise.all([
-          supabase.from("shop_products").select("id, name, description, images, price_acoin, seller_id").ilike("name", pat).eq("is_available", true).limit(all ? 3 : 15),
-          supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, profiles!freelance_listings_seller_id_fkey(display_name, handle)").or(`title.ilike.${pat},description.ilike.${pat}`).eq("is_active", true).limit(all ? 3 : 15),
-          supabase.from("paid_communities").select("id, name, description, emoji, price, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").or(`name.ilike.${pat},description.ilike.${pat}`).limit(all ? 2 : 10),
+          productIds.length
+            ? supabase.from("shop_products").select("id, name, description, images, price_acoin, seller_id").in("id", productIds).eq("is_available", true)
+            : Promise.resolve({ data: [] }),
+          freelanceIds.length
+            ? supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, profiles!freelance_listings_seller_id_fkey(display_name, handle)").in("id", freelanceIds).eq("is_active", true)
+            : Promise.resolve({ data: [] }),
+          communityIds.length
+            ? supabase.from("paid_communities").select("id, name, description, emoji, price, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").in("id", communityIds).eq("is_active", true)
+            : Promise.resolve({ data: [] }),
         ]);
         if (prods.data) marketItems.push(...prods.data.map((p: any) => ({
           id: p.id, kind: "product" as const, title: p.name, desc: p.description,
@@ -875,6 +945,12 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
           badge: "Community", seller_name: (p.profiles as any)?.display_name || "",
           route: `/paid-communities`,
         })));
+        const marketRank = new Map(
+          [...productIds, ...freelanceIds, ...communityIds].map((sourceId, index) => [sourceId, index]),
+        );
+        marketItems.sort((a, b) =>
+          (marketRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (marketRank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+        );
       }
 
       if (id !== searchIdRef.current) return;
@@ -890,16 +966,16 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
       }
 
       const people: (PersonResult | OrgPageResult)[] = [
-        ...((peopleRes.data || []) as any[]).map((p: any) => ({ ...p, kind: "profile" as const })),
-        ...((orgPageRes.data || []) as any[]).map((o: any) => ({ ...o, kind: "org" as const })),
+        ...sortBySearchRank((peopleRes.data || []) as any[], "profile").map((p: any) => ({ ...p, kind: "profile" as const })),
+        ...sortBySearchRank((orgPageRes.data || []) as any[], "organization_page").map((o: any) => ({ ...o, kind: "org" as const })),
       ];
 
-      const posts: PostResult[] = ((postsRes.data || []) as any[]).map((p: any) => {
+      const posts: PostResult[] = sortBySearchRank((postsRes.data || []) as any[], "post").map((p: any) => {
         const a = profiles2Map.get(p.author_id) || {};
         return { ...p, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null };
       });
 
-      const videos: VideoResult[] = ((videosRes.data || []) as any[]).map((v: any) => {
+      const videos: VideoResult[] = sortBySearchRank((videosRes.data || []) as any[], "video").map((v: any) => {
         const a = profiles2Map.get(v.author_id) || {};
         const dur = (v.video_assets as any[] | null)?.[0]?.duration_seconds ?? null;
         return {
@@ -919,7 +995,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             .in("channel_id", channelIds)
         : { data: [] as any[] };
       const subscribedChannelIds = new Set((channelSubscriptions || []).map((row: any) => row.channel_id));
-      const channels: ChannelResult[] = ((channelsRes.data || []) as any[]).map((ch: any) => {
+      const channels: ChannelResult[] = sortBySearchRank((channelsRes.data || []) as any[], "channel").map((ch: any) => {
         return {
           id: ch.id,
           name: ch.name,
@@ -931,7 +1007,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const groups: GroupResult[] = ((groupsRes.data || []) as any[]).map((c: any) => {
+      const groups: GroupResult[] = sortBySearchRank((groupsRes.data || []) as any[], "group").map((c: any) => {
         const countArr = c.chat_members;
         const member_count = Array.isArray(countArr) && countArr[0]?.count != null ? Number(countArr[0].count) : 0;
         return {
@@ -944,7 +1020,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const events: EventResult[] = ((eventsRes.data || []) as any[]).map((e: any) => {
+      const events: EventResult[] = sortBySearchRank((eventsRes.data || []) as any[], "event").map((e: any) => {
         const cr = (e.profiles as any) || {};
         return {
           id: e.id, title: e.title, description: e.description, emoji: e.emoji || "🎟️",
@@ -954,9 +1030,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const gifts: GiftResult[] = (giftsRes.data || []) as any[];
+      const gifts: GiftResult[] = sortBySearchRank((giftsRes.data || []) as any[], "gift") as any[];
 
-      const jobs: JobResult[] = ((jobsRes.data || []) as any[]).map((j: any) => {
+      const jobs: JobResult[] = sortBySearchRank((jobsRes.data || []) as any[], "job").map((j: any) => {
         const op = (j.organization_pages as any) || {};
         return {
           id: j.id, title: j.title, job_type: j.job_type || null, location: j.location || null,
@@ -965,7 +1041,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         };
       });
 
-      const music = (musicRes || []) as AfuMusicTrack[];
+      const music = sortBySearchRank((musicRes || []) as AfuMusicTrack[], "music");
       const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs, music };
       if (id !== searchIdRef.current) return;
 
@@ -1201,73 +1277,162 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
     else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
   }
 
+  function startVisualSearchWarmup() {
+    void (async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session?.access_token) return;
+        await fetch(`${getEdgeFnBase()}/visual-image-search`, {
+          method: "POST",
+          headers: edgeHeadersWithAuth(session.access_token),
+          body: JSON.stringify({ action: "warmup" }),
+        });
+      } catch (error) {
+        console.warn("[AfuSearch] Could not start visual image index warmup", error);
+      }
+    })();
+  }
+
   async function openLens() {
     if (lensLoading) return;
     Haptics.selectionAsync();
     setLensError(null);
+    if (Platform.OS === "web") {
+      await openLensWithSource("gallery");
+      return;
+    }
+    Alert.alert("Search with an image", "Choose where to get the image.", [
+      { text: "Take photo", onPress: () => { void openLensWithSource("camera"); } },
+      { text: "Choose from gallery", onPress: () => { void openLensWithSource("gallery"); } },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
 
+  async function openLensWithSource(source: "camera" | "gallery") {
+    if (lensLoading) return;
+    setLensError(null);
+    lensAutoRetryAttemptedRef.current = false;
+    lensRetryImageRef.current = null;
+    startVisualSearchWarmup();
     try {
-      let permission;
-      let pickerResult;
-      if (Platform.OS === "web") {
-        permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          setLensError("Allow photo access to search with an image.");
-          return;
-        }
-        pickerResult = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"] as any,
-          allowsEditing: false,
-          quality: 0.75,
-          base64: true,
-        });
-      } else {
-        permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          setLensError("Allow camera access to search with an image.");
-          return;
-        }
-        pickerResult = await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"] as any,
-          allowsEditing: false,
-          quality: 0.75,
-          base64: true,
-        });
-      }
-
-      if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
-      const asset = pickerResult.assets[0];
-      if (!asset.base64) {
-        setLensError("That image could not be read. Please try another photo.");
+      const permission = source === "camera"
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setLensError(source === "camera"
+          ? "Allow camera access to search with a photo."
+          : "Allow photo access to search with an image.");
         return;
       }
-
-      setLensImageUri(asset.uri);
-      setLensLoading(true);
-      const response = await fetch(`${getEdgeFnBase()}/ai-lens`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...edgeHeaders() },
-        body: JSON.stringify({ imageBase64: asset.base64, mimeType: asset.mimeType || "image/jpeg" }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload) {
-        throw new Error(payload?.error || "Image search failed");
-      }
-      setLensResult({
-        title: payload.title || payload.name || "Image result",
-        description: payload.description || payload.answer || "AfuSearch found information about this image.",
-        facts: Array.isArray(payload.facts) ? payload.facts : [],
-        category: payload.category,
-        confidence: payload.confidence,
-        answer: payload.answer,
-      });
-    } catch {
-      setLensError("Image search is unavailable right now. Please try again.");
-    } finally {
-      setLensLoading(false);
+      const options = { mediaTypes: ["images"] as any, allowsEditing: false, quality: 0.75 as const, base64: false };
+      const pickerResult = source === "camera"
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+      if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
+      const asset = pickerResult.assets[0];
+      // Normalize camera/gallery inputs to JPEG so the non-AI pixel-hash engine
+      // receives a predictable format, regardless of the source image encoding.
+      const normalized = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 512 } }],
+        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+      if (!normalized.base64) throw new Error("That image could not be read. Please try another photo.");
+      await analyzeLensImage(asset.uri, normalized.base64, "image/jpeg");
+    } catch (error: any) {
+      setLensError(error?.message || "Image search is unavailable right now. Please try again.");
     }
   }
 
+  async function searchImageUri(uri: string) {
+    if (lensLoading) return;
+    setLensError(null);
+    lensAutoRetryAttemptedRef.current = false;
+    lensRetryImageRef.current = null;
+    startVisualSearchWarmup();
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) throw new Error("This image could not be loaded for visual search.");
+      const blob = await response.blob();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = typeof reader.result === "string" ? reader.result : "";
+          const comma = dataUrl.indexOf(",");
+          if (comma < 0) reject(new Error("This image could not be read for visual search."));
+          else resolve(dataUrl.slice(comma + 1));
+        };
+        reader.onerror = () => reject(new Error("This image could not be read for visual search."));
+        reader.readAsDataURL(blob);
+      });
+      await analyzeLensImage(uri, base64, blob.type || "image/jpeg");
+    } catch (error: any) {
+      setLensError(error?.message || "Could not search this image. Try another image.");
+    }
+  }
+
+  async function analyzeLensImage(uri: string, imageBase64: string, mimeType: string) {
+    if (lensLoading) return;
+    lensRetryImageRef.current = { uri, imageBase64, mimeType };
+    setLensImageUri(uri);
+    setLensResult(null);
+    setLensLoading(true);
+    setLensError(null);
+    const requestController = new AbortController();
+    let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+    const timeoutError = new Error("Visual search took too long. Please try again.");
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      requestTimeout = setTimeout(() => {
+        requestController.abort();
+        reject(timeoutError);
+      }, 20_000);
+    });
+    try {
+      const searchPromise = (async () => {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session?.access_token) {
+          throw new Error("Please sign in again to search images.");
+        }
+        if (requestController.signal.aborted) throw timeoutError;
+        const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
+          method: "POST",
+          headers: edgeHeadersWithAuth(session.access_token),
+          signal: requestController.signal,
+          body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (requestController.signal.aborted) throw timeoutError;
+        if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
+        const matches: VisualMatch[] = Array.isArray(payload.matches)
+          ? payload.matches.filter((match: any) =>
+              typeof match?.postId === "string" &&
+              typeof match?.imageUrl === "string" &&
+              typeof match?.distance === "number"
+            )
+          : [];
+        setLensResult({
+          title: matches.length
+            ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}`
+            : payload.indexing ? "Preparing visual matches…" : "No close visual matches yet",
+          description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
+          matches,
+          indexedThisRequest: Number(payload.indexedThisRequest) || 0,
+          algorithm: String(payload.algorithm || "dhash"),
+          indexing: Boolean(payload.indexing),
+        });
+        if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
+      })();
+      await Promise.race([searchPromise, timeoutPromise]);
+    } catch (error: any) {
+      lensRetryImageRef.current = null;
+      setLensError(requestController.signal.aborted
+        ? timeoutError.message
+        : error?.message || "Visual image search failed. Please try again.");
+    } finally {
+      if (requestTimeout) clearTimeout(requestTimeout);
+      setLensLoading(false);
+    }
+  }
   function onSortPress(s: SortMode) {
     setSortMode(s);
     if (hasSearched) performSearch(query, tab, verifiedOnly, s, dateRange);
@@ -1672,40 +1837,78 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
         <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: BRAND + "0A" }]}>
           <ActivityIndicator size="small" color={BRAND} />
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>
-            Looking for matches in this image…
+            Comparing image pixels with AfuChat images…
           </Text>
         </View>
       );
     }
     if (!lensResult) return null;
     return (
-      <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: colors.surface }]}>
-        {lensImageUri && <ExpoImage source={{ uri: lensImageUri }} style={ss.lensImage} contentFit="cover" />}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
-            <Ionicons name="scan-outline" size={16} color={BRAND} />
-            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>LENS RESULT</Text>
-          </View>
-          <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
-          {!!lensResult.facts?.length && (
-            <View style={{ marginTop: 9, gap: 5 }}>
-              {lensResult.facts.slice(0, 3).map((fact, i) => (
-                <View key={`${fact}-${i}`} style={{ flexDirection: "row", gap: 6 }}>
-                  <Text style={{ color: BRAND, fontSize: 13 }}>•</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, flex: 1 }}>{fact}</Text>
-                </View>
-              ))}
+      <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: colors.surface, flexDirection: "column", alignItems: "stretch" }]}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+          {lensImageUri && <ExpoImage source={{ uri: lensImageUri }} style={ss.lensImage} contentFit="cover" />}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
+              <Ionicons name="scan-outline" size={16} color={BRAND} />
+              <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>AFUSEARCH VISUAL SEARCH</Text>
             </View>
-          )}
+            <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
+          </View>
+          <TouchableOpacity onPress={() => {
+            setLensResult(null);
+            setLensImageUri(null);
+            setLensError(null);
+            lensRetryImageRef.current = null;
+          }} hitSlop={10}>
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => { setLensResult(null); setLensImageUri(null); }} hitSlop={10}>
-          <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-        </TouchableOpacity>
+        {lensResult.indexing && !!lensRetryImageRef.current && (
+          <TouchableOpacity
+            onPress={() => {
+              const retryImage = lensRetryImageRef.current;
+              if (!retryImage) return;
+              lensAutoRetryAttemptedRef.current = true;
+              void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
+            }}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Check visual search again"
+            style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, paddingVertical: 5 }}
+          >
+            <Ionicons name="refresh-outline" size={15} color={BRAND} />
+            <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Check again</Text>
+          </TouchableOpacity>
+        )}
+        {!!lensResult.matches.length && (
+          <View style={{ marginTop: 12, gap: 8 }}>
+            {lensResult.matches.slice(0, 8).map((match) => (
+              <TouchableOpacity
+                key={match.imageUrl}
+                onPress={() => router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Open visually matching AfuChat post"
+                style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 }}
+              >
+                <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg }} contentFit="cover" />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text numberOfLines={2} style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
+                    {match.content || "Open matching post"}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                    {match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     );
   }
-
   // ─── No Results ──────────────────────────────────────────────────────────────
 
   function NoResults() {
@@ -2487,7 +2690,7 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
             onPress={openLens}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={Platform.OS === "web" ? "Search with an image" : "Search with camera"}
+            accessibilityLabel="Search AfuChat with an image"
             hitSlop={8}
             style={[
               ss.lensInlineButton,
@@ -2595,7 +2798,9 @@ export function SearchScreen({ title = "Search", initialTab }: { title?: string;
 }
 
 export default function SearchRoute() {
-  return <SearchScreen />;
+  const params = useLocalSearchParams<{ tag?: string; q?: string; imageUrl?: string; section?: string }>();
+  // Keep old links working without rendering a second search experience.
+  return <Redirect href={{ pathname: "/app/afusearch", params } as any} />;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

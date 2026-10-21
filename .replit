@@ -69,7 +69,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && (PORT=5000 node scripts/serve-static-web.mjs & primary=$!; PORT=5001 node scripts/serve-static-web.mjs & alternate=$!; trap 'kill \"$primary\" \"$alternate\" 2>/dev/null || true' TERM INT EXIT; wait -n \"$primary\" \"$alternate\")"
+args = "cd artifacts/mobile && pnpm run build:web && (PORT=5000 node scripts/serve-static-web.mjs & primary=$!; PORT=5001 node scripts/serve-static-web.mjs & alternate=$!; trap 'kill \"$primary\" \"$alternate\" 2>/dev/null || true' TERM INT EXIT; wait -n \"$primary\" \"$alternate\")"
 waitForPort = 5000
 
 [[workflows.workflow]]

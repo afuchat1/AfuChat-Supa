@@ -326,7 +326,7 @@ export function RichText({
       }
       case "hashtag": {
         const tag = span.text.replace("#", "");
-        router.push({ pathname: "/(tabs)/search", params: { tag } });
+        router.push({ pathname: "/app/afusearch", params: { tag } } as any);
         break;
       }
     }

@@ -116,7 +116,7 @@ ${platformContext}
 
 ${ACTION_ROUTES_GUIDE}
 
-SEARCH: [ACTION:Search for X:/search?q=X] (spaces → +)
+SEARCH: [ACTION:Search for X:/app/afusearch?q=X] (spaces → +)
 PROFILE: [ACTION:View @handle:/@handle]
 
 PROACTIVE HELP: After answering, suggest additional help ONLY when directly relevant to what was just discussed.
