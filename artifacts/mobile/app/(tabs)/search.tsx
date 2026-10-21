@@ -121,11 +121,12 @@ type SearchSuggestionItem =
   | { kind: "profile"; profile: SearchProfileSuggestion };
 type VisualMatch = {
   postId: string;
-  imageUrl: string;
+  imageUrl: string | null;
   content: string;
   createdAt: string;
   distance: number;
   similarity: number;
+  matchType?: "visual" | "text" | "caption";
 };
 type LensResult = {
   title: string;
@@ -1885,20 +1886,26 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <View style={{ marginTop: 12, gap: 8 }}>
             {lensResult.matches.slice(0, 8).map((match) => (
               <TouchableOpacity
-                key={match.imageUrl}
+                key={match.postId}
                 onPress={() => router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any)}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel="Open visually matching AfuChat post"
+                accessibilityLabel="Open matching AfuChat post"
                 style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5 }}
               >
-                <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg }} contentFit="cover" />
+                {match.imageUrl ? (
+                  <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg }} contentFit="cover" />
+                ) : (
+                  <View style={{ width: 58, height: 58, borderRadius: 8, backgroundColor: colors.inputBg, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name="document-text-outline" size={22} color={colors.textMuted} />
+                  </View>
+                )}
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text numberOfLines={2} style={{ color: colors.text, fontSize: 13, lineHeight: 18 }}>
                     {match.content || "Open matching post"}
                   </Text>
                   <Text style={{ color: colors.textMuted, fontSize: 11 }}>
-                    {match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
+                    {match.matchType === "text" ? "Text detected inside a matching image" : match.matchType === "caption" ? "Related post text" : match.distance <= 3 ? "Very close visual match" : "Similar visual pattern"}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
