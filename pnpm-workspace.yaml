@@ -5,7 +5,7 @@ autoInstallPeers: false
 
 overrides:
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
-  react-devtools-core>shell-quote: 1.12.0
+  'react-devtools-core>shell-quote': 1.12.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-freebsd-ia32': '-'
