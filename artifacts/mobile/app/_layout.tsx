@@ -215,21 +215,38 @@ function PageWatcher() {
  * through every page they actually entered.
  */
 function HardwareBackGuard() {
+  const { session, user } = useAuth();
+  const pathname = usePathname();
+  const isLoggedIn = Boolean(session?.user?.id || user?.id);
+
   useEffect(() => {
     if (Platform.OS === "web") return;
 
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      // Let Android close the activity only when Expo Router confirms that
-      // there is no page left to pop. This preserves every entered page,
-      // including app pages and modal-like stack routes.
-      if (!router.canGoBack()) return false;
+    const fallbackRoute = isLoggedIn ? "/(tabs)/chats" : "/(tabs)/discover";
+    const isAlreadyAtFallback =
+      pathname === fallbackRoute ||
+      (isLoggedIn && pathname === "/chats") ||
+      (!isLoggedIn && pathname === "/discover");
 
-      router.back();
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      // Preserve real navigation history first. Only use the role-appropriate
+      // home route when the user has reached the end of the stack.
+      if (router.canGoBack()) {
+        router.back();
+        return true;
+      }
+
+      // If already on the fallback destination, allow Android to exit normally.
+      if (isAlreadyAtFallback) return false;
+
+      // Public/guest navigation falls back to Feed; authenticated navigation
+      // falls back to Chats. No extra navigation button is added to the UI.
+      safeRouter.replace(fallbackRoute as any);
       return true;
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [isLoggedIn, pathname]);
 
   return null;
 }
