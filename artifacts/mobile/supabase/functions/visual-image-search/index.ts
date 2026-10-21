@@ -347,9 +347,25 @@ Deno.serve(async (req: Request) => {
         textMatches = (textRows ?? []).filter((row: any) => row.image_url !== sourceImageUrl);
       }
     }
-    const allPostIds = [...new Set([...postIds, ...textMatches.map((row: any) => row.post_id)])];
+    let captionMatches: any[] = [];
+    if (extractedQueryText.length >= 2) {
+      const { data: captionRows, error: captionError } = await admin.rpc("find_public_post_text_matches", {
+        p_query: extractedQueryText,
+        p_limit: 30,
+      });
+      if (captionError) {
+        console.error("[visual-image-search] caption text query failed", captionError.message);
+      } else {
+        captionMatches = captionRows ?? [];
+      }
+    }
+    const allPostIds = [...new Set([
+      ...postIds,
+      ...textMatches.map((row: any) => row.post_id),
+      ...captionMatches.map((row: any) => row.post_id),
+    ])];
     let postsById = new Map<string, any>();
-    if (postIds.length) {
+    if (allPostIds.length) {
       const { data: matchedPosts, error: matchedError } = await admin
         .from("posts")
         .select("id,content,article_title,created_at,visibility,author_id")
@@ -388,10 +404,27 @@ Deno.serve(async (req: Request) => {
           matchType: "text",
         };
       });
+    const indexedTextIds = new Set(textResults.map((row: any) => row.postId));
+    const captionResults = captionMatches
+      .filter((row: any) => postsById.has(row.post_id))
+      .map((row: any) => {
+        const post = postsById.get(row.post_id);
+        return {
+          postId: row.post_id,
+          imageUrl: post.image_url ?? null,
+          content: String(row.content ?? post.content ?? post.article_title ?? "").slice(0, 220),
+          createdAt: post.created_at,
+          distance: 64,
+          similarity: Math.max(1, Math.min(99, Math.round(Number(row.score ?? 0) * 100))),
+          matchType: "caption",
+        };
+      });
     const visualIds = new Set(visualResults.map((row) => row.postId));
+    const indexedTextPostIds = new Set([...visualIds, ...indexedTextIds]);
     const matches = [
       ...visualResults,
       ...textResults.filter((row: any) => !visualIds.has(row.postId)),
+      ...captionResults.filter((row: any) => !indexedTextPostIds.has(row.postId)),
     ].slice(0, 12);
 
     return json({
