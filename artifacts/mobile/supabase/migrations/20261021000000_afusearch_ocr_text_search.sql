@@ -38,7 +38,21 @@ AS $$
   WITH input AS (
     SELECT
       left(trim(coalesce(p_query, '')), 300) AS query_text,
-      plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts
+      plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts,
+      to_tsquery(
+        'simple'::regconfig,
+        coalesce((
+          SELECT string_agg(tokens.token || ':*', ' | ' ORDER BY length(tokens.token) DESC)
+          FROM (
+            SELECT token
+            FROM regexp_split_to_table(lower(left(trim(coalesce(p_query, '')), 300)), '[^[:alnum:]]+') AS token
+            WHERE length(token) >= 3
+            GROUP BY token
+            ORDER BY length(token) DESC
+            LIMIT 8
+          ) AS tokens
+        ), '')
+      ) AS query_or_ts
   ),
   scored AS (
     SELECT
@@ -47,6 +61,7 @@ AS $$
       i.ocr_text,
       greatest(
         ts_rank_cd(i.ocr_search, input.query_ts),
+        ts_rank_cd(i.ocr_search, input.query_or_ts),
         similarity(lower(i.ocr_text), lower(input.query_text)) * 0.65
       )::real AS match_score
     FROM public.visual_image_index AS i
@@ -55,6 +70,7 @@ AS $$
       AND length(coalesce(i.ocr_text, '')) > 0
       AND (
         i.ocr_search @@ input.query_ts
+        OR i.ocr_search @@ input.query_or_ts
         OR lower(i.ocr_text) % lower(input.query_text)
       )
   )
@@ -89,7 +105,21 @@ AS $$
   WITH input AS (
     SELECT
       left(trim(coalesce(p_query, '')), 300) AS query_text,
-      plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts
+      plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts,
+      to_tsquery(
+        'simple'::regconfig,
+        coalesce((
+          SELECT string_agg(tokens.token || ':*', ' | ' ORDER BY length(tokens.token) DESC)
+          FROM (
+            SELECT token
+            FROM regexp_split_to_table(lower(left(trim(coalesce(p_query, '')), 300)), '[^[:alnum:]]+') AS token
+            WHERE length(token) >= 3
+            GROUP BY token
+            ORDER BY length(token) DESC
+            LIMIT 8
+          ) AS tokens
+        ), '')
+      ) AS query_or_ts
   ),
   scored AS (
     SELECT
@@ -100,6 +130,7 @@ AS $$
       d.created_at,
       greatest(
         ts_rank_cd(d.search_vector, input.query_ts),
+        ts_rank_cd(d.search_vector, input.query_or_ts),
         similarity(lower(d.title || ' ' || d.body), lower(input.query_text)) * 0.65
       )::real AS match_score
     FROM search_private.search_documents AS d
@@ -107,6 +138,7 @@ AS $$
     WHERE length(input.query_text) >= 2
       AND (
         d.search_vector @@ input.query_ts
+        OR d.search_vector @@ input.query_or_ts
         OR lower(d.title) % lower(input.query_text)
         OR lower(d.body) % lower(input.query_text)
       )
