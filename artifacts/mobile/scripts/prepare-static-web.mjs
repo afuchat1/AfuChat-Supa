@@ -99,7 +99,45 @@ try {
       posts: null,
       grid: [],
     });
-    await writeFile(join(root, `${handle}.html`), injectMeta(template, content));
+    const title = content.title.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    const description = content.description.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+    const canonicalUrl = `https://afuchat.com/${encodeURIComponent(handle)}`;
+    const profilePage = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  <link rel="canonical" href="${canonicalUrl}">
+  <meta property="og:type" content="profile">
+  <meta property="og:site_name" content="AfuChat">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <meta property="og:url" content="${canonicalUrl}">
+  <meta name="robots" content="index,follow">
+  <style>
+    :root{color-scheme:light dark;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#172033;line-height:1.65}
+    header{background:#fff;border-bottom:1px solid #e5e9f0;padding:16px 20px}
+    header a{font-weight:750;color:#2563eb;text-decoration:none;font-size:20px}
+    main{width:min(760px,calc(100% - 32px));margin:32px auto;background:#fff;border:1px solid #e5e9f0;border-radius:18px;padding:clamp(22px,5vw,42px);overflow-wrap:anywhere}
+    h1{line-height:1.2;font-size:clamp(26px,5vw,36px);margin-top:0;color:#111827}
+    h2{font-size:20px;margin-top:28px}p{color:#374151}a{color:#2563eb}img{max-width:100%;height:auto;border-radius:12px}
+    footer{text-align:center;color:#6b7280;padding:12px 20px 32px;font-size:14px}
+    @media(prefers-color-scheme:dark){body{background:#10141c;color:#e5e7eb}header,main{background:#171d28;border-color:#2b3443}h1{color:#f9fafb}p{color:#d1d5db}footer{color:#9ca3af}}
+  </style>
+</head>
+<body>
+  <header><a href="https://afuchat.com/">AfuChat</a></header>
+  <main>
+    ${content.html}
+    <p><a href="https://afuchat.com/welcome">Open AfuChat</a></p>
+  </main>
+  <footer>Public profile on AfuChat</footer>
+</body>
+</html>`;
+    await writeFile(join(root, `${handle}.html`), profilePage);
     generatedProfiles += 1;
   }
 } catch (error) {
