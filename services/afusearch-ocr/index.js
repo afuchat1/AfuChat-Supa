@@ -1,31 +1,43 @@
-import { enableOcr, extractBytes, initWasm } from "@kreuzberg/wasm";
-import wasmModule from "@kreuzberg/wasm/kreuzberg_wasm_bg.wasm";
+import { createOCREngine, supportsFastBuild } from "tesseract-wasm";
 
-let ocrInitialization;
+const WASM_BASE = "https://cdn.jsdelivr.net/npm/tesseract-wasm@0.11.0/dist";
+const MODEL_URL = "https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/eng.traineddata";
+const MAX_PIXELS = 8_000_000;
+let wasmPromise;
+let modelPromise;
 
-async function initializeOcr() {
-  if (!ocrInitialization) {
-    ocrInitialization = (async () => {
-      await initWasm({ wasmModule });
-      await enableOcr();
-    })();
+async function fetchBinary(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`OCR asset fetch failed (${response.status})`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+function loadWasm() {
+  if (!wasmPromise) {
+    const file = supportsFastBuild() ? "tesseract-core.wasm" : "tesseract-core-fallback.wasm";
+    wasmPromise = fetchBinary(`${WASM_BASE}/${file}`);
   }
-  await ocrInitialization;
+  return wasmPromise;
+}
+
+function loadModel() {
+  if (!modelPromise) modelPromise = fetchBinary(MODEL_URL);
+  return modelPromise;
 }
 
 export default {
   async fetch(request, env) {
     const cors = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, content-type, x-image-mime-type, x-ocr-test-secret",
+      "Access-Control-Allow-Headers": "authorization, content-type, x-image-width, x-image-height, x-image-mime-type, x-ocr-test-secret",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Content-Type": "application/json",
     };
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
     if (request.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: cors });
 
-    const authorization = request.headers.get("authorization") || "";
     const testAuthorized = Boolean(env.OCR_TEST_SECRET) && request.headers.get("x-ocr-test-secret") === env.OCR_TEST_SECRET;
+    const authorization = request.headers.get("authorization") || "";
     if (!testAuthorized) {
       if (!authorization.startsWith("Bearer ")) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
       try {
@@ -39,34 +51,38 @@ export default {
     }
 
     try {
-
-      let bytes;
-      let mimeType;
+      let pixels;
+      let width;
+      let height;
       if (testAuthorized && (request.headers.get("content-type") || "").includes("application/json")) {
         const testBody = await request.json();
-        if (typeof testBody.base64 !== "string" || testBody.base64.length > 4_500_000) {
-          return new Response(JSON.stringify({ error: "Invalid test image payload" }), { status: 400, headers: cors });
+        if (typeof testBody.pixelsBase64 !== "string" || testBody.pixelsBase64.length > 500_000) {
+          return new Response(JSON.stringify({ error: "Invalid test pixel payload" }), { status: 400, headers: cors });
         }
-        const binary = atob(testBody.base64);
-        bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-        mimeType = testBody.mimeType || "image/png";
+        const binary = atob(testBody.pixelsBase64);
+        pixels = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        width = Number(testBody.width);
+        height = Number(testBody.height);
       } else {
-        bytes = new Uint8Array(await request.arrayBuffer());
-        mimeType = request.headers.get("x-image-mime-type") || request.headers.get("content-type") || "";
+        pixels = new Uint8Array(await request.arrayBuffer());
+        width = Number(request.headers.get("x-image-width"));
+        height = Number(request.headers.get("x-image-height"));
       }
-      if (bytes.length < 8 || bytes.length > 3145728) {
-        return new Response(JSON.stringify({ error: "Image must be between 8 bytes and 3 MB" }), { status: 400, headers: cors });
-      }
-      if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType.split(";")[0].trim().toLowerCase())) {
-        return new Response(JSON.stringify({ error: "Unsupported image type" }), { status: 415, headers: cors });
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
+          width * height > MAX_PIXELS || pixels.length !== width * height * 4) {
+        return new Response(JSON.stringify({ error: "Invalid RGBA image dimensions or size" }), { status: 400, headers: cors });
       }
 
-      await initializeOcr();
-      const result = await extractBytes(bytes, mimeType.split(";")[0].trim().toLowerCase(), {
-        ocr: { backend: "tesseract", language: "eng" },
-      });
-      const text = String(result.content || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").trim().slice(0, 5000);
-      return new Response(JSON.stringify({ text, engine: "tesseract-wasm" }), { headers: cors });
+      const [wasmBinary, model] = await Promise.all([loadWasm(), loadModel()]);
+      const engine = await createOCREngine({ wasmBinary });
+      try {
+        engine.loadModel(model);
+        engine.loadImage({ width, height, data: new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength) });
+        const text = engine.getText().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").trim().slice(0, 5000);
+        return new Response(JSON.stringify({ text, engine: "tesseract-wasm" }), { headers: cors });
+      } finally {
+        engine.destroy();
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("[afusearch-ocr] OCR failed", detail);
