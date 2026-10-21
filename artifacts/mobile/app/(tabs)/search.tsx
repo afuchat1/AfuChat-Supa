@@ -1414,9 +1414,9 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           : [];
         setLensResult({
           title: matches.length
-            ? `${matches.length} visual match${matches.length === 1 ? "" : "es"}`
-            : payload.indexing ? "Preparing visual matches…" : "No close visual matches yet",
-          description: String(payload.message || "AfuSearch compares image pixels with indexed public AfuChat images."),
+            ? `${matches.length} match${matches.length === 1 ? "" : "es"}`
+            : payload.indexing ? "Preparing visual and text matches…" : "No close visual or text matches yet",
+          description: String(payload.message || "AfuSearch combines traditional image matching with OCR text search."),
           matches,
           indexedThisRequest: Number(payload.indexedThisRequest) || 0,
           algorithm: String(payload.algorithm || "dhash"),
