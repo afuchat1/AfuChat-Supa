@@ -235,18 +235,50 @@ export default function FindPeopleTab() {
     heartbeat();
     const heartbeatTimer = setInterval(heartbeat, 60_000);
     const pollTimer = setInterval(() => void loadPeople(true), 30_000);
-    const channel = supabase
-      .channel(`find-presence-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chats" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_members" }, () => void loadPeople(true))
-      .on("postgres_changes", { event: "*", schema: "public", table: "channel_subscriptions" }, () => void loadPeople(true))
-      .subscribe();
+    const channelName = `find-presence-${user.id}`;
+    const channelTopic = `realtime:${channelName}`;
+    let channel: import("@supabase/supabase-js").RealtimeChannel | null = null;
+    let cancelled = false;
+
+    // Strict Mode and fast route/auth changes can remount this effect while
+    // an earlier channel with the same topic is still subscribed. Remove
+    // stale channels before adding callbacks to the replacement channel.
+    const setupChannel = async () => {
+      const staleChannels = supabase
+        .getChannels()
+        .filter((existing) => existing.topic === channelTopic);
+      await Promise.all(
+        staleChannels.map((staleChannel) =>
+          supabase.removeChannel(staleChannel).catch(() => "error"),
+        ),
+      );
+      if (cancelled) return;
+
+      const nextChannel = supabase
+        .channel(channelName)
+        .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadPeople(true))
+        .on("postgres_changes", { event: "*", schema: "public", table: "chats" }, () => void loadPeople(true))
+        .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => void loadPeople(true))
+        .on("postgres_changes", { event: "*", schema: "public", table: "chat_members" }, () => void loadPeople(true))
+        .on("postgres_changes", { event: "*", schema: "public", table: "channel_subscriptions" }, () => void loadPeople(true));
+
+      if (cancelled) {
+        await supabase.removeChannel(nextChannel).catch(() => {});
+        return;
+      }
+      channel = nextChannel;
+      channel.subscribe();
+    };
+    void setupChannel();
+
     return () => {
+      cancelled = true;
       clearInterval(heartbeatTimer);
       clearInterval(pollTimer);
-      supabase.removeChannel(channel);
+      if (channel) {
+        void supabase.removeChannel(channel).catch(() => {});
+        channel = null;
+      }
     };
   }, [loadPeople, user]);
 
