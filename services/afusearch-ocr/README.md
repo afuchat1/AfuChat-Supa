@@ -1,15 +1,16 @@
 # AfuSearch OCR Worker
 
-Cloudflare Worker that runs Tesseract OCR through the portable Kreuzberg WASM runtime. This replaces vision-language captioning with actual OCR for text inside public AfuChat images.
+Cloudflare Worker running Tesseract OCR through WebAssembly. The worker receives decoded RGBA pixels from the Supabase Edge Function, so it does not depend on vision-language captioning or guess text from image descriptions.
 
 ## Runtime
 
 - Worker: `afusearch-ocr`
-- OCR backend: Tesseract WASM, English model
-- Accepts raw JPEG, PNG, or WebP bytes up to 3 MiB
+- OCR engine: `tesseract-wasm@0.11.0`
+- English recognition data: `tessdata_fast`
+- Accepts RGBA pixel bytes plus width/height headers; maximum 8 megapixels
 - Requires a valid signed-in Supabase user access token
-- Returns only recognized text (up to 5,000 characters); errors fail closed
-- Supabase URL and publishable key are public client configuration provided through Wrangler variables
+- Returns recognized text only (up to 5,000 characters)
+- WASM and language model binaries are cached per warm Worker isolate and fetched from pinned/known public asset locations
 
 ## Deploy
 
@@ -22,6 +23,3 @@ npx wrangler deploy --config wrangler.toml
 ```
 
 The Supabase `visual-image-search` Edge Function calls `https://afusearch-ocr.afuchatgroup.workers.dev`.
-
-
-Temporary smoke-test auth bypass is enabled only when the private `OCR_TEST_SECRET` Worker secret exists; remove that secret and the conditional test path before merging the final production version.
