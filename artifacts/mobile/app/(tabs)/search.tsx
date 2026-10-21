@@ -487,13 +487,28 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
   const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
-  const lensAutoRetryAttemptedRef = useRef(false);
+  const lensAutoRetryAttemptedRef = useRef(0);
+  const MAX_LENS_AUTO_RETRIES = 3;
 
   useEffect(() => {
-    if (!lensResult?.indexing || lensAutoRetryAttemptedRef.current || !lensRetryImageRef.current) return;
+    if (!lensResult?.indexing || !lensRetryImageRef.current) return;
+    if (lensAutoRetryAttemptedRef.current >= MAX_LENS_AUTO_RETRIES) {
+      lensRetryImageRef.current = null;
+      setLensResult((current) => current ? {
+        ...current,
+        indexing: false,
+        title: current.matches.length
+          ? `${current.matches.length} match${current.matches.length === 1 ? "" : "es"}`
+          : "No close visual or text matches yet",
+        description: current.matches.length
+          ? current.description
+          : "AfuSearch checked the currently indexed public images but found no close matches. Try again later as the public index grows.",
+      } : current);
+      return;
+    }
     const retryImage = lensRetryImageRef.current;
     const timeout = setTimeout(() => {
-      lensAutoRetryAttemptedRef.current = true;
+      lensAutoRetryAttemptedRef.current += 1;
       void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
     }, 2500);
     return () => clearTimeout(timeout);
@@ -1313,7 +1328,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function openLensWithSource(source: "camera" | "gallery") {
     if (lensLoading) return;
     setLensError(null);
-    lensAutoRetryAttemptedRef.current = false;
+    lensAutoRetryAttemptedRef.current = 0;
     lensRetryImageRef.current = null;
     startVisualSearchWarmup();
     try {
@@ -1349,7 +1364,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function searchImageUri(uri: string) {
     if (lensLoading) return;
     setLensError(null);
-    lensAutoRetryAttemptedRef.current = false;
+    lensAutoRetryAttemptedRef.current = 0;
     lensRetryImageRef.current = null;
     startVisualSearchWarmup();
     try {
@@ -1871,7 +1886,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
             onPress={() => {
               const retryImage = lensRetryImageRef.current;
               if (!retryImage) return;
-              lensAutoRetryAttemptedRef.current = true;
+              lensAutoRetryAttemptedRef.current = 0;
               void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
             }}
             activeOpacity={0.75}
