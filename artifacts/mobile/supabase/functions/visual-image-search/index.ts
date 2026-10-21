@@ -79,7 +79,7 @@ function differenceHash(bytes: Uint8Array, mimeType = ""): string {
 }
 
 
-async function getOcrWorker(): Promise<Worker> {
+async function getOcrWorker(): Promise<Awaited<ReturnType<typeof createWorker>>> {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = createWorker("eng", 1, {
       // The OCR engine is the open-source Tesseract OCR runtime. Only the
