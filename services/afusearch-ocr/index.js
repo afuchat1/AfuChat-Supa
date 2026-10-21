@@ -1,8 +1,22 @@
+import { enableOcr, extractBytes, initWasm } from "@kreuzberg/wasm";
+
+let ocrInitialization: Promise<void> | undefined;
+
+async function initializeOcr() {
+  if (!ocrInitialization) {
+    ocrInitialization = (async () => {
+      await initWasm();
+      await enableOcr();
+    })();
+  }
+  await ocrInitialization;
+}
+
 export default {
   async fetch(request, env) {
     const cors = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, content-type",
+      "Access-Control-Allow-Headers": "authorization, content-type, x-image-mime-type",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Content-Type": "application/json",
     };
@@ -22,18 +36,19 @@ export default {
       if (bytes.length < 8 || bytes.length > 3145728) {
         return new Response(JSON.stringify({ error: "Image must be between 8 bytes and 3 MB" }), { status: 400, headers: cors });
       }
+      const mimeType = request.headers.get("x-image-mime-type") || request.headers.get("content-type") || "";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType.split(";")[0].trim().toLowerCase())) {
+        return new Response(JSON.stringify({ error: "Unsupported image type" }), { status: 415, headers: cors });
+      }
 
-      const output = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
-        image: Array.from(bytes),
-        prompt: "Transcribe text visible in this image exactly as written. Preserve spelling, capitalization, numbers, punctuation, and line breaks. Do not describe the image, summarize it, infer missing words, or add commentary. If no readable text is visible, return an empty string.",
-        max_tokens: 512,
-        temperature: 0,
+      await initializeOcr();
+      const result = await extractBytes(bytes, mimeType.split(";")[0].trim().toLowerCase(), {
+        ocr: { backend: "tesseract", language: "eng" },
       });
-      return new Response(JSON.stringify({
-        text: String(output?.description || "").trim().slice(0, 5000),
-        model: "@cf/llava-hf/llava-1.5-7b-hf",
-      }), { headers: cors });
-    } catch {
+      const text = String(result.content || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").trim().slice(0, 5000);
+      return new Response(JSON.stringify({ text, engine: "tesseract-wasm" }), { headers: cors });
+    } catch (error) {
+      console.error("[afusearch-ocr] OCR failed", error instanceof Error ? error.message : error);
       return new Response(JSON.stringify({ error: "OCR inference failed" }), { status: 502, headers: cors });
     }
   },
