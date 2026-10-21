@@ -15,6 +15,8 @@ const CORS_HEADERS = {
 };
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const AFUSEARCH_VISION_URL = (Deno.env.get("AFUSEARCH_VISION_URL") ?? "").replace(/\\/$/, "");
+const AFUSEARCH_VISION_KEY = Deno.env.get("AFUSEARCH_VISION_KEY") ?? "";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_INDEX_PER_WARMUP = 12;
 const INDEX_BATCH_SIZE = 2;
@@ -108,6 +110,34 @@ async function extractImageText(bytes: Uint8Array): Promise<string> {
   } catch (error) {
     console.error("[visual-image-search] OCR extraction failed", error instanceof Error ? error.message : error);
     throw error;
+  }
+}
+
+async function inferImageEmbedding(bytes: Uint8Array, mimeType: string): Promise<{ embedding: string; model: string } | null> {
+  if (!AFUSEARCH_VISION_URL || !AFUSEARCH_VISION_KEY) return null;
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([bytes], { type: mimeType || "image/jpeg" }), "query-image");
+    const response = await fetch(`${AFUSEARCH_VISION_URL}/v1/embed/image`, {
+      method: "POST",
+      headers: { "x-afusearch-key": AFUSEARCH_VISION_KEY },
+      body: form,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) {
+      console.error("[visual-image-search] vision embedding service returned", response.status);
+      return null;
+    }
+    const result = await response.json();
+    if (!Array.isArray(result.embedding) || result.embedding.length !== 512 ||
+        !result.embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) {
+      console.error("[visual-image-search] vision service returned an invalid embedding");
+      return null;
+    }
+    return { embedding: `[${result.embedding.join(",")}]`, model: String(result.model ?? "unknown") };
+  } catch (error) {
+    console.error("[visual-image-search] vision embedding unavailable", error instanceof Error ? error.message : error);
+    return null;
   }
 }
 
@@ -227,6 +257,7 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
       if (!fetched) return null;
       try {
         const perceptualHash = differenceHash(fetched.bytes, fetched.mimeType);
+        const imageEmbedding = await inferImageEmbedding(fetched.bytes, fetched.mimeType);
         let ocrText = "";
         let ocrProcessedAt: string | null = null;
         try {
@@ -243,6 +274,11 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
           perceptual_hash: perceptualHash,
           ocr_text: ocrText,
           ocr_processed_at: ocrProcessedAt,
+          ...(imageEmbedding ? {
+            image_embedding: imageEmbedding.embedding,
+            embedding_model: imageEmbedding.model,
+            embedding_created_at: new Date().toISOString(),
+          } : {}),
         };
       } catch {
         return null;
@@ -348,10 +384,53 @@ Deno.serve(async (req: Request) => {
         : "Visual search is temporarily unavailable. Please try again shortly.";
       return json({ error: errorMessage }, 503);
     }
-    const candidates = (matchedImages ?? [])
-      .filter((row: any) => row.image_url !== sourceImageUrl)
-      .sort((a: any, b: any) => a.distance - b.distance)
-      .slice(0, 30);
+    const queryEmbedding = await inferImageEmbedding(imageBytes, mimeType);
+    let embeddingMatches: any[] = [];
+    if (queryEmbedding) {
+      const { data: embeddingRows, error: embeddingError } = await admin.rpc("find_visual_embedding_matches", {
+        p_embedding: queryEmbedding.embedding,
+        p_limit: 40,
+        p_min_similarity: 0.18,
+      });
+      if (embeddingError) {
+        console.error("[visual-image-search] embedding retrieval failed", embeddingError.message);
+      } else {
+        embeddingMatches = (embeddingRows ?? []).filter((row: any) => row.image_url !== sourceImageUrl);
+      }
+    }
+
+    // Fuse independent exact/near-duplicate and learned-embedding candidate sets.
+    // dHash catches edited copies; OpenCLIP catches semantically similar imagery.
+    const candidateByUrl = new Map<string, any>();
+    for (const row of (matchedImages ?? []).filter((item: any) => item.image_url !== sourceImageUrl)) {
+      candidateByUrl.set(row.image_url, { ...row, retrievalMethod: "dhash" });
+    }
+    for (const row of embeddingMatches) {
+      const prior = candidateByUrl.get(row.image_url);
+      const embeddingSimilarity = Number(row.similarity ?? 0);
+      if (prior) {
+        prior.embeddingSimilarity = embeddingSimilarity;
+        prior.retrievalMethod = "hybrid";
+      } else {
+        candidateByUrl.set(row.image_url, {
+          ...row,
+          distance: Math.max(0, Math.min(64, Math.round((1 - embeddingSimilarity) * 64))),
+          embeddingSimilarity,
+          retrievalMethod: "embedding",
+        });
+      }
+    }
+    const candidates = [...candidateByUrl.values()]
+      .sort((a: any, b: any) => {
+        const scoreA = a.embeddingSimilarity != null
+          ? 75 + Math.max(0, Math.min(25, Number(a.embeddingSimilarity) * 25))
+          : 100 - Number(a.distance);
+        const scoreB = b.embeddingSimilarity != null
+          ? 75 + Math.max(0, Math.min(25, Number(b.embeddingSimilarity) * 25))
+          : 100 - Number(b.distance);
+        return scoreB - scoreA;
+      })
+      .slice(0, 40);
 
     const postIds = [...new Set(candidates.map((row) => row.post_id))];
     let textMatches: any[] = [];
@@ -404,9 +483,15 @@ Deno.serve(async (req: Request) => {
           content: String(post.content ?? post.article_title ?? "").slice(0, 220),
           createdAt: post.created_at,
           distance: row.distance,
-          similarity: Math.round((64 - row.distance) / 64 * 100),
-          rankScore: 100 - Number(row.distance),
-          matchType: "visual",
+          similarity: row.embeddingSimilarity != null
+            ? Math.max(1, Math.min(99, Math.round(Number(row.embeddingSimilarity) * 100)))
+            : Math.round((64 - row.distance) / 64 * 100),
+          rankScore: row.embeddingSimilarity != null
+            ? 75 + Math.max(0, Math.min(25, Number(row.embeddingSimilarity) * 25))
+            : 100 - Number(row.distance),
+          matchType: row.embeddingSimilarity != null
+            ? (row.retrievalMethod === "hybrid" ? "hybrid-visual" : "semantic-visual")
+            : "visual",
         };
       });
     const textResults = textMatches
@@ -447,7 +532,7 @@ Deno.serve(async (req: Request) => {
     ].sort((a: any, b: any) => Number(b.rankScore ?? 0) - Number(a.rankScore ?? 0)).slice(0, 12);
 
     return json({
-      algorithm: "dhash+ocr",
+      algorithm: queryEmbedding ? "openclip+dhash+ocr+hybrid-text" : "dhash+ocr+hybrid-text",
       extractedText: extractedQueryText,
       indexedThisRequest: 0,
       indexing,
