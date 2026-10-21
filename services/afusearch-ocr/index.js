@@ -5,7 +5,7 @@ let ocrInitialization;
 async function initializeOcr() {
   if (!ocrInitialization) {
     ocrInitialization = (async () => {
-      await initWasm();
+      await initWasm("https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@4.10.2/dist/pkg/kreuzberg_wasm_bg.wasm");
       await enableOcr();
     })();
   }
