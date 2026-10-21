@@ -223,18 +223,27 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
       const fetched = await fetchImageBytes(url);
       if (!fetched) return null;
       try {
+        const perceptualHash = differenceHash(fetched.bytes, fetched.mimeType);
+        let ocrText = "";
+        let ocrProcessedAt: string | null = null;
+        try {
+          ocrText = await extractImageText(fetched.bytes);
+          ocrProcessedAt = new Date().toISOString();
+        } catch {
+          // Keep dHash indexing available if OCR cannot initialize; retry OCR on a later warmup.
+        }
         return {
           image_url: url,
           post_id: owner.post_id,
-          perceptual_hash: differenceHash(fetched.bytes, fetched.mimeType),
-          ocr_text: await extractImageText(fetched.bytes),
-          ocr_processed_at: new Date().toISOString(),
+          perceptual_hash: perceptualHash,
+          ocr_text: ocrText,
+          ocr_processed_at: ocrProcessedAt,
         };
       } catch {
         return null;
       }
     }));
-    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string; ocr_text: string; ocr_processed_at: string } => Boolean(row));
+    const valid = computed.filter((row): row is { image_url: string; post_id: string; perceptual_hash: string; ocr_text: string; ocr_processed_at: string | null } => Boolean(row));
     if (!valid.length) continue;
     const { error: upsertError } = await admin
       .from("visual_image_index")
@@ -310,7 +319,12 @@ Deno.serve(async (req: Request) => {
     const imageBytes = decodeBase64(body.imageBase64);
     const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
     const targetHash = differenceHash(imageBytes, mimeType);
-    const extractedQueryText = await extractImageText(imageBytes);
+    let extractedQueryText = "";
+    try {
+      extractedQueryText = await extractImageText(imageBytes);
+    } catch {
+      // OCR is additive; a recognition failure must not break pixel-based image search.
+    }
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
 
     // Match the already-indexed corpus immediately; public image indexing is
