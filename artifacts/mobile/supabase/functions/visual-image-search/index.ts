@@ -145,7 +145,7 @@ async function extractImageText(bytes: Uint8Array, authorization: string): Promi
     }
     const payload = await response.json().catch(() => null);
     if (!payload || typeof payload.text !== "string") return null;
-    return payload.text.replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, " ").trim().slice(0, 5000);
+    return payload.text.split("").filter((char) => { const code = char.charCodeAt(0); return code >= 32 || code === 9 || code === 10 || code === 13; }).join("").trim().slice(0, 5000);
   } catch (error) {
     console.error("[visual-image-search] OCR request failed", error instanceof Error ? error.message : error);
     return null;
@@ -348,7 +348,7 @@ Deno.serve(async (req: Request) => {
 
     // Match the already-indexed corpus immediately; public image indexing is
     // scheduled separately so cold starts do not delay the user's search.
-    // Never run index maintenance inside a user's search request. Warmup is triggered separately.
+    // Index maintenance runs in a bounded background task; search results are returned independently.
 
     const [visualResult, ocrResult, contentResult] = await Promise.all([
       admin.rpc("find_visual_image_matches", {
