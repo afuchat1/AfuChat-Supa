@@ -41,7 +41,7 @@ AS $$
       plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts,
       to_tsquery(
         'simple'::regconfig,
-        coalesce((
+        coalesce(nullif((
           SELECT string_agg(tokens.token || ':*', ' | ' ORDER BY length(tokens.token) DESC)
           FROM (
             SELECT token
@@ -51,7 +51,7 @@ AS $$
             ORDER BY length(token) DESC
             LIMIT 8
           ) AS tokens
-        ), '')
+        ), ''), 'afusearchnoquerytoken:*')
       ) AS query_or_ts
   ),
   scored AS (
@@ -108,7 +108,7 @@ AS $$
       plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts,
       to_tsquery(
         'simple'::regconfig,
-        coalesce((
+        coalesce(nullif((
           SELECT string_agg(tokens.token || ':*', ' | ' ORDER BY length(tokens.token) DESC)
           FROM (
             SELECT token
@@ -118,7 +118,7 @@ AS $$
             ORDER BY length(token) DESC
             LIMIT 8
           ) AS tokens
-        ), '')
+        ), ''), 'afusearchnoquerytoken:*')
       ) AS query_or_ts
   ),
   scored AS (
