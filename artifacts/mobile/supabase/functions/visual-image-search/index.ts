@@ -349,20 +349,19 @@ Deno.serve(async (req: Request) => {
     }
     let captionMatches: any[] = [];
     if (extractedQueryText.length >= 2) {
-      const { data: captionRows, error: captionError } = await admin.rpc("find_public_post_text_matches", {
+      const { data: contentRows, error: contentError } = await admin.rpc("find_public_content_text_matches", {
         p_query: extractedQueryText,
         p_limit: 30,
       });
-      if (captionError) {
-        console.error("[visual-image-search] caption text query failed", captionError.message);
+      if (contentError) {
+        console.error("[visual-image-search] public content text query failed", contentError.message);
       } else {
-        captionMatches = captionRows ?? [];
+        captionMatches = contentRows ?? [];
       }
     }
     const allPostIds = [...new Set([
       ...postIds,
       ...textMatches.map((row: any) => row.post_id),
-      ...captionMatches.map((row: any) => row.post_id),
     ])];
     let postsById = new Map<string, any>();
     if (allPostIds.length) {
@@ -405,26 +404,24 @@ Deno.serve(async (req: Request) => {
         };
       });
     const indexedTextIds = new Set(textResults.map((row: any) => row.postId));
-    const captionResults = captionMatches
-      .filter((row: any) => postsById.has(row.post_id))
-      .map((row: any) => {
-        const post = postsById.get(row.post_id);
-        return {
-          postId: row.post_id,
-          imageUrl: row.image_url ?? null,
-          content: String(row.content ?? post.content ?? post.article_title ?? "").slice(0, 220),
-          createdAt: post.created_at,
-          distance: 64,
-          similarity: Math.max(1, Math.min(99, Math.round(Number(row.score ?? 0) * 100))),
-          matchType: "caption",
-        };
-      });
+    const captionResults = captionMatches.map((row: any) => ({
+      postId: row.source_id,
+      imageUrl: null,
+      content: String(row.title || row.body || row.source_type || "Matching AfuChat content").slice(0, 220),
+      createdAt: row.created_at,
+      distance: 64,
+      similarity: Math.max(1, Math.min(99, Math.round(Number(row.score ?? 0) * 100))),
+      matchType: "caption",
+      sourceType: row.source_type,
+    }));
     const visualIds = new Set(visualResults.map((row) => row.postId));
     const indexedTextPostIds = new Set([...visualIds, ...indexedTextIds]);
     const matches = [
       ...visualResults,
       ...textResults.filter((row: any) => !visualIds.has(row.postId)),
-      ...captionResults.filter((row: any) => !indexedTextPostIds.has(row.postId)),
+      ...captionResults.filter((row: any) =>
+        !((row.sourceType === "post" || row.sourceType === "video") && indexedTextPostIds.has(row.postId))
+      ),
     ].slice(0, 12);
 
     return json({
