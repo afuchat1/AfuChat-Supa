@@ -58,19 +58,26 @@ export default {
         return new Response(JSON.stringify({ error: "Invalid RGBA image dimensions or size" }), { status: 400, headers: cors });
       }
 
+      let stage = "fetch-assets";
       const [wasmBinary, model] = await Promise.all([loadWasm(), loadModel()]);
+      console.log("[afusearch-ocr] assets loaded", { wasmBytes: wasmBinary.byteLength, modelBytes: model.byteLength, width, height, pixelBytes: pixels.byteLength });
+      stage = "initialize-engine";
       const engine = await createOCREngine({ wasmBinary });
       try {
+        stage = "load-model";
         engine.loadModel(model);
+        stage = "load-image";
         engine.loadImage({ width, height, data: new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength) });
-        const text = engine.getText().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ").trim().slice(0, 5000);
+        stage = "recognize-text";
+        const text = engine.getText().replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, " ").trim().slice(0, 5000);
+        console.log("[afusearch-ocr] OCR completed", { textLength: text.length, width, height });
         return new Response(JSON.stringify({ text, engine: "tesseract-wasm" }), { headers: cors });
       } finally {
         engine.destroy();
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      console.error("[afusearch-ocr] OCR failed", detail);
+      console.error("[afusearch-ocr] OCR failed", { stage: typeof stage === "string" ? stage : "unknown", detail });
       return new Response(JSON.stringify({ error: "OCR inference failed" }), { status: 502, headers: cors });
     }
   },
