@@ -487,33 +487,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
   const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
-  const lensAutoRetryAttemptedRef = useRef(0);
-  const MAX_LENS_AUTO_RETRIES = 3;
-
-  useEffect(() => {
-    if (!lensResult?.indexing || !lensRetryImageRef.current) return;
-    if (lensAutoRetryAttemptedRef.current >= MAX_LENS_AUTO_RETRIES) {
-      lensRetryImageRef.current = null;
-      setLensResult((current) => current ? {
-        ...current,
-        indexing: false,
-        title: current.matches.length
-          ? `${current.matches.length} match${current.matches.length === 1 ? "" : "es"}`
-          : "No close visual or text matches yet",
-        description: current.matches.length
-          ? current.description
-          : "AfuSearch checked the currently indexed public images but found no close matches. Try again later as the public index grows.",
-      } : current);
-      return;
-    }
-    const retryImage = lensRetryImageRef.current;
-    const timeout = setTimeout(() => {
-      lensAutoRetryAttemptedRef.current += 1;
-      void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
-    }, 2500);
-    return () => clearTimeout(timeout);
-  }, [lensResult?.indexing, lensLoading]);
-
 
   useEffect(() => {
     if (incomingTag && incomingTag !== handledTagRef.current) {
@@ -1328,9 +1301,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function openLensWithSource(source: "camera" | "gallery") {
     if (lensLoading) return;
     setLensError(null);
-    lensAutoRetryAttemptedRef.current = 0;
     lensRetryImageRef.current = null;
-    startVisualSearchWarmup();
     try {
       const permission = source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -1364,7 +1335,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function searchImageUri(uri: string) {
     if (lensLoading) return;
     setLensError(null);
-    lensAutoRetryAttemptedRef.current = 0;
     lensRetryImageRef.current = null;
     startVisualSearchWarmup();
     try {
@@ -1402,7 +1372,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       requestTimeout = setTimeout(() => {
         requestController.abort();
         reject(timeoutError);
-      }, 20_000);
+      }, 3_000);
     });
     try {
       const searchPromise = (async () => {
@@ -1881,23 +1851,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
             <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
-        {lensResult.indexing && !!lensRetryImageRef.current && (
-          <TouchableOpacity
-            onPress={() => {
-              const retryImage = lensRetryImageRef.current;
-              if (!retryImage) return;
-              lensAutoRetryAttemptedRef.current = 0;
-              void analyzeLensImage(retryImage.uri, retryImage.imageBase64, retryImage.mimeType);
-            }}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="Check visual search again"
-            style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, paddingVertical: 5 }}
-          >
-            <Ionicons name="refresh-outline" size={15} color={BRAND} />
-            <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Check again</Text>
-          </TouchableOpacity>
-        )}
         {!!lensResult.matches.length && (
           <View style={{ marginTop: 12, gap: 8 }}>
             {lensResult.matches.slice(0, 8).map((match) => (
