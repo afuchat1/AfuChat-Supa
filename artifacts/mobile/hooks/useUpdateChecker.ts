@@ -36,17 +36,26 @@ export function useUpdateChecker(): UpdateInfo | null {
           (Constants as any).manifest?.version ??
           "0.0.0";
 
-        const { data } = await supabase
+        // The live app_settings table is a key/value store, not a
+        // one-row settings record. Query only the three public update keys;
+        // never select unrelated settings because this table also contains
+        // server-side configuration.
+        const { data, error } = await supabase
           .from("app_settings")
-          .select("latest_app_version, min_app_version, android_store_url")
-          .limit(1)
-          .maybeSingle();
+          .select("key, value")
+          .in("key", ["LATEST_APP_VERSION", "MIN_APP_VERSION", "ANDROID_STORE_URL"]);
 
-        if (cancelled || !data) return;
+        if (cancelled || error) return;
 
-        const latest: string = data.latest_app_version ?? currentVersion;
-        const minVer: string = data.min_app_version ?? currentVersion;
-        const androidUrl: string = data.android_store_url ?? DEFAULT_ANDROID_URL;
+        const settings = new Map(
+          (data ?? []).map((row: { key: string; value: unknown }) => [
+            row.key.toUpperCase(),
+            typeof row.value === "string" ? row.value : "",
+          ]),
+        );
+        const latest = settings.get("LATEST_APP_VERSION") || currentVersion;
+        const minVer = settings.get("MIN_APP_VERSION") || currentVersion;
+        const androidUrl = settings.get("ANDROID_STORE_URL") || DEFAULT_ANDROID_URL;
 
         const hasUpdate = semverCompare(currentVersion, latest) < 0;
         const isMandatory = semverCompare(currentVersion, minVer) < 0;
