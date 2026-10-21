@@ -34,6 +34,8 @@ import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/li
 import {
   getRankedSearchSuggestions,
   getSearchProfileSuggestions,
+  getPlatformSearchSuggestions,
+  type PlatformSearchSuggestion,
   getSimilarSearchTerms,
   recordSearchResultEngagement,
   recordSearchSubmission,
@@ -119,7 +121,8 @@ type AiInsight = { summary:string; suggestions:string[]; intent:string; bestCate
 type DidYouMeanState = { original: string; suggested: string };
 type SearchSuggestionItem =
   | { kind: "term"; term: string; score: number; growth: number; engagementRate: number; exactMatch: boolean }
-  | { kind: "profile"; profile: SearchProfileSuggestion };
+  | { kind: "profile"; profile: SearchProfileSuggestion }
+  | { kind: "content"; content: PlatformSearchSuggestion };
 type VisualMatch = {
   postId: string;
   imageUrl: string | null;
@@ -574,6 +577,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     text: string,
     rankedTerms: RankedSearchTerm[],
     profiles: SearchProfileSuggestion[],
+    contentSuggestions: PlatformSearchSuggestion[],
     localTerms: string[],
   ): SearchSuggestionItem[] {
     const normalizedQuery = normalizeSearchTerm(text);
@@ -591,7 +595,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     );
     const partialProfiles = orderedProfiles.filter((profile) => !exactProfiles.includes(profile));
     const items: SearchSuggestionItem[] = [
-      ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
+      // Shared, completed-search trends always lead the list.
       ...rankedTerms.slice(0, 5).map((row) => ({
         kind: "term" as const,
         term: row.term,
@@ -600,6 +604,8 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         engagementRate: row.engagementRate,
         exactMatch: row.exactMatch,
       })),
+      ...contentSuggestions.slice(0, 6).map((content) => ({ kind: "content" as const, content })),
+      ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
       ...partialProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
       ...localTerms.map((term) => ({
         kind: "term" as const,
@@ -614,7 +620,9 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     return items.filter((item) => {
       const key = item.kind === "profile"
         ? `profile:${item.profile.profile_id}`
-        : `term:${normalizeSearchTerm(item.term)}`;
+        : item.kind === "content"
+          ? `content:${item.content.source_type}:${item.content.source_id}`
+          : `term:${normalizeSearchTerm(item.term)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -1133,10 +1141,10 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       setSearchSuggestions([]); return;
     }
     const requestId = ++suggestionRequestRef.current;
-    setSearchSuggestions(mergeSuggestionItems(t, [], [], localSuggestionsFor(t)));
+    setSearchSuggestions(mergeSuggestionItems(t, [], [], [], localSuggestionsFor(t)));
     if (t.trim().length >= 2) {
       debounceRef.current = setTimeout(async () => {
-        const [rankedTerms, profileSuggestions] = await Promise.all([
+        const [rankedTerms, profileSuggestions, contentSuggestions] = await Promise.all([
           getRankedSearchSuggestions(t, 6).catch((error) => {
             console.warn("[AfuSearch] Ranked suggestions unavailable:", error?.message || error);
             return [] as RankedSearchTerm[];
@@ -1145,12 +1153,19 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
             console.warn("[AfuSearch] Profile suggestions unavailable:", error?.message || error);
             return [] as SearchProfileSuggestion[];
           }),
+          isAfuSearch
+            ? getPlatformSearchSuggestions(t, 8).catch((error) => {
+                console.warn("[AfuSearch] Content suggestions unavailable:", error?.message || error);
+                return [] as PlatformSearchSuggestion[];
+              })
+            : Promise.resolve([] as PlatformSearchSuggestion[]),
         ]);
         if (requestId !== suggestionRequestRef.current) return;
         setSearchSuggestions(mergeSuggestionItems(
           t,
           rankedTerms,
           profileSuggestions,
+          contentSuggestions,
           localSuggestionsFor(t),
         ));
       }, 220);
@@ -1181,6 +1196,18 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       });
       return;
     }
+    if (suggestion.kind === "content") {
+      const content = suggestion.content;
+      if (content.source_type === "feature" && content.target_path?.startsWith("/")) {
+        inputRef.current?.blur();
+        router.push(content.target_path as any);
+        return;
+      }
+      setQuery(content.title);
+      performSearch(content.title, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+      inputRef.current?.blur();
+      return;
+    }
     setQuery(suggestion.term);
     performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
@@ -1188,28 +1215,48 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
 
   function renderSuggestionRow(suggestion: SearchSuggestionItem, index: number) {
     const profile = suggestion.kind === "profile" ? suggestion.profile : null;
+    const content = suggestion.kind === "content" ? suggestion.content : null;
     const term = suggestion.kind === "term" ? suggestion.term : "";
-    const label = suggestion.kind === "profile"
-      ? suggestion.profile.display_name || `@${suggestion.profile.handle}`
-      : suggestion.term;
+    const label = profile
+      ? profile.display_name || `@${profile.handle}`
+      : content
+        ? content.title
+        : suggestion.term;
     const isTrending = suggestion.kind === "term" && suggestion.growth > 0.35;
-    const icon = suggestion.kind === "profile"
+    const contentIcon: Record<string, string> = {
+      music: "musical-notes",
+      organization_page: "business-outline",
+      post: "document-text-outline",
+      video: "play-circle-outline",
+      gift: "gift-outline",
+      feature: "apps-outline",
+      channel: "megaphone-outline",
+      group: "people-outline",
+      event: "calendar-outline",
+      job: "briefcase-outline",
+      product: "storefront-outline",
+      freelance: "briefcase-outline",
+      paid_community: "people-outline",
+    };
+    const icon = profile
       ? "person-outline"
-      : term.startsWith("#")
-        ? "pricetag-outline"
-        : isTrending
-          ? "trending-up"
-          : "search-outline";
+      : content
+        ? contentIcon[content.source_type] || "search-outline"
+        : term.startsWith("#")
+          ? "pricetag-outline"
+          : isTrending
+            ? "trending-up"
+            : "search-outline";
 
     return (
       <TouchableOpacity
-        key={`${suggestion.kind}-${suggestion.kind === "profile" ? suggestion.profile.profile_id : normalizeSearchTerm(suggestion.term)}-${index}`}
+        key={`${suggestion.kind}-${suggestion.kind === "profile" ? suggestion.profile.profile_id : suggestion.kind === "content" ? `${suggestion.content.source_type}:${suggestion.content.source_id}` : normalizeSearchTerm(suggestion.term)}-${index}`}
         testID={`search-suggestion-${index}`}
         onPress={() => onSuggestionPress(suggestion)}
         style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 }}
         activeOpacity={0.72}
         accessibilityRole="button"
-        accessibilityLabel={profile ? `Open ${label}` : `Search for ${label}`}
+        accessibilityLabel={profile || content?.source_type === "feature" ? `Open ${label}` : `Search for ${label}`}
       >
         {profile ? (
           <Avatar uri={profile.avatar_url} name={label} size={32} userId={profile.profile_id} />
@@ -1220,11 +1267,15 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
             {label}
           </Text>
-          {profile && (
+          {profile ? (
             <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
               @{profile.handle}
             </Text>
-          )}
+          ) : content ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+              {content.subtitle}
+            </Text>
+          ) : null}
         </View>
         {profile?.is_verified && (
           <Ionicons name="checkmark-circle" size={15} color={profile.is_organization_verified ? GOLD : BRAND} />
