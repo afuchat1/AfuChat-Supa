@@ -27,10 +27,10 @@ import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
 
-// Visible bottom bar tabs — Chat · Discover · Shorts · Apps · Me
+// Visible bottom bar tabs — Chat · Feed · Shorts · Apps · Me
 const BOTTOM_TABS = [
   { route: "/(tabs)/chats",    icon: "chatbubbles",        label: "navigation.chat"     },
-  { route: "/(tabs)/discover", icon: "compass",            label: "navigation.discover" },
+  { route: "/(tabs)/discover", icon: "newspaper",          label: "Feed"                  },
   { route: "/(tabs)/shorts",   icon: "play-circle",        label: "navigation.shorts"   },
   { route: "/(tabs)/apps",     icon: "grid",               label: "navigation.apps"     },
   { route: "/(tabs)/me",       icon: "person-circle",      label: "navigation.me"       },
@@ -233,7 +233,7 @@ export function CompactTabBar({
                 onPress={() => handleTabPress(tab.route)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                 accessibilityLabel={t(tab.label)}
+                 accessibilityLabel={tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
                 accessibilityState={{ selected: focused }}
               >
                 <View
@@ -275,7 +275,7 @@ export function CompactTabBar({
                   allowFontScaling={false}
                   maxFontSizeMultiplier={1}
                 >
-                   {t(tab.label)}
+                   {tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
                 </Text>
               </TouchableOpacity>
             );
