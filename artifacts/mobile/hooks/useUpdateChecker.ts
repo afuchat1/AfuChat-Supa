@@ -44,7 +44,7 @@ export function useUpdateChecker(): UpdateInfo | null {
 
         const settings = new Map(
           (data ?? []).map((row: { setting_key: string; setting_value: string | null }) => [
-            row.setting_key,
+            row.setting_key.toLowerCase(),
             row.setting_value ?? "",
           ]),
         );
