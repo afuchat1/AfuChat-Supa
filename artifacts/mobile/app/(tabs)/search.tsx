@@ -1351,7 +1351,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     setLensError(null);
     const requestController = new AbortController();
     let requestTimeout: ReturnType<typeof setTimeout> | undefined;
-    const timeoutError = new Error("Visual search took too long. Please try again.");
+    const timeoutError = new Error("Visual search did not finish within 3 seconds. Please try another image later.");
     const timeoutPromise = new Promise<never>((_, reject) => {
       requestTimeout = setTimeout(() => {
         requestController.abort();
