@@ -136,3 +136,59 @@ REVOKE ALL ON FUNCTION public.find_public_post_text_matches(text, integer) FROM 
 GRANT EXECUTE ON FUNCTION public.find_public_post_text_matches(text, integer) TO service_role;
 
 NOTIFY pgrst, 'reload schema';
+
+
+-- Reuse AfuChat's existing permission-filtered public search corpus so OCR words
+-- can discover posts, profiles, products, jobs, events, music and other indexed content.
+CREATE OR REPLACE FUNCTION public.find_public_content_text_matches(
+  p_query text,
+  p_limit integer DEFAULT 30
+)
+RETURNS TABLE (
+  source_type text,
+  source_id uuid,
+  title text,
+  body text,
+  created_at timestamptz,
+  score real
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, search_private
+AS $$
+  WITH input AS (
+    SELECT
+      left(trim(coalesce(p_query, '')), 300) AS query_text,
+      plainto_tsquery('simple'::regconfig, left(trim(coalesce(p_query, '')), 300)) AS query_ts
+  ),
+  scored AS (
+    SELECT
+      d.source_type,
+      d.source_id,
+      d.title,
+      d.body,
+      d.created_at,
+      greatest(
+        ts_rank_cd(d.search_vector, input.query_ts),
+        similarity(lower(d.title || ' ' || d.body), lower(input.query_text)) * 0.65
+      )::real AS match_score
+    FROM search_private.search_documents AS d
+    CROSS JOIN input
+    WHERE length(input.query_text) >= 2
+      AND (
+        d.search_vector @@ input.query_ts
+        OR lower(d.title) % lower(input.query_text)
+        OR lower(d.body) % lower(input.query_text)
+      )
+  )
+  SELECT scored.source_type, scored.source_id, scored.title, scored.body, scored.created_at, scored.match_score
+  FROM scored
+  ORDER BY scored.match_score DESC, scored.created_at DESC
+  LIMIT greatest(1, least(coalesce(p_limit, 30), 100));
+$$;
+
+REVOKE ALL ON FUNCTION public.find_public_content_text_matches(text, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.find_public_content_text_matches(text, integer) TO service_role;
+
+NOTIFY pgrst, 'reload schema';
