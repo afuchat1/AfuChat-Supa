@@ -1879,7 +1879,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: BRAND + "0A" }]}>
           <ActivityIndicator size="small" color={BRAND} />
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>
-            Comparing image pixels with AfuChat images…
+            Comparing image similarity and reading text in the image…
           </Text>
         </View>
       );
