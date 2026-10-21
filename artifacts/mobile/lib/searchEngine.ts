@@ -18,6 +18,16 @@ export type SearchProfileSuggestion = {
   is_organization_verified: boolean;
 };
 
+export type PlatformSearchSuggestion = {
+  suggestion_type: "content";
+  source_type: string;
+  source_id: string;
+  title: string;
+  subtitle: string;
+  target_path: string | null;
+  score: number;
+};
+
 export type SearchSubmissionResult = {
   analytics_enabled: boolean;
   indexed: boolean;
@@ -32,6 +42,7 @@ const PROFILE_CACHE_TTL_MS = 3_000;
 const MAX_CACHE_ENTRIES = 128;
 const termCache = new Map<string, CacheEntry<RankedSearchTerm[]>>();
 const profileCache = new Map<string, CacheEntry<SearchProfileSuggestion[]>>();
+const contentSuggestionCache = new Map<string, CacheEntry<PlatformSearchSuggestion[]>>();
 
 function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string): T | undefined {
   const entry = cache.get(key);
@@ -144,6 +155,54 @@ export async function getSearchProfileSuggestions(
   return rows;
 }
 
+export async function getPlatformSearchSuggestions(
+  query: string,
+  limit = 8,
+): Promise<PlatformSearchSuggestion[]> {
+  const normalized = normalizeSearchTerm(query);
+  if (!normalized || coreLength(normalized) < 2) return [];
+
+  const safeLimit = Math.max(1, Math.min(12, Math.floor(limit)));
+  const cacheKey = `${normalized}|${safeLimit}`;
+  const cached = readCache(contentSuggestionCache, cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase.rpc("get_platform_search_suggestions", {
+    p_query: normalized,
+    p_limit: safeLimit,
+  });
+  if (error) throw error;
+
+  const rows: PlatformSearchSuggestion[] = Array.isArray(data)
+    ? data.map((row: any) => ({
+        suggestion_type: "content" as const,
+        source_type: String(row?.source_type || ""),
+        source_id: String(row?.source_id || ""),
+        title: String(row?.title || ""),
+        subtitle: String(row?.subtitle || ""),
+        target_path: row?.target_path ? String(row.target_path) : null,
+        score: Number(row?.score) || 0,
+      })).filter((row) => row.source_type && row.source_id && row.title)
+    : [];
+  writeCache(contentSuggestionCache, cacheKey, rows, 5_000);
+  return rows;
+}
+
+export async function recordSearchSuggestionSelection(
+  query: string,
+  sourceType: string,
+): Promise<boolean> {
+  const normalized = normalizeSearchTerm(query);
+  if (!normalized || coreLength(normalized) < 2) return false;
+
+  const { data, error } = await supabase.rpc("record_search_suggestion_selection", {
+    p_query: normalized,
+    p_source_type: sourceType,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 export async function recordSearchSubmission(
   query: string,
   resultCount: number,
@@ -155,6 +214,7 @@ export async function recordSearchSubmission(
   if (error) throw error;
 
   termCache.clear();
+  contentSuggestionCache.clear();
   return (data || { analytics_enabled: false, indexed: false }) as SearchSubmissionResult;
 }
 
@@ -164,7 +224,10 @@ export async function recordSearchResultEngagement(query: string): Promise<boole
   });
   if (error) throw error;
 
-  if (data) termCache.clear();
+  if (data) {
+    termCache.clear();
+    contentSuggestionCache.clear();
+  }
   return data === true;
 }
 

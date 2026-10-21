@@ -34,9 +34,12 @@ import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/li
 import {
   getRankedSearchSuggestions,
   getSearchProfileSuggestions,
+  getPlatformSearchSuggestions,
+  type PlatformSearchSuggestion,
   getSimilarSearchTerms,
   recordSearchResultEngagement,
   recordSearchSubmission,
+  recordSearchSuggestionSelection,
   type RankedSearchTerm,
   type SearchProfileSuggestion,
 } from "@/lib/searchEngine";
@@ -119,7 +122,8 @@ type AiInsight = { summary:string; suggestions:string[]; intent:string; bestCate
 type DidYouMeanState = { original: string; suggested: string };
 type SearchSuggestionItem =
   | { kind: "term"; term: string; score: number; growth: number; engagementRate: number; exactMatch: boolean }
-  | { kind: "profile"; profile: SearchProfileSuggestion };
+  | { kind: "profile"; profile: SearchProfileSuggestion }
+  | { kind: "content"; content: PlatformSearchSuggestion };
 type VisualMatch = {
   postId: string;
   imageUrl: string | null;
@@ -574,6 +578,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     text: string,
     rankedTerms: RankedSearchTerm[],
     profiles: SearchProfileSuggestion[],
+    contentSuggestions: PlatformSearchSuggestion[],
     localTerms: string[],
   ): SearchSuggestionItem[] {
     const normalizedQuery = normalizeSearchTerm(text);
@@ -591,8 +596,8 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     );
     const partialProfiles = orderedProfiles.filter((profile) => !exactProfiles.includes(profile));
     const items: SearchSuggestionItem[] = [
-      ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
-      ...rankedTerms.slice(0, 5).map((row) => ({
+      // Shared, completed-search trends always lead the list.
+      ...rankedTerms.slice(0, 3).map((row) => ({
         kind: "term" as const,
         term: row.term,
         score: row.score,
@@ -600,6 +605,8 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         engagementRate: row.engagementRate,
         exactMatch: row.exactMatch,
       })),
+      ...contentSuggestions.slice(0, 4).map((content) => ({ kind: "content" as const, content })),
+      ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
       ...partialProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
       ...localTerms.map((term) => ({
         kind: "term" as const,
@@ -614,11 +621,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     return items.filter((item) => {
       const key = item.kind === "profile"
         ? `profile:${item.profile.profile_id}`
-        : `term:${normalizeSearchTerm(item.term)}`;
+        : item.kind === "content"
+          ? `content:${item.content.source_type}:${item.content.source_id}`
+          : `term:${normalizeSearchTerm(item.term)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).slice(0, 6);
+    }).slice(0, 8);
   }
 
   function updateRelatedTerms(scope: "posts" | "people" | "videos", values: Array<string | null | undefined>) {
@@ -1042,7 +1051,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         item.kind === "org" || (item as PersonResult).is_private !== true,
       ).length
         + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length;
+        + events.length + gifts.length + marketItems.length + jobs.length + music.length;
       if (recordExplicitSubmission && trimmed.length > 0) {
         addToHistory(trimmed).then(setHistory).catch(() => {});
       }
@@ -1133,10 +1142,10 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       setSearchSuggestions([]); return;
     }
     const requestId = ++suggestionRequestRef.current;
-    setSearchSuggestions(mergeSuggestionItems(t, [], [], localSuggestionsFor(t)));
+    setSearchSuggestions(mergeSuggestionItems(t, [], [], [], localSuggestionsFor(t)));
     if (t.trim().length >= 2) {
       debounceRef.current = setTimeout(async () => {
-        const [rankedTerms, profileSuggestions] = await Promise.all([
+        const [rankedTerms, profileSuggestions, contentSuggestions] = await Promise.all([
           getRankedSearchSuggestions(t, 6).catch((error) => {
             console.warn("[AfuSearch] Ranked suggestions unavailable:", error?.message || error);
             return [] as RankedSearchTerm[];
@@ -1145,12 +1154,19 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
             console.warn("[AfuSearch] Profile suggestions unavailable:", error?.message || error);
             return [] as SearchProfileSuggestion[];
           }),
+          isAfuSearch
+            ? getPlatformSearchSuggestions(t, 8).catch((error) => {
+                console.warn("[AfuSearch] Content suggestions unavailable:", error?.message || error);
+                return [] as PlatformSearchSuggestion[];
+              })
+            : Promise.resolve([] as PlatformSearchSuggestion[]),
         ]);
         if (requestId !== suggestionRequestRef.current) return;
         setSearchSuggestions(mergeSuggestionItems(
           t,
           rankedTerms,
           profileSuggestions,
+          contentSuggestions,
           localSuggestionsFor(t),
         ));
       }, 220);
@@ -1165,11 +1181,20 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     inputRef.current?.blur();
   }
 
+  function trackSuggestionSelection(sourceType: string) {
+    const submittedText = query.trim();
+    if (!submittedText) return;
+    void recordSearchSuggestionSelection(submittedText, sourceType).catch((error) => {
+      console.warn("[AfuSearch] Could not record suggestion selection:", error?.message || error);
+    });
+  }
+
   function onSuggestionPress(suggestion: SearchSuggestionItem) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     if (suggestion.kind === "profile") {
+      trackSuggestionSelection("profile");
       const profile = suggestion.profile;
       setQuery(profile.display_name || `@${profile.handle}`);
       inputRef.current?.blur();
@@ -1181,35 +1206,79 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       });
       return;
     }
+    if (suggestion.kind === "content") {
+      const content = suggestion.content;
+      trackSuggestionSelection(content.source_type);
+      if (content.source_type === "feature" && content.target_path?.startsWith("/")) {
+        inputRef.current?.blur();
+        router.push(content.target_path as any);
+        return;
+      }
+      const targetTab: SearchTab = content.source_type === "music" ? "music"
+        : content.source_type === "post" ? "posts"
+        : content.source_type === "video" ? "videos"
+        : content.source_type === "gift" ? "gifts"
+        : content.source_type === "event" ? "events"
+        : content.source_type === "job" ? "jobs"
+        : ["product", "freelance", "paid_community"].includes(content.source_type) ? "market"
+        : ["channel", "group"].includes(content.source_type) ? "channels"
+        : "all";
+      setQuery(content.title);
+      setTab(targetTab);
+      performSearch(content.title, targetTab, verifiedOnly, sortMode, dateRange, true, undefined, false);
+      inputRef.current?.blur();
+      return;
+    }
+    trackSuggestionSelection("search_term");
     setQuery(suggestion.term);
-    performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+    performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, false);
     inputRef.current?.blur();
   }
 
   function renderSuggestionRow(suggestion: SearchSuggestionItem, index: number) {
     const profile = suggestion.kind === "profile" ? suggestion.profile : null;
+    const content = suggestion.kind === "content" ? suggestion.content : null;
     const term = suggestion.kind === "term" ? suggestion.term : "";
     const label = suggestion.kind === "profile"
       ? suggestion.profile.display_name || `@${suggestion.profile.handle}`
-      : suggestion.term;
+      : suggestion.kind === "content"
+        ? suggestion.content.title
+        : suggestion.term;
     const isTrending = suggestion.kind === "term" && suggestion.growth > 0.35;
-    const icon = suggestion.kind === "profile"
+    const contentIcon: Record<string, string> = {
+      music: "musical-notes",
+      organization_page: "business-outline",
+      post: "document-text-outline",
+      video: "play-circle-outline",
+      gift: "gift-outline",
+      feature: "apps-outline",
+      channel: "megaphone-outline",
+      group: "people-outline",
+      event: "calendar-outline",
+      job: "briefcase-outline",
+      product: "storefront-outline",
+      freelance: "briefcase-outline",
+      paid_community: "people-outline",
+    };
+    const icon = profile
       ? "person-outline"
-      : term.startsWith("#")
-        ? "pricetag-outline"
-        : isTrending
-          ? "trending-up"
-          : "search-outline";
+      : content
+        ? contentIcon[content.source_type] || "search-outline"
+        : term.startsWith("#")
+          ? "pricetag-outline"
+          : isTrending
+            ? "trending-up"
+            : "search-outline";
 
     return (
       <TouchableOpacity
-        key={`${suggestion.kind}-${suggestion.kind === "profile" ? suggestion.profile.profile_id : normalizeSearchTerm(suggestion.term)}-${index}`}
+        key={`${suggestion.kind}-${suggestion.kind === "profile" ? suggestion.profile.profile_id : suggestion.kind === "content" ? `${suggestion.content.source_type}:${suggestion.content.source_id}` : normalizeSearchTerm(suggestion.term)}-${index}`}
         testID={`search-suggestion-${index}`}
         onPress={() => onSuggestionPress(suggestion)}
         style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 }}
         activeOpacity={0.72}
         accessibilityRole="button"
-        accessibilityLabel={profile ? `Open ${label}` : `Search for ${label}`}
+        accessibilityLabel={profile || content?.source_type === "feature" ? `Open ${label}` : `Search for ${label}`}
       >
         {profile ? (
           <Avatar uri={profile.avatar_url} name={label} size={32} userId={profile.profile_id} />
@@ -1220,11 +1289,15 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
             {label}
           </Text>
-          {profile && (
+          {profile ? (
             <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
               @{profile.handle}
             </Text>
-          )}
+          ) : content ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+              {content.subtitle}
+            </Text>
+          ) : null}
         </View>
         {profile?.is_verified && (
           <Ionicons name="checkmark-circle" size={15} color={profile.is_organization_verified ? GOLD : BRAND} />
