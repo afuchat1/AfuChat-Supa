@@ -20,7 +20,8 @@
     "audit:i18n": "node scripts/audit-localization.js",
     "audit:i18n:strict": "node scripts/audit-localization.js --strict-literals",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "postinstall": "bash scripts/postinstall.sh"
+    "postinstall": "bash scripts/postinstall.sh",
+    "build:web:cloudflare": "pnpm run build:web && mkdir -p dist/.well-known && cp well-known/assetlinks.json dist/.well-known/assetlinks.json && cp well-known/apple-app-site-association dist/.well-known/apple-app-site-association && printf '/.well-known/assetlinks.json\\n  Content-Type: application/json\\n  Cache-Control: public, max-age=300\\n\\n/.well-known/apple-app-site-association\\n  Content-Type: application/json\\n  Cache-Control: public, max-age=300\\n' > dist/_headers"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
