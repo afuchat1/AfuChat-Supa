@@ -137,9 +137,10 @@ export default function FindPeopleTab() {
       ] = await Promise.all([
         supabase
           .from("chats")
-          .select("id, name, description, avatar_url, is_group, is_channel, is_public, chat_members(count)")
+          .select("id, name, description, avatar_url, is_group, is_channel, is_private, chat_members(count)")
           .eq("is_group", true)
-          .eq("is_public", true)
+          .eq("is_channel", false)
+          .eq("is_private", false)
           .order("updated_at", { ascending: false })
           .limit(30),
         supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
