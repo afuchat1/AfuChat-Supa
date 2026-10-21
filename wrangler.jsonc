@@ -1,0 +1,6 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "afuchat",
+  "pages_build_output_dir": "./artifacts/mobile/dist",
+  "compatibility_date": "2026-10-21"
+}
