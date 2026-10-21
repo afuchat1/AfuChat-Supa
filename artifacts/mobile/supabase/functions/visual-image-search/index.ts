@@ -102,8 +102,8 @@ async function extractImageText(bytes: Uint8Array): Promise<string> {
     const result = await worker.recognize(bytes);
     // Keep the index bounded and strip control characters before database writes.
     return String(result.data.text ?? "")
-      .replace(/[\\u0000-\\u001f\\u007f]/g, " ")
-      .replace(/\\s+/g, " ")
+      .replace(/[\u0000-\u001f\u007f]/g, " ")
+      .replace(/\s+/g, " ")
       .trim()
       .slice(0, 12000);
   } catch (error) {
