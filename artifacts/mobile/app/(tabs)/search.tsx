@@ -1407,7 +1407,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         const matches: VisualMatch[] = Array.isArray(payload.matches)
           ? payload.matches.filter((match: any) =>
               typeof match?.postId === "string" &&
-              typeof match?.imageUrl === "string" &&
+              (typeof match?.imageUrl === "string" || match?.imageUrl === null) &&
               typeof match?.distance === "number"
             )
           : [];
