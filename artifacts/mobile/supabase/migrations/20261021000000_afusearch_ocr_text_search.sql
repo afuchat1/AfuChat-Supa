@@ -11,6 +11,9 @@ ALTER TABLE public.visual_image_index
   ADD COLUMN IF NOT EXISTS ocr_search tsvector
   GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, coalesce(ocr_text, ''))) STORED;
 
+COMMENT ON COLUMN public.visual_image_index.ocr_processed_at IS
+  'Last OCR attempt timestamp; blank OCR text is eligible for retry after six hours.';
+
 CREATE INDEX IF NOT EXISTS visual_image_index_ocr_search_idx
   ON public.visual_image_index USING gin (ocr_search);
 CREATE INDEX IF NOT EXISTS visual_image_index_ocr_trgm_idx
