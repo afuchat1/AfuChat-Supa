@@ -11,6 +11,7 @@
  * _layout.tsx and you're done. No changes needed at any call site.
  */
 import { router } from "expo-router";
+import { getCachedUserId } from "@/lib/offlineStore";
 
 const DUPLICATE_WINDOW_MS = 250;
 
@@ -92,8 +93,17 @@ function runWithMountRetry(action: () => void, attempt = 0): void {
 (router as any).back = () => {
   if (!acquire(keyFor("back"))) return;
   runWithMountRetry(() => {
-    if (_origCanGoBack()) _origBack();
-    else _origReplace("/(tabs)/chats" as any);
+    if (_origCanGoBack()) {
+      _origBack();
+      return;
+    }
+
+    // Keep the fallback consistent with the user's current local identity:
+    // guests return to Feed, while authenticated users return to Chats.
+    const fallbackRoute = getCachedUserId()
+      ? "/(tabs)/chats"
+      : "/(tabs)/discover";
+    _origReplace(fallbackRoute as any);
   });
 };
 
