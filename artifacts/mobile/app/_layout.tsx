@@ -22,7 +22,7 @@ let screensEnabled = false;
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { AppState, BackHandler, I18nManager, InteractionManager, Linking, LogBox, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, BackHandler, I18nManager, InteractionManager, Linking, LogBox, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router, Stack, usePathname, useRootNavigationState } from "expo-router";
 import { setCurrentPage, resolvePageInfo } from "@/lib/pageTracker";
@@ -490,43 +490,6 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
 }
 
 
-function GlobalFeedShortcut() {
-  const pathname = usePathname();
-  const { session, user } = useAuth();
-  const { colors } = useTheme();
-  const signedIn = Boolean(session?.user?.id || user?.id);
-  const isTabRoute = pathname.startsWith("/(tabs)/") ||
-    ["/", "/chats", "/discover", "/shorts", "/apps", "/me", "/(tabs)", "/(tabs)/index"].includes(pathname);
-  if (!signedIn || isTabRoute || pathname.startsWith("/(auth)")) return null;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Go to Feed"
-      onPress={() => safeRouter.navigate("/(tabs)/discover" as any)}
-      style={{
-        position: "absolute",
-        left: 16,
-        bottom: 20,
-        zIndex: 999,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        paddingHorizontal: 16,
-        height: 44,
-        borderRadius: 24,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        boxShadow: "0 3px 14px rgba(0,0,0,0.14)",
-      } as any}
-    >
-      <Ionicons name="newspaper-outline" size={19} color={colors.accent} />
-      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>Feed</Text>
-    </Pressable>
-  );
-}
-
 export default function RootLayout() {
   const rootNavigationState = useRootNavigationState();
   const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
@@ -715,7 +678,6 @@ export default function RootLayout() {
                                 <IncomingShareGate navigationReady={!!rootNavigationState?.key} />
                                 <NativeShareShortcutSync />
                                 <AppNavigationStack />
-                                <GlobalFeedShortcut />
                                 <IncomingCallModal />
                                  <UsernameLoadingOverlay />
                                 <ToastContainer />
