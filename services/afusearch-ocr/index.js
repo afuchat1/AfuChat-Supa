@@ -49,6 +49,7 @@ export default {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
     }
 
+    let stage = "validate-image";
     try {
       const pixels = new Uint8Array(await request.arrayBuffer());
       const width = Number(request.headers.get("x-image-width"));
@@ -58,7 +59,7 @@ export default {
         return new Response(JSON.stringify({ error: "Invalid RGBA image dimensions or size" }), { status: 400, headers: cors });
       }
 
-      let stage = "fetch-assets";
+      stage = "fetch-assets";
       const [wasmBinary, model] = await Promise.all([loadWasm(), loadModel()]);
       console.log("[afusearch-ocr] assets loaded", { wasmBytes: wasmBinary.byteLength, modelBytes: model.byteLength, width, height, pixelBytes: pixels.byteLength });
       stage = "initialize-engine";
