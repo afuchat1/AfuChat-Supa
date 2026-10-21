@@ -1,6 +1,6 @@
 import { enableOcr, extractBytes, initWasm } from "@kreuzberg/wasm";
 
-let ocrInitialization: Promise<void> | undefined;
+let ocrInitialization;
 
 async function initializeOcr() {
   if (!ocrInitialization) {
