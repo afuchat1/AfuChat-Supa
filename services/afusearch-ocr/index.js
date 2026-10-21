@@ -18,14 +18,13 @@ export default {
       });
       if (!authResponse.ok) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: cors });
 
-      const body = await request.json();
-      if (!Array.isArray(body.image) || body.image.length < 8 || body.image.length > 3145728 ||
-          !body.image.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
-        return new Response(JSON.stringify({ error: "Invalid image bytes" }), { status: 400, headers: cors });
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (bytes.length < 8 || bytes.length > 3145728) {
+        return new Response(JSON.stringify({ error: "Image must be between 8 bytes and 3 MB" }), { status: 400, headers: cors });
       }
 
       const output = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
-        image: body.image,
+        image: Array.from(bytes),
         prompt: "Transcribe text visible in this image exactly as written. Preserve spelling, capitalization, numbers, punctuation, and line breaks. Do not describe the image, summarize it, infer missing words, or add commentary. If no readable text is visible, return an empty string.",
         max_tokens: 512,
         temperature: 0,
