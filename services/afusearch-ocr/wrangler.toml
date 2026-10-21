@@ -3,6 +3,10 @@ main = "index.js"
 compatibility_date = "2026-10-21"
 workers_dev = true
 
+[limits]
+# Tesseract WASM performs CPU-intensive OCR; 10 ms is insufficient.
+cpu_ms = 30000
+
 
 [vars]
 SUPABASE_URL = "https://rhnsjqqtdzlkvqazfcbg.supabase.co"
