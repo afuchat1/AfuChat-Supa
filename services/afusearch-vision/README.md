@@ -48,7 +48,7 @@ Do not commit either secret. Rotate the key if it is exposed.
 
 ## Database and rollout
 
-1. Review and apply `artifacts/mobile/supabase/migrations/20261022000000_afusearch_vector_retrieval.sql`.
+1. Review and apply `artifacts/mobile/supabase/migrations/20261021000001_afusearch_vector_retrieval.sql`.
 2. Deploy this service and confirm `/healthz` reports `status=ready`.
 3. Set the Edge Function secrets and deploy `visual-image-search`.
 4. Run an authorized end-to-end search with an image already in the public index.
