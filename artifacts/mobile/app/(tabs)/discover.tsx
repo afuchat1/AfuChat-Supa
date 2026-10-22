@@ -2869,36 +2869,7 @@ export default function DiscoverScreen() {
         </View>
       </View>
       {/* ────────────────────────────────────────────────────────────────── */}
-      {discoverMusic.length > 0 && (
-        <View style={{ backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingTop: 10, paddingBottom: 11 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, marginBottom: 8 }}>
-            <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 14 }}>Music on AfuChat</Text>
-            <TouchableOpacity onPress={() => router.push("/app/afumusic" as any)}><Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Explore all</Text></TouchableOpacity>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 16 }}>
-            {discoverMusic.map((track) => (
-              <TouchableOpacity key={track.id} onPress={async () => {
-                if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
-                try {
-                  const uri = await getMusicPlaybackUri(track);
-                  if (uri) {
-                    const playableQueue = discoverMusic.filter((item) => item.isOwned || item.price === 0);
-                    playMusic(track, uri, playableQueue, getMusicPlaybackUri);
-                  }
-                }
-                catch { router.push("/app/afumusic" as any); }
-              }} activeOpacity={0.75} style={{ width: 104 }}>
-                <View style={{ width: 104, height: 104, backgroundColor: track.coverColor || "#19172F", alignItems: "center", justifyContent: "center", marginBottom: 7 }}>
-                  <Ionicons name="musical-notes" size={24} color={track.accentColor || colors.accent} />
-                  <View style={{ position: "absolute", right: 5, bottom: 5, backgroundColor: "#000B", paddingHorizontal: 5, paddingVertical: 3 }}><Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" }}>{track.price > 0 && !track.isOwned ? track.price + " AC" : track.price > 0 ? "Owned" : "Free"}</Text></View>
-                </View>
-                <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{track.title}</Text>
-                <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>{track.artist}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
+
 
       {/* Edge fade removed — it was overlaying the first row of feed content */}
 
@@ -2925,6 +2896,36 @@ export default function DiscoverScreen() {
                   data={augmentedFeed}
                   keyExtractor={(entry: FeedEntry) => entry._kind === "post" ? entry.item.id : entry.id}
                   renderItem={renderFeedItem}
+                  ListHeaderComponent={feedTab === "for_you" && discoverMusic.length > 0 ? () => (\n                          {discoverMusic.length > 0 && (
+                            <View style={{ backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, borderRadius: 14, marginHorizontal: 8, marginTop: 8, marginBottom: 4, paddingTop: 10, paddingBottom: 11 }}>
+                              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, marginBottom: 8 }}>
+                                <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 14 }}>Music on AfuChat</Text>
+                                <TouchableOpacity onPress={() => router.push("/app/afumusic" as any)}><Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Explore all</Text></TouchableOpacity>
+                              </View>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 12 }}>
+                                {discoverMusic.map((track) => (
+                                  <TouchableOpacity key={track.id} onPress={async () => {
+                                    if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
+                                    try {
+                                      const uri = await getMusicPlaybackUri(track);
+                                      if (uri) {
+                                        const playableQueue = discoverMusic.filter((item) => item.isOwned || item.price === 0);
+                                        playMusic(track, uri, playableQueue, getMusicPlaybackUri);
+                                      }
+                                    }
+                                    catch { router.push("/app/afumusic" as any); }
+                                  }} activeOpacity={0.75} style={{ width: 104 }}>
+                                    <View style={{ width: 104, height: 104, backgroundColor: track.coverColor || "#19172F", alignItems: "center", justifyContent: "center", marginBottom: 7 }}>
+                                      <Ionicons name="musical-notes" size={24} color={track.accentColor || colors.accent} />
+                                      <View style={{ position: "absolute", right: 5, bottom: 5, backgroundColor: "#000B", paddingHorizontal: 5, paddingVertical: 3 }}><Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" }}>{track.price > 0 && !track.isOwned ? track.price + " AC" : track.price > 0 ? "Owned" : "Free"}</Text></View>
+                                    </View>
+                                    <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{track.title}</Text>
+                                    <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>{track.artist}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+                            </View>
+                          )}\n                  ) : null}
                   contentContainerStyle={{ gap: 8, paddingBottom: insets.bottom + 100 }}
                   showsVerticalScrollIndicator={false}
                   onScroll={onFeedScroll}
