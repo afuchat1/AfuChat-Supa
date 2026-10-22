@@ -2925,7 +2925,8 @@ export default function DiscoverScreen() {
                                 ))}
                               </ScrollView>
                             </View>
-                          )}\n                  ) : null}
+                          )}
+                  ) : null}
                   contentContainerStyle={{ gap: 8, paddingBottom: insets.bottom + 100 }}
                   showsVerticalScrollIndicator={false}
                   onScroll={onFeedScroll}
