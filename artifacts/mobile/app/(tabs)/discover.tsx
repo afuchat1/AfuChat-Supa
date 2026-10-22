@@ -2896,7 +2896,8 @@ export default function DiscoverScreen() {
                   data={augmentedFeed}
                   keyExtractor={(entry: FeedEntry) => entry._kind === "post" ? entry.item.id : entry.id}
                   renderItem={renderFeedItem}
-                  ListHeaderComponent={feedTab === "for_you" && discoverMusic.length > 0 ? () => (\n                          {discoverMusic.length > 0 && (
+                  ListHeaderComponent={feedTab === "for_you" && discoverMusic.length > 0 ? () => (
+                          {discoverMusic.length > 0 && (
                             <View style={{ backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, borderRadius: 14, marginHorizontal: 8, marginTop: 8, marginBottom: 4, paddingTop: 10, paddingBottom: 11 }}>
                               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, marginBottom: 8 }}>
                                 <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 14 }}>Music on AfuChat</Text>
