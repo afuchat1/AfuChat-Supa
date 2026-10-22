@@ -17,8 +17,8 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const OCR_SERVICE_URL = "https://afusearch-ocr.afuchatgroup.workers.dev";
 const MAX_INPUT_BYTES = 8 * 1024 * 1024;
 const MAX_INDEX_PER_WARMUP = 6;
-const MAX_WARMUP_DEPTH = 20;
-const INDEX_BATCH_SIZE = 2;
+const MAX_WARMUP_DEPTH = 50;
+const INDEX_BATCH_SIZE = 24;
 const MAX_CANDIDATE_POSTS = 200;
 const MAX_SCAN_PAGES = 50;
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
@@ -229,7 +229,8 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
     const { data: posts, error: postsError } = await admin
       .from("posts")
       .select("id,image_url,created_at,visibility,post_images(image_url,display_order)")
-      .or("visibility.eq.public,visibility.is.null")
+      .eq("visibility", "public")
+      .or("is_blocked.is.null,is_blocked.eq.false")
       .order("created_at", { ascending: false })
       .range(from, from + MAX_CANDIDATE_POSTS - 1);
     if (postsError) throw new Error(`Public image scan failed: ${postsError.message}`);
@@ -245,19 +246,18 @@ async function indexPublicImages(admin: ReturnType<typeof createClient>): Promis
 
     const pageUrls = [...pageOwners.keys()];
     for (let offset = 0; offset < pageUrls.length && pending.size < MAX_INDEX_PER_WARMUP; offset += INDEX_BATCH_SIZE) {
-      // PostgREST encodes .in() values into the request URL. Keep each lookup
-      // small so a large page of public image URLs cannot exceed URL limits.
+      // Send long CDN URLs in a POST body; putting them in PostgREST .in()
+      // query parameters exceeds request URL limits in production.
       const urlBatch = pageUrls.slice(offset, offset + INDEX_BATCH_SIZE);
-      const { data: existing, error: existingError } = await admin
-        .from("visual_image_index")
-        .select("image_url")
-        .in("image_url", urlBatch);
-      if (existingError) throw new Error(`Visual index lookup failed: ${existingError.message}`);
+      const { data: missing, error: missingError } = await admin.rpc("find_unindexed_visual_image_urls", {
+        p_image_urls: urlBatch,
+      });
+      if (missingError) throw new Error(`Visual index lookup failed: ${missingError.message}`);
 
-      const indexedUrls = new Set((existing ?? []).map((row) => row.image_url));
+      const missingUrls = new Set((missing ?? []).map((row: { image_url: string }) => row.image_url));
       for (const url of urlBatch) {
         const owner = pageOwners.get(url);
-        if (owner && !indexedUrls.has(url) && !pending.has(url)) pending.set(url, owner);
+        if (owner && missingUrls.has(url) && !pending.has(url)) pending.set(url, owner);
         if (pending.size >= MAX_INDEX_PER_WARMUP) break;
       }
     }
@@ -391,9 +391,11 @@ Deno.serve(async (req: Request) => {
     const mimeType = typeof body.mimeType === "string" ? body.mimeType : "image/jpeg";
     const targetHash = differenceHash(imageBytes, mimeType);
     const sourceImageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
+    const typedQuery = typeof body.queryText === "string" ? body.queryText.trim().slice(0, 120) : "";
     const authorization = req.headers.get("authorization") ?? "";
     startIndexWarmup(admin, authorization, req.headers.get("apikey") ?? "", 0);
     const imageText = await extractImageText(imageBytes, authorization, mimeType);
+    const searchText = [typedQuery, imageText ?? ""].filter(Boolean).join("\n").slice(0, 500);
 
     // Match the already-indexed corpus immediately; public image indexing is
     // scheduled separately so cold starts do not delay the user's search.
@@ -405,8 +407,8 @@ Deno.serve(async (req: Request) => {
         p_max_distance: MAX_DISTANCE,
         p_limit: 30,
       }),
-      imageText ? admin.rpc("find_visual_text_matches", { p_query: imageText, p_limit: 20 }) : Promise.resolve({ data: [], error: null }),
-      imageText ? admin.rpc("find_public_content_text_matches", { p_query: imageText, p_limit: 30 }) : Promise.resolve({ data: [], error: null }),
+      searchText ? admin.rpc("find_visual_text_matches", { p_query: searchText, p_limit: 20 }) : Promise.resolve({ data: [], error: null }),
+      searchText ? admin.rpc("find_public_content_text_matches", { p_query: searchText, p_limit: 30 }) : Promise.resolve({ data: [], error: null }),
     ]);
     const matchedImages = visualResult.data;
     const matchError = visualResult.error;
@@ -439,11 +441,11 @@ Deno.serve(async (req: Request) => {
     if (postIds.length) {
       const { data: matchedPosts, error: matchedError } = await admin
         .from("posts")
-        .select("id,content,article_title,created_at,visibility,author_id")
+        .select("id,content,article_title,created_at,visibility,author_id,is_blocked,image_url,post_images(image_url,display_order)")
         .in("id", postIds);
       if (matchedError) console.error("[visual-image-search] matched post lookup failed", matchedError.message);
       postsById = new Map((matchedPosts ?? [])
-        .filter((post: any) => post.visibility === "public" || post.visibility == null)
+        .filter((post: any) => post.visibility === "public" && !post.is_blocked)
         .map((post: any) => [post.id, post]));
     }
 
@@ -490,9 +492,15 @@ Deno.serve(async (req: Request) => {
       const key = row.source_id + "|content";
       if (merged.has(key)) continue;
       const score = Math.max(0, Math.min(1, Number(row.score) || 0));
+      const firstCarouselImage = Array.isArray(post.post_images)
+        ? post.post_images
+          .slice()
+          .sort((a: any, b: any) => Number(a.display_order ?? 0) - Number(b.display_order ?? 0))
+          .find((image: any) => typeof image.image_url === "string")?.image_url ?? null
+        : null;
       merged.set(key, {
         postId: row.source_id,
-        imageUrl: null,
+        imageUrl: post.image_url || firstCarouselImage,
         content: String(row.title || row.body || post.content || post.article_title || "").slice(0, 220),
         createdAt: row.created_at || post.created_at,
         distance: 64 - Math.round(score * 64),
@@ -512,10 +520,12 @@ Deno.serve(async (req: Request) => {
       ocrTextAvailable: Boolean(imageText),
       matches,
       message: matches.length
-        ? "Results combine visual similarity, text detected in images, and matching public AfuChat posts."
-        : imageText
-          ? "No close visual or text matches yet. OCR was read, but no matching public results were found."
-          : "No close visual matches yet. Text extraction was unavailable for this image; try a smaller JPEG or PNG.",
+        ? imageText
+          ? "Results combine visual similarity, text detected in images, and related public AfuChat posts."
+          : "Results combine visual similarity and related public AfuChat keyword matches."
+        : searchText
+          ? "No results found in public AfuChat posts. Try a different image or keyword."
+          : "No results found. No readable text was detected; try a clearer image or enter a keyword.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Visual search failed.";

@@ -69,20 +69,20 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && pnpm run build:web && (PORT=5000 node scripts/serve-static-web.mjs & primary=$!; PORT=5001 node scripts/serve-static-web.mjs & alternate=$!; trap 'kill \"$primary\" \"$alternate\" 2>/dev/null || true' TERM INT EXIT; wait -n \"$primary\" \"$alternate\")"
+args = "cd artifacts/mobile && EXPO_OFFLINE=1 EXPO_NO_LAZY=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo export -p web --clear --output-dir dist && node scripts/prepare-static-web.mjs && (PORT=5000 node scripts/serve-static-web.mjs & primary=$!; PORT=5001 node scripts/serve-static-web.mjs & alternate=$!; trap 'kill \"$primary\" \"$alternate\" 2>/dev/null || true' TERM INT EXIT; wait -n \"$primary\" \"$alternate\")"
 waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Expo Go"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/mobile && pnpm run dev"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/mobile && if [ -n \"$REPLIT_EXPO_SESSION_SECRET\" ]; then ./node_modules/.bin/create-launch login --session \"$REPLIT_EXPO_SESSION_SECRET\" || true; fi; unset EXPO_OFFLINE; NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel --port 8000"
+waitForPort = 8000
 
 [[ports]]
 localPort = 3000
