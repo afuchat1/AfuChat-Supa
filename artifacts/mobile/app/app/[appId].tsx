@@ -11,9 +11,7 @@ import AfuEventsApp from "@/modules/afuevents";
 import AfuUsernamesApp from "@/modules/afuusernames";
 import QRScannerScreen from "@/app/qr-scanner";
 import AfuSavedApp from "@/modules/afusaved";
-import GamesScreen from "@/app/games";
-import PlayRouter from "@/app/games/play";
-import KampalaHustleGame from "@/app/games/lifesim";
+import AfuGamesApp from "@/modules/afugames";
 import { SearchScreen } from "@/app/(tabs)/search";
 import FileManagerScreen from "@/app/file-manager";
 import GiftsScreen from "@/app/gifts";
@@ -103,9 +101,7 @@ function AppContent({
       if (section === "order") return <OrderDetailScreen />;
       return <AfuMarketApp initialScreen={section as any} />;
     case "afugames":
-      if (section === "progress") return <KampalaHustleGame />;
-      if (section === "play") return <PlayRouter />;
-      return <GamesScreen />;
+      return <AfuGamesApp />;
     case "afubusiness":
       return <AfuBusinessApp initialScreen={section as any} />;
     case "afusearch":
