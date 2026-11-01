@@ -35,6 +35,7 @@ import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 import { CHAT_FAST_DURATION } from "@/lib/chatMotion";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
@@ -7983,11 +7984,11 @@ STRICT RULES:
           </View>
         ) : isRecording && recLocked ? (
           <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <View style={[st.inputGlassPill, {
-              backgroundColor: isDark ? "rgba(255,255,255,0.12)" : colors.inputBg,
-              borderColor: isDark ? "rgba(255,255,255,0.22)" : colors.border,
-            }]}>
-              <View style={st.recLockedInner}>
+            <FloatingGlassSurface
+              fill={false}
+              style={[st.inputGlassPill, st.recHoldGlass]}
+              contentStyle={st.recLockedInner}
+            >
                 <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
                   <Ionicons name="trash" size={20} color="#FF3B30" />
                 </TouchableOpacity>
@@ -8006,8 +8007,7 @@ STRICT RULES:
                 <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
                   <Ionicons name="send" size={18} color="#fff" />
                 </TouchableOpacity>
-              </View>
-            </View>
+            </FloatingGlassSurface>
           </View>
         ) : chatInfo?.is_channel && !canPostToChannel ? (
           !channelMembershipKnown ? (
@@ -8063,12 +8063,15 @@ STRICT RULES:
               />
               {/* Pill + action button sit side-by-side; mic/send is outside the pill */}
               <View style={st.inputRowOuter}>
-                <View style={[st.inputGlassPill, {
-                  flex: 1,
-                  backgroundColor: isDark ? "rgba(255,255,255,0.12)" : colors.inputBg,
-                  borderColor: isDark ? "rgba(255,255,255,0.22)" : colors.border,
-                  }, isRecording && !recLocked ? st.recHoldGlass : undefined]}>
-                  <View style={st.inputBarRow}>
+                <FloatingGlassSurface
+                  fill={false}
+                  style={[
+                    st.inputGlassPill,
+                    { flex: 1 },
+                    isRecording && !recLocked ? st.recHoldGlass : undefined,
+                  ]}
+                  contentStyle={st.inputBarRow}
+                >
                     {isRecording && !recLocked ? (
                       <>
                         <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recTrashBtn}>
@@ -8167,8 +8170,7 @@ STRICT RULES:
                         )}
                       </View>
                     )}
-                  </View>
-                </View>
+                </FloatingGlassSurface>
 
                 {/* ── Mic / Send button — separated from the input pill ── */}
                 <View style={st.outerActionBtn}>
@@ -10276,9 +10278,6 @@ const st = StyleSheet.create({
   },
   inputGlassPill: {
     borderRadius: 999,
-    borderWidth: 0.5,
-    borderColor: "rgba(120,120,128,0.22)",
-    overflow: "hidden",
     marginBottom: 6,
   },
   inputBarRow: {

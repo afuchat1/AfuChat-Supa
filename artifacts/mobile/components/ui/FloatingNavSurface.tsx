@@ -3,11 +3,73 @@ import {
   StyleSheet,
   View,
   type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { floatingNavigationShadow, GLASS, glassTokens } from "@/constants/glass";
+
+type FloatingGlassSurfaceProps = {
+  children: React.ReactNode;
+  fill?: boolean;
+  style?: StyleProp<ViewStyle>;
+  contentStyle?: StyleProp<ViewStyle>;
+  onLayout?: (event: LayoutChangeEvent) => void;
+};
+
+export function FloatingGlassSurface({
+  children,
+  fill = true,
+  style,
+  contentStyle,
+  onLayout,
+}: FloatingGlassSurfaceProps) {
+  const { colors, isDark } = useTheme();
+  const glass = glassTokens(isDark);
+
+  return (
+    <View
+      style={[
+        styles.glassSurface,
+        {
+          backgroundColor: colors.navigationSurface,
+          borderColor: colors.navigationBorder,
+          ...floatingNavigationShadow(isDark),
+        },
+        style,
+      ]}
+    >
+      <View style={fill ? styles.glassClip : styles.glassClipAuto}>
+        {!isDark && (
+          <>
+            <BlurView
+              intensity={GLASS.blur.light}
+              tint="light"
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: glass.fillStrong }]}
+            />
+          </>
+        )}
+        <View
+          onLayout={onLayout}
+          pointerEvents="box-none"
+          style={[
+            fill ? styles.glassContent : styles.glassContentAuto,
+            contentStyle,
+          ]}
+        >
+          {children}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 type Props = {
   children: React.ReactNode;
@@ -24,9 +86,7 @@ export function FloatingNavSurface({
   sideInset = 20,
   onLayout,
 }: Props) {
-  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const glass = glassTokens(isDark);
   const bottom = bottomOffset ?? Math.max(insets.bottom, 8) + 6;
 
   return (
@@ -34,41 +94,13 @@ export function FloatingNavSurface({
       pointerEvents="box-none"
       style={[styles.positioner, { left: sideInset, right: sideInset, bottom }]}
     >
-      <View
-        style={[
-          styles.shadowSurface,
-          {
-            height,
-            backgroundColor: colors.navigationSurface,
-            borderColor: colors.navigationBorder,
-            ...floatingNavigationShadow(isDark),
-          },
-        ]}
+      <FloatingGlassSurface
+        style={{ height, width: "100%" }}
+        onLayout={onLayout}
+        contentStyle={styles.content}
       >
-        <View style={styles.clip}>
-          {!isDark && (
-            <>
-              <BlurView
-                intensity={GLASS.blur.light}
-                tint="light"
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-              <View
-                pointerEvents="none"
-                style={[StyleSheet.absoluteFill, { backgroundColor: glass.fillStrong }]}
-              />
-            </>
-          )}
-          <View
-            onLayout={onLayout}
-            pointerEvents="box-none"
-            style={styles.content}
-          >
-            {children}
-          </View>
-        </View>
-      </View>
+        {children}
+      </FloatingGlassSurface>
     </View>
   );
 }
@@ -114,21 +146,32 @@ export const floatingNavigationStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  positioner: {
-    position: "absolute",
-    zIndex: 100,
-    alignItems: "center",
-  },
-  shadowSurface: {
-    width: "100%",
+  glassSurface: {
     borderRadius: 999,
     borderWidth: 1,
     overflow: "visible",
   },
-  clip: {
+  glassClip: {
     flex: 1,
     borderRadius: 999,
     overflow: "hidden",
+  },
+  glassClipAuto: {
+    width: "100%",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  glassContent: {
+    flex: 1,
+    width: "100%",
+  },
+  glassContentAuto: {
+    width: "100%",
+  },
+  positioner: {
+    position: "absolute",
+    zIndex: 100,
+    alignItems: "center",
   },
   content: {
     flex: 1,
