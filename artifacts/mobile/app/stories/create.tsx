@@ -17,6 +17,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
@@ -287,13 +288,12 @@ export default function CreateStoryScreen() {
       )}
 
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
+        <GlassBackButton
           style={styles.topBtn}
           onPress={() => router.back()}
-          hitSlop={12}
-        >
-          <Ionicons name="close" size={28} color="#fff" />
-        </TouchableOpacity>
+          icon="close"
+          accessibilityLabel="Close"
+        />
 
         <View style={styles.topCenter}>
           {starting && (

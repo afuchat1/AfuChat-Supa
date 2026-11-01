@@ -2,7 +2,6 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { BlurView } from "expo-blur";
 import { Security2FABanner } from "@/components/ui/Security2FABanner";
 import {
   Animated,
@@ -28,7 +27,7 @@ import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
 import { T } from "@/constants/theme";
-import { GLASS, glassTokens } from "@/constants/glass";
+import { FloatingNavSurface, floatingNavigationStyles } from "@/components/ui/FloatingNavSurface";
 
 // Visible bottom bar tabs — Chat · Feed · Shorts · Apps · Me
 const BOTTOM_TABS = [
@@ -162,7 +161,6 @@ export function CompactTabBar({
   const pathname           = usePathname();
   const insets             = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const barGlass = glassTokens(isDark);
   const { t } = useLanguage();
   const totalUnread        = useTotalUnread(userId);
   const active             = normalizeTabPath(pathname);
@@ -211,7 +209,6 @@ export function CompactTabBar({
   const ACTIVE_ICON    = colors.navigationActive;
   const PILL_BOTTOM    = Math.max(insets.bottom, 8) + 6;
   const PILL_H         = 56;
-  const BAR_BORDER     = colors.navigationBorder;
 
   function handleTabPress(route: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -227,110 +224,70 @@ export function CompactTabBar({
   return (
     <>
       {/* ── Pill bar ──────────────────────────────────────────────────── */}
-      <View
-        style={[
-          pill.rowWrap,
-          { bottom: PILL_BOTTOM, pointerEvents: "box-none" },
-        ]}
+      <FloatingNavSurface
+        bottomOffset={PILL_BOTTOM}
+        onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
       >
-        <View
+        <Animated.View
+          pointerEvents="none"
           style={[
-            pill.bar,
+            floatingNavigationStyles.activeHighlight,
             {
-              height: PILL_H,
-              backgroundColor: colors.navigationSurface,
-              borderColor: BAR_BORDER,
-              ...Platform.select({
-                ios: {
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: isDark ? 0.35 : 0.12,
-                  shadowRadius: 16,
-                },
-                android: { elevation: 8 },
-                web: { boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.45)" : "0 4px 20px rgba(0,0,0,0.10)" } as any,
-              }),
+              width: itemWidth,
+              backgroundColor: ACTIVE_ICON + (isDark ? "34" : "1C"),
+              transform: [{ translateX: activeTranslateX }],
             },
           ]}
-          onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
-        >
-          {!isDark && (
-            <>
-              <BlurView
-                intensity={GLASS.blur.light}
-                tint="light"
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-              <View
-                pointerEvents="none"
-                style={[StyleSheet.absoluteFill, { backgroundColor: barGlass.fillStrong }]}
-              />
-            </>
-          )}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              pill.activeTabHighlight,
-              {
-                width: itemWidth,
-                backgroundColor: ACTIVE_ICON + (isDark ? "34" : "1C"),
-                transform: [{ translateX: activeTranslateX }],
-              },
-            ]}
-          />
-          {BOTTOM_TABS.map((tab) => {
-            const focused   = active === tab.route;
-            const iconColor = focused ? ACTIVE_ICON : INACTIVE_ICON;
+        />
+        {BOTTOM_TABS.map((tab) => {
+          const focused   = active === tab.route;
+          const iconColor = focused ? ACTIVE_ICON : INACTIVE_ICON;
 
-            return (
-              <TouchableOpacity
-                key={tab.route}
-                style={pill.tab}
-                onPress={() => handleTabPress(tab.route)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                 accessibilityLabel={tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
-                accessibilityState={{ selected: focused }}
+          return (
+            <TouchableOpacity
+              key={tab.route}
+              style={floatingNavigationStyles.item}
+              onPress={() => handleTabPress(tab.route)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
+              accessibilityState={{ selected: focused }}
+            >
+              <View style={floatingNavigationStyles.iconWrap}>
+                {tab.route === "/(tabs)/me" ? (
+                  <Avatar
+                    uri={avatarUrl}
+                    name={displayName || t("navigation.me")}
+                    size={24}
+                    userId={userId}
+                  />
+                ) : (
+                  <Ionicons name={tab.icon as any} size={22} color={iconColor} />
+                )}
+                {/* Unread badge on Chat */}
+                {tab.route === "/(tabs)/chats" && totalUnread > 0 && (
+                  <View style={[pill.badge, { backgroundColor: accentColor }]}>
+                    <Text style={pill.badgeText} numberOfLines={1}>
+                      {totalUnread > 99 ? "99+" : String(totalUnread)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text
+                style={[
+                  floatingNavigationStyles.label,
+                  { color: focused ? ACTIVE_ICON : INACTIVE_ICON },
+                ]}
+                numberOfLines={1}
+                allowFontScaling={false}
+                maxFontSizeMultiplier={1}
               >
-                <View
-                  style={pill.iconWrap}
-                >
-                  {tab.route === "/(tabs)/me" ? (
-                    <Avatar
-                      uri={avatarUrl}
-                       name={displayName || t("navigation.me")}
-                      size={24}
-                      userId={userId}
-                    />
-                  ) : (
-                    <Ionicons name={tab.icon as any} size={22} color={iconColor} />
-                  )}
-                  {/* Unread badge on Chat */}
-                  {tab.route === "/(tabs)/chats" && totalUnread > 0 && (
-                    <View style={[pill.badge, { backgroundColor: accentColor }]}>
-                      <Text style={pill.badgeText} numberOfLines={1}>
-                        {totalUnread > 99 ? "99+" : String(totalUnread)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <Text
-                  style={[
-                    pill.label,
-                    { color: focused ? ACTIVE_ICON : INACTIVE_ICON },
-                  ]}
-                  numberOfLines={1}
-                  allowFontScaling={false}
-                  maxFontSizeMultiplier={1}
-                >
-                   {tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+                {tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </FloatingNavSurface>
 
       {/* Create FAB and its expanded action FABs */}
       {active === "/(tabs)/discover" && (
@@ -422,60 +379,6 @@ export function CompactTabBar({
 }
 
 const pill = StyleSheet.create({
-  rowWrap: {
-    position: "absolute",
-    left: 20,
-    right: 20,
-    zIndex: 100,
-    alignItems: "center",
-  },
-  bar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 6,
-    width: "100%",
-    overflow: "hidden",
-  },
-  activeTabHighlight: {
-    position: "absolute",
-    left: 6,
-    top: 5,
-    bottom: 5,
-    borderRadius: 999,
-  },
-  tab: {
-    flex: 1,
-    flexBasis: 0,
-    flexGrow: 1,
-    flexShrink: 1,
-    minWidth: 0,
-    alignSelf: "stretch",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 0,
-    zIndex: 1,
-  },
-  iconWrap: {
-    width: 44,
-    height: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  label: {
-    width: "100%",
-    fontSize: 10,
-    lineHeight: 13,
-    fontFamily: "Inter_600SemiBold",
-    fontWeight: "600",
-    letterSpacing: 0,
-    marginTop: 1,
-    textAlign: "center",
-    includeFontPadding: false,
-  },
   fab: {
     position: "absolute",
     width: 52,

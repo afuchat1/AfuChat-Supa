@@ -21,6 +21,7 @@ import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import {
   ShopOrder,
@@ -279,9 +280,12 @@ export default function OrderDetailScreen() {
       <View style={[st.root, { backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }]}>
         <Ionicons name="alert-circle" size={48} color={colors.textMuted} />
         <Text style={[{ color: colors.text, fontSize: 16, fontFamily: "Inter_500Medium", marginTop: 12 }]}>Order not found</Text>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20, padding: 12 }}>
-          <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold" }}>Go back</Text>
-        </TouchableOpacity>
+        <GlassBackButton
+          onPress={() => router.back()}
+          label="Go back"
+          accessibilityLabel="Go back"
+          style={{ marginTop: 20, alignSelf: "center" }}
+        />
       </View>
     );
   }

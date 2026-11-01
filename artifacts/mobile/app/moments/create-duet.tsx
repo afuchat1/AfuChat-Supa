@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Image as ExpoImage } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
@@ -235,9 +236,7 @@ export default function CreateDuetScreen() {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-          <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} style={s.headerBtn} icon="close" accessibilityLabel="Close" />
           <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
           <View style={s.headerBtn} />
         </View>
@@ -252,9 +251,7 @@ export default function CreateDuetScreen() {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-          <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} style={s.headerBtn} icon="close" accessibilityLabel="Close" />
           <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
           <View style={s.headerBtn} />
         </View>
@@ -268,9 +265,7 @@ export default function CreateDuetScreen() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={s.headerBtn} icon="close" accessibilityLabel="Close" />
         <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
         <TouchableOpacity
           onPress={post}

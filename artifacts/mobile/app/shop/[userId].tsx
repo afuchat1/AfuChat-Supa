@@ -155,9 +155,12 @@ export default function StoreStorefront() {
       ) : !shop ? (
         <View style={st.loadingWrap}>
           <Text style={[st.notFoundText, { color: colors.textMuted }]}>Store not found.</Text>
-          <TouchableOpacity onPress={() => router.back()} style={[st.backBtn, { backgroundColor: colors.accent }]}>
-            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
-          </TouchableOpacity>
+          <GlassBackButton
+            onPress={() => router.back()}
+            label="Go back"
+            accessibilityLabel="Go back"
+            style={{ marginTop: 8, alignSelf: "center" }}
+          />
         </View>
       ) : (
         <FlatList
@@ -316,7 +319,6 @@ const st = StyleSheet.create({
   root: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  backBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   floatBar: {
     position: "absolute",
     top: 0,

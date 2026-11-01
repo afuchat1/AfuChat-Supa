@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 
@@ -770,9 +771,7 @@ function TopBar({
 }) {
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
-      <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.glassBtn}>
-        <Ionicons name="arrow-back" size={20} color="#fff" />
-      </TouchableOpacity>
+      <GlassBackButton onPress={onClose} accessibilityLabel="Go back" />
 
       <TouchableOpacity onPress={onVisualSearch} hitSlop={12} style={styles.glassBtn} accessibilityRole="button" accessibilityLabel="Find similar images with AfuSearch">
         <Ionicons name="scan-outline" size={20} color="#fff" />

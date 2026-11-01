@@ -11,6 +11,7 @@ import { ActivityIndicator, Animated, Platform, Text, TouchableOpacity, View } f
 import { router, useLocalSearchParams, useRootNavigationState } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -292,16 +293,15 @@ export default function HandleScreen() {
           <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 21, textAlign: "center" }}>
             @{cleanHandle || "username"} could not be opened.
           </Text>
-          <TouchableOpacity
+          <GlassBackButton
             onPress={() => {
               if (router.canGoBack()) router.back();
               else safeNavigate(session ? "/(tabs)/discover" : "/welcome");
             }}
-            style={{ minWidth: 150, alignItems: "center", paddingVertical: 13, paddingHorizontal: 22, borderRadius: 12, backgroundColor: colors.accent }}
-            activeOpacity={0.85}
-          >
-            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Go back</Text>
-          </TouchableOpacity>
+            label="Go back"
+            accessibilityLabel="Go back"
+            style={{ alignSelf: "center" }}
+          />
         </View>
       </Animated.View>
     );

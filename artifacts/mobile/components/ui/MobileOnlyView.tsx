@@ -1,10 +1,10 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
-import Colors from "@/constants/colors";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 
 type Props = {
   title: string;
@@ -18,11 +18,9 @@ export function MobileOnlyView({ title, description }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
         <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 52 }} />
       </View>
 
       <View style={styles.body}>
@@ -65,12 +63,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
   },
   headerTitle: {
     flex: 1,

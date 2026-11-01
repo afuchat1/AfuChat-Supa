@@ -141,9 +141,12 @@ export default function ProductDetailScreen() {
     return (
       <View style={[st.loadingWrap, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Text style={[st.notFoundText, { color: colors.textMuted }]}>Product not found.</Text>
-        <TouchableOpacity style={[st.backBtnCenter, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
-          <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
-        </TouchableOpacity>
+        <GlassBackButton
+          onPress={() => router.back()}
+          label="Go back"
+          accessibilityLabel="Go back"
+          style={{ alignSelf: "center" }}
+        />
       </View>
     );
   }
@@ -494,7 +497,6 @@ const st = StyleSheet.create({
   root: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  backBtnCenter: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   topBar: {
     position: "absolute",
     top: 0,

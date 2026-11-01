@@ -19,6 +19,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -675,9 +676,13 @@ export default function ViewStoryScreen() {
         <View style={styles.mediaErrorOverlay}>
           <Ionicons name="cloud-offline-outline" size={34} color="#fff" />
           <Text style={styles.downloadText}>This story is not downloaded on this device</Text>
-          <TouchableOpacity style={styles.mediaErrorButton} onPress={() => router.back()}>
-            <Text style={styles.mediaErrorButtonText}>Close</Text>
-          </TouchableOpacity>
+          <GlassBackButton
+            onPress={() => router.back()}
+            icon="close"
+            label="Close"
+            accessibilityLabel="Close"
+            style={{ alignSelf: "center" }}
+          />
         </View>
       )}
 
@@ -736,9 +741,12 @@ export default function ViewStoryScreen() {
         <TouchableOpacity style={styles.topBtn} onPress={openShareSheet} activeOpacity={0.8}>
           <Ionicons name="share-social" size={20} color="#fff" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.topBtn} onPress={() => router.back()} activeOpacity={0.8}>
-          <Ionicons name="close" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton
+          style={styles.topBtn}
+          onPress={() => router.back()}
+          icon="close"
+          accessibilityLabel="Close"
+        />
       </View>
 
       {/* ── Tap zones — prev / next ──────────────────────────────────────── */}

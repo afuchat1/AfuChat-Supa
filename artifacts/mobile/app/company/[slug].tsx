@@ -410,9 +410,12 @@ export default function CompanyPageScreen() {
             <Ionicons name="business" size={36} color={colors.textMuted} />
           </View>
           <Text style={{ color: colors.textMuted, fontSize: 16, fontFamily: "Inter_400Regular" }}>This page doesn't exist.</Text>
-          <TouchableOpacity onPress={() => router.back()} style={[styles.emptyBtn, { backgroundColor: colors.accent }]} activeOpacity={0.8}>
-            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Go Back</Text>
-          </TouchableOpacity>
+          <GlassBackButton
+            onPress={() => router.back()}
+            label="Go back"
+            accessibilityLabel="Go back"
+            style={{ alignSelf: "center" }}
+          />
         </View>
       </View>
     );

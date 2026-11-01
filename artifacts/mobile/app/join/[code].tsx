@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -200,13 +201,12 @@ export default function JoinGroupScreen() {
   return (
     <View style={[st.root, { backgroundColor: bgColor, paddingTop: insets.top }]}>
       {/* Close button */}
-      <TouchableOpacity
+      <GlassBackButton
         onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/chats" as any); }}
         style={[st.closeBtn, { top: insets.top + 12 }]}
-        hitSlop={12}
-      >
-        <Ionicons name="close" size={22} color={mutedColor} />
-      </TouchableOpacity>
+        icon="close"
+        accessibilityLabel="Close"
+      />
 
       {loading ? (
         <View style={st.center}>
@@ -226,12 +226,12 @@ export default function JoinGroupScreen() {
           >
             <Text style={st.retryBtnText}>Try Again</Text>
           </TouchableOpacity>
-          <TouchableOpacity
+          <GlassBackButton
             onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/chats" as any); }}
-            style={{ marginTop: 16 }}
-          >
-            <Text style={[st.cancelLink, { color: mutedColor }]}>Go Back</Text>
-          </TouchableOpacity>
+            label="Go back"
+            accessibilityLabel="Go back"
+            style={{ marginTop: 16, alignSelf: "center" }}
+          />
         </View>
       ) : group ? (
         <ScrollView
@@ -353,12 +353,13 @@ export default function JoinGroupScreen() {
 
           {/* Cancel */}
           {!isMember && !joined && (
-            <TouchableOpacity
+            <GlassBackButton
               onPress={() => { if (router.canGoBack()) router.back(); else router.replace("/(tabs)/chats" as any); }}
-              style={{ marginTop: 8 }}
-            >
-              <Text style={[st.cancelLink, { color: mutedColor }]}>Cancel</Text>
-            </TouchableOpacity>
+              icon="close"
+              label="Cancel"
+              accessibilityLabel="Cancel"
+              style={{ marginTop: 8, alignSelf: "center" }}
+            />
           )}
         </ScrollView>
       ) : null}

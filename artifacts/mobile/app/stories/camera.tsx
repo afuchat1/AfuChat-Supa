@@ -156,9 +156,12 @@ function NativeCameraScreen() {
             <Ionicons name="images" size={18} color="rgba(255,255,255,0.7)" />
             <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.7)" }]}>Choose from Gallery</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.4)", marginTop: 8 }]}>Go Back</Text>
-          </TouchableOpacity>
+          <GlassBackButton
+            onPress={() => router.back()}
+            label="Go back"
+            accessibilityLabel="Go back"
+            style={{ marginTop: 8, alignSelf: "center" }}
+          />
         </View>
       </View>
     );

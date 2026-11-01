@@ -523,14 +523,12 @@ export default function BusinessVerificationScreen() {
           )}
         </View>
         <View style={[st.stepFooter, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <TouchableOpacity
-            style={[st.backBtn, { borderColor: colors.border, opacity: step === 1 ? 0.45 : 1 }]}
+          <GlassBackButton
             onPress={() => step === 1 ? router.back() : setStep((current) => current - 1)}
-            activeOpacity={0.75}
-          >
-            <Ionicons name={step === 1 ? "close" : "chevron-back"} size={18} color={colors.text} />
-            <Text style={[st.backBtnText, { color: colors.text }]}>{step === 1 ? "Cancel" : "Back"}</Text>
-          </TouchableOpacity>
+            icon={step === 1 ? "close" : "chevron-back"}
+            label={step === 1 ? "Cancel" : "Back"}
+            style={{ opacity: step === 1 ? 0.45 : 1 }}
+          />
           <TouchableOpacity
             style={[st.nextBtn, { backgroundColor: GOLD, opacity: submitting ? 0.7 : 1 }]}
             onPress={goNext}
@@ -733,8 +731,6 @@ const st = StyleSheet.create({
   submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 999 },
   submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   stepFooter: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 0.5 },
-  backBtn: { flex: 0.8, minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 999, borderWidth: 1 },
-  backBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   nextBtn: { flex: 1.5, minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 999 },
   nextBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
   disclaimer: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 17, marginTop: 4 },

@@ -438,9 +438,13 @@ export default function QRScannerScreen() {
           <TouchableOpacity style={[s.permBtn, { backgroundColor: Colors.brand }]} onPress={requestPermission}>
             <Text style={s.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
-            <Text style={{ color: colors.textMuted, fontSize: 14 }}>Cancel</Text>
-          </TouchableOpacity>
+          <GlassBackButton
+            onPress={() => router.back()}
+            icon="close"
+            label="Cancel"
+            accessibilityLabel="Cancel"
+            style={{ marginTop: 12, alignSelf: "center" }}
+          />
         </View>
       </View>
     );

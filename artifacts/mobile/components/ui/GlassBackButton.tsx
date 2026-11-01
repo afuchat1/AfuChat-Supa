@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,7 +10,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useTheme } from "@/hooks/useTheme";
-import { GLASS, glassTokens } from "@/constants/glass";
+import { floatingNavigationShadow, GLASS, glassTokens } from "@/constants/glass";
 import { useLanguage } from "@/context/LanguageContext";
 
 type Props = {
@@ -30,8 +29,8 @@ export function GlassBackButton({
   accessibilityLabel,
   label,
   icon = "arrow-back",
-  iconSize = 23,
-  size = 44,
+  iconSize = 22,
+  size = 52,
   color,
   style,
 }: Props) {
@@ -40,10 +39,11 @@ export function GlassBackButton({
   const glass = glassTokens(isDark);
   const translatedLabel = label ? t(label) : undefined;
   const translatedAccessibilityLabel = t(accessibilityLabel ?? label ?? "Go back");
-  const faceFill =
-    color?.toLowerCase() === "#fff" && !isDark
-      ? "rgba(16,16,20,0.78)"
-      : glass.fillStrong;
+  const requestedColor = color?.trim().toLowerCase();
+  const iconColor =
+    requestedColor === "#fff" || requestedColor === "#ffffff" || requestedColor === "white"
+      ? colors.navigationActive
+      : color ?? colors.navigationActive;
 
   return (
     <View
@@ -55,25 +55,35 @@ export function GlassBackButton({
           minWidth: label ? size : undefined,
           height: size,
           borderRadius: size / 2,
-          borderColor: glass.border,
-          ...glass.shadowSoft,
+          backgroundColor: colors.navigationSurface,
+          borderColor: colors.navigationBorder,
+          zIndex: 120,
+          ...floatingNavigationShadow(isDark),
         },
       ]}
     >
       <View style={[styles.clip, { borderRadius: size / 2 }]}>
-        <BlurView
-          intensity={Platform.OS === "web" ? GLASS.blur.medium : GLASS.blur.heavy}
-          tint={isDark ? "dark" : "light"}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: faceFill }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: colors.navigationSurface }]}
         />
+        {!isDark && (
+          <>
+            <BlurView
+              intensity={GLASS.blur.light}
+              tint="light"
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: glass.fillStrong }]}
+            />
+          </>
+        )}
         <Pressable
           onPress={onPress}
-          style={styles.button}
+          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
           hitSlop={6}
           disabled={!onPress}
           android_ripple={{
@@ -83,9 +93,9 @@ export function GlassBackButton({
           accessibilityRole="button"
           accessibilityLabel={translatedAccessibilityLabel}
         >
-          <Ionicons name={icon} size={iconSize} color={color ?? colors.accent} />
+          <Ionicons name={icon} size={iconSize} color={iconColor} />
           {translatedLabel ? (
-            <Text style={[styles.label, { color: color ?? colors.accent }]}>
+            <Text style={[styles.label, { color: iconColor }]}>
               {translatedLabel}
             </Text>
           ) : null}
@@ -99,6 +109,7 @@ const styles = StyleSheet.create({
   shadow: {
     borderWidth: 1,
     overflow: "visible",
+    flexShrink: 0,
   },
   clip: {
     flex: 1,
@@ -112,9 +123,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
   },
+  pressed: {
+    opacity: 0.65,
+  },
   label: {
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 14,
     fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0,
   },
 });

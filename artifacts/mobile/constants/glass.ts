@@ -94,6 +94,23 @@ export const GLASS = {
   },
 };
 
+export function floatingNavigationShadow(isDark: boolean) {
+  return Platform.select({
+    ios: {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.35 : 0.12,
+      shadowRadius: 16,
+    },
+    android: { elevation: 8 },
+    web: {
+      boxShadow: isDark
+        ? "0 4px 20px rgba(0,0,0,0.45)"
+        : "0 4px 20px rgba(0,0,0,0.10)",
+    } as any,
+  });
+}
+
 // ─── Convenience helpers ──────────────────────────────────────────────────────
 
 /** Return the correct glass tokens for the current color scheme */

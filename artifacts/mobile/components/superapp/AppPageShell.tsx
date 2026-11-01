@@ -92,9 +92,8 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
   ],
 };
 
-// App modules own their in-flow header and back control. The shell remains
-// responsible for the shared safe-area surface and app-level bottom nav, so
-// pages never become modal overlays or detached windows.
+// App modules own their in-flow header and back control. The shell places the
+// shared floating app navigation over each full-height page.
 
 export function getAppNav(appId: FullAppId) {
   const items = NAV[appId];
@@ -124,13 +123,7 @@ type Props = {
 export default function AppPageShell({ appId, activeKey, showNav = true, children }: Props) {
   const { colors } = useTheme();
   const items = getAppNav(appId);
-  const shouldShowNav = showNav && items.length > 1 && (
-    appId === "afumarket" ||
-    appId === "afubusiness" ||
-    appId === "afugifts" ||
-    appId === "afuevents" ||
-    appId === "afumusic"
-  );
+  const shouldShowNav = showNav && items.length > 1;
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flex: 1, minHeight: 0, position: "relative" }}>{children}</View>

@@ -20,6 +20,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import Svg, { Circle } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
@@ -269,13 +270,12 @@ export default function CreatePostScreen() {
     >
       {/* ──────────────────────────── Header ──────────────────────────────── */}
       <View style={[ss.header, { paddingTop: insets.top + 6, borderBottomColor: colors.separator }]}>
-        <TouchableOpacity
+        <GlassBackButton
           style={ss.closeBtn}
           onPress={() => { Keyboard.dismiss(); if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any); }}
-          hitSlop={12}
-        >
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
+          icon="close"
+          accessibilityLabel="Close"
+        />
 
         <Text style={[ss.headerTitle, { color: colors.text }]}>New Post</Text>
 
