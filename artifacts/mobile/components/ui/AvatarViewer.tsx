@@ -12,6 +12,7 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "@/hooks/useTheme";
 
 type Props = {
   visible: boolean;
@@ -44,6 +45,7 @@ function hashColor(name?: string): string {
  * stays square on every aspect ratio (mobile, tablet, desktop preview).
  */
 export function AvatarViewer({ visible, uri, name, onClose }: Props) {
+  const { colors, isDark } = useTheme();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const size = Math.min(width, height) - 48;
@@ -59,19 +61,19 @@ export function AvatarViewer({ visible, uri, name, onClose }: Props) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.95)" />
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      <Pressable style={[styles.backdrop, { backgroundColor: colors.background }]} onPress={onClose}>
         <Pressable
           style={[styles.closeBtn, { top: insets.top + 12 }]}
           onPress={onClose}
           hitSlop={12}
         >
-          <Ionicons name="close" size={28} color="#fff" />
+          <Ionicons name="close" size={28} color={colors.text} />
         </Pressable>
 
         {name ? (
           <View style={[styles.nameWrap, { top: insets.top + 16 }]}>
-            <Text style={styles.nameTxt} numberOfLines={1}>
+            <Text style={[styles.nameTxt, { color: colors.text }]} numberOfLines={1}>
               {name}
             </Text>
           </View>
@@ -85,7 +87,7 @@ export function AvatarViewer({ visible, uri, name, onClose }: Props) {
                 width: size,
                 height: size,
                 borderRadius: 16,
-                backgroundColor: "#111",
+                backgroundColor: colors.surface,
               }}
               contentFit="contain"
               cachePolicy="memory-disk"
@@ -117,7 +119,6 @@ export function AvatarViewer({ visible, uri, name, onClose }: Props) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -139,7 +140,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   nameTxt: {
-    color: "#fff",
     fontSize: 18,
     fontFamily: "Inter_600SemiBold",
   },

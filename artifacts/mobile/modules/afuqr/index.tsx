@@ -88,8 +88,8 @@ export default function AfuQRApp() {
   if (!permission.granted) {
     return (
       <View style={[s.center, { backgroundColor: colors.background, padding: 36 }]}>
-        <View style={[s.permIconWrap, { backgroundColor: "#1C1C1E" }]}>
-          <Ionicons name="qr-code" size={48} color="#fff" />
+        <View style={[s.permIconWrap, { backgroundColor: colors.surface }]}>
+          <Ionicons name="qr-code" size={48} color={colors.text} />
         </View>
         <Text style={[s.permTitle, { color: colors.text }]}>Camera Access</Text>
         <Text style={[s.permSub, { color: colors.textMuted }]}>

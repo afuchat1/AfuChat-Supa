@@ -20,11 +20,13 @@ import FaceFilterOverlay from "@/components/camera/FaceFilterOverlay";
 import { FilterId } from "@/components/camera/filterDefs";
 import { prepareMediaForUpload } from "@/lib/mediaUpload";
 import { setStoryMediaDraft } from "@/lib/storyMediaDraft";
+import { useTheme } from "@/hooks/useTheme";
 
 type CameraMode = "photo" | "video";
 
 function NativeCameraScreen() {
   const { accent } = useAppAccent();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<any>(null);
 
@@ -132,18 +134,18 @@ function NativeCameraScreen() {
 
   if (!camPermission) {
     return (
-      <View style={[st.root, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color="#fff" size="large" />
+      <View style={[st.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator color={colors.accent} size="large" />
       </View>
     );
   }
 
   if (!camPermission.granted) {
     return (
-      <View style={[st.root, { backgroundColor: "#000" }]}>
+      <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={st.permWrap}>
-          <Ionicons name="camera" size={56} color="rgba(255,255,255,0.5)" />
-          <Text style={st.permText}>Camera access is needed to take photos and videos for stories.</Text>
+          <Ionicons name="camera" size={56} color={colors.textMuted} />
+          <Text style={[st.permText, { color: colors.text }]}>Camera access is needed to take photos and videos for stories.</Text>
           <TouchableOpacity
             style={[st.permBtn, { backgroundColor: accent }]}
             onPress={() => camPermission.canAskAgain === false
@@ -153,8 +155,8 @@ function NativeCameraScreen() {
             <Text style={st.permBtnText}>{camPermission.canAskAgain === false ? "Open Settings" : "Allow Camera"}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={st.permSecondary} onPress={openGallery}>
-            <Ionicons name="images" size={18} color="rgba(255,255,255,0.7)" />
-            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.7)" }]}>Choose from Gallery</Text>
+            <Ionicons name="images" size={18} color={colors.textMuted} />
+            <Text style={[st.permBtnText, { color: colors.textMuted }]}>Choose from Gallery</Text>
           </TouchableOpacity>
           <GlassBackButton
             onPress={() => router.back()}
@@ -168,7 +170,7 @@ function NativeCameraScreen() {
   }
 
   return (
-    <View style={[st.root, { backgroundColor: "#000" }]}>
+    <View style={[st.root, { backgroundColor: colors.background }]}>
       <CameraView
         ref={cameraRef}
         style={st.camera}

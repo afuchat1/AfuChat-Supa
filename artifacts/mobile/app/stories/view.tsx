@@ -30,6 +30,7 @@ import { hydrateViewedUsers, markStoriesViewed } from "@/lib/storyViewedStore";
 import { safePause, safePlay } from "@/lib/safeMedia";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getCachedStoryMedia } from "@/lib/storyMediaCache";
+import { useTheme } from "@/hooks/useTheme";
 
 const STORY_DURATION = 5000;
 const STORY_LIST_CACHE_PREFIX = "@afuchat:story_list:";
@@ -66,6 +67,7 @@ type Viewer = {
 export default function ViewStoryScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useAuth();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
 
@@ -620,9 +622,9 @@ export default function ViewStoryScreen() {
 
   if (!story) {
     return (
-      <View style={[styles.root, styles.loadingScreen]}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.loadingLabel}>
+      <View style={[styles.root, styles.loadingScreen, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingLabel, { color: colors.textMuted }]}>
           {storiesLoaded ? "No stories available" : "Loading stories…"}
         </Text>
       </View>
@@ -637,7 +639,7 @@ export default function ViewStoryScreen() {
   return (
     <KeyboardAvoidingView
       behavior="padding"
-      style={[styles.root, { backgroundColor: "#0D0D0D" }]}
+      style={[styles.root, { backgroundColor: colors.background }]}
     >
       {/* ── Media ─────────────────────────────────────────────────────────── */}
       {isVideoStory ? (
@@ -1003,7 +1005,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
-    backgroundColor: "#0D0D0D",
   },
   loadingLabel: {
     color: "rgba(255,255,255,0.72)",

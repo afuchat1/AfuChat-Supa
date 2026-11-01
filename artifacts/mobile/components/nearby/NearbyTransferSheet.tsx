@@ -258,7 +258,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
           </View>
 
           {isScanning ? (
-            <View style={styles.scannerWrap}>
+            <View style={[styles.scannerWrap, { backgroundColor: colors.background }]}>
               <CameraView
                 style={styles.camera}
                 facing="back"
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   errorText: { color: "#FF3B30", flex: 1, fontSize: 12, lineHeight: 17, fontFamily: "Inter_500Medium" },
   textButton: { alignItems: "center", paddingVertical: 13 },
   textButtonText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  scannerWrap: { height: 430, backgroundColor: "#000", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  scannerWrap: { height: 430, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   camera: { ...StyleSheet.absoluteFill },
   scanFrame: { width: 250, height: 250, position: "relative" },
   corner: { width: 30, height: 30, position: "absolute", borderWidth: 3 },

@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
   panel: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   panelTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  balanceBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  balanceBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   balanceText: { color: "#8E8E93", fontSize: 11, fontFamily: "Inter_400Regular" },
   giftCard: { width: 76, alignItems: "center", borderRadius: 14, padding: 10, gap: 4, borderWidth: 1.5 },
   giftCardEmoji: { fontSize: 30 },

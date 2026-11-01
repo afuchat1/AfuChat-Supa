@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { CompressionEstimate } from "@/lib/videoCompression";
+import { useTheme } from "@/hooks/useTheme";
 
 const ND = true;
 
@@ -109,6 +110,7 @@ interface CardProps {
 }
 
 export function CompressionCard({ est, style }: CardProps) {
+  const { colors } = useTheme();
   const { opacity, translateY } = useFadeSlideIn(60);
 
   // Animate the compressed bar width from 0 → savingsRatio
@@ -134,21 +136,25 @@ export function CompressionCard({ est, style }: CardProps) {
 
   return (
     <Animated.View
-      style={[cs.card, style, { opacity, transform: [{ translateY }] }]}
+      style={[
+        cs.card,
+        style,
+        { backgroundColor: colors.surface, borderColor: colors.border, opacity, transform: [{ translateY }] },
+      ]}
     >
       {/* ── Header ── */}
       <View style={cs.header}>
         <View style={cs.flashWrap}>
           <Ionicons name="flash" size={13} color="#FACC15" />
         </View>
-        <Text style={cs.headerTitle}>Smart Compression</Text>
-        <View style={cs.networkBadge}>
+        <Text style={[cs.headerTitle, { color: colors.text }]}>Smart Compression</Text>
+        <View style={[cs.networkBadge, { backgroundColor: colors.backgroundSecondary }]}>
           <Ionicons
             name={est.networkLabel === "Wi-Fi" ? "wifi" : "cellular"}
             size={10}
-            color="#888"
+            color={colors.textMuted}
           />
-          <Text style={cs.networkText}>{est.networkLabel}</Text>
+          <Text style={[cs.networkText, { color: colors.textMuted }]}>{est.networkLabel}</Text>
         </View>
       </View>
 
@@ -156,22 +162,22 @@ export function CompressionCard({ est, style }: CardProps) {
       <View style={cs.sizesRow}>
         {/* Original */}
         <View style={cs.sizeGroup}>
-          <Text style={cs.sizeCaption}>Original</Text>
-          <Text style={cs.sizeValueGray}>{est.originalLabel}</Text>
+          <Text style={[cs.sizeCaption, { color: colors.textMuted }]}>Original</Text>
+          <Text style={[cs.sizeValueGray, { color: colors.textSecondary }]}>{est.originalLabel}</Text>
         </View>
 
         {/* Arrow */}
         <View style={cs.arrowGroup}>
-          <View style={cs.arrowLine} />
-          <View style={cs.arrowCircle}>
-            <Ionicons name="arrow-forward" size={12} color="#fff" />
+          <View style={[cs.arrowLine, { backgroundColor: colors.border }]} />
+          <View style={[cs.arrowCircle, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}>
+            <Ionicons name="arrow-forward" size={12} color={colors.text} />
           </View>
-          <View style={cs.arrowLine} />
+          <View style={[cs.arrowLine, { backgroundColor: colors.border }]} />
         </View>
 
         {/* Estimated */}
         <View style={[cs.sizeGroup, cs.sizeGroupRight]}>
-          <Text style={cs.sizeCaption}>Compressed</Text>
+          <Text style={[cs.sizeCaption, { color: colors.textMuted }]}>Compressed</Text>
           <Text style={cs.sizeValueGreen}>{est.estimatedLabel}</Text>
         </View>
 
@@ -187,20 +193,20 @@ export function CompressionCard({ est, style }: CardProps) {
         {/* Original bar — full width */}
         <View style={cs.barRow}>
           <View style={cs.barLabelCol}>
-            <Text style={cs.barCaption}>Before</Text>
+            <Text style={[cs.barCaption, { color: colors.textMuted }]}>Before</Text>
           </View>
-          <View style={cs.barTrack}>
-            <View style={[cs.bar, cs.barOriginal]} />
+          <View style={[cs.barTrack, { backgroundColor: colors.backgroundSecondary }]}>
+            <View style={[cs.bar, cs.barOriginal, { backgroundColor: colors.border }]} />
           </View>
-          <Text style={cs.barSize}>{est.originalLabel}</Text>
+          <Text style={[cs.barSize, { color: colors.textSecondary }]}>{est.originalLabel}</Text>
         </View>
 
         {/* Compressed bar — animated to ratio width */}
         <View style={cs.barRow}>
           <View style={cs.barLabelCol}>
-            <Text style={cs.barCaption}>After</Text>
+            <Text style={[cs.barCaption, { color: colors.textMuted }]}>After</Text>
           </View>
-          <View style={cs.barTrack}>
+          <View style={[cs.barTrack, { backgroundColor: colors.backgroundSecondary }]}>
             <Animated.View style={[cs.bar, cs.barCompressed, { width: compressedBarWidth }]} />
           </View>
           <Text style={[cs.barSize, { color: "#4ADE80" }]}>{est.estimatedLabel}</Text>
@@ -208,10 +214,10 @@ export function CompressionCard({ est, style }: CardProps) {
       </View>
 
       {/* ── Footer ── */}
-      <View style={cs.footer}>
-        <Ionicons name="cloud-upload" size={12} color="#555" />
-        <Text style={cs.footerText}>
-          Upload time on {est.networkLabel}: <Text style={{ color: "#aaa" }}>{est.uploadTimeLabel}</Text>
+      <View style={[cs.footer, { borderTopColor: colors.border }]}>
+        <Ionicons name="cloud-upload" size={12} color={colors.textMuted} />
+        <Text style={[cs.footerText, { color: colors.textMuted }]}>
+          Upload time on {est.networkLabel}: <Text style={{ color: colors.textSecondary }}>{est.uploadTimeLabel}</Text>
         </Text>
       </View>
     </Animated.View>
@@ -220,7 +226,6 @@ export function CompressionCard({ est, style }: CardProps) {
 
 const cs = StyleSheet.create({
   card: {
-    backgroundColor: "#111",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(250,204,21,0.18)",
@@ -252,7 +257,6 @@ const cs = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#1E1E1E",
     borderRadius: 20,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -302,13 +306,11 @@ const cs = StyleSheet.create({
   arrowLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#333",
   },
   arrowCircle: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#2A2A2A",
     borderWidth: 1,
     borderColor: "#3A3A3A",
     alignItems: "center",
@@ -356,7 +358,6 @@ const cs = StyleSheet.create({
   barTrack: {
     flex: 1,
     height: 6,
-    backgroundColor: "#1E1E1E",
     borderRadius: 3,
     overflow: "hidden",
   },

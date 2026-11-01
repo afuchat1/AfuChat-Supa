@@ -188,18 +188,18 @@ export default function VideoTrimmerModal({
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onCancel}>
-      <View style={s.container}>
+      <View style={[s.container, { backgroundColor: colors.background }]}>
         {/* Header */}
         <View style={s.header}>
           <TouchableOpacity onPress={onCancel} hitSlop={12} style={s.headerBtn}>
-            <Ionicons name="close" size={22} color="#fff" />
+            <Ionicons name="close" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>Trim Video</Text>
+          <Text style={[s.headerTitle, { color: colors.text }]}>Trim Video</Text>
           <View style={s.headerBtn} />
         </View>
 
         {/* Video preview */}
-        <View style={s.videoWrap}>
+        <View style={[s.videoWrap, { backgroundColor: colors.backgroundSecondary }]}>
           {VideoComp ? (
             <VideoComp
               ref={videoRef}
@@ -236,7 +236,7 @@ export default function VideoTrimmerModal({
             </Text>
           </View>
           <View style={s.infoBadge}>
-            <Text style={[s.infoTime, { color: "#fff" }]}>{fmtTime(trimEnd)}</Text>
+            <Text style={[s.infoTime, { color: colors.text }]}>{fmtTime(trimEnd)}</Text>
             <Ionicons name="play-skip-forward" size={12} color={accent} />
           </View>
         </View>
@@ -245,7 +245,7 @@ export default function VideoTrimmerModal({
         <View style={s.timelineWrap}>
           {/* Track background */}
           <View
-            style={s.track}
+            style={[s.track, { backgroundColor: colors.backgroundSecondary }]}
             onLayout={(e) => { trackW.current = e.nativeEvent.layout.width; }}
           >
             {/* Thumbnail strip */}
@@ -259,12 +259,12 @@ export default function VideoTrimmerModal({
                   t ? (
                     <Image key={i} source={{ uri: t }} style={s.thumb} resizeMode="cover" />
                   ) : (
-                    <View key={i} style={[s.thumb, { backgroundColor: "#2a2a2a" }]} />
+                    <View key={i} style={[s.thumb, { backgroundColor: colors.backgroundSecondary }]} />
                   )
                 )}
               </View>
             ) : (
-              <View style={s.thumbPlaceholder} />
+              <View style={[s.thumbPlaceholder, { backgroundColor: colors.backgroundSecondary }]} />
             )}
 
             {/* Dimmed overlay — before trim start */}
@@ -347,11 +347,11 @@ export default function VideoTrimmerModal({
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0a0a0a" },
+  container: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: Platform.OS === "ios" ? 56 : 16, paddingBottom: 12 },
   headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
-  videoWrap: { width: SW, height: SW * 0.58, backgroundColor: "#111", position: "relative" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
+  videoWrap: { width: SW, height: SW * 0.58, position: "relative" },
   video: { width: SW, height: SW * 0.58 },
   videoLoadOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   infoRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
@@ -364,13 +364,12 @@ const s = StyleSheet.create({
     height: TRACK_H,
     borderRadius: 8,
     overflow: "hidden",
-    backgroundColor: "#1e1e1e",
     position: "relative",
   },
   thumbRow: { flexDirection: "row", position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   thumb: { flex: 1, height: TRACK_H },
   thumbLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  thumbPlaceholder: { flex: 1, backgroundColor: "#1e1e1e" },
+  thumbPlaceholder: { flex: 1 },
   dimOverlay: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.68)" },
   selBorder: { position: "absolute", top: 0, bottom: 0, borderWidth: 2, borderRadius: 4 },
   playhead: { position: "absolute", top: 0, bottom: 0, width: 2, backgroundColor: "rgba(255,255,255,0.9)" },

@@ -245,10 +245,10 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
 
   if (screen === "apply-seller") {
     return (
-      <View style={[s.root, { backgroundColor: "#0a0a0a" }]}>
-        <View style={[s.topBar, { borderBottomColor: "rgba(255,255,255,0.08)", borderBottomWidth: 0.5 }]}>
-          <GlassBackButton onPress={() => setScreen("browse")} color="#fff" />
-          <Text style={[s.topTitle, { color: "#fff" }]}>Become a Seller</Text>
+      <View style={[s.root, { backgroundColor: colors.background }]}>
+        <View style={[s.topBar, { borderBottomColor: colors.border, borderBottomWidth: 0.5 }]}>
+          <GlassBackButton onPress={() => setScreen("browse")} color={colors.text} />
+          <Text style={[s.topTitle, { color: colors.text }]}>Become a Seller</Text>
           <View style={{ width: 30 }} />
         </View>
         <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }} keyboardShouldPersistTaps="handled">

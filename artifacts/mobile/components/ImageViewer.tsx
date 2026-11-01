@@ -23,6 +23,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/hooks/useTheme";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lazy-load Reanimated + GestureHandler with a try-catch IIFE.
@@ -799,6 +800,7 @@ type ViewerProps = {
 };
 
 function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta }: ViewerProps) {
+  const { colors } = useTheme();
   const {
     useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
     default: AnimatedRN,
@@ -881,7 +883,7 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose} hardwareAccelerated>
       <StatusBar style="light" />
-      <View style={styles.root}>
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
         {/* Ambient blurred background */}
         <Image
           source={{ uri: images[index] }}
@@ -957,6 +959,7 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
 }
 
 function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }: ViewerProps) {
+  const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex]   = useState(initialIndex);
@@ -1003,7 +1006,7 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <StatusBar style="light" />
-      <View style={styles.root}>
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
         <Image
           source={{ uri: images[index] }}
           style={StyleSheet.absoluteFill}
@@ -1108,7 +1111,6 @@ export function useImageViewer() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },

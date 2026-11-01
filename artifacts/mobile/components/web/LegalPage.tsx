@@ -20,11 +20,6 @@ type Section = {
   bullets?: string[];
 };
 
-const INK = "#102033";
-const MUTED = "#607086";
-const BORDER = "#e5ebf2";
-const SOFT_BLUE = "#edf6ff";
-
 const PAGES: Record<
   LegalPageKind,
   {
@@ -265,11 +260,11 @@ function navigateTo(path: string) {
   Linking.openURL(`https://afuchat.com${path}`).catch(() => {});
 }
 
-function LegalSection({ section, accent }: { section: Section; accent: string }) {
+function LegalSection({ section, accent, colors }: { section: Section; accent: string; colors: any }) {
   const renderParagraph = (paragraph: string) => {
     const parts = paragraph.split(/(support@afuchat\.com|hello@afuchat\.com)/g);
     return (
-      <Text style={styles.paragraph}>
+      <Text style={[styles.paragraph, { color: colors.textSecondary }]}>
         {parts.map((part, index) =>
           part === "support@afuchat.com" || part === "hello@afuchat.com" ? (
             <Text
@@ -290,8 +285,8 @@ function LegalSection({ section, accent }: { section: Section; accent: string })
   };
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{section.title}</Text>
+    <View style={[styles.section, { borderBottomColor: colors.border }]}>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
       {section.paragraphs?.map((paragraph) => (
         <React.Fragment key={paragraph}>{renderParagraph(paragraph)}</React.Fragment>
       ))}
@@ -300,7 +295,7 @@ function LegalSection({ section, accent }: { section: Section; accent: string })
           {section.bullets.map((bullet) => (
             <View key={bullet} style={styles.bulletRow}>
               <View style={[styles.bullet, { backgroundColor: accent }]} />
-              <Text style={styles.bulletText}>{bullet}</Text>
+              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>{bullet}</Text>
             </View>
           ))}
         </View>
@@ -318,83 +313,83 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
 
   return (
     <ScrollView
-      style={styles.root}
+      style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={[styles.nav, compact && styles.navCompact]}>
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
-            <Text style={styles.logo}>
+            <Text style={[styles.logo, { color: colors.text }]}>
               Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
             </Text>
           </Pressable>
           {!compact && (
             <View style={styles.navLinks}>
               <Pressable onPress={() => navigateTo("/terms")} accessibilityRole="link">
-                <Text style={styles.navLink}>Terms</Text>
+                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Terms</Text>
               </Pressable>
               <Pressable onPress={() => navigateTo("/privacy")} accessibilityRole="link">
-                <Text style={styles.navLink}>Privacy</Text>
+                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Privacy</Text>
               </Pressable>
               <Pressable onPress={() => navigateTo("/account-deletion")} accessibilityRole="link">
-                <Text style={styles.navLink}>Account deletion</Text>
+                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Account deletion</Text>
               </Pressable>
               <Pressable onPress={() => navigateTo("/child-safety")} accessibilityRole="link">
-                <Text style={styles.navLink}>Child safety</Text>
+                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Child safety</Text>
               </Pressable>
             </View>
           )}
         </View>
       </View>
 
-      <View style={[styles.hero, compact && styles.heroCompact]}>
+      <View style={[styles.hero, { backgroundColor: colors.background }, compact && styles.heroCompact]}>
         <View style={styles.heroInner}>
-          <View style={styles.iconCircle}>
+          <View style={[styles.iconCircle, { backgroundColor: colors.surface }]}>
             <Ionicons name={page.icon} size={25} color={BRAND} />
           </View>
-          <Text style={styles.eyebrow}>{page.eyebrow}</Text>
-          <Text style={[styles.title, compact && styles.titleCompact]}>{page.title}</Text>
-          <Text style={styles.intro}>{page.intro}</Text>
-          <Text style={styles.updated}>{page.updated ?? "Last updated: August 14, 2026"}</Text>
+          <Text style={[styles.eyebrow, { color: colors.accent }]}>{page.eyebrow}</Text>
+          <Text style={[styles.title, { color: colors.text }, compact && styles.titleCompact]}>{page.title}</Text>
+          <Text style={[styles.intro, { color: colors.textSecondary }]}>{page.intro}</Text>
+          <Text style={[styles.updated, { color: colors.textMuted }]}>{page.updated ?? "Last updated: August 14, 2026"}</Text>
         </View>
       </View>
 
       <View style={[styles.content, compact && styles.contentCompact]}>
-        <View style={styles.notice}>
+        <View style={[styles.notice, { backgroundColor: colors.surface }]}>
           <Ionicons name="information-circle-outline" size={20} color={BRAND} />
-          <Text style={styles.noticeText}>
+          <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
             AfuChat’s legal pages are published for the web. Account actions and app settings remain inside the authenticated AfuChat app.
           </Text>
         </View>
         {page.sections.map((section) => (
-          <LegalSection key={section.title} section={section} accent={BRAND} />
+          <LegalSection key={section.title} section={section} accent={BRAND} colors={colors} />
         ))}
       </View>
 
-      <View style={styles.footer}>
-           <Text style={styles.footerLogo}>
+      <View style={[styles.footer, { backgroundColor: colors.background }]}>
+           <Text style={[styles.footerLogo, { color: colors.text }]}>
            Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
         </Text>
-        <Text style={styles.footerText}>Connect · Discover · Create</Text>
+        <Text style={[styles.footerText, { color: colors.textMuted }]}>Connect · Discover · Create</Text>
         <View style={styles.footerLinks}>
           <Pressable onPress={() => navigateTo("/terms")} accessibilityRole="link">
-            <Text style={styles.footerLink}>Terms</Text>
+            <Text style={[styles.footerLink, { color: colors.accent }]}>Terms</Text>
           </Pressable>
           <Pressable onPress={() => navigateTo("/privacy")} accessibilityRole="link">
-            <Text style={styles.footerLink}>Privacy</Text>
+            <Text style={[styles.footerLink, { color: colors.accent }]}>Privacy</Text>
           </Pressable>
           <Pressable onPress={() => navigateTo("/account-deletion")} accessibilityRole="link">
-            <Text style={styles.footerLink}>Account deletion</Text>
+            <Text style={[styles.footerLink, { color: colors.accent }]}>Account deletion</Text>
           </Pressable>
           <Pressable onPress={() => navigateTo("/child-safety")} accessibilityRole="link">
-            <Text style={styles.footerLink}>Child safety standards</Text>
+            <Text style={[styles.footerLink, { color: colors.accent }]}>Child safety standards</Text>
           </Pressable>
           <Pressable
             onPress={() => Linking.openURL("mailto:support@afuchat.com").catch(() => {})}
             accessibilityRole="link"
           >
-            <Text style={styles.footerLink}>Contact support</Text>
+            <Text style={[styles.footerLink, { color: colors.accent }]}>Contact support</Text>
           </Pressable>
         </View>
       </View>
@@ -403,12 +398,10 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#f7faff" },
+  root: { flex: 1 },
   scrollContent: { minHeight: "100%" as any },
   header: {
-    backgroundColor: "#07111f",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   nav: {
     width: "100%" as any,
@@ -425,7 +418,7 @@ const styles = StyleSheet.create({
   logoAccent: {},
   navLinks: { flexDirection: "row", alignItems: "center", gap: 26 },
   navLink: { color: "rgba(255,255,255,0.68)", fontSize: 13, fontFamily: "Inter_500Medium" },
-  hero: { backgroundColor: "#07111f", paddingHorizontal: 28, paddingBottom: 58 },
+  hero: { paddingHorizontal: 28, paddingBottom: 58 },
   heroCompact: { paddingHorizontal: 20, paddingBottom: 42 },
   heroInner: { width: "100%" as any, maxWidth: 820, alignSelf: "center", paddingTop: 42 },
   iconCircle: {
@@ -479,7 +472,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    backgroundColor: SOFT_BLUE,
     borderRadius: 16,
     padding: 16,
     marginBottom: 26,
@@ -491,9 +483,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: "Inter_500Medium",
   },
-  section: { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: BORDER },
+  section: { paddingVertical: 20, borderBottomWidth: 1 },
   sectionTitle: {
-    color: INK,
     fontSize: 20,
     lineHeight: 27,
     fontFamily: "Inter_700Bold",
@@ -501,7 +492,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   paragraph: {
-    color: MUTED,
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
@@ -521,13 +511,11 @@ const styles = StyleSheet.create({
   },
   bulletText: {
     flex: 1,
-    color: MUTED,
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
   },
   footer: {
-    backgroundColor: "#07111f",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingVertical: 36,

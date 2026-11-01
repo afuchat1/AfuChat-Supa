@@ -1014,7 +1014,7 @@ const styles = StyleSheet.create({
   matchRow: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, padding: 14 },
   matchAvatarWrap: { position: "relative" },
   matchAvatar: { width: 60, height: 60, borderRadius: 30 },
-  superDot: { position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: "#1C1C1E", alignItems: "center", justifyContent: "center" },
+  superDot: { position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   matchName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   matchLastMsg: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 3 },
   matchMeta: { alignItems: "flex-end", gap: 4 },

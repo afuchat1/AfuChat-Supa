@@ -187,9 +187,9 @@ function MemberRow({ member, accent, colors, isMe }: { member: Member; accent: s
   );
 }
 
-function PostCell({ post, cellSize }: { post: GridPost; cellSize: number }) {
+function PostCell({ post, cellSize, colors }: { post: GridPost; cellSize: number; colors: any }) {
   const uri = post.image_url ?? post.video_url;
-  if (!uri) return <View style={[s.postCell, { width: cellSize, height: cellSize, backgroundColor: "#1C1C1E" }]} />;
+  if (!uri) return <View style={[s.postCell, { width: cellSize, height: cellSize, backgroundColor: colors.backgroundSecondary }]} />;
   return (
     <TouchableOpacity
       style={[s.postCell, { width: cellSize, height: cellSize }]}
@@ -536,7 +536,7 @@ export default function ChatInfoScreen() {
       );
     }
     if (isDM && activeTab === 0) {
-      return <PostCell post={item as GridPost} cellSize={cellSize} />;
+      return <PostCell post={item as GridPost} cellSize={cellSize} colors={colors} />;
     }
     return null;
   }

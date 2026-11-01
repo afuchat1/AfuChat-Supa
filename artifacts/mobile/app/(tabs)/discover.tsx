@@ -1113,7 +1113,7 @@ type FeedEntry =
 export default function DiscoverScreen() {
   "use no memo";
   const { horizontalScrollActive } = React.useContext(TabSwipeContext);
-  const { colors, isDark, setForceDark } = useTheme();
+  const { colors, isDark } = useTheme();
   const pillGlass = glassTokens(isDark);
   const { user, profile } = useAuth();
   const { playMusic } = useGlobalMusicPlayer();

@@ -331,7 +331,7 @@ function CameraPhase({
   onClose: () => void;
   soundName?: string;
 }) {
-  const { accent } = useTheme();
+  const { colors, accent } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
 
@@ -557,19 +557,19 @@ function CameraPhase({
     : null;
 
   return (
-    <View style={[cs.root, { width: W, height: H }]}>
+    <View style={[cs.root, { width: W, height: H, backgroundColor: colors.background }]}>
       <StatusBar hidden />
 
       {/* ── Camera view ── */}
       {cameraLoading ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
-          <ActivityIndicator color="#fff" size="large" />
-          <Text style={{ color: "#aaa", marginTop: 12, fontFamily: "Inter_400Regular" }}>Checking camera access…</Text>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
+          <ActivityIndicator color={colors.accent} size="large" />
+          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: "Inter_400Regular" }}>Checking camera access…</Text>
         </View>
       ) : !camAvailable || !CameraView ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
-          <Ionicons name="videocam-off" size={48} color="#555" />
-          <Text style={{ color: "#555", marginTop: 12, fontFamily: "Inter_400Regular" }}>Camera unavailable</Text>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
+          <Ionicons name="videocam-off" size={48} color={colors.textMuted} />
+          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: "Inter_400Regular" }}>Camera unavailable</Text>
           <TouchableOpacity
             onPress={onPickFromGallery}
             style={[cs.galleryFallbackBtn, { backgroundColor: accent }]}
@@ -579,9 +579,9 @@ function CameraPhase({
           </TouchableOpacity>
         </View>
       ) : !cameraPermission?.granted ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }]}>
-          <Ionicons name="camera" size={48} color="#aaa" />
-          <Text style={{ color: "#fff", marginTop: 14, textAlign: "center", fontFamily: "Inter_500Medium" }}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }]}>
+          <Ionicons name="camera" size={48} color={colors.textMuted} />
+          <Text style={{ color: colors.text, marginTop: 14, textAlign: "center", fontFamily: "Inter_500Medium" }}>
             Allow camera access to record a short video.
           </Text>
           <TouchableOpacity
@@ -821,7 +821,7 @@ function CameraPhase({
               >
                 <View style={[
                   cs.frameCircle,
-                  fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: "#333", borderWidth: 1.5, borderColor: "#555" },
+                  fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: colors.backgroundSecondary, borderWidth: 1.5, borderColor: colors.border },
                   activeFrame.id === fr.id && { borderWidth: 2.5, borderColor: "#fff" },
                 ]}>
                   {fr.emoji ? (
@@ -941,7 +941,7 @@ function EditPhase({
   soundName?: string; soundAlbumArt?: string;
   capturedSpeed?: number;
 }) {
-  const { colors, accent } = useTheme();
+  const { colors, accent, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
 
@@ -1109,21 +1109,21 @@ function EditPhase({
   ];
 
   return (
-    <KeyboardAvoidingView style={[es.root, { backgroundColor: "#000" }]} behavior="padding">
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <KeyboardAvoidingView style={[es.root, { backgroundColor: colors.background }]} behavior="padding">
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {/* ── Top bar ── */}
       <View style={[es.topBar, { paddingTop: insets.top + 6 }]}>
         <GlassBackButton
           onPress={step === 1 ? onBack : () => setStep(1)}
           style={es.backBtn}
-          color="#fff"
+          color={colors.text}
         />
         <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={es.topTitle}>{step === 1 ? "Enhance" : "Details"}</Text>
+          <Text style={[es.topTitle, { color: colors.text }]}>{step === 1 ? "Enhance" : "Details"}</Text>
           <View style={{ flexDirection: "row", gap: 6, marginTop: 3 }}>
             <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: accent }} />
-            <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: step === 2 ? accent : "#3a3a3a" }} />
+            <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: step === 2 ? accent : colors.border }} />
           </View>
         </View>
         {step === 1 ? (
@@ -1248,7 +1248,7 @@ function EditPhase({
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#111" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface }}>
           <Ionicons name="musical-notes" size={19} color={accent} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }} numberOfLines={1}>{selectedMusic?.title || (soundDismissed ? "No soundtrack" : soundName || "Add an AfuMusic soundtrack")}</Text>
@@ -1261,7 +1261,7 @@ function EditPhase({
         </View>
 
         {/* ── Edit tabs ── */}
-        <View style={[es.tabBar, { backgroundColor: "#111", borderBottomColor: "#222" }]}>
+        <View style={[es.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           {TABS.map((t) => (
             <TouchableOpacity
               key={t.id}
@@ -1276,7 +1276,7 @@ function EditPhase({
         </View>
 
         {/* ── Tab panels ── */}
-        <View style={[es.panel, { backgroundColor: "#111" }]}>
+        <View style={[es.panel, { backgroundColor: colors.surface }]}>
 
           {/* FILTERS */}
           {tab === "filters" && (
@@ -1314,7 +1314,7 @@ function EditPhase({
                   >
                     <View style={[
                       es.frameThumb,
-                      fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: "#333" },
+                      fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: colors.backgroundSecondary },
                       frame.id === fr.id && { borderWidth: 2.5, borderColor: accent },
                     ]}>
                       {fr.emoji
@@ -1349,7 +1349,7 @@ function EditPhase({
               {texts.map((t) => (
                 <View key={t.id} style={es.textItem}>
                   <TouchableOpacity
-                    style={[es.textItemPreview, t.hasBg && { backgroundColor: "#333" }]}
+                    style={[es.textItemPreview, t.hasBg && { backgroundColor: colors.backgroundSecondary }]}
                     onPress={() => { setEditingText(t); setEditTextValue(t.text); setEditTextColor(t.color); setEditTextBold(t.bold); setEditTextBg(t.hasBg); }}
                   >
                     <Text style={{ color: t.color, fontSize: 14, fontFamily: t.bold ? "Inter_700Bold" : "Inter_400Regular" }} numberOfLines={1}>{t.text}</Text>
@@ -1446,7 +1446,7 @@ function EditPhase({
 
               {/* Thumbnail scrubber */}
               <View style={[es.trimThumbRow]}>
-                <View style={[es.trimThumbBox, { backgroundColor: "#222" }]}>
+                <View style={[es.trimThumbBox, { backgroundColor: colors.backgroundSecondary }]}>
                   {thumbnailUri && !thumbGen ? (
                     <ExpoImage source={{ uri: thumbnailUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
                   ) : (
@@ -1476,7 +1476,7 @@ function EditPhase({
                 </View>
 
                 <View
-                  style={[es.trimTrack, { backgroundColor: "#333" }]}
+                  style={[es.trimTrack, { backgroundColor: colors.backgroundSecondary }]}
                   onLayout={(e) => { trimTrackW.current = e.nativeEvent.layout.width; }}
                 >
                   {/* Selected range */}
@@ -1569,7 +1569,7 @@ function EditPhase({
         <View style={{ gap: 0, paddingTop: 8 }}>
 
           {/* ── Caption — primary field ── */}
-          <View style={[es.captionWrap, { backgroundColor: "#1A1A1A", borderColor: "#333", marginBottom: 4 }]}>
+          <View style={[es.captionWrap, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 4 }]}>
             <Ionicons name="pencil" size={17} color="#666" style={{ marginTop: 3 }} />
             <TextInput
               style={[es.captionInput, { color: "#fff" }]}
@@ -1681,11 +1681,11 @@ function EditPhase({
                   {thumbnailUri ? (
                     <ExpoImage
                       source={{ uri: thumbnailUri }}
-                      style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: "#222" }}
+                      style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: colors.backgroundSecondary }}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: "#222", alignItems: "center", justifyContent: "center" }}>
+                    <View style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }}>
                       <Ionicons name="image" size={20} color="#444" />
                     </View>
                   )}
@@ -1704,7 +1704,7 @@ function EditPhase({
 
               {/* Sound banner */}
               {soundName && !soundDismissed && (
-                <View style={[es.soundBanner, { backgroundColor: "#222", borderColor: "#333", marginTop: 14 }]}>
+                <View style={[es.soundBanner, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, marginTop: 14 }]}>
                   {soundAlbumArt
                     ? <ExpoImage source={{ uri: soundAlbumArt }} style={es.soundArt} contentFit="cover" />
                     : <View style={[es.soundArt, { backgroundColor: accent + "22", alignItems: "center", justifyContent: "center" }]}>
@@ -1738,7 +1738,7 @@ function EditPhase({
       </ScrollView>
       <Modal visible={showMusicPicker} transparent animationType="slide" onRequestClose={() => setShowMusicPicker(false)}>
         <Pressable onPress={() => setShowMusicPicker(false)} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" }}>
-          <Pressable onPress={() => {}} style={{ maxHeight: "72%", backgroundColor: "#151515", paddingTop: 18, paddingBottom: Math.max(insets.bottom, 16) + 10 }}>
+          <Pressable onPress={() => {}} style={{ maxHeight: "72%", backgroundColor: colors.surface, paddingTop: 18, paddingBottom: Math.max(insets.bottom, 16) + 10 }}>
             <View style={{ paddingHorizontal: 18, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 }}>AfuMusic soundtrack</Text>
               <TouchableOpacity onPress={() => setShowMusicPicker(false)} hitSlop={10}><Ionicons name="close" size={22} color="#aaa" /></TouchableOpacity>
@@ -1764,6 +1764,7 @@ function EditPhase({
 }
 
 function TrimScrubber({ value, max, accent, onChange }: { value: number; max: number; accent: string; onChange: (t: number) => void }) {
+  const { colors } = useTheme();
   const trackW = useRef(1);
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -1774,7 +1775,7 @@ function TrimScrubber({ value, max, accent, onChange }: { value: number; max: nu
   const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return (
     <View style={ss.outer} onLayout={(e) => { trackW.current = e.nativeEvent.layout.width || 1; }} {...pan.panHandlers}>
-      <View style={[ss.track, { backgroundColor: "#333" }]}>
+      <View style={[ss.track, { backgroundColor: colors.backgroundSecondary }]}>
         <View style={[ss.fill, { width: `${pct * 100}%` as any, backgroundColor: accent }]} />
       </View>
       <View style={[ss.thumb, { left: `${pct * 100}%` as any, backgroundColor: accent }]} />
@@ -1794,6 +1795,7 @@ function AdjustSlider({ label, value, min, max, accent, onChange, leftLabel, rig
   onChange: (v: number) => void;
   leftLabel?: string; rightLabel?: string;
 }) {
+  const { colors } = useTheme();
   const trackW = useRef(1);
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -1819,7 +1821,7 @@ function AdjustSlider({ label, value, min, max, accent, onChange, leftLabel, rig
         onLayout={(e) => { trackW.current = e.nativeEvent.layout.width || 1; }}
         {...pan.panHandlers}
       >
-        <View style={[ss.track, { backgroundColor: "#333" }]}>
+        <View style={[ss.track, { backgroundColor: colors.backgroundSecondary }]}>
           <View style={[ss.fill, { width: `${pct * 100}%` as any, backgroundColor: accent }]} />
         </View>
         <View style={[ss.thumb, { left: `${pct * 100}%` as any, backgroundColor: accent }]} />
@@ -2059,6 +2061,7 @@ export default function CreateVideoScreen() {
 }
 
 function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; caption: string }) {
+  const { colors, isDark } = useTheme();
   const { accent } = useTheme();
   const insets = useSafeAreaInsets();
   const upload = useSyncExternalStore(subscribePostUpload, getPostUploadState, getPostUploadState);
@@ -2106,8 +2109,8 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {/* ── 3-step stepper ── */}
       <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 32 }}>
@@ -2122,7 +2125,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
                 <View style={{ alignItems: "center", gap: 5 }}>
                   <View style={{
                     width: 26, height: 26, borderRadius: 13,
-                    backgroundColor: complete ? "#22C55E" : failed ? "#EF4444" : active ? accent : "#222",
+                    backgroundColor: complete ? "#22C55E" : failed ? "#EF4444" : active ? accent : colors.backgroundSecondary,
                     alignItems: "center", justifyContent: "center",
                   }}>
                     {complete && !active ? (
@@ -2132,16 +2135,16 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
                     ) : active ? (
                       <ActivityIndicator size={12} color="#fff" />
                     ) : (
-                      <Text style={{ color: "#666", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{i + 1}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{i + 1}</Text>
                     )}
                   </View>
                   <Text style={{
                     fontSize: 10, fontFamily: "Inter_500Medium",
-                    color: complete ? "#22C55E" : failed ? "#EF4444" : active ? "#fff" : "#444",
+                    color: complete ? "#22C55E" : failed ? "#EF4444" : colors.textMuted,
                   }}>{label}</Text>
                 </View>
                 {!isLast && (
-                  <View style={{ flex: 1, height: 1.5, marginTop: 12, marginHorizontal: 6, backgroundColor: i < 2 ? "#22C55E" : "#222" }} />
+                  <View style={{ flex: 1, height: 1.5, marginTop: 12, marginHorizontal: 6, backgroundColor: i < 2 ? "#22C55E" : colors.border }} />
                 )}
               </React.Fragment>
             );
@@ -2161,12 +2164,12 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
               contentFit="cover"
             />
           ) : (
-            <View style={{ width: 90, height: 120, borderRadius: 12, backgroundColor: "#111", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="videocam" size={36} color="#444" />
+            <View style={{ width: 90, height: 120, borderRadius: 12, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="videocam" size={36} color={colors.textMuted} />
             </View>
           )}
           {!!caption && (
-            <Text style={{ color: "#888", fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 260 }} numberOfLines={2}>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 260 }} numberOfLines={2}>
               {caption}
             </Text>
           )}
@@ -2178,8 +2181,8 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
             <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: "#22C55E18", alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="checkmark-circle" size={52} color="#22C55E" />
             </View>
-            <Text style={{ color: "#fff", fontSize: 22, fontFamily: "Inter_700Bold" }}>Video Posted!</Text>
-            <Text style={{ color: "#555", fontSize: 13, fontFamily: "Inter_400Regular" }}>Taking you back…</Text>
+            <Text style={{ color: colors.text, fontSize: 22, fontFamily: "Inter_700Bold" }}>Video Posted!</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_400Regular" }}>Taking you back…</Text>
           </View>
         )}
 
@@ -2189,16 +2192,16 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
             <Ionicons name="alert-circle" size={56} color="#EF4444" />
             <Text style={{ color: "#EF4444", fontSize: 18, fontFamily: "Inter_600SemiBold" }}>Upload failed</Text>
             {upload?.errorMessage ? (
-              <Text style={{ color: "#666", fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 }}>
                 {upload.errorMessage}
               </Text>
             ) : null}
             <TouchableOpacity
               onPress={() => { if (router.canDismiss()) router.dismissAll(); else router.replace("/(tabs)/discover" as any); }}
-              style={{ marginTop: 8, paddingHorizontal: 28, paddingVertical: 11, borderRadius: 22, borderWidth: 1, borderColor: "#333" }}
+              style={{ marginTop: 8, paddingHorizontal: 28, paddingVertical: 11, borderRadius: 22, borderWidth: 1, borderColor: colors.border }}
               activeOpacity={0.75}
             >
-              <Text style={{ color: "#fff", fontFamily: "Inter_500Medium", fontSize: 14 }}>Go Back</Text>
+              <Text style={{ color: colors.text, fontFamily: "Inter_500Medium", fontSize: 14 }}>Go Back</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -2208,14 +2211,14 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
           <View style={{ width: "100%", gap: 18 }}>
             {/* Stage + percentage */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" }}>
+              <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_600SemiBold" }}>
                 {stageLabel[stage]}
               </Text>
               <Text style={{ color: barColor, fontSize: 16, fontFamily: "Inter_700Bold" }}>{pct}%</Text>
             </View>
 
             {/* Progress bar */}
-            <View style={{ height: 7, borderRadius: 4, backgroundColor: "#181818", overflow: "hidden" }}>
+            <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.backgroundSecondary, overflow: "hidden" }}>
               <View style={{ height: 7, borderRadius: 4, backgroundColor: barColor, width: `${pct}%` as any }} />
             </View>
 
@@ -2228,7 +2231,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
                   <Text key={s.key} style={{
                     fontSize: 10,
                     fontFamily: done ? "Inter_600SemiBold" : "Inter_400Regular",
-                    color: done ? "#22C55E" : active ? "#fff" : "#333",
+                    color: done ? "#22C55E" : colors.textMuted,
                   }}>
                     {s.label}
                   </Text>
@@ -2238,7 +2241,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
 
             {/* Compression card */}
             {est && (
-              <View style={{ borderRadius: 14, backgroundColor: "#0c0c0c", borderWidth: 1, borderColor: "#1c1c1c", padding: 16, gap: 12, marginTop: 4 }}>
+              <View style={{ borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 12, marginTop: 4 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Ionicons name="flash" size={13} color="#FACC15" />
                   <Text style={{ color: "#666", fontSize: 12, fontFamily: "Inter_500Medium" }}>
@@ -2300,7 +2303,7 @@ function WebPickerScreen({ onPick }: { onPick: () => void }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const cs = StyleSheet.create({
-  root: { backgroundColor: "#000" },
+  root: {},
   topBar: {
     position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: "row", alignItems: "center",
@@ -2453,13 +2456,12 @@ const es = StyleSheet.create({
   topBar: {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 16, paddingBottom: 12, gap: 12,
-    backgroundColor: "#0A0A0A",
   },
   backBtn: { padding: 4 },
   topTitle: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#fff", textAlign: "center" },
   postBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
   postBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#fff" },
-  previewWrap: { backgroundColor: "#000", overflow: "hidden" },
+  previewWrap: { overflow: "hidden" },
   videoBadges: { position: "absolute", top: 12, right: 12, gap: 6 },
   badge: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -2496,11 +2498,11 @@ const es = StyleSheet.create({
   emptyHintText: { color: "#555", fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center" },
   textItem: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "#1A1A1A", borderRadius: 10, overflow: "hidden",
+    borderRadius: 10, overflow: "hidden",
   },
   textItemPreview: { flex: 1, paddingHorizontal: 14, paddingVertical: 10 },
   textEditor: {
-    backgroundColor: "#1A1A1A", borderRadius: 12, borderWidth: 1,
+    borderRadius: 12, borderWidth: 1,
     padding: 14, gap: 12,
   },
   textEditorInput: {
@@ -2561,12 +2563,12 @@ const es = StyleSheet.create({
   bigPostBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 17 },
   speedChip: {
     flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 10,
-    borderWidth: 1, borderColor: "#333", backgroundColor: "#1A1A1A",
+    borderWidth: 1,
   },
   sizeCard: {
     marginHorizontal: 16, marginTop: 8, marginBottom: 4,
-    backgroundColor: "#111", borderRadius: 14,
-    borderWidth: 1, borderColor: "#2a2a2a",
+    borderRadius: 14,
+    borderWidth: 1,
     padding: 14, gap: 10,
   },
   sizeCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -2597,8 +2599,8 @@ const es = StyleSheet.create({
   advPillText: { fontFamily: "Inter_500Medium", fontSize: 11 },
   advancedPanel: {
     marginHorizontal: 16, marginTop: 4, marginBottom: 4,
-    backgroundColor: "#111", borderRadius: 14,
-    borderWidth: 1, borderColor: "#1E1E1E",
+    borderRadius: 14,
+    borderWidth: 1,
     padding: 16,
   },
   optionLabel: { color: "#666", fontFamily: "Inter_600SemiBold", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 },

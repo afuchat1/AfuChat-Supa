@@ -32,6 +32,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
 import { prepareMediaForUpload, uploadToStorage } from "@/lib/mediaUpload";
 import { consumeStoryMediaDraft } from "@/lib/storyMediaDraft";
+import { useTheme } from "@/hooks/useTheme";
 import * as FileSystem from "expo-file-system/legacy";
 import { isOnline } from "@/lib/offlineStore";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
@@ -53,6 +54,7 @@ const PRIVACY_OPTIONS: { id: Privacy; label: string; icon: React.ComponentProps<
 
 export default function CreateStoryScreen() {
   const { accent } = useAppAccent();
+  const { colors } = useTheme();
   const { user, profile, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -275,7 +277,7 @@ export default function CreateStoryScreen() {
   const charColor = charPct > 0.9 ? "#FF3B30" : charPct > 0.75 ? "#FF9500" : "rgba(255,255,255,0.5)";
 
   return (
-    <View style={[styles.root, { backgroundColor: "#000" }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       {starting && (
         <View style={[styles.progressBar, { top: insets.top }]}>
           <LinearGradient
@@ -322,7 +324,7 @@ export default function CreateStoryScreen() {
       >
         <View style={styles.previewContainer}>
           {mediaUri ? (
-            <View style={[styles.previewWrap, { width: previewW, height: previewH, borderRadius: previewRadius }]}>
+            <View style={[styles.previewWrap, { width: previewW, height: previewH, borderRadius: previewRadius, backgroundColor: colors.backgroundSecondary }]}>
               {mediaType === "video" ? (
                 <VideoPreview
                   uri={mediaUri!}
@@ -517,18 +519,18 @@ export default function CreateStoryScreen() {
           onPress={() => setShowPrivacy(false)}
         >
           <Pressable
-            style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}
+            style={[styles.modalSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>Who can see your story?</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Who can see your story?</Text>
 
             {PRIVACY_OPTIONS.map((opt) => (
               <TouchableOpacity
                 key={opt.id}
                 style={[
                   styles.privacyRow,
-                  privacy === opt.id && styles.privacyRowActive,
+                  privacy === opt.id && [styles.privacyRowActive, { backgroundColor: colors.backgroundSecondary }],
                 ]}
                 onPress={() => {
                   Haptics.selectionAsync();
@@ -544,17 +546,17 @@ export default function CreateStoryScreen() {
                   <Ionicons
                     name={opt.icon}
                     size={20}
-                    color={privacy === opt.id ? accent : "#999"}
+                    color={privacy === opt.id ? accent : colors.textMuted}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[
                     styles.privacyLabel,
-                    privacy === opt.id && { color: "#fff" },
+                    { color: colors.text },
                   ]}>
                     {opt.label}
                   </Text>
-                  <Text style={styles.privacyDesc}>{opt.desc}</Text>
+                  <Text style={[styles.privacyDesc, { color: colors.textMuted }]}>{opt.desc}</Text>
                 </View>
                 {privacy === opt.id && (
                   <Ionicons name="checkmark-circle" size={22} color={accent} />
@@ -638,7 +640,6 @@ const styles = StyleSheet.create({
   },
   previewWrap: {
     overflow: "hidden",
-    backgroundColor: "#111",
     position: "relative",
   },
   sideToolbar: {
@@ -839,7 +840,6 @@ const styles = StyleSheet.create({
     zIndex: 200,
   },
   modalSheet: {
-    backgroundColor: "#1C1C1E",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,

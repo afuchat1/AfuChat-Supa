@@ -5,6 +5,8 @@ description: Preserve AfuChat's original brand palette when updating the app's v
 
 Keep the original AfuChat palette; the primary brand blue is `#1018D8`.
 
-**Why:** The user asked to restore the original colors and not replace them with the newer palette.
+For app surfaces, use AfuSearch's shared palette across the platform: light `#F5F0E8` and dark `#202124`. Theme choices must remain available as System, Light, and Dark. Avoid pure-black screen and panel backgrounds; retain dark overlays only when needed for media contrast.
 
-**How to apply:** Preserve the existing palette when changing components or themes; do not introduce a new primary brand color.
+**Why:** The user asked to preserve the brand palette and use AfuSearch's surface colors throughout AfuChat with both light and dark themes.
+
+**How to apply:** Use the semantic values from `useTheme()` for page, surface, input, text, border, and navigation colors. Do not introduce a new primary brand color or force one theme while the user has selected another.

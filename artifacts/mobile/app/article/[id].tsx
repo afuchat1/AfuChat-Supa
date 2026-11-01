@@ -228,14 +228,14 @@ export default function ArticleDetailScreen() {
             {/* ── Hero cover image with floating back/share buttons ── */}
             <View>
               {coverImage ? (
-                <View style={st.heroWrap}>
+                <View style={[st.heroWrap, { backgroundColor: colors.backgroundSecondary }]}>
                   <CachedImage uri={coverImage} style={st.heroImage} contentFit="cover" priority="high" />
                   {/* Scrim so buttons are always readable */}
                   <View style={st.heroScrim} />
                 </View>
               ) : (
                 /* Spacer so back button has room even without an image */
-                <View style={[st.heroWrap, { backgroundColor: isDark ? "#1a1a24" : "#e8e0d0", height: 120 }]} />
+                <View style={[st.heroWrap, { backgroundColor: colors.backgroundSecondary, height: 120 }]} />
               )}
 
               {/* Floating action row over the hero */}
@@ -357,7 +357,7 @@ const st = StyleSheet.create({
   center:     { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   topBar:     { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingBottom: 10 },
   topBarBtn:  { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  heroWrap:   { width: "100%", height: 260, backgroundColor: "#111" },
+  heroWrap:   { width: "100%", height: 260 },
   heroImage:  { width: "100%", height: 260 },
   heroScrim:  { ...StyleSheet.absoluteFill, backgroundColor: "transparent" },
   heroActions:{ position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 8 },

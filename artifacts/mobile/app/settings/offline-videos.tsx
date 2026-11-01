@@ -234,7 +234,7 @@ export default function OfflineVideosScreen() {
         isLast && styles.rowLast,
       ]}>
         {/* Thumbnail */}
-        <View style={styles.thumb}>
+        <View style={[styles.thumb, { backgroundColor: colors.backgroundSecondary }]}>
           {item.thumbnail ? (
             <Image source={{ uri: item.thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           ) : (
@@ -389,11 +389,9 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 8,
     overflow: "hidden",
-    backgroundColor: "#111",
     flexShrink: 0,
   },
   thumbPlaceholder: {
-    backgroundColor: "#1a1a2e",
     alignItems: "center",
     justifyContent: "center",
   },

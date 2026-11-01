@@ -299,7 +299,7 @@ export default function CreateDuetScreen() {
             {/* Original video */}
             <View style={s.videoHalf}>
               <Text style={[s.videoHalfLabel, { color: colors.textMuted }]}>Original</Text>
-              <View style={[s.videoBox, { backgroundColor: "#000" }]}>
+              <View style={[s.videoBox, { backgroundColor: colors.backgroundSecondary }]}>
                 <VideoPreview
                   uri={original.video_url}
                   style={StyleSheet.absoluteFill}

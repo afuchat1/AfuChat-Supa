@@ -422,7 +422,7 @@ export default function FileManagerScreen() {
                 <Pressable
                   testID={`file-tile-${item.id}`}
                   onPress={() => setPreviewFile(item)}
-                  style={({ pressed }) => [styles.gridTile, { opacity: pressed ? 0.82 : 1 }]}
+                  style={({ pressed }) => [styles.gridTile, { backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.82 : 1 }]}
                 >
                   {item.type === "image" ? (
                     <Image source={{ uri: item.uri }} style={styles.gridImage} />
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
   fileName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   fileMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
   gridRow: { gap: 2 },
-  gridTile: { flex: 1, aspectRatio: 1, margin: 1, position: "relative", overflow: "hidden", borderRadius: 4, backgroundColor: "#222" },
+  gridTile: { flex: 1, aspectRatio: 1, margin: 1, position: "relative", overflow: "hidden", borderRadius: 4 },
   gridImage: { width: "100%", height: "100%" },
   gridVideo: { flex: 1, alignItems: "center", justifyContent: "center" },
   gridVideoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.24)" },

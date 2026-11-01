@@ -1730,7 +1730,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
             </>
           ) : hasVideo ? (
             <TouchableOpacity onLongPress={messageLongPress} delayLongPress={300} activeOpacity={0.9} style={{ position: "relative" }}>
-              <View style={st.attachVideo}>
+              <View style={[st.attachVideo, { backgroundColor: colors.backgroundSecondary }]}>
                 <VideoPreview
                   uri={msg.attachment_url!}
                   style={{ width: "100%", height: "100%", borderRadius: 8 }}
@@ -10261,7 +10261,7 @@ const st = StyleSheet.create({
     width: (ATTACH_W - 2) / 2,
     height: (ATTACH_H - 2) / 2,
   },
-  attachVideo: { width: ATTACH_W, height: ATTACH_H, borderRadius: 10, overflow: "hidden", backgroundColor: "#0D0D0D" },
+  attachVideo: { width: ATTACH_W, height: ATTACH_H, borderRadius: 10, overflow: "hidden" },
   audioRow: { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 180 },
   fileRow: { flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 260 },
   fileIconBg: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },

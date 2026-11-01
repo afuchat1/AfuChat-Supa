@@ -357,6 +357,7 @@ const VideoItem = React.memo(function VideoItem({
   commentsOpen?: boolean; squeezedH?: number;
 }) {
   const { accent } = useAppAccent();
+  const { colors } = useTheme();
   const { playMusic } = useGlobalMusicPlayer();
   const insets = useSafeAreaInsets();
   // On web, create the player with its final stable source. expo-video's web
@@ -786,7 +787,7 @@ const VideoItem = React.memo(function VideoItem({
             safePause(player);
           }}
         />
-      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />}
+      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />}
 
       {/* TapHandler on native — uses Responder, does NOT block scroll */}
       <TapHandler
@@ -798,7 +799,7 @@ const VideoItem = React.memo(function VideoItem({
   );
 
   return (
-    <View style={[vStyles.item, { width: screenW, height: screenH }]}>
+    <View style={[vStyles.item, { width: screenW, height: screenH, backgroundColor: colors.background }]}>
       {/* Video area — squeezes up when comments open (TikTok/Shorts style) */}
       <Animated.View style={{
         width: screenW, height: videoAreaAnim, overflow: "hidden",
@@ -809,7 +810,7 @@ const VideoItem = React.memo(function VideoItem({
 
         {/* PiP-exit cover: hides the VideoView while Android animates it back to full size */}
         {pipExiting && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", pointerEvents: "none" } as any]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, pointerEvents: "none" } as any]} />
         )}
 
         {/* Poster thumbnail: persists until first frame renders, eliminates black flash on swipe */}
@@ -958,7 +959,7 @@ const VideoItem = React.memo(function VideoItem({
       </Animated.View>
 
       {/* ── WeChat-style horizontal bottom action bar ─────────────────────── */}
-      <View style={vStyles.bottomBar}>
+      <View style={[vStyles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         {/* Left: avatar · @handle · slim Follow button below handle (no display name) */}
         <View style={vStyles.bottomBarLeft}>
           <TouchableOpacity onPress={() => navigateToProfile(item.profile.handle, true).catch(() => {})} activeOpacity={0.85}>
@@ -973,7 +974,7 @@ const VideoItem = React.memo(function VideoItem({
                 <UserName
                   userId={item.author_id}
                   name={`@${item.profile.handle}`}
-                  style={vStyles.barHandle}
+                  style={[vStyles.barHandle, { color: colors.text }]}
                   numberOfLines={1}
                   suppressStar
                 />
@@ -987,10 +988,14 @@ const VideoItem = React.memo(function VideoItem({
             {!isSelf && (
               <TouchableOpacity
                 onPress={() => onFollow(item.author_id, isFollowing)}
-                style={[vStyles.followBtn, isFollowing && vStyles.followBtnActive]}
+                style={[
+                  vStyles.followBtn,
+                  { borderColor: colors.border },
+                  isFollowing && [vStyles.followBtnActive, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }],
+                ]}
                 activeOpacity={0.8}
               >
-                <Text style={[vStyles.followBtnText, isFollowing && vStyles.followBtnTextActive]}>
+                <Text style={[vStyles.followBtnText, { color: colors.textSecondary }]}>
                   {isFollowing ? "Following" : "Follow"}
                 </Text>
               </TouchableOpacity>
@@ -1002,21 +1007,21 @@ const VideoItem = React.memo(function VideoItem({
         <View style={vStyles.bottomBarRight}>
           <TouchableOpacity onPress={handleLike} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
             <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-              <Ionicons name="heart" size={24} color={item.liked ? "#FF3B30" : "#fff"} />
+              <Ionicons name="heart" size={24} color={item.liked ? "#FF3B30" : colors.text} />
             </Animated.View>
-            <Text style={vStyles.barActionLabel}>{formatCount(item.likeCount)}</Text>
+            <Text style={[vStyles.barActionLabel, { color: colors.text }]}>{formatCount(item.likeCount)}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onOpenComments(item.id)} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
-            <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
-            <Text style={vStyles.barActionLabel}>{formatCount(item.replyCount)}</Text>
+            <Ionicons name="chatbubble-ellipses" size={24} color={colors.text} />
+            <Text style={[vStyles.barActionLabel, { color: colors.text }]}>{formatCount(item.replyCount)}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onBookmark(item.id, item.bookmarked)} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
-            <Ionicons name="bookmark" size={24} color={item.bookmarked ? "#FFD60A" : "#fff"} />
-            <Text style={vStyles.barActionLabel}> </Text>
+            <Ionicons name="bookmark" size={24} color={item.bookmarked ? "#FFD60A" : colors.text} />
+            <Text style={[vStyles.barActionLabel, { color: colors.text }]}> </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onShare(item)} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
-            <Ionicons name="paper-plane" size={24} color="#fff" />
-            <Text style={vStyles.barActionLabel}> </Text>
+            <Ionicons name="paper-plane" size={24} color={colors.text} />
+            <Text style={[vStyles.barActionLabel, { color: colors.text }]}> </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1029,7 +1034,7 @@ const VS_SHADOW = Platform.select({
   default: { textShadowColor: "rgba(0,0,0,0.8)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 },
 });
 const vStyles = StyleSheet.create({
-  item: { backgroundColor: "#000", overflow: "hidden" },
+  item: { overflow: "hidden" },
   centerOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   doubleTapHeart: {
     position: "absolute",
@@ -1051,7 +1056,6 @@ const vStyles = StyleSheet.create({
     height: BOTTOM_BAR_H,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0d0d0d",
     paddingHorizontal: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(255,255,255,0.14)",
@@ -1066,7 +1070,7 @@ const vStyles = StyleSheet.create({
   followBtnText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   followBtnTextActive: { color: "rgba(255,255,255,0.45)" },
   barAction: { alignItems: "center", gap: 3 },
-  barActionLabel: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold", ...VS_SHADOW },
+  barActionLabel: { fontSize: 11, fontFamily: "Inter_700Bold" },
   // ── Seek bar — hidden by default, tap to reveal, drag to scrub ────────────
   seekContainer: {
     position: "absolute", left: 0, right: 0, bottom: 0,
@@ -1105,7 +1109,7 @@ const vStyles = StyleSheet.create({
 
 export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {}) {
   const { accent } = useAppAccent();
-  const { colors, isDark, setForceDark } = useTheme();
+  const { colors, isDark } = useTheme();
   const params = useLocalSearchParams<{ id: string }>();
   const rawId = isEmbedded ? undefined : params.id;
   const id = rawId && !isUuid(rawId) ? decodeId(rawId) : rawId;
@@ -1144,16 +1148,14 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   useFocusEffect(
     useCallback(() => {
       setTabFocused(true);
-      setForceDark(true);
       activateKeepAwakeAsync?.("video-feed")?.catch(() => {});
       return () => {
         setTabFocused(false);
-        setForceDark(false);
         setAutoScroll(false);
         autoScrollRef.current = false;
       deactivateKeepAwake?.("video-feed")?.catch(() => {});
       };
-    }, [setForceDark])
+    }, [])
   );
 
   const listRef = useRef<FlatList>(null);
@@ -1896,7 +1898,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
   if (loading) {
     return (
-      <View style={[mStyles.root, { paddingBottom: tabOffset }]}>
+      <View style={[mStyles.root, { paddingBottom: tabOffset, backgroundColor: colors.background }]}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <ShortsFeedSkeleton dark={isDark} />
         {/* Render the real header on top so navigation chrome is visible during load */}
@@ -1928,7 +1930,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   }
 
   return (
-    <View style={[mStyles.root, { paddingBottom: tabOffset }]}>
+    <View style={[mStyles.root, { paddingBottom: tabOffset, backgroundColor: colors.background }]}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Fixed header */}
@@ -2003,9 +2005,9 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           onLayout={onListLayout}
           // Misc
           decelerationRate="fast"
-          style={{ flex: 1, backgroundColor: "#000" }}
+          style={{ flex: 1, backgroundColor: colors.background }}
           ListFooterComponent={loadingMore ? (
-            <View style={{ width: SCREEN_W, height: listHeight, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
+            <View style={{ width: SCREEN_W, height: listHeight, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
               <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
             </View>
           ) : null}
@@ -2058,7 +2060,6 @@ export default function VideoPlayerScreen() {
 const mStyles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#000",
   } as any,
   headerRow: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingBottom: 10 },
   headerSide: { width: 38, alignItems: "center" },
