@@ -19,6 +19,7 @@ import { showAlert } from "@/lib/alert";
 import { safeRouter } from "@/lib/navUtils";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 
 type MusicSection = "discover" | "library" | "offline" | "studio";
 
@@ -588,17 +589,7 @@ export default function AfuMusicApp({
       >
       <View style={styles.topBar}>
         <View style={styles.topBarStart}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            testID="afumusic-back-button"
-            onPress={handleBack}
-            hitSlop={8}
-            style={[styles.backButton, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
-          >
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
-            <Text style={[styles.backLabel, { color: colors.text }]}>Back</Text>
-          </Pressable>
+          <GlassBackButton onPress={handleBack} accessibilityLabel="Go back" />
           <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="flash" size={13} color={GOLD} />
             <Text style={[styles.coinText, { color: colors.text }]}>

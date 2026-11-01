@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -202,9 +203,7 @@ export default function CompanyIndexScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[styles.headerTitle, { color: colors.text }]}>Company Pages</Text>
           {canCreate && myPages.length === 0 && !loading ? (
             <TouchableOpacity

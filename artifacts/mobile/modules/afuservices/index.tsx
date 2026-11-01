@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { safeRouter } from "@/lib/navUtils";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 
 type WalletService = {
   id: string;
@@ -128,15 +129,7 @@ export default function AfuServicesApp({
             },
           ]}
         >
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={onBack}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Back to wallet"
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={onBack} icon="chevron-back" accessibilityLabel="Back to wallet" />
           <View>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Services</Text>
             <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>

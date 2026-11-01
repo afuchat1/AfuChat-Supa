@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -122,9 +123,7 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -139,9 +138,7 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -166,9 +163,7 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -198,9 +193,7 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -233,9 +226,7 @@ export default function SellerApplyScreen() {
   return (
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={24} color={colors.accent} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
         <Text style={[st.headerTitle, { color: colors.text }]}>Become a Seller</Text>
         <View style={{ width: 24 }} />
       </View>

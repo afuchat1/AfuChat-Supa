@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -197,9 +198,7 @@ export default function PaidCommunitiesScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Paid Communities</Text>
         <View style={{ width: 24 }} />
       </View>

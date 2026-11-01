@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
@@ -88,12 +89,12 @@ export default function ResetPasswordNative() {
         showsVerticalScrollIndicator={false}
       >
         {/* Back */}
-        <TouchableOpacity style={s.back} onPress={() => step === "code" ? setStep("email") : router.back()}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-          <Text style={[s.backTxt, { color: colors.text }]}>
-            {step === "code" ? "Back" : "Sign in"}
-          </Text>
-        </TouchableOpacity>
+        <GlassBackButton
+          style={s.back}
+          onPress={() => step === "code" ? setStep("email") : router.back()}
+          icon="chevron-back"
+          label={step === "code" ? "Back" : "Sign in"}
+        />
 
         {/* Icon — flat, no box */}
         <Ionicons

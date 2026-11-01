@@ -16,6 +16,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
@@ -365,9 +366,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   function renderHeader(title: string, rightAction?: { label: string; onPress: () => void }) {
     return (
       <View style={[st.subHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => setScreen("home")} hitSlop={12} style={st.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </Pressable>
+        <GlassBackButton onPress={() => setScreen("home")} icon="chevron-back" />
         <Text style={[st.subTitle, { color: colors.text }]}>{title}</Text>
         {rightAction ? (
           <Pressable onPress={rightAction.onPress} style={[st.headerAction, { backgroundColor: accent + "22" }]}>
@@ -679,9 +678,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.subHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <Pressable onPress={() => setScreen("orders")} hitSlop={12} style={st.backBtn}>
-            <Ionicons name="chevron-back" size={22} color={colors.text} />
-          </Pressable>
+          <GlassBackButton onPress={() => setScreen("orders")} icon="chevron-back" />
           <Text style={[st.subTitle, { color: colors.text }]}>Order Detail</Text>
           <View style={{ width: 60 }} />
         </View>
@@ -824,9 +821,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
       showsVerticalScrollIndicator={false}
     >
       <View style={[st.homeHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 10 }]}>
-        <Pressable onPress={() => safeRouter.back("/apps")} hitSlop={10} style={st.backBtn} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </Pressable>
+        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
         <Text style={[st.homeTitle, { color: colors.text }]}>AfuBusiness</Text>
         <View style={{ width: 34 }} />
       </View>

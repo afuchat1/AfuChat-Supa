@@ -16,6 +16,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import Svg, { Line } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Sharing from "expo-sharing";
@@ -187,9 +188,7 @@ export default function DigitalIdScreen() {
 
       {/* HEADER */}
       <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={s.iconBtn} />
         <Text style={[s.headerTitle, { color: colors.text }]}>Digital ID</Text>
         <View style={s.iconBtn} />
       </View>

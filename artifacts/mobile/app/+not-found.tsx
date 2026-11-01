@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -22,13 +23,11 @@ export default function NotFoundScreen() {
       ]}
     >
       {(
-        <TouchableOpacity
+        <GlassBackButton
           style={styles.backBtn}
           onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover")}
-          hitSlop={12}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.accent} />
-        </TouchableOpacity>
+          icon="chevron-back"
+        />
       )}
 
       <View style={styles.content}>
@@ -59,14 +58,12 @@ export default function NotFoundScreen() {
           </TouchableOpacity>
 
           {router.canGoBack() && (
-            <TouchableOpacity
+            <GlassBackButton
               style={[styles.secondaryBtn, { borderColor: colors.border }]}
               onPress={() => router.back()}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chevron-back" size={17} color={colors.accent} />
-              <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Go back</Text>
-            </TouchableOpacity>
+              icon="chevron-back"
+              label="Go back"
+            />
           )}
         </View>
 

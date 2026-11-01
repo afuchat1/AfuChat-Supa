@@ -19,6 +19,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
@@ -277,9 +278,11 @@ export default function MatchOnboarding() {
       </View>
 
       {/* Back button */}
-      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 16 }]} onPress={prevStep}>
-        <Ionicons name="chevron-back" size={22} color={colors.accent} />
-      </TouchableOpacity>
+      <GlassBackButton
+        style={[styles.backBtn, { top: insets.top + 16 }]}
+        onPress={prevStep}
+        icon="chevron-back"
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView

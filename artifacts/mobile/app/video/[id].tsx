@@ -47,6 +47,7 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { VideoView, useVideoPlayer } from "expo-video";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
@@ -1900,9 +1901,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         <ShortsFeedSkeleton dark={isDark} />
         {/* Render the real header on top so navigation chrome is visible during load */}
         <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} color="#fff" />
           <View style={mStyles.tabRow}>
             <TouchableOpacity
               onPress={() => switchTab("for_you")}
@@ -1934,9 +1933,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
       {/* Fixed header */}
       <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} color="#fff" />
         <View style={mStyles.tabRow}>
           <TouchableOpacity
             onPress={() => switchTab("for_you")}

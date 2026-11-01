@@ -19,6 +19,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { LinearGradient } from "@/components/ui/SafeGradient";
@@ -207,9 +208,7 @@ export default function AfuFreelanceApp({ initialScreen }: { initialScreen?: Scr
     return (
       <KeyboardAvoidingView style={[s.root, { backgroundColor: colors.background }]} behavior="height">
         <View style={[s.subHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
-          <Pressable onPress={() => setScreen("browse")} hitSlop={12} style={s.backBtn}>
-            <Ionicons name="chevron-back" size={22} color={colors.text} />
-          </Pressable>
+          <GlassBackButton onPress={() => setScreen("browse")} icon="chevron-back" />
           <Text style={[s.subTitle, { color: colors.text }]}>Create a service</Text>
           <View style={{ width: 34 }} />
         </View>
@@ -290,9 +289,7 @@ export default function AfuFreelanceApp({ initialScreen }: { initialScreen?: Scr
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.subHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
-          <Pressable onPress={() => setScreen("browse")} hitSlop={12} style={s.backBtn}>
-            <Ionicons name="chevron-back" size={22} color={colors.text} />
-          </Pressable>
+          <GlassBackButton onPress={() => setScreen("browse")} icon="chevron-back" />
           <Text style={[s.subTitle, { color: colors.text }]} numberOfLines={1}>{g.title}</Text>
           <Pressable onPress={() => shareGig(g)} hitSlop={12} style={s.backBtn}>
             <Ionicons name="share-outline" size={20} color={colors.text} />

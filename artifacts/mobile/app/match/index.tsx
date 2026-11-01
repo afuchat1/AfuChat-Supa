@@ -24,6 +24,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -745,9 +746,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
   if (!myProfile) return (
     <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} style={styles.headerBtn}>
-          <Ionicons name="chevron-back" size={24} color={colors.accent} />
-        </Pressable>
+        <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="chevron-back" />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <LinearGradient colors={[BRAND, "#FF6B6B"]} style={styles.headerLogo}>
             <Ionicons name="heart" size={16} color="#fff" />
@@ -788,7 +787,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
   if (myProfile.is_paused) return (
     <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} style={styles.headerBtn}><Ionicons name="chevron-back" size={24} color={colors.accent} /></Pressable>
+        <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="chevron-back" />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <LinearGradient colors={[BRAND, "#FF6B6B"]} style={styles.headerLogo}><Ionicons name="heart" size={16} color="#fff" /></LinearGradient>
           <Text style={[styles.headerTitle, { color: colors.text }]}>AfuMatch</Text>
@@ -815,9 +814,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
     <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable style={styles.headerBtn} onPress={() => router.back()} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
-          <Ionicons name="chevron-back" size={24} color={colors.accent} />
-        </Pressable>
+        <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="chevron-back" />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <LinearGradient colors={[BRAND, "#FF6B6B"]} style={styles.headerLogo}>
             <Ionicons name="heart" size={16} color="#fff" />

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -155,9 +156,7 @@ export default function ProductDetailScreen() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* ── Back + Cart header ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 4 }]}>
-        <TouchableOpacity style={[st.topBarBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} color="#fff" />
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={[st.topBarBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/app/afumarket?section=cart" as any)}>
             <Ionicons name="cart" size={20} color="#fff" />

@@ -16,6 +16,7 @@ import { Image } from "expo-image";
 import { SmartSheet } from "@/components/ui/SmartSheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
@@ -714,9 +715,7 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => safeRouter.back("/apps")} hitSlop={10} style={{ width: 34, height: 40, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
         <View style={styles.headerTitle}>
           <Text style={[styles.eyebrow, { color: colors.accent }]}>USERNAME MARKET</Text>
           <Text style={[styles.title, { color: colors.text }]}>Find a name worth keeping.</Text>

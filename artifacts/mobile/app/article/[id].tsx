@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
@@ -201,9 +202,7 @@ export default function ArticleDetailScreen() {
         <>
           {/* Minimal header while loading */}
           <View style={[st.topBar, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
-            <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={st.topBarBtn}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <GlassBackButton onPress={() => router.back()} style={st.topBarBtn} />
           </View>
           <View style={st.center}>
             <ActivityIndicator color={accent} size="large" />
@@ -212,9 +211,7 @@ export default function ArticleDetailScreen() {
       ) : !article ? (
         <>
           <View style={[st.topBar, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
-            <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={st.topBarBtn}>
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
+            <GlassBackButton onPress={() => router.back()} style={st.topBarBtn} />
           </View>
           <View style={st.center}>
             <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
@@ -243,13 +240,7 @@ export default function ArticleDetailScreen() {
 
               {/* Floating action row over the hero */}
               <View style={[st.heroActions, { paddingTop: insets.top + 8 }]}>
-                <TouchableOpacity
-                  onPress={() => router.back()}
-                  hitSlop={10}
-                  style={st.heroBtn}
-                >
-                  <Ionicons name="arrow-back" size={22} color="#fff" />
-                </TouchableOpacity>
+                <GlassBackButton onPress={() => router.back()} style={st.heroBtn} color="#fff" />
                 <TouchableOpacity
                   onPress={() => sharePost({ postId: article.id, authorName: article.profile.display_name, content: article.article_title || article.content })}
                   hitSlop={10}

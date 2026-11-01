@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { MobileOnlyView } from "@/components/ui/MobileOnlyView";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -112,9 +113,7 @@ export default function PhoneContactsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
         <Text style={[styles.headerTitle, { color: colors.text }]}>Invite Contacts</Text>
         <TouchableOpacity onPress={findContacts} hitSlop={12}>
           <Ionicons name="refresh" size={22} color={colors.accent} />

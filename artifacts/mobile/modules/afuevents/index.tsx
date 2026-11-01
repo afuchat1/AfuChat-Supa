@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
@@ -116,9 +117,7 @@ export default function AfuEventsApp({ initialTab }: { initialTab?: "upcoming" |
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { borderBottomColor: colors.border, paddingTop: insets.top + 14 }]}>
-        <TouchableOpacity onPress={() => safeRouter.back("/apps")} hitSlop={10} style={{ width: 34, height: 40, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
         <Text style={[s.headerTitle, { color: colors.text, flex: 1, textAlign: "center" }]}>Events</Text>
         <TouchableOpacity style={[s.createBtn, { backgroundColor: "#FF9500" }]} onPress={() => showAlert("Create Event", "Event creation coming soon!")}>
           <Ionicons name="add" size={18} color="#fff" />

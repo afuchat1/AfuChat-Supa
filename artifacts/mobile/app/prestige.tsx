@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -243,9 +244,7 @@ export default function PrestigeScreen() {
         >
           {/* Nav */}
           <View style={s.heroNav}>
-            <TouchableOpacity style={s.navBtn} onPress={() => router.back()} hitSlop={12}>
-              <Ionicons name="chevron-back" size={22} color="#fff" />
-            </TouchableOpacity>
+            <GlassBackButton style={s.navBtn} onPress={() => router.back()} icon="chevron-back" color="#fff" />
             <Text style={s.navTitle}>Prestige</Text>
             <TouchableOpacity style={s.navBtn} onPress={() => router.push("/app/afupay")} hitSlop={12}>
               <Ionicons name="wallet" size={20} color="#fff" />

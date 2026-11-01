@@ -34,6 +34,7 @@ const STORY_REPLY_H = Math.round(STORY_REPLY_W * 0.65);
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { CHAT_FAST_DURATION } from "@/lib/chatMotion";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
@@ -7439,9 +7440,7 @@ STRICT RULES:
       <WallpaperOverlay wallpaper={chatAppearance?.wallpaper} dark={isDark} />
       <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
         {(
-          <TouchableOpacity onPress={() => router.back()} style={st.backBtn} hitSlop={12}>
-            <Ionicons name="chevron-back" size={26} color={colors.text} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={st.backBtn} />
         )}
         <TouchableOpacity
           style={st.headerProfile}
@@ -9045,9 +9044,10 @@ STRICT RULES:
       <BottomSheet visible={showLangPicker} onClose={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 10, borderBottomColor: colors.border }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <TouchableOpacity onPress={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }} hitSlop={12}>
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-            </TouchableOpacity>
+            <GlassBackButton
+              onPress={() => { setShowLangPicker(false); setTranslateMsg(null); setAiResult(null); setAiResultType(null); }}
+              icon="chevron-back"
+            />
             <Ionicons name="language" size={20} color={colors.accent} />
             <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: colors.text }}>Translate to</Text>
           </View>

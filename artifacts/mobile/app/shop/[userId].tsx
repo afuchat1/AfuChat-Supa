@@ -15,6 +15,7 @@ import {
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -138,9 +139,7 @@ export default function StoreStorefront() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Floating back + cart */}
       <View style={[st.floatBar, { paddingTop: insets.top + 4 }]}>
-        <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} color="#fff" />
         <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/app/afumarket?section=cart" as any)}>
           <Ionicons name="cart" size={20} color="#fff" />
           {cartCount > 0 && (

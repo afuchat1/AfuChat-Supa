@@ -40,6 +40,7 @@ import { Image as ExpoImage } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
@@ -991,9 +992,11 @@ function EditPhase({
 
       {/* ── Top bar ── */}
       <View style={[es.topBar, { paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity onPress={step === 1 ? onBack : () => setStep(1)} style={es.backBtn} hitSlop={10}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton
+          onPress={step === 1 ? onBack : () => setStep(1)}
+          style={es.backBtn}
+          color="#fff"
+        />
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={es.topTitle}>{step === 1 ? "Enhance" : "Details"}</Text>
           <View style={{ flexDirection: "row", gap: 6, marginTop: 3 }}>

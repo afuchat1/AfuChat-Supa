@@ -14,6 +14,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
@@ -218,9 +219,7 @@ export default function TicketDetail() {
           colors={[BRAND, BRAND + "CC"]}
           style={[st.header, { paddingTop: insets.top + 8 }]}
         >
-          <TouchableOpacity onPress={() => router.back()} style={st.iconBtn}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} style={st.iconBtn} color="#fff" />
           <Text style={st.headerTitle}>Support Ticket</Text>
         </LinearGradient>
         <View style={{ padding: 14, gap: 12 }}>
@@ -240,9 +239,7 @@ export default function TicketDetail() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[st.header, { paddingTop: insets.top + 8 }]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={st.iconBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} color="#fff" />
         <View style={{ flex: 1 }}>
           <Text style={st.headerTitle} numberOfLines={1}>{ticket?.subject || "Support Ticket"}</Text>
           <Text style={st.headerSub}>#{shortId}</Text>

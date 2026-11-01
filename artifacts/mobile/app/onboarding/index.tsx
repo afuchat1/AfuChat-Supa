@@ -20,6 +20,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -964,11 +965,9 @@ export default function OnboardingScreen() {
       {/* ── Top bar ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
         {step > 1 ? (
-          <TouchableOpacity onPress={goBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={goBack} icon="chevron-back" />
         ) : (
-          <View style={{ width: 24 }} />
+          <View style={{ width: 44, height: 44 }} />
         )}
         <Text style={[st.stepIndicator, { color: colors.textMuted }]}>Step {step} of {TOTAL_STEPS}</Text>
         <View style={{ width: 24 }} />

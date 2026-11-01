@@ -20,6 +20,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -709,11 +710,7 @@ export default function SignInScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Back */}
-            <TouchableOpacity onPress={goToLanding} style={sc.backBtn} hitSlop={14}>
-              <View style={sc.backBtnInner}>
-                <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.80)" />
-              </View>
-            </TouchableOpacity>
+            <GlassBackButton onPress={goToLanding} style={sc.backBtn} color="#fff" />
 
             <View style={{ marginTop: 24, marginBottom: 36 }}>
               <Text style={sc.heading}>{t("Sign in")}</Text>

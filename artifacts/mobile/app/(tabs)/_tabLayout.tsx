@@ -28,6 +28,7 @@ import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
 import { T } from "@/constants/theme";
+import { GLASS, glassTokens } from "@/constants/glass";
 
 // Visible bottom bar tabs — Chat · Feed · Shorts · Apps · Me
 const BOTTOM_TABS = [
@@ -161,6 +162,7 @@ export function CompactTabBar({
   const pathname           = usePathname();
   const insets             = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const barGlass = glassTokens(isDark);
   const { t } = useLanguage();
   const totalUnread        = useTotalUnread(userId);
   const active             = normalizeTabPath(pathname);
@@ -236,7 +238,7 @@ export function CompactTabBar({
             pill.bar,
             {
               height: PILL_H,
-              backgroundColor: colors.glassBg,
+              backgroundColor: colors.surface,
               borderColor: BAR_BORDER,
               ...Platform.select({
                 ios: {
@@ -253,14 +255,14 @@ export function CompactTabBar({
           onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
         >
           <BlurView
-            intensity={Platform.OS === "web" ? 0 : 48}
+            intensity={GLASS.blur.light}
             tint={isDark ? "dark" : "light"}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
           <View
             pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassBg }]}
+            style={[StyleSheet.absoluteFill, { backgroundColor: barGlass.fillStrong }]}
           />
           <Animated.View
             pointerEvents="none"

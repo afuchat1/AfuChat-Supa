@@ -13,6 +13,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -478,9 +479,7 @@ export default function PremiumScreen() {
     return (
       <View style={[s.flex, { backgroundColor: colors.background }]}>
         <View style={[s.nav, { paddingTop: insets.top + 8, borderBottomColor: sep }]}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} style={s.backBtn} />
           <Text style={[s.navTitle, { color: colors.text }]}>Premium</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -499,9 +498,7 @@ export default function PremiumScreen() {
     <View style={[s.flex, { backgroundColor: colors.background }]}>
       {/* Nav */}
       <View style={[s.nav, { paddingTop: insets.top + 8, backgroundColor: colors.background, borderBottomColor: sep }]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.accent} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={s.backBtn} />
         <Text style={[s.navTitle, { color: colors.text }]}>Premium</Text>
         <View style={{ width: 40 }} />
       </View>

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -252,9 +253,7 @@ export default function CreateCompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -283,9 +282,7 @@ export default function CreateCompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -365,9 +362,10 @@ export default function CreateCompanyPageScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Nav */}
       <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={step === 1 ? () => router.back() : () => setStep((s) => s - 1)} hitSlop={12}>
-          <Ionicons name="chevron-back" size={24} color={colors.accent} />
-        </TouchableOpacity>
+        <GlassBackButton
+          onPress={step === 1 ? () => router.back() : () => setStep((s) => s - 1)}
+          icon="chevron-back"
+        />
         <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
         <Text style={[styles.stepCounter, { color: colors.textMuted }]}>{step}/{TOTAL_STEPS}</Text>
       </View>
@@ -833,14 +831,12 @@ export default function CreateCompanyPageScreen() {
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12, backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         {step > 1 && (
-          <TouchableOpacity
+          <GlassBackButton
             style={[styles.backBtn, { borderColor: colors.border }]}
             onPress={() => setStep((s) => s - 1)}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="chevron-back" size={18} color={colors.accent} />
-            <Text style={[styles.backBtnText, { color: colors.text }]}>Back</Text>
-          </TouchableOpacity>
+            icon="chevron-back"
+            label="Back"
+          />
         )}
         <TouchableOpacity
           style={[styles.nextBtn, { backgroundColor: colors.accent, opacity: submitting ? 0.7 : 1, flex: step === 1 ? 1 : undefined }]}

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -305,9 +306,7 @@ export default function ManageCompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[styles.navTitle, { color: colors.text }]}>Manage Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -322,9 +321,7 @@ export default function ManageCompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-            <Ionicons name="chevron-back" size={24} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           <Text style={[styles.navTitle, { color: colors.text }]}>Manage Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -339,9 +336,7 @@ export default function ManageCompanyPageScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="chevron-back" size={24} color={colors.accent} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
         <Text style={[styles.navTitle, { color: colors.text }]}>Manage Page</Text>
         <TouchableOpacity onPress={() => router.push(`/company/${page.slug}` as any)} hitSlop={12}>
           <Ionicons name="eye" size={22} color={colors.accent} />

@@ -16,6 +16,7 @@ import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
@@ -583,14 +584,11 @@ export default function EditProfileScreen() {
       <View style={[styles.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.navBarInner}>
           {/* Left — back */}
-          <TouchableOpacity
+          <GlassBackButton
             style={styles.navSideLeft}
             onPress={() => router.back()}
-            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-            activeOpacity={0.6}
-          >
-            <Ionicons name="chevron-back" size={28} color={accent} />
-          </TouchableOpacity>
+            icon="chevron-back"
+          />
 
           {/* Center — title */}
           <Text style={[styles.navTitle, { color: colors.text }]} numberOfLines={1}>

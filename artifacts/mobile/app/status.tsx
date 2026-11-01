@@ -14,6 +14,7 @@ import {
 import { router, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useTheme } from "@/hooks/useTheme";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/env";
 
@@ -207,13 +208,7 @@ export default function StatusPage() {
 
       {/* Hero banner */}
       <View style={[styles.hero, { backgroundColor: overallCfg.bg, paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          hitSlop={12}
-        >
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={styles.backBtn} color="#fff" />
         <View style={styles.heroContent}>
           {loading ? (
             <ActivityIndicator color="#fff" size="large" />

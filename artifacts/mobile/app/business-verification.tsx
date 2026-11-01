@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -210,9 +211,7 @@ export default function BusinessVerificationScreen() {
 
   const NavBar = () => (
     <View style={[st.navBar, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-      <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
-        <Ionicons name="chevron-back" size={24} color={colors.accent} />
-      </TouchableOpacity>
+      <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
       <Text style={[st.navTitle, { color: colors.text }]}>Business Verification</Text>
       <View style={{ width: 24 }} />
     </View>

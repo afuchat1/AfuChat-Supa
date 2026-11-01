@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
@@ -246,9 +247,7 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
     return (
       <View style={[s.root, { backgroundColor: "#0a0a0a" }]}>
         <View style={[s.topBar, { borderBottomColor: "rgba(255,255,255,0.08)", borderBottomWidth: 0.5 }]}>
-          <Pressable onPress={() => setScreen("browse")} hitSlop={12} style={{ padding: 4 }}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </Pressable>
+          <GlassBackButton onPress={() => setScreen("browse")} color="#fff" />
           <Text style={[s.topTitle, { color: "#fff" }]}>Become a Seller</Text>
           <View style={{ width: 30 }} />
         </View>
@@ -328,9 +327,7 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
     <>
       {/* Top bar */}
        <View style={[s.topBar, { borderBottomColor: colors.border, paddingTop: insets.top + 14 }]}>
-         <Pressable onPress={() => safeRouter.back("/apps")} hitSlop={10} style={{ width: 34, height: 40, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel="Go back">
-           <Ionicons name="arrow-back" size={22} color={colors.text} />
-         </Pressable>
+         <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
          <View style={{ flex: 1 }}>
           <Text style={[s.topTitle, { color: colors.text }]}>AfuMarket</Text>
           <Text style={[s.topSub, { color: colors.textMuted }]}>Shop from verified stores</Text>
@@ -633,9 +630,7 @@ function ProductDetail({
           )}
 
           {/* Back button */}
-          <Pressable style={[s.detailBack, { backgroundColor: colors.surface }]} onPress={onBack}>
-            <Ionicons name="arrow-back" size={20} color={colors.text} />
-          </Pressable>
+          <GlassBackButton onPress={onBack} style={s.detailBack} />
 
           {/* Image thumbnails */}
           {product.images?.length > 1 && (

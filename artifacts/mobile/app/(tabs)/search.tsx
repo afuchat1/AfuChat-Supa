@@ -16,6 +16,7 @@ import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
@@ -2720,9 +2721,11 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         {/* Title + image search */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-            <TouchableOpacity onPress={() => safeRouter.back(title === "AfuSearch" ? "/apps" : "/(tabs)/discover")} hitSlop={10} style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", marginRight: 6 }} accessibilityRole="button" accessibilityLabel="Go back">
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </TouchableOpacity>
+            <GlassBackButton
+              onPress={() => safeRouter.back(title === "AfuSearch" ? "/apps" : "/(tabs)/discover")}
+              style={{ marginRight: 6 }}
+              accessibilityLabel="Go back"
+            />
             <Text style={{ fontSize: 24, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: -0.3 }}>{title}</Text>
           </View>
         </View>

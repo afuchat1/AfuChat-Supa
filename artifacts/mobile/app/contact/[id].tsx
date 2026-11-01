@@ -17,6 +17,7 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -430,11 +431,11 @@ export default function ContactScreen() {
           />
           {/* Nav row: back (left) + more (right) */}
           <View style={[s.navRow, { top: 6 }]}>
-            <TouchableOpacity style={s.navBtn}
+            <GlassBackButton
+              style={s.navBtn}
               onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
-              hitSlop={{ top: 8, left: 8, right: 10, bottom: 8 }}>
-              <Ionicons name="arrow-back" size={20} color="#fff" />
-            </TouchableOpacity>
+              color="#fff"
+            />
             {!isSelf && (
               <TouchableOpacity style={s.navBtn}
                 onPress={() => showAlert(profile.display_name, undefined, [

@@ -12,6 +12,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
@@ -76,9 +77,7 @@ export default function AfuCollectionsApp() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <View style={[s.header, { borderBottomColor: colors.border, paddingTop: insets.top + 14 }]}>
-        <TouchableOpacity onPress={() => safeRouter.back("/apps")} hitSlop={10} style={{ width: 34, height: 40, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
         <Text style={[s.headerTitle, { color: colors.text }]}>Collections</Text>
         <TouchableOpacity style={[s.addBtn, { backgroundColor: "#BF5AF2" }]} onPress={() => showAlert("New Collection", "Collection creation coming soon!")}>
           <Ionicons name="add" size={18} color="#fff" />

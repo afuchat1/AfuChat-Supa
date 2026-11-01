@@ -10,6 +10,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -136,7 +137,7 @@ export default function RedEnvelopeScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: "#FF3B30" }]}>
-        <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} color="#fff" />
         <Text style={styles.headerTitle}>🧧 Red Envelope</Text>
         <TouchableOpacity onPress={() => shareRedEnvelope({ envelopeId: id!, senderName: envelope.sender.display_name })}>
           <Ionicons name="share" size={22} color="#fff" />

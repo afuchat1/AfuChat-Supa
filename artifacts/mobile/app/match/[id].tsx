@@ -19,6 +19,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
@@ -287,9 +288,7 @@ export default function MatchConversationScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <LinearGradient colors={[BRAND, "#FF375F"]} style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </Pressable>
+        <GlassBackButton onPress={() => router.back()} color="#fff" />
         <Pressable
           style={styles.headerProfile}
           onPress={() => router.push({ pathname: "/app/afumatch", params: { section: "view-profile", userId: otherProfile?.user_id } } as any)}

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -130,9 +131,7 @@ export default function CartScreen() {
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <View style={styles.headerSide}>
-            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
-              <Ionicons name="chevron-back" size={26} color={colors.accent} />
-            </TouchableOpacity>
+            <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
           </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
           <View style={styles.headerSide} />
@@ -146,9 +145,7 @@ export default function CartScreen() {
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerSide}>
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
-            <Ionicons name="chevron-back" size={26} color={colors.accent} />
-          </TouchableOpacity>
+          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
         </View>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
         <View style={styles.headerSide}>

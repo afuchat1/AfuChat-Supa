@@ -13,6 +13,7 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 
@@ -547,9 +548,7 @@ export default function ChatInfoScreen() {
 
       {/* ── Top bar ── */}
       <View style={[s.topBar, { paddingTop: insets.top + 4 }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={s.topBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-    </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={s.topBtn} />
         <View style={{ flex: 1 }} />
         {(!isChannel || isChannelOwner) && <TouchableOpacity
           onPress={() => router.push({

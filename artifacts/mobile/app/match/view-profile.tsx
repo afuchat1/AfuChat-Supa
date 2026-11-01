@@ -14,6 +14,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -120,9 +121,11 @@ export default function ViewProfileScreen() {
               </View>
             </LinearGradient>
           )}
-          <TouchableOpacity style={[styles.backBtn, { top: insets.top + 8 }]} onPress={() => router.back()}>
-            <View style={styles.backBtnInner}><Ionicons name="arrow-back" size={20} color="#fff" /></View>
-          </TouchableOpacity>
+          <GlassBackButton
+            style={[styles.backBtn, { top: insets.top + 8 }]}
+            onPress={() => router.back()}
+            color="#fff"
+          />
           <TouchableOpacity style={[styles.reportBtn, { top: insets.top + 8 }]} onPress={() => setShowReport(true)}>
             <View style={styles.backBtnInner}><Ionicons name="flag" size={18} color="#fff" /></View>
           </TouchableOpacity>

@@ -22,6 +22,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
@@ -492,9 +493,7 @@ export default function QRScannerScreen() {
 
       {/* Top bar */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={s.iconBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton style={s.iconBtn} onPress={() => router.back()} color="#fff" />
         <Text style={s.topTitle}>QR Scanner</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={s.iconBtn} onPress={() => setTorch((t) => !t)}>

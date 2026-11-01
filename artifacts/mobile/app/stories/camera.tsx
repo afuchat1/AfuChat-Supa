@@ -9,6 +9,7 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -157,9 +158,7 @@ function NativeCameraScreen() {
       <FaceFilterOverlay filter={filter} />
 
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={st.topBtn}>
-          <Ionicons name="arrow-back" size={26} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={st.topBtn} color="#fff" />
         <View style={{ flex: 1 }} />
         <TouchableOpacity
           onPress={() => setFlash(flash === "off" ? "on" : "off")}

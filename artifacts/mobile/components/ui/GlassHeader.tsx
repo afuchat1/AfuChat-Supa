@@ -1,20 +1,16 @@
 import React from "react";
 import {
-  Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
   type ViewStyle,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { safeRouter } from "@/lib/navUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { T } from "@/constants/theme";
-import { GLASS, glassTokens } from "@/constants/glass";
 import { useLanguage } from "@/context/LanguageContext";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 
 export interface GlassHeaderProps {
   title: string;
@@ -39,25 +35,15 @@ export function GlassHeader({
   subtitle,
   largeTitle = false,
   sideWidth = 52,
-  glassBackButton = false,
 }: GlassHeaderProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
-  const glass = glassTokens(isDark);
 
   function handleBack() {
     if (onBack) { onBack(); return; }
     safeRouter.back();
   }
-
-  const backRipple = Platform.OS === "android"
-    ? {
-        color: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-        borderless: true,
-        radius: 22,
-      }
-    : undefined;
 
   return (
     <View
@@ -76,46 +62,11 @@ export function GlassHeader({
         {/* Left — back button */}
         <View style={[styles.side, { width: sideWidth }]}>
           {showBack && (
-            <View
-              style={[
-                styles.backBtnClip,
-                glassBackButton && styles.glassBackBtnClip,
-                glassBackButton && {
-                  borderColor: glass.border,
-                  ...glass.shadowSoft,
-                },
-              ]}
-            >
-              {glassBackButton && (
-                <>
-                  <BlurView
-                    intensity={Platform.OS === "web" ? GLASS.blur.medium : GLASS.blur.heavy}
-                    tint={isDark ? "dark" : "light"}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <View
-                    style={[
-                      StyleSheet.absoluteFill,
-                      { backgroundColor: glass.fillSubtle },
-                    ]}
-                  />
-                </>
-              )}
-              <Pressable
-                android_ripple={backRipple}
-                style={styles.backBtn}
-                onPress={handleBack}
-                hitSlop={{ top: 8, left: 8, right: 12, bottom: 8 }}
-                accessibilityRole="button"
-                 accessibilityLabel={t("Go back")}
-              >
-                <Ionicons
-                   name="arrow-back"
-                  size={26}
-                  color={colors.accent}
-                />
-              </Pressable>
-            </View>
+            <GlassBackButton
+              onPress={handleBack}
+              accessibilityLabel="Go back"
+              style={styles.floatingBack}
+            />
           )}
         </View>
 
@@ -172,19 +123,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 1,
   },
-  backBtnClip: {
-    borderRadius: T.radius.pill,
-    overflow: "hidden",
-  },
-  glassBackBtnClip: {
-    borderWidth: 1,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  floatingBack: { marginLeft: 2 },
   title: {
     ...T.title,
   },

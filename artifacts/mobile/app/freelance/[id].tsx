@@ -27,6 +27,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
@@ -479,13 +480,7 @@ function SafeHeader({
         },
       ]}
     >
-      <TouchableOpacity onPress={onBack} style={st.headerBtn} hitSlop={10}>
-        <Ionicons
-          name="arrow-back"
-          size={26}
-          color={colors.accent ?? Colors.brand}
-        />
-      </TouchableOpacity>
+      <GlassBackButton onPress={onBack} style={st.headerBtn} />
 
       <Text style={[st.headerTitle, { color: colors.text }]} numberOfLines={1}>
         {title}

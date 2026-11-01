@@ -16,6 +16,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
@@ -232,9 +233,7 @@ export default function SupportCenter() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[st.header, { paddingTop: insets.top + 8 }]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={st.iconBtn}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} color="#fff" />
         <View style={{ flex: 1 }}>
           <Text style={st.headerTitle}>Support Center</Text>
           <View style={st.headerSubRow}>

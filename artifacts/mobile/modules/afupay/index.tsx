@@ -20,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { SUPABASE_EDGE_URL } from "@/lib/env";
@@ -143,9 +144,7 @@ function SubHeader({ title, onBack, colors }: { title: string; onBack: () => voi
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   return (
     <View style={[s.subHeader, { borderBottomColor: colors.border, paddingTop: topInset + 8 }]}>
-      <TouchableOpacity onPress={onBack} hitSlop={12} style={s.backBtn}>
-        <Ionicons name="chevron-back" size={22} color={colors.text} />
-      </TouchableOpacity>
+      <GlassBackButton onPress={onBack} icon="chevron-back" />
       <Text style={[s.subHeaderTitle, { color: colors.text }]}>{title}</Text>
       <View style={{ width: 36 }} />
     </View>
@@ -157,20 +156,12 @@ function WalletHeader({ colors, insets, onBack }: { colors: any; insets: { top: 
   return (
     <View style={[s.walletHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: topInset }]}>
       <View style={s.walletHeaderRow}>
-        <TouchableOpacity
-          onPress={onBack}
-          hitSlop={12}
-          style={s.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Text style={[s.walletBackGlyph, { color: colors.text }]}>‹</Text>
-        </TouchableOpacity>
+        <GlassBackButton onPress={onBack} accessibilityLabel="Go back" />
         <View style={s.walletHeaderTitleWrap}>
           <Text style={[s.walletHeaderTitle, { color: colors.text }]}>Wallet</Text>
            <Text style={[s.walletHeaderSubtitle, { color: colors.textMuted }]}>Money and services in one place</Text>
         </View>
-        <View style={s.backBtn} />
+        <View style={{ width: 44, height: 44 }} />
       </View>
     </View>
   );

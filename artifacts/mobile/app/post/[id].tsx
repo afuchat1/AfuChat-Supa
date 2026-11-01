@@ -31,6 +31,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 
@@ -888,9 +889,7 @@ export default function PostDetailScreen() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Floating header — overlays the scroll content, true edge-to-edge */}
       <View style={[st.header, { paddingTop: insets.top + 2, pointerEvents: "box-none" }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={st.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} style={st.headerBtn} />
       </View>
 
       {/* Body */}

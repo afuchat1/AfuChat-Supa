@@ -22,6 +22,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CHAT_FAST_DURATION } from "@/lib/chatMotion";
 import { Ionicons } from "@expo/vector-icons";
+import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
@@ -386,13 +387,7 @@ export default function NewChatScreen() {
           { paddingTop: insets.top + 6, backgroundColor: colors.background },
         ]}
       >
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="chevron-back" size={26} color={accent} />
-        </TouchableOpacity>
+        <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={styles.backBtn} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           New Message
         </Text>
