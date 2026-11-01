@@ -1016,7 +1016,7 @@ export default function PostDetailScreen() {
                 >
                   <Avatar uri={u.avatar_url} name={u.display_name} size={28} userId={u.id} />
                   <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
-                    {u.display_name || u.handle}
+                    {u.display_name || "User"}
                   </Text>
                 </TouchableOpacity>
               ))}

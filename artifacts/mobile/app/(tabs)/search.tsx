@@ -2947,7 +2947,7 @@ export function SearchScreen({
               {history.slice(0, 8).map((term, i) => (
                 <TouchableOpacity
                   key={`h-${i}`}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 0.5, borderColor: colors.border }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
                   onPress={() => onHistoryPress(term)}
                   activeOpacity={0.7}
                 >
@@ -2973,7 +2973,7 @@ export function SearchScreen({
               {saved.slice(0, 6).map((s) => (
                 <TouchableOpacity
                   key={s.id}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: GOLD + "14", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: GOLD + "30" }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: GOLD + "14", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: isAfuSearch ? 0 : 1, borderColor: GOLD + "30" }}
                   onPress={() => onHistoryPress(s.query)}
                   activeOpacity={0.7}
                 >
@@ -3018,7 +3018,7 @@ export function SearchScreen({
                   <TouchableOpacity
                     onPress={() => onTagPress(tag)}
                     activeOpacity={0.72}
-                    style={{ width: half, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 0.5, borderColor: colors.border }}
+                    style={{ width: half, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13, borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
                   >
                     <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: i < 3 ? RED : colors.textMuted, width: 30, textAlign: "center", letterSpacing: -1 }}>{i + 1}</Text>
                     <View style={{ flex: 1, gap: 2 }}>
@@ -3046,7 +3046,7 @@ export function SearchScreen({
               {trendingPeople.slice(0, 10).map((p) => (
                 <TouchableOpacity
                   key={p.id}
-                  style={{ width: 148, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: 0.5, borderColor: colors.border }}
+                  style={{ width: 148, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
                   onPress={() => navigateToKnownProfile(p)}
                   activeOpacity={0.8}
                 >
@@ -3054,7 +3054,7 @@ export function SearchScreen({
                   <LinearGradient colors={[BRAND + "44", BRAND + "08"]} style={{ height: 52, alignItems: "center" }} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                     <View style={{ position: "absolute", bottom: -28, alignItems: "center" }}>
                       {p.avatar_url
-                        ? <ExpoImage source={{ uri: p.avatar_url }} style={{ width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderColor: colors.surface }} contentFit="cover" cachePolicy="memory-disk" />
+                        ? <ExpoImage source={{ uri: p.avatar_url }} style={{ width: 56, height: 56, borderRadius: 28, borderWidth: isAfuSearch ? 0 : 3, borderColor: colors.surface }} contentFit="cover" cachePolicy="memory-disk" />
                         : <AvatarPlaceholder name={p.display_name || p.handle} size={56} color={BRAND} />
                       }
                       {(p.is_verified || p.is_organization_verified) && (
@@ -3101,7 +3101,7 @@ export function SearchScreen({
                 return (
                   <View key={v.id} >
                     <TouchableOpacity
-                      style={{ width: vw, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: 0.5, borderColor: colors.border }}
+                      style={{ width: vw, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
                       onPress={() => router.push(`/video/${v.id}` as any)}
                       activeOpacity={0.82}
                     >
@@ -3129,7 +3129,7 @@ export function SearchScreen({
                         </LinearGradient>
                         {/* Play button */}
                         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-                          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.52)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" }}>
+                          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.52)", alignItems: "center", justifyContent: "center", borderWidth: isAfuSearch ? 0 : 1.5, borderColor: "rgba(255,255,255,0.5)" }}>
                             <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 3 }} />
                           </View>
                         </View>

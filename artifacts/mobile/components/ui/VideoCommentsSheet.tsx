@@ -125,14 +125,6 @@ function formatSecs(totalSecs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function parseCommentText(text: string, accent: string): React.ReactNode {
-  return text.split(/(@\w[\w.]*|#\w+)/g).map((p, i) => {
-    if (/^@\w/.test(p)) return <Text key={i} style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>{p}</Text>;
-    if (/^#\w/.test(p)) return <Text key={i} style={{ color: accent + "BB" }}>{p}</Text>;
-    return <Text key={i}>{p}</Text>;
-  });
-}
-
 function genWaveHeights(seed: string): number[] {
   const n = seed.split("").reduce((a, c) => (a * 31 + c.charCodeAt(0)) & 0xffff, 7);
   return Array.from({ length: WAVEFORM_BARS }, (_, i) => {
@@ -1208,7 +1200,7 @@ export function VideoCommentsSheet({
             >
               <Avatar uri={u.avatar_url} name={u.display_name} size={28} userId={u.id} />
               <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
-                {u.display_name || u.handle}
+                {u.display_name || "User"}
               </Text>
             </TouchableOpacity>
           ))}

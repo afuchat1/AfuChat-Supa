@@ -3,6 +3,7 @@
 - [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
 - [AfuChat brand colors](afuchat-brand-colors.md) — Keep the original AfuChat palette; the primary brand blue is #1018D8.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
+- [Mention display policy](mention-rendering-policy.md) — Render actual mentions as avatar plus display name, never the visible handle.
 - [Find People recommendations](find-people-recommendations.md) — Prefer unseen people on refresh, rank shared interests and mutual connections, and keep the layout free of suggestion labels/icons.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Use the shared floating nav where needed; AfuSearch omits its app-shell bottom bar.
 - [Android module compatibility](android-module-compatibility.md) — App modules must work on Android 14 and earlier across phone brands; verify device-specific crashes from reports.

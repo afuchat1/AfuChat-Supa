@@ -143,7 +143,7 @@ const _mentionProfileCache = new Map<string, MentionProfile | null>();
 
 /**
  * Renders a resolved @mention as an inline profile picture and display name.
- * The handle is only used when no public profile name is available.
+ * The handle is used only for lookup and is never shown in the rendered text.
  */
 function MentionAvatar({
   handle,
@@ -185,32 +185,21 @@ function MentionAvatar({
     return () => { cancelled = true; };
   }, [raw]);
 
-  // Keep a small placeholder while profile details load; don't expose the handle.
-  if (profile === undefined) {
-    return (
-      <Text style={[styles.mention, { color: mentionColor }]}>…</Text>
-    );
-  }
+  const label = profile?.displayName?.trim() || "User";
+  const avatarBackground = /^#[\da-f]{6}$/i.test(mentionColor)
+    ? `${mentionColor}22`
+    : "rgba(127,127,127,0.18)";
 
-  const label = profile?.displayName || raw;
-
-  // No usable avatar: keep the resolved display name and existing profile link.
-  if (!profile?.avatarUrl) {
-    return (
-      <Text
-        style={[styles.mention, { color: mentionColor }]}
-        onPress={onPress}
-        suppressHighlighting
-      >
-        {label}
-      </Text>
-    );
-  }
-
-  // Inline image plus display name on both native and web.
+  // Keep a consistent inline avatar/name while loading or if the profile is unavailable.
   return (
     <Text onPress={onPress} suppressHighlighting>
-      <Image source={{ uri: profile.avatarUrl }} style={styles.mentionAvatar} />
+      {profile?.avatarUrl ? (
+        <Image source={{ uri: profile.avatarUrl }} style={styles.mentionAvatar} />
+      ) : (
+        <Text style={[styles.mentionAvatarPlaceholder, { color: mentionColor, backgroundColor: avatarBackground }]}>
+          {label.charAt(0).toUpperCase()}
+        </Text>
+      )}
       <Text style={[styles.mention, { color: mentionColor }]}> {label}</Text>
     </Text>
   );
@@ -476,5 +465,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden" as const,
     marginTop: 2,
+  },
+  mentionAvatarPlaceholder: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    overflow: "hidden" as const,
+    textAlign: "center",
+    lineHeight: 16,
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
   },
 });

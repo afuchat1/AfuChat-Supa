@@ -7819,7 +7819,7 @@ STRICT RULES:
                 activeOpacity={0.7}
               >
                 <Avatar uri={s.avatar_url} name={s.display_name} size={22} />
-                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }}>@{s.handle}</Text>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }}>{s.display_name || "User"}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
