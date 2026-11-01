@@ -87,12 +87,13 @@ const FALLBACK_TAGS = [
   "business", "sports", "movies", "food", "nature", "education",
 ];
 
-type SearchTab = "all" | "people" | "posts" | "videos" | "music" | "channels" | "events" | "gifts" | "market" | "jobs";
+type SearchTab = "all" | "images" | "people" | "posts" | "videos" | "music" | "channels" | "events" | "gifts" | "market" | "jobs";
 type SortMode  = "relevance" | "recent" | "popular";
 type DateRange = "all" | "24h" | "7d" | "30d";
 
 const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "all",      label: "All",      icon: "apps" },
+  { id: "images",   label: "Images",   icon: "images" },
   { id: "people",   label: "People",   icon: "people" },
   { id: "posts",    label: "Posts",    icon: "document-text" },
   { id: "videos",   label: "Videos",   icon: "play-circle" },
@@ -134,6 +135,15 @@ type VisualMatch = {
   similarity: number;
   matchType?: "visual" | "text" | "caption" | "visual+text" | "content-text";
   sourceType?: string;
+};
+type ImageSearchTileData = {
+  key: string;
+  imageUrl: string;
+  title: string;
+  metadata: string;
+  label?: string;
+  accessibilityLabel: string;
+  onPress: () => void;
 };
 type LensResult = {
   title: string;
@@ -492,6 +502,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   const [lensImageUri, setLensImageUri] = useState<string | null>(null);
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
+  const isVisualSearchActive = Boolean(lensImageUri || lensLoading || lensResult);
   const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
 
   useEffect(() => {
@@ -775,7 +786,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
 
     try {
       const wantsPeople   = all || currentTab === "people";
-      const wantsPosts    = all || currentTab === "posts";
+      const wantsPosts    = all || currentTab === "posts" || currentTab === "images";
       const wantsVideos   = all || currentTab === "videos";
       const wantsChannels = all || currentTab === "channels";
       const wantsEvents   = all || currentTab === "events";
@@ -971,10 +982,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         ...sortBySearchRank((orgPageRes.data || []) as any[], "organization_page").map((o: any) => ({ ...o, kind: "org" as const })),
       ];
 
-      const posts: PostResult[] = sortBySearchRank((postsRes.data || []) as any[], "post").map((p: any) => {
+      const searchedPosts: PostResult[] = sortBySearchRank((postsRes.data || []) as any[], "post").map((p: any) => {
         const a = profiles2Map.get(p.author_id) || {};
         return { ...p, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null };
       });
+      const posts = currentTab === "images"
+        ? searchedPosts.filter((post) => Boolean(post.image_url))
+        : searchedPosts;
 
       const videos: VideoResult[] = sortBySearchRank((videosRes.data || []) as any[], "video").map((v: any) => {
         const a = profiles2Map.get(v.author_id) || {};
@@ -1061,7 +1075,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         if (id !== searchIdRef.current) return;
         const localCandidates = currentTab === "people"
           ? relatedTermsRef.current.people
-          : currentTab === "posts"
+          : currentTab === "posts" || currentTab === "images"
             ? relatedTermsRef.current.posts
             : currentTab === "videos"
               ? relatedTermsRef.current.videos
@@ -1129,7 +1143,15 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     });
   }
 
+  function clearLensResults() {
+    setLensResult(null);
+    setLensImageUri(null);
+    setLensError(null);
+    lensRetryImageRef.current = null;
+  }
+
   function onChangeText(t: string) {
+    clearLensResults();
     setQuery(t);
     setDidYouMean(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -1178,6 +1200,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
+    clearLensResults();
     performSearch(query, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
@@ -1194,6 +1217,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
+    clearLensResults();
     if (suggestion.kind === "profile") {
       trackSuggestionSelection("profile");
       const profile = suggestion.profile;
@@ -1313,6 +1337,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
     setTotalCount(0); setSearchSuggestions([]); setDidYouMean(null);
+    clearLensResults();
     inputRef.current?.focus();
   }
 
@@ -1320,6 +1345,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
+    clearLensResults();
     setQuery(term);
     performSearch(term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
@@ -1329,6 +1355,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
+    clearLensResults();
     const q = `#${tag}`;
     setQuery(q); setTab("posts");
     performSearch(q, "posts", verifiedOnly, sortMode, dateRange, true, undefined, true);
@@ -1338,6 +1365,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   function onTabPress(t: SearchTab) {
     Haptics.selectionAsync();
     setTab(t);
+    if (isVisualSearchActive) return;
     if (hasSearched) performSearch(query, t, verifiedOnly, sortMode, dateRange);
     else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
   }
@@ -1420,10 +1448,17 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   async function analyzeLensImage(uri: string, imageBase64: string, mimeType: string) {
     if (lensLoading) return;
     lensRetryImageRef.current = { uri, imageBase64, mimeType };
+    searchIdRef.current += 1;
+    setLoading(false);
     setLensImageUri(uri);
     setLensResult(null);
     setLensLoading(true);
     setLensError(null);
+    setTab("all");
+    setResults(EMPTY);
+    setTotalCount(0);
+    setDidYouMean(null);
+    setHasSearched(true);
     const requestController = new AbortController();
     let requestTimeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutError = new Error("Visual and text search did not finish within 30 seconds. Please try again.");
@@ -1464,6 +1499,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         algorithm: String(payload.algorithm || "dhash"),
         indexing: Boolean(payload.indexing),
       });
+      setTotalCount(matches.length);
       if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
     } catch (error: any) {
       lensRetryImageRef.current = null;
@@ -1872,105 +1908,245 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     );
   }
 
+  function ImageSearchGrid({ items }: { items: ImageSearchTileData[] }) {
+    const tileWidth = (SW - 32 - 10) / 2;
+    const rows: ImageSearchTileData[][] = [];
+    for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
+
+    return (
+      <View style={{ paddingHorizontal: 16, gap: 14 }}>
+        {rows.map((row, rowIndex) => (
+          <View key={`image-row-${rowIndex}`} style={{ flexDirection: "row", gap: 10 }}>
+            {row.map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                style={{ width: tileWidth }}
+                onPress={item.onPress}
+                activeOpacity={0.82}
+                accessibilityRole="button"
+                accessibilityLabel={item.accessibilityLabel}
+              >
+                <View style={{ width: tileWidth, height: tileWidth * 1.04, overflow: "hidden", borderRadius: 13, backgroundColor: colors.inputBg }}>
+                  <ExpoImage
+                    source={{ uri: item.imageUrl }}
+                    style={{ width: "100%", height: "100%" }}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                  />
+                  {!!item.label && (
+                    <View style={{ position: "absolute", left: 7, bottom: 7, maxWidth: "88%", borderRadius: 6, backgroundColor: "rgba(0,0,0,0.68)", paddingHorizontal: 7, paddingVertical: 4 }}>
+                      <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" }}>{item.label}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text numberOfLines={2} style={{ color: colors.text, fontSize: 12, lineHeight: 16, marginTop: 6 }}>
+                  {item.title || "AfuChat post"}
+                </Text>
+                <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 3 }}>
+                  {item.metadata}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {row.length === 1 && <View style={{ width: tileWidth }} />}
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  function PostImageGrid({ posts }: { posts: PostResult[] }) {
+    const items: ImageSearchTileData[] = posts
+      .filter((post) => Boolean(post.image_url))
+      .map((post) => ({
+        key: `post-image:${post.id}`,
+        imageUrl: post.image_url!,
+        title: post.article_title || post.content || "AfuChat post",
+        metadata: `${post.author_handle ? `@${post.author_handle} · ` : ""}${timeAgo(post.created_at)}`,
+        accessibilityLabel: `Open AfuChat image post by ${post.author_name || post.author_handle}`,
+        onPress: () => {
+          trackSearchClick();
+          router.push((post.post_type === "article" ? `/article/${post.id}` : `/post/${post.id}`) as any);
+        },
+      }));
+
+    return <ImageSearchGrid items={items} />;
+  }
+
   // ─── Lens result card ─────────────────────────────────────────────────────────
 
   function LensCard() {
+    const matches = lensResult?.matches ?? [];
+    const imageMatches = matches.filter((match) => Boolean(match.imageUrl));
+    const contentMatches = Array.from(
+      new Map(matches.map((match) => [match.postId, match] as const)).values(),
+    );
+
+    const matchLabel = (match: VisualMatch) => match.matchType === "text"
+      ? "TEXT IN IMAGE"
+      : match.matchType === "content-text"
+        ? "POST TEXT"
+        : match.matchType === "visual+text"
+          ? "VISUAL + TEXT"
+          : match.matchType === "caption"
+            ? "RELATED POST"
+            : match.distance <= 3 ? "CLOSE IMAGE MATCH" : "IMAGE MATCH";
+
+    const openMatch = (match: VisualMatch) => {
+      trackSearchClick();
+      if (!match.sourceType || match.sourceType === "post" || match.sourceType === "video") {
+        router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any);
+      } else {
+        router.push({ pathname: "/app/afusearch", params: { q: match.content.slice(0, 100) } } as any);
+      }
+    };
+
     if (lensLoading) {
       return (
-        <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: BRAND + "0A" }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 18 }}>
           <ActivityIndicator size="small" color={BRAND} />
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>
-            Comparing image similarity and reading text in the image…
+            Searching public AfuChat posts for matching images and content…
           </Text>
         </View>
       );
     }
-    if (!lensResult) return null;
-    return (
-      <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: colors.surface, flexDirection: "column", alignItems: "stretch" }]}>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-          {lensImageUri && <ExpoImage source={{ uri: lensImageUri }} style={ss.lensImage} contentFit="cover" />}
+    if (!lensResult) {
+      if (!lensError || !lensImageUri) return null;
+      return (
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
-              <Ionicons name="scan-outline" size={16} color={BRAND} />
-              <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>AFUSEARCH VISUAL SEARCH</Text>
-            </View>
-            <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_700Bold" }}>Image search could not finish</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>{lensError}</Text>
           </View>
-          <TouchableOpacity onPress={() => {
-            setLensResult(null);
-            setLensImageUri(null);
-            setLensError(null);
-            lensRetryImageRef.current = null;
-          }} hitSlop={10}>
+          <TouchableOpacity
+            onPress={() => {
+              clearLensResults();
+              setHasSearched(false);
+              setResults(EMPTY);
+              setTotalCount(0);
+              setTab("all");
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close image search results"
+          >
             <Ionicons name="close-circle" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
-        {!!lensResult.matches.length && (
-          <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 }}>
-            {lensResult.matches.slice(0, 12).map((match) => {
-              const matchLabel = match.matchType === "text"
-                ? "TEXT IN IMAGE"
-                : match.matchType === "content-text"
-                  ? "POST TEXT"
-                  : match.matchType === "visual+text"
-                    ? "VISUAL + TEXT"
-                    : match.matchType === "caption"
-                      ? `RELATED ${(match.sourceType || "POST").replace(/_/g, " ").toUpperCase()}`
-                      : match.distance <= 3 ? "CLOSE IMAGE MATCH" : "IMAGE MATCH";
-              return (
-                <TouchableOpacity
-                  key={`${match.sourceType ?? match.matchType ?? "visual"}:${match.postId}:${match.imageUrl ?? ""}`}
-                  onPress={() => {
-                    if (!match.sourceType || match.sourceType === "post" || match.sourceType === "video") {
-                      router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any);
-                    } else {
-                      router.push({ pathname: "/app/afusearch", params: { q: match.content.slice(0, 100) } } as any);
-                    }
-                  }}
-                  activeOpacity={0.78}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open AfuChat post: ${match.content || matchLabel}`}
-                  style={{
-                    width: "48%",
-                    maxWidth: "48%",
-                    overflow: "hidden",
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.inputBg,
-                  }}
-                >
-                  {match.imageUrl ? (
-                    <ExpoImage
-                      source={{ uri: match.imageUrl }}
-                      style={{ width: "100%", aspectRatio: 1, backgroundColor: colors.inputBg }}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
-                    />
-                  ) : (
-                    <View style={{ width: "100%", aspectRatio: 1, padding: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>
-                      <Ionicons name="document-text-outline" size={26} color={BRAND} />
-                      <Text numberOfLines={4} style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: 8 }}>
-                        {match.content || "Open matching AfuChat post"}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={{ paddingHorizontal: 9, paddingVertical: 8, minHeight: 62, justifyContent: "space-between" }}>
-                    {match.imageUrl ? (
-                      <Text numberOfLines={2} style={{ color: colors.text, fontSize: 12, lineHeight: 16 }}>
-                        {match.content || "Open matching AfuChat post"}
-                      </Text>
-                    ) : null}
-                    <Text numberOfLines={1} style={{ color: BRAND, fontSize: 9, letterSpacing: 0.45, fontFamily: "Inter_700Bold", marginTop: match.imageUrl ? 5 : 0 }}>
-                      {matchLabel}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+      );
+    }
+
+    const imageItems: ImageSearchTileData[] = imageMatches.map((match) => ({
+      key: `${match.sourceType ?? "post"}:${match.postId}:${match.imageUrl}`,
+      imageUrl: match.imageUrl!,
+      title: match.content || "AfuChat post",
+      metadata: `${match.sourceType === "video" ? "AfuChat video" : "AfuChat post"} · ${timeAgo(match.createdAt)}`,
+      label: matchLabel(match),
+      accessibilityLabel: `Open matching AfuChat content: ${match.content || matchLabel(match)}`,
+      onPress: () => openMatch(match),
+    }));
+    return (
+      <View style={{ paddingTop: 16 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 16, paddingBottom: 16 }}>
+          {lensImageUri ? (
+            <ExpoImage source={{ uri: lensImageUri }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: colors.inputBg }} contentFit="cover" />
+          ) : (
+            <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: BRAND + "12", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="scan-outline" size={22} color={BRAND} />
+            </View>
+          )}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: BRAND, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.55, marginBottom: 3 }}>
+              AFUSEARCH · PUBLIC POSTS
+            </Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_700Bold" }} numberOfLines={1}>
+              {lensResult.title}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={2}>
+              {lensResult.description}
+            </Text>
           </View>
+          <TouchableOpacity
+            onPress={() => {
+              clearLensResults();
+              setHasSearched(false);
+              setResults(EMPTY);
+              setTotalCount(0);
+              setTab("all");
+            }}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close image search results"
+          >
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        {tab === "images" ? (
+          imageItems.length ? (
+            <ImageSearchGrid items={imageItems} />
+          ) : (
+            <View style={{ paddingHorizontal: 16, paddingVertical: 18 }}>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                No matching images. Switch to All to see related AfuChat posts and text matches.
+              </Text>
+            </View>
+          )
+        ) : (
+          <>
+            {imageItems.length > 0 && (
+              <>
+                <SectionHeader icon="images" label="Matching images" color={BRAND} count={imageItems.length} />
+                <ImageSearchGrid items={imageItems} />
+              </>
+            )}
+            {contentMatches.length > 0 && (
+              <>
+                <SectionHeader icon="document-text" label="Related AfuChat posts" color={BLUE} count={contentMatches.length} />
+                <View style={{ paddingHorizontal: 16 }}>
+                  {contentMatches.map((match) => (
+                    <TouchableOpacity
+                      key={`content-match:${match.postId}`}
+                      onPress={() => openMatch(match)}
+                      activeOpacity={0.76}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open matching AfuChat content: ${match.content || matchLabel(match)}`}
+                      style={{ flexDirection: "row", alignItems: "flex-start", gap: 11, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                    >
+                      {match.imageUrl ? (
+                        <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 54, height: 54, borderRadius: 9, backgroundColor: colors.inputBg }} contentFit="cover" cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={{ width: 54, height: 54, borderRadius: 9, backgroundColor: BRAND + "12", alignItems: "center", justifyContent: "center" }}>
+                          <Ionicons name={match.sourceType === "video" ? "play-circle-outline" : "document-text-outline"} size={22} color={BRAND} />
+                        </View>
+                      )}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                          <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", flex: 1 }}>
+                            {match.sourceType === "video" ? "AFUCHAT VIDEO" : "AFUCHAT POST"}
+                          </Text>
+                          <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(match.createdAt)}</Text>
+                        </View>
+                        <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }} numberOfLines={3}>
+                          {match.content || "Open matching AfuChat post"}
+                        </Text>
+                        <Text style={{ color: BRAND, fontSize: 10, fontFamily: "Inter_600SemiBold", marginTop: 5 }}>
+                          {matchLabel(match)}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+            {!imageItems.length && !contentMatches.length && (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 18 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
+                  No public AfuChat posts matched this image.
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </View>
     );
@@ -2089,6 +2265,9 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   // ─── Results view ────────────────────────────────────────────────────────────
 
   function renderResults() {
+    const showLens = isVisualSearchActive;
+    const visualImageCount = lensResult?.matches.filter((match) => Boolean(match.imageUrl)).length ?? 0;
+    const showImages = !isVisualSearchActive && tab === "images" && results.posts.length > 0;
     const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
     const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
     const showVideos   = (tab === "all" || tab === "videos")   && results.videos.length > 0;
@@ -2098,7 +2277,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
     const showMarket   = (tab === "all" || tab === "market")   && results.market.length > 0;
     const showJobs     = (tab === "all" || tab === "jobs")     && results.jobs.length > 0;
-    const any = showPeople || showPosts || showVideos || showMusic || showChannels || showEvents || showGifts || showMarket || showJobs;
+    const any = showLens || showImages || showPeople || showPosts || showVideos || showMusic || showChannels || showEvents || showGifts || showMarket || showJobs;
 
     if (!any) return <NoResults />;
 
@@ -2109,7 +2288,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Ionicons name="search" size={13} color={BRAND} />
             <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              {didYouMean
+              {isVisualSearchActive
+                ? <>
+                    <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>
+                      {tab === "images" ? visualImageCount : lensResult?.matches.length ?? 0}
+                    </Text>{" "}{tab === "images" ? "image matches" : "matches"} from your image
+                  </>
+                : didYouMean
                 ? <>
                     Showing <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text> results for{" "}
                     <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{didYouMean.suggested}"</Text>
@@ -2154,7 +2339,14 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           </View>
         )}
 
-        {(lensResult || lensLoading) && <View style={{ paddingHorizontal: 14, paddingTop: 14 }}><LensCard /></View>}
+        {showLens && <LensCard />}
+
+        {showImages && (
+          <View>
+            <SectionHeader icon="images" label="Images" color={BRAND} count={results.posts.length} />
+            <PostImageGrid posts={results.posts} />
+          </View>
+        )}
 
         {showPeople && (
           <View>
@@ -2785,7 +2977,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         )}
 
         {/* Filter pills — only shown when actively searching */}
-        {(query.length > 0 || hasSearched) && !isAfuSearchTyping && (
+        {(query.length > 0 || hasSearched) && !isAfuSearchTyping && !isVisualSearchActive && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 6 }}>
           <TouchableOpacity
             style={[ss.filterPill, verifiedOnly && { backgroundColor: BRAND, borderColor: BRAND }]}
@@ -2814,9 +3006,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       {hasSearched && !loading && (
         <View style={[ss.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4, paddingHorizontal: 12 }}>
-            {TABS.map((t) => {
+            {(isVisualSearchActive ? TABS.filter((item) => item.id === "all" || item.id === "images") : TABS).map((t) => {
               const active = tab === t.id;
               const cnt = t.id === "all" ? totalCount
+                : t.id === "images"
+                  ? isVisualSearchActive
+                    ? lensResult?.matches.filter((match) => Boolean(match.imageUrl)).length || 0
+                    : results.posts.filter((post) => Boolean(post.image_url)).length
                 : t.id === "people" ? results.people.length
                 : t.id === "posts" ? results.posts.length
                 : t.id === "videos" ? results.videos.length
@@ -2951,20 +3147,6 @@ const ss = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 10,
-  },
-
-  lensCard: {
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  lensImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 10,
   },
 
   listRow: {
