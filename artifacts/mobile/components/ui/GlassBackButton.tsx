@@ -29,8 +29,8 @@ export function GlassBackButton({
   accessibilityLabel,
   label,
   icon = "arrow-back",
-  iconSize = 22,
-  size = 52,
+  iconSize = 18,
+  size = 40,
   color,
   style,
 }: Props) {
@@ -84,7 +84,7 @@ export function GlassBackButton({
         <Pressable
           onPress={onPress}
           style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-          hitSlop={6}
+          hitSlop={8}
           disabled={!onPress}
           android_ripple={{
             color: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)",
@@ -118,10 +118,10 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
   pressed: {
     opacity: 0.65,

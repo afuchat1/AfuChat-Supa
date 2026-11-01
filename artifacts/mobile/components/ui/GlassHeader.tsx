@@ -34,7 +34,7 @@ export function GlassHeader({
   extraBottom = 0,
   subtitle,
   largeTitle = false,
-  sideWidth = 52,
+  sideWidth = 44,
 }: GlassHeaderProps) {
   const { colors } = useTheme();
   const { t } = useLanguage();
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     paddingTop: T.space.sm - 2,
   },
   side: {
-    width: 52,
+    width: 44,
     alignItems: "flex-start",
     justifyContent: "center",
   },

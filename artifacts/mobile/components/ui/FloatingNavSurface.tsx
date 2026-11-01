@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
+  Animated,
+  Platform,
   StyleSheet,
   View,
   type LayoutChangeEvent,
@@ -10,6 +12,7 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { floatingNavigationShadow, GLASS, glassTokens } from "@/constants/glass";
+import { T } from "@/constants/theme";
 
 type FloatingGlassSurfaceProps = {
   children: React.ReactNode;
@@ -102,6 +105,51 @@ export function FloatingNavSurface({
         {children}
       </FloatingGlassSurface>
     </View>
+  );
+}
+
+type FloatingNavIndicatorProps = {
+  itemCount: number;
+  selectedIndex: number;
+  barWidth: number;
+};
+
+export function FloatingNavIndicator({
+  itemCount,
+  selectedIndex,
+  barWidth,
+}: FloatingNavIndicatorProps) {
+  const { colors, isDark } = useTheme();
+  const activeIndexAnim = useRef(new Animated.Value(selectedIndex)).current;
+  const itemWidth = itemCount > 0 ? Math.max(0, (barWidth - 12) / itemCount) : 0;
+  const activeTranslateX = itemCount > 1
+    ? activeIndexAnim.interpolate({
+        inputRange: Array.from({ length: itemCount }, (_, index) => index),
+        outputRange: Array.from({ length: itemCount }, (_, index) => index * itemWidth),
+        extrapolate: "clamp",
+      })
+    : 0;
+
+  useEffect(() => {
+    Animated.spring(activeIndexAnim, {
+      toValue: selectedIndex,
+      ...T.motion.spring.snappy,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [activeIndexAnim, selectedIndex]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        floatingNavigationStyles.activeHighlight,
+        {
+          width: itemWidth,
+          backgroundColor: colors.navigationActive + (isDark ? "34" : "1C"),
+          transform: [{ translateX: activeTranslateX }],
+        },
+      ]}
+    />
   );
 }
 

@@ -26,8 +26,11 @@ import { supabase } from "@/lib/supabase";
 import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
-import { T } from "@/constants/theme";
-import { FloatingNavSurface, floatingNavigationStyles } from "@/components/ui/FloatingNavSurface";
+import {
+  FloatingNavIndicator,
+  FloatingNavSurface,
+  floatingNavigationStyles,
+} from "@/components/ui/FloatingNavSurface";
 
 // Visible bottom bar tabs — Chat · Feed · Shorts · Apps · Me
 const BOTTOM_TABS = [
@@ -167,26 +170,12 @@ export function CompactTabBar({
   const [showCreateActions, setShowCreateActions] = useState(false);
   const [barWidth, setBarWidth] = useState(0);
   const activeIndex = Math.max(0, BOTTOM_TABS.findIndex((tab) => tab.route === active));
-  const activeIndexAnim = useRef(new Animated.Value(activeIndex)).current;
   const createFabScale = useRef(new Animated.Value(1)).current;
   const composeFabScale = useRef(new Animated.Value(1)).current;
-  const itemWidth = Math.max(0, (barWidth - 12) / BOTTOM_TABS.length);
-  const activeTranslateX = activeIndexAnim.interpolate({
-    inputRange: [0, 1, 2, 3, 4],
-    outputRange: [0, 1, 2, 3, 4].map((index) => index * itemWidth),
-  });
   // Keep this binding distinct from older module-level brand constants. A
   // previous name collided in the transformed web bundle and caused a TDZ
   // crash while TabLayout was mounting.
   const accentColor = colors.accent;
-
-  useEffect(() => {
-    Animated.spring(activeIndexAnim, {
-      toValue: activeIndex,
-      ...T.motion.spring.snappy,
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-  }, [activeIndex, activeIndexAnim]);
 
   function animateFab(scale: Animated.Value, toValue: number) {
     Animated.spring(scale, {
@@ -228,16 +217,10 @@ export function CompactTabBar({
         bottomOffset={PILL_BOTTOM}
         onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
       >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            floatingNavigationStyles.activeHighlight,
-            {
-              width: itemWidth,
-              backgroundColor: ACTIVE_ICON + (isDark ? "34" : "1C"),
-              transform: [{ translateX: activeTranslateX }],
-            },
-          ]}
+        <FloatingNavIndicator
+          itemCount={BOTTOM_TABS.length}
+          selectedIndex={activeIndex}
+          barWidth={barWidth}
         />
         {BOTTOM_TABS.map((tab) => {
           const focused   = active === tab.route;
