@@ -18,6 +18,7 @@ import {
   FlatList,
   Image as RNImage,
   Keyboard,
+  Linking,
   Modal,
   PanResponder,
   Platform,
@@ -678,6 +679,7 @@ export function VideoCommentsSheet({
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [recordElapsed, setRecordElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartingRef = useRef(false);
 
   const [attachedImage, setAttachedImage] = useState<{ uri: string; width: number; height: number } | null>(null);
   const [showEmojiPanel, setShowEmojiPanel] = useState(false);
@@ -903,25 +905,41 @@ export function VideoCommentsSheet({
       showAlert("Not supported", "Audio recording is not available in this environment.");
       return;
     }
-    audioFocus.claimRecording();
-    const { granted } = await Audio.requestPermissionsAsync();
-    if (!granted) {
-      showAlert("Microphone access needed", "Please enable microphone access in Settings to record voice notes.");
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!visibleRef.current || recordingStartingRef.current || recordState !== "idle") return;
+    recordingStartingRef.current = true;
     try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        const buttons = permission.canAskAgain === false
+          ? [
+              { text: "Not now", style: "cancel" as const },
+              { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
+            ]
+          : undefined;
+        showAlert(
+          "Microphone access needed",
+          permission.canAskAgain === false
+            ? "Enable microphone access in Settings to record a voice note."
+            : "Allow microphone access to record a voice note.",
+          buttons,
+        );
+        return;
+      }
+      if (!visibleRef.current) return;
+
+      audioFocus.claimRecording();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
+      ).catch(() => Audio!.Recording.createAsync(Audio!.RecordingOptionsPresets.LOW_QUALITY));
       setRecordingObj(recording);
       setRecordElapsed(0);
       setRecordState("recording");
-      timerRef.current = setInterval(async () => {
+      timerRef.current = setInterval(() => {
         setRecordElapsed((prev) => {
           const next = prev + 1;
           if (next >= MAX_VOICE_SECS) {
@@ -931,7 +949,16 @@ export function VideoCommentsSheet({
         });
       }, 1000);
     } catch (e: any) {
-      showAlert("Could not start recording", e?.message || "Please try again.");
+      setRecordState("idle");
+      setRecordingObj(null);
+      setRecordElapsed(0);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: false,
+      }).catch(() => {});
+      showAlert("Could not start recording", e?.message || "Check microphone access and try again.");
+    } finally {
+      recordingStartingRef.current = false;
     }
   }
 
@@ -963,19 +990,20 @@ export function VideoCommentsSheet({
   }
 
   async function pickImage() {
-    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!granted) {
-      showAlert("Photos access needed", "Please enable photo library access in Settings.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.82,
-      allowsEditing: false,
-    });
-    if (!result.canceled && result.assets.length > 0) {
-      const a = result.assets[0];
-      setAttachedImage({ uri: a.uri, width: a.width, height: a.height });
+    try {
+      // Let Android's system picker grant access to only the selected image;
+      // full library permission is not needed for a one-off attachment.
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.82,
+        allowsEditing: false,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const a = result.assets[0];
+        setAttachedImage({ uri: a.uri, width: a.width, height: a.height });
+      }
+    } catch (error: any) {
+      showAlert("Could not open photos", error?.message || "Please try again.");
     }
   }
 

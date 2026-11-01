@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -34,6 +35,7 @@ function NativeCameraScreen() {
   const [flash, setFlash] = useState<"off" | "on">("off");
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [filter, setFilter] = useState<FilterId>("normal");
 
   useFocusEffect(
@@ -44,7 +46,7 @@ function NativeCameraScreen() {
   );
 
   const takePicture = useCallback(async () => {
-    if (!cameraRef.current || processing) return;
+    if (!cameraRef.current || processing || !cameraReady) return;
     setProcessing(true);
     try {
       // Keep camera photos as native files. Converting them to base64 sends
@@ -63,18 +65,30 @@ function NativeCameraScreen() {
       showAlert("Error", e?.message || "Failed to take photo.");
       setProcessing(false);
     }
-  }, [processing]);
+  }, [processing, cameraReady]);
 
   const toggleRecord = useCallback(async () => {
-    if (!cameraRef.current) return;
+    if (!cameraRef.current || !cameraReady) return;
     if (recording) {
       cameraRef.current.stopRecording();
       return;
     }
     if (!micPermission?.granted) {
-      const { granted } = await requestMicPermission();
-      if (!granted) {
-        showAlert("Microphone Required", "Microphone access is needed to record video with audio.");
+      const permission = await requestMicPermission();
+      if (!permission.granted) {
+        const buttons = permission.canAskAgain === false
+          ? [
+              { text: "Not now", style: "cancel" as const },
+              { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
+            ]
+          : undefined;
+        showAlert(
+          "Microphone Required",
+          permission.canAskAgain === false
+            ? "Enable microphone access in AfuChat settings to record video with audio."
+            : "Allow microphone access to record video with audio.",
+          buttons,
+        );
         return;
       }
     }
@@ -92,7 +106,7 @@ function NativeCameraScreen() {
       setRecording(false);
       showAlert("Error", e?.message || "Failed to record video.");
     }
-  }, [recording, micPermission]);
+  }, [recording, micPermission, cameraReady]);
 
   const openGallery = useCallback(async () => {
     try {
@@ -130,8 +144,13 @@ function NativeCameraScreen() {
         <View style={st.permWrap}>
           <Ionicons name="camera" size={56} color="rgba(255,255,255,0.5)" />
           <Text style={st.permText}>Camera access is needed to take photos and videos for stories.</Text>
-          <TouchableOpacity style={[st.permBtn, { backgroundColor: accent }]} onPress={requestCamPermission}>
-            <Text style={st.permBtnText}>Allow Camera</Text>
+          <TouchableOpacity
+            style={[st.permBtn, { backgroundColor: accent }]}
+            onPress={() => camPermission.canAskAgain === false
+              ? void Linking.openSettings().catch(() => {})
+              : void requestCamPermission()}
+          >
+            <Text style={st.permBtnText}>{camPermission.canAskAgain === false ? "Open Settings" : "Allow Camera"}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={st.permSecondary} onPress={openGallery}>
             <Ionicons name="images" size={18} color="rgba(255,255,255,0.7)" />
@@ -153,6 +172,7 @@ function NativeCameraScreen() {
         facing={facing}
         flash={flash}
         mode={mode === "video" ? "video" : "picture"}
+        onCameraReady={() => setCameraReady(true)}
       />
 
       <FaceFilterOverlay filter={filter} />
@@ -183,7 +203,7 @@ function NativeCameraScreen() {
         <TouchableOpacity
           style={[st.shutter, recording && st.shutterRec]}
           onPress={mode === "photo" ? takePicture : toggleRecord}
-          disabled={processing}
+          disabled={processing || !cameraReady}
           activeOpacity={0.7}
         >
           {processing ? (

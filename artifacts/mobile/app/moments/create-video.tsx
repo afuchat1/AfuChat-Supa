@@ -23,6 +23,7 @@ import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
+  Linking,
   PanResponder,
   Platform,
   Pressable,
@@ -336,6 +337,10 @@ function CameraPhase({
 
   const [CameraView, setCameraView] = useState<any>(null);
   const [camAvailable, setCamAvailable] = useState(true);
+  const [cameraLoading, setCameraLoading] = useState(true);
+  const [cameraPermission, setCameraPermission] = useState<any>(null);
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<"front" | "back">("back");
   const [flash, setFlash] = useState<"off" | "on" | "torch">("off");
   const [isRecording, setIsRecording] = useState(false);
@@ -353,6 +358,8 @@ function CameraPhase({
   const [beautyMode, setBeautyMode] = useState(false);
 
   const cameraRef = useRef<any>(null);
+  const cameraModuleRef = useRef<any>(null);
+  const recordingStartRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
@@ -362,24 +369,80 @@ function CameraPhase({
 
   useEffect(() => {
     mounted.current = true;
-    import("expo-camera").then(async (m) => {
-      setCameraView(() => m.CameraView ?? (m as any).Camera ?? null);
-      // Pre-request permissions on mount so first record tap is instant
+    let active = true;
+    const loadCamera = async () => {
       try {
-        const cam = m.Camera ?? m.CameraView;
-        if (cam?.requestCameraPermissionsAsync) {
-          await cam.requestCameraPermissionsAsync();
-          await cam.requestMicrophonePermissionsAsync?.();
-        }
-      } catch {}
-    }).catch(() => setCamAvailable(false));
+        const m = await import("expo-camera");
+        if (!active) return;
+        const view = m.CameraView ?? (m as any).Camera ?? null;
+        cameraModuleRef.current = m;
+        setCameraView(() => view);
+        setCamAvailable(!!view);
+        if (!view) return;
+        const permission = await m.Camera.getCameraPermissionsAsync();
+        if (active) setCameraPermission(permission);
+      } catch {
+        if (active) setCamAvailable(false);
+      } finally {
+        if (active) setCameraLoading(false);
+      }
+    };
+    void loadCamera();
     return () => {
+      active = false;
       mounted.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
     };
   }, []);
+
+  async function requestCameraAccess() {
+    const camera = cameraModuleRef.current?.Camera;
+    if (!camera) return;
+    setPermissionBusy(true);
+    try {
+      const current = await camera.getCameraPermissionsAsync();
+      const next = current.granted ? current : await camera.requestCameraPermissionsAsync();
+      setCameraPermission(next);
+      if (!next.granted && next.canAskAgain === false) {
+        showAlert("Camera access is blocked", "Enable camera access in AfuChat settings to record a video.", [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
+        ]);
+      }
+    } catch (error: any) {
+      showAlert("Could not access the camera", error?.message || "Please try again.");
+    } finally {
+      setPermissionBusy(false);
+    }
+  }
+
+  async function ensureMicrophoneAccess() {
+    const camera = cameraModuleRef.current?.Camera;
+    if (!camera) {
+      showAlert("Microphone unavailable", "Close and reopen the video creator, then try again.");
+      return false;
+    }
+    const current = await camera.getMicrophonePermissionsAsync();
+    const next = current.granted ? current : await camera.requestMicrophonePermissionsAsync();
+    if (next.granted) return true;
+
+    const buttons = next.canAskAgain === false
+      ? [
+          { text: "Not now", style: "cancel" as const },
+          { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
+        ]
+      : undefined;
+    showAlert(
+      "Microphone access needed",
+      next.canAskAgain === false
+        ? "Enable microphone access in AfuChat settings to record video with sound."
+        : "Allow microphone access to record video with sound.",
+      buttons,
+    );
+    return false;
+  }
 
   function startCountdown(cb: () => void) {
     setCountdown(3);
@@ -398,21 +461,31 @@ function CameraPhase({
     }, 1000);
   }
 
-  async function doRecord() {
-    if (!cameraRef.current || isRecording) return;
-    // Permissions are pre-requested on mount — no delay here
-
-    setIsRecording(true);
-    setElapsed(0);
-    elapsedRef.current = 0;
-    void Haptics.impactAsync("medium");
-    timerRef.current = setInterval(() => {
-      elapsedRef.current += 1;
-      if (mounted.current) setElapsed(elapsedRef.current);
-      if (elapsedRef.current >= maxDur) stopRecord();
-    }, 1000);
-
+  async function doRecord(holdToRecord = false) {
+    if (!cameraRef.current || isRecording || recordingStartRef.current) return;
+    recordingStartRef.current = true;
     try {
+      if (!cameraPermission?.granted) {
+        await requestCameraAccess();
+        return;
+      }
+      if (!cameraReady) {
+        showAlert("Camera starting", "Wait for the camera preview, then try recording again.");
+        return;
+      }
+      if (!(await ensureMicrophoneAccess())) return;
+      if (holdToRecord && !holdActiveRef.current) return;
+
+      setIsRecording(true);
+      setElapsed(0);
+      elapsedRef.current = 0;
+      void Haptics.impactAsync("medium");
+      timerRef.current = setInterval(() => {
+        elapsedRef.current += 1;
+        if (mounted.current) setElapsed(elapsedRef.current);
+        if (elapsedRef.current >= maxDur) stopRecord();
+      }, 1000);
+
       const result = await cameraRef.current.recordAsync({
         maxDuration: maxDur,
         quality: getCameraRecordingQuality(),
@@ -420,10 +493,13 @@ function CameraPhase({
       if (result?.uri && mounted.current) {
         onCapture(result.uri, elapsedRef.current || 10, speed);
       }
-    } catch {}
-
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (mounted.current) setIsRecording(false);
+    } catch (error: any) {
+      showAlert("Could not start recording", error?.message || "Check camera and microphone access, then try again.");
+    } finally {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (mounted.current) setIsRecording(false);
+      recordingStartRef.current = false;
+    }
   }
 
   function stopRecord() {
@@ -432,10 +508,26 @@ function CameraPhase({
     if (mounted.current) setIsRecording(false);
   }
 
-  function handleRecordPress() {
+  async function handleRecordPress() {
     if (isRecording) { stopRecord(); return; }
-    if (countdown !== null) return;
-    startCountdown(() => doRecord());
+    if (countdown !== null || recordingStartRef.current) return;
+    recordingStartRef.current = true;
+    try {
+      if (!cameraPermission?.granted) {
+        await requestCameraAccess();
+        return;
+      }
+      if (!cameraReady) {
+        showAlert("Camera starting", "Wait for the camera preview, then try recording again.");
+        return;
+      }
+      if (!(await ensureMicrophoneAccess())) return;
+      startCountdown(() => { void doRecord(); });
+    } catch (error: any) {
+      showAlert("Could not prepare recording", error?.message || "Check camera and microphone access, then try again.");
+    } finally {
+      recordingStartRef.current = false;
+    }
   }
 
   // Hold-to-record: press and hold = start recording immediately (no countdown)
@@ -445,7 +537,7 @@ function CameraPhase({
     holdTimerRef.current = setTimeout(() => {
       holdActiveRef.current = true;
       void Haptics.impactAsync("heavy");
-      doRecord();
+      doRecord(true);
     }, 250);
   }
 
@@ -454,8 +546,8 @@ function CameraPhase({
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
-    if (holdActiveRef.current && isRecording) {
-      stopRecord();
+    if (holdActiveRef.current) {
+      if (isRecording) stopRecord();
       holdActiveRef.current = false;
     }
   }
@@ -469,7 +561,12 @@ function CameraPhase({
       <StatusBar hidden />
 
       {/* ── Camera view ── */}
-      {!camAvailable || !CameraView ? (
+      {cameraLoading ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
+          <ActivityIndicator color="#fff" size="large" />
+          <Text style={{ color: "#aaa", marginTop: 12, fontFamily: "Inter_400Regular" }}>Checking camera access…</Text>
+        </View>
+      ) : !camAvailable || !CameraView ? (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
           <Ionicons name="videocam-off" size={48} color="#555" />
           <Text style={{ color: "#555", marginTop: 12, fontFamily: "Inter_400Regular" }}>Camera unavailable</Text>
@@ -481,6 +578,30 @@ function CameraPhase({
             <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", marginLeft: 8 }}>Pick from Gallery</Text>
           </TouchableOpacity>
         </View>
+      ) : !cameraPermission?.granted ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }]}>
+          <Ionicons name="camera" size={48} color="#aaa" />
+          <Text style={{ color: "#fff", marginTop: 14, textAlign: "center", fontFamily: "Inter_500Medium" }}>
+            Allow camera access to record a short video.
+          </Text>
+          <TouchableOpacity
+            disabled={permissionBusy}
+            onPress={() => cameraPermission?.canAskAgain === false
+              ? void Linking.openSettings().catch(() => {})
+              : void requestCameraAccess()}
+            style={[cs.galleryFallbackBtn, { backgroundColor: accent, marginTop: 18, opacity: permissionBusy ? 0.65 : 1 }]}
+          >
+            {permissionBusy
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Ionicons name="camera" size={18} color="#fff" />}
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", marginLeft: 8 }}>
+              {cameraPermission?.canAskAgain === false ? "Open Settings" : "Allow Camera"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onPickFromGallery} style={{ padding: 14 }}>
+            <Text style={{ color: "#ddd", fontFamily: "Inter_500Medium" }}>Choose a video instead</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <CameraView
           ref={cameraRef}
@@ -489,6 +610,7 @@ function CameraPhase({
           mode="video"
           flash={flash}
           zoom={zoom}
+          onCameraReady={() => setCameraReady(true)}
         >
           {/* Filter overlay */}
           {filterOverlay && (
@@ -1761,9 +1883,6 @@ export default function CreateVideoScreen() {
   }
 
   async function handlePickFromGallery() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { showAlert("Permission required", "Allow access to your media library."); return; }
-
     // Show loading overlay immediately — OS picker + transcoding can freeze UI for 3–8s
     setIsPickingVideo(true);
     try {
@@ -1785,6 +1904,8 @@ export default function CreateVideoScreen() {
         } catch {}
         setPhase("edit");
       }
+    } catch (error: any) {
+      showAlert("Could not open videos", error?.message || "Please try again.");
     } finally {
       setIsPickingVideo(false);
     }
