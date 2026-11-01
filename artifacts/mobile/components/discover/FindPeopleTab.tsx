@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,7 +10,11 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import type {
+  GestureResponderEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
@@ -53,6 +58,8 @@ const MAX_RECOMMENDATIONS = 60;
 const INITIAL_VISIBLE_COUNT = 20;
 const LOAD_MORE_COUNT = 12;
 const MAX_MUTUAL_AVATARS = 3;
+const WEB_PULL_REFRESH_THRESHOLD = 56;
+const WEB_PULL_REFRESH_MAX_DISTANCE = 88;
 
 function interleavePeople(recommended: Person[], discovery: Person[]): Person[] {
   const mixed: Person[] = [];
@@ -101,10 +108,14 @@ export default function FindPeopleTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
+  const [pullDistance, setPullDistance] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [followBusy, setFollowBusy] = useState<string | null>(null);
   const loadRequestRef = useRef(0);
   const lastRevealAtRef = useRef(0);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullDistanceRef = useRef(0);
+  const scrollOffsetYRef = useRef(0);
 
   const loadRecommendations = useCallback(async (manualRefresh = false) => {
     if (!userId) return;
@@ -348,8 +359,9 @@ export default function FindPeopleTab() {
   }, [followBusy, user]);
 
   const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (visibleCount >= people.length) return;
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    scrollOffsetYRef.current = Math.max(0, contentOffset.y);
+    if (visibleCount >= people.length) return;
     const remainingDistance = contentSize.height - layoutMeasurement.height - contentOffset.y;
     if (remainingDistance > 420 || Date.now() - lastRevealAtRef.current < 350) return;
     lastRevealAtRef.current = Date.now();
@@ -359,6 +371,43 @@ export default function FindPeopleTab() {
         : Math.min(current + LOAD_MORE_COUNT, people.length),
     );
   }, [people.length, visibleCount]);
+
+  const handleWebTouchStart = useCallback((event: GestureResponderEvent) => {
+    if (
+      Platform.OS !== "web" ||
+      loading ||
+      refreshing ||
+      scrollOffsetYRef.current > 1
+    ) return;
+    pullStartYRef.current = event.nativeEvent.pageY;
+    pullDistanceRef.current = 0;
+    setPullDistance(0);
+  }, [loading, refreshing]);
+
+  const handleWebTouchMove = useCallback((event: GestureResponderEvent) => {
+    const startY = pullStartYRef.current;
+    if (Platform.OS !== "web" || startY === null || scrollOffsetYRef.current > 1) return;
+    const distance = Math.max(0, event.nativeEvent.pageY - startY);
+    const nextPullDistance = Math.min(
+      WEB_PULL_REFRESH_MAX_DISTANCE,
+      Math.round(distance * 0.55),
+    );
+    pullDistanceRef.current = nextPullDistance;
+    setPullDistance(nextPullDistance);
+    if (distance > 8) event.preventDefault();
+  }, []);
+
+  const handleWebTouchEnd = useCallback(() => {
+    const shouldRefresh =
+      Platform.OS === "web" &&
+      pullDistanceRef.current >= WEB_PULL_REFRESH_THRESHOLD &&
+      !refreshing &&
+      !loading;
+    pullStartYRef.current = null;
+    pullDistanceRef.current = 0;
+    setPullDistance(0);
+    if (shouldRefresh) void loadRecommendations(true);
+  }, [loadRecommendations, loading, refreshing]);
 
   if (!user) {
     return (
@@ -382,6 +431,9 @@ export default function FindPeopleTab() {
     gridRows.push(visiblePeople.slice(index, index + 2));
   }
   const hasResults = people.length > 0;
+  const pullIndicatorHeight = refreshing
+    ? 48
+    : Math.min(WEB_PULL_REFRESH_MAX_DISTANCE, pullDistance);
 
   return (
     <ScrollView
@@ -390,14 +442,69 @@ export default function FindPeopleTab() {
       showsVerticalScrollIndicator={false}
       onScroll={handleListScroll}
       scrollEventThrottle={200}
-      refreshControl={
+      onTouchStart={Platform.OS === "web" ? handleWebTouchStart : undefined}
+      onTouchMove={Platform.OS === "web" ? handleWebTouchMove : undefined}
+      onTouchEnd={Platform.OS === "web" ? handleWebTouchEnd : undefined}
+      onTouchCancel={Platform.OS === "web" ? handleWebTouchEnd : undefined}
+      refreshControl={Platform.OS !== "web" ? (
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => { void loadRecommendations(true); }}
           tintColor={accent}
         />
-      }
+      ) : undefined}
     >
+      {Platform.OS === "web" && (pullDistance > 0 || refreshing) && (
+        <View
+          style={[
+            styles.webPullIndicator,
+            {
+              height: pullIndicatorHeight,
+              opacity: pullDistance >= 28 || refreshing ? 1 : 0,
+            },
+          ]}
+          accessibilityLiveRegion="polite"
+        >
+          {refreshing ? (
+            <ActivityIndicator size="small" color={accent} />
+          ) : pullDistance >= 28 ? (
+            <Ionicons name="arrow-down" size={16} color={accent} />
+          ) : null}
+          {(pullDistance >= 28 || refreshing) && (
+            <Text style={[styles.webPullCopy, { color: colors.textMuted }]}>
+              {refreshing
+                ? t("Refreshing")
+                : pullDistance >= WEB_PULL_REFRESH_THRESHOLD
+                  ? t("Release to refresh")
+                  : t("Pull down to refresh")}
+            </Text>
+          )}
+        </View>
+      )}
+      {Platform.OS === "web" && (
+        <View style={styles.webRefreshRow}>
+          <TouchableOpacity
+            style={[
+              styles.webRefreshButton,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+              (refreshing || loading) && styles.disabledButton,
+            ]}
+            onPress={() => void loadRecommendations(true)}
+            disabled={refreshing || loading}
+            accessibilityRole="button"
+            accessibilityLabel={t("Refresh suggestions")}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color={accent} />
+            ) : (
+              <Ionicons name="refresh-outline" size={14} color={accent} />
+            )}
+            <Text style={[styles.webRefreshLabel, { color: colors.text }]}>
+              {t("Refresh suggestions")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {loading && !hasResults ? (
         <View style={styles.grid}>
           {[0, 1].map((row) => (
@@ -635,6 +742,12 @@ const styles = StyleSheet.create({
   mutualCopy: { flex: 1, minHeight: 26, fontSize: 10, lineHeight: 13 },
   mutualName: { fontFamily: "Inter_600SemiBold" },
   moreHint: { paddingVertical: 14, textAlign: "center", fontSize: 11, fontFamily: "Inter_500Medium" },
+  webPullIndicator: { alignItems: "center", justifyContent: "center", gap: 5, overflow: "hidden" },
+  webPullCopy: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  webRefreshRow: { alignItems: "flex-end", marginHorizontal: 8, marginBottom: 8 },
+  webRefreshButton: { minHeight: 32, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 10, borderWidth: 1, borderRadius: 17 },
+  webRefreshLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  disabledButton: { opacity: 0.55 },
   connectButton: { minHeight: 38, borderWidth: 1.4, borderRadius: 20, marginHorizontal: 12, alignItems: "center", justifyContent: "center" },
   connectText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   skeletonBody: { alignItems: "center", paddingHorizontal: 12, marginTop: -34 },
