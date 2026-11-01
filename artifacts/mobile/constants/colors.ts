@@ -67,6 +67,10 @@ const light = {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   header:            "#F5F0E8",
+  navigationSurface: "#F5F0E8",
+  navigationBorder:  "#DDD7C9",
+  navigationActive:  BRAND,
+  navigationInactive: "#8C7F6A",
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeBg:           STATUS.error,
@@ -130,6 +134,10 @@ const dark = {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   header:            "#000000",
+  navigationSurface: "#252830",
+  navigationBorder:  "rgba(255,255,255,0.24)",
+  navigationActive:  "#FFF8F0",
+  navigationInactive: "#B9BAC4",
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeBg:           STATUS.error,

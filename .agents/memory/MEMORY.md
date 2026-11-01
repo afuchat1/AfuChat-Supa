@@ -4,3 +4,4 @@
 - [AfuChat brand colors](afuchat-brand-colors.md) — Keep the original AfuChat palette; the primary brand blue is #1018D8.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Keep the main nav as a floating overlay; content scrolls behind it without reserved space or a background layer.
+- [Android module compatibility](android-module-compatibility.md) — App modules must work on Android 14 and earlier across phone brands; verify device-specific crashes from reports.

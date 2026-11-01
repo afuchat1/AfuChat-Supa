@@ -20,7 +20,7 @@ type Props = {
 };
 
 export default function AppBottomNav({ items, activeKey }: Props) {
-  const { colors, accent } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   // The bar is in normal flow, so adding a synthetic browser safe-area inset
@@ -29,7 +29,7 @@ export default function AppBottomNav({ items, activeKey }: Props) {
 
   return (
     <View style={[styles.rowWrap, { paddingBottom: bottomInset + 8 }]}>
-      <View style={[styles.bar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+      <View style={[styles.bar, { backgroundColor: colors.navigationSurface, borderTopColor: colors.navigationBorder }]}>
         {items.map((item) => {
           const active = activeKey === item.key || (!activeKey && pathname === item.href);
           return (
@@ -48,11 +48,11 @@ export default function AppBottomNav({ items, activeKey }: Props) {
                 <Ionicons
                   name={active ? (item.activeIcon ?? item.icon) : item.icon}
                   size={active ? 22 : 20}
-                  color={active ? accent : colors.textMuted}
+                  color={active ? colors.navigationActive : colors.navigationInactive}
                 />
               </View>
               <Text
-                style={[styles.label, { color: active ? accent : colors.textMuted }]}
+                style={[styles.label, { color: active ? colors.navigationActive : colors.navigationInactive }]}
                 numberOfLines={1}
               >
                 {item.label}

@@ -207,11 +207,11 @@ export function CompactTabBar({
     { icon: "document-text", label: "navigation.article", route: "/moments/create-article", color: accentColor },
   ];
 
-  const INACTIVE_ICON  = colors.textSecondary;
-  const ACTIVE_ICON    = colors.accent;
+  const INACTIVE_ICON  = colors.navigationInactive;
+  const ACTIVE_ICON    = colors.navigationActive;
   const PILL_BOTTOM    = Math.max(insets.bottom, 8) + 6;
   const PILL_H         = 56;
-  const BAR_BORDER     = colors.border;
+  const BAR_BORDER     = colors.navigationBorder;
 
   function handleTabPress(route: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -238,7 +238,7 @@ export function CompactTabBar({
             pill.bar,
             {
               height: PILL_H,
-              backgroundColor: colors.surface,
+              backgroundColor: colors.navigationSurface,
               borderColor: BAR_BORDER,
               ...Platform.select({
                 ios: {
@@ -254,23 +254,27 @@ export function CompactTabBar({
           ]}
           onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
         >
-          <BlurView
-            intensity={GLASS.blur.light}
-            tint={isDark ? "dark" : "light"}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: barGlass.fillStrong }]}
-          />
+          {!isDark && (
+            <>
+              <BlurView
+                intensity={GLASS.blur.light}
+                tint="light"
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: barGlass.fillStrong }]}
+              />
+            </>
+          )}
           <Animated.View
             pointerEvents="none"
             style={[
               pill.activeTabHighlight,
               {
                 width: itemWidth,
-                backgroundColor: accentColor + (isDark ? "34" : "1C"),
+                backgroundColor: ACTIVE_ICON + (isDark ? "34" : "1C"),
                 transform: [{ translateX: activeTranslateX }],
               },
             ]}
