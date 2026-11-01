@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -61,7 +62,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import UserName from "@/components/ui/UserName";
 import { getPersonalizedTags } from "@/lib/personalization";
 import Colors from "@/constants/colors";
-import { searchMusicTracksByIds, getMusicPlaybackUri } from "@/lib/afuMusic";
+import { searchMusicTracksByIds, getMusicPlaybackUri, listMusicTracks } from "@/lib/afuMusic";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 
@@ -445,11 +446,25 @@ export function SearchScreen({
 } = {}) {
   const { playMusic } = useGlobalMusicPlayer();
   const { user } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors: themeColors, isDark: themeIsDark } = useTheme();
   // Shadow the module-level BRAND constant so every reference inside this
   // component (and all its inner functions) uses the user's chosen accent.
-  const BRAND = colors.accent;
   const isAfuSearch = title === "AfuSearch";
+  const colors = isAfuSearch
+    ? {
+        ...themeColors,
+        background: "#202124",
+        backgroundSecondary: "#202124",
+        surface: "#202124",
+        inputBg: "#303134",
+        text: "#E8EAED",
+        textSecondary: "#BDC1C6",
+        textMuted: "#9AA0A6",
+        border: "#3C4043",
+      }
+    : themeColors;
+  const isDark = isAfuSearch || themeIsDark;
+  const BRAND = colors.accent;
 
   const CATEGORIES = [
     { id: "people",   label: "People",   icon: "people",        gradient: [BRAND,  Colors.brandDark]   as [string,string] },
@@ -472,12 +487,14 @@ export function SearchScreen({
   const scrollPB = insets.bottom + (hasAppBottomNav ? 90 : 16);
 
   const inputRef    = useRef<TextInput>(null);
+  const overlayInputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
   const suggestionRequestRef = useRef(0);
   const searchEngagementSentRef = useRef(new Map<string, number>());
 
   const [query,        setQuery]        = useState("");
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const [tab,          setTab]          = useState<SearchTab>(initialTab ?? "all");
   const sortMode: SortMode = "relevance";
   const dateRange: DateRange = "all";
@@ -485,8 +502,6 @@ export function SearchScreen({
   const [loading,     setLoading]     = useState(false);
   const [results,     setResults]     = useState<AllResults>(EMPTY);
   const [hasSearched, setHasSearched] = useState(false);
-  const isAfuSearchTyping = isAfuSearch && query.trim().length > 0 && !hasSearched;
-
   const [history,          setHistory]          = useState<string[]>([]);
   const [saved,            setSaved]            = useState<SavedSearch[]>([]);
   const [personalizedTags, setPersonalizedTags] = useState<string[]>([]);
@@ -499,10 +514,17 @@ export function SearchScreen({
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
+  useEffect(() => {
+    if (!searchOverlayOpen || !isAfuSearch) return;
+    const timer = setTimeout(() => overlayInputRef.current?.focus(), Platform.OS === "web" ? 40 : 120);
+    return () => clearTimeout(timer);
+  }, [searchOverlayOpen, isAfuSearch]);
+
   const [trendingPosts,    setTrendingPosts]    = useState<PostResult[]>([]);
   const [trendingPeople,   setTrendingPeople]   = useState<PersonResult[]>([]);
   const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
   const [trendingVideos,   setTrendingVideos]   = useState<VideoResult[]>([]);
+  const [trendingMusic,    setTrendingMusic]    = useState<AfuMusicTrack[]>([]);
   const [trendingSearches, setTrendingSearches] = useState<RankedSearchTerm[]>([]);
 
   const [lensResult, setLensResult] = useState<LensResult | null>(null);
@@ -551,6 +573,12 @@ export function SearchScreen({
       getRankedSearchSuggestions("", 8)
         .then(setTrendingSearches)
         .catch((error) => console.warn("[AfuSearch] Could not load shared trends:", error?.message || error));
+      void loadTrendingVideos();
+      if (user) {
+        void listMusicTracks()
+          .then((tracks) => setTrendingMusic([...tracks].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 6)))
+          .catch((error) => console.warn("[AfuSearch] Could not load music discovery:", error?.message || error));
+      }
     } else {
       const peopleLoad = loadTrendingPeople();
       relatedIndexReadyRef.current = Promise.all([peopleLoad, postIndexLoad])
@@ -1131,6 +1159,40 @@ export function SearchScreen({
 
   // ── Event handlers ───────────────────────────────────────────────────────────
 
+  function openSearchOverlay() {
+    if (!isAfuSearch) {
+      inputRef.current?.focus();
+      return;
+    }
+    setSearchOverlayOpen(true);
+  }
+
+  function closeSearchOverlay(resetDraft = false) {
+    setSearchOverlayOpen(false);
+    overlayInputRef.current?.blur();
+    if (resetDraft && !hasSearched) {
+      setQuery("");
+      setSearchSuggestions([]);
+      setDidYouMean(null);
+    }
+  }
+
+  function AfuSearchBackButton({ style }: { style?: any } = {}) {
+    return (
+      <TouchableOpacity
+        onPress={() => safeRouter.back("/apps")}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        style={[
+          { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+          style,
+        ]}
+      >
+        <Ionicons name="arrow-back" size={18} color={colors.text} />
+      </TouchableOpacity>
+    );
+  }
+
   function trackSearchClick() {
     if (!user || !query.trim()) return;
     const normalizedQuery = normalizeSearchTerm(query);
@@ -1205,6 +1267,7 @@ export function SearchScreen({
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
+    closeSearchOverlay();
     performSearch(query, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
@@ -1222,6 +1285,7 @@ export function SearchScreen({
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
+    closeSearchOverlay();
     if (suggestion.kind === "profile") {
       trackSuggestionSelection("profile");
       const profile = suggestion.profile;
@@ -1336,13 +1400,175 @@ export function SearchScreen({
     );
   }
 
+  function renderAfuSearchOverlayList() {
+    const hasPopularContent = trendingPosts.length > 0 || trendingVideos.length > 0 || trendingMusic.length > 0;
+    return (
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: scrollPB }}
+        keyboardShouldPersistTaps="always"
+        showsVerticalScrollIndicator={false}
+      >
+        {history.length > 0 && (
+          <View style={{ paddingBottom: 10 }}>
+            <View style={{ minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Recent searches</Text>
+              <TouchableOpacity
+                onPress={() => { void clearHistory().then(() => setHistory([])); }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search history"
+                hitSlop={8}
+              >
+                <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Clear history</Text>
+              </TouchableOpacity>
+            </View>
+            {history.map((term) => (
+              <View key={`overlay-history-${term}`} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <TouchableOpacity
+                  onPress={() => onHistoryPress(term)}
+                  style={{ flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}
+                  activeOpacity={0.72}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Search again for ${term}`}
+                >
+                  <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>
+                    <Ionicons name="time-outline" size={17} color={colors.textMuted} />
+                  </View>
+                  <Text style={{ flex: 1, color: colors.text, fontSize: 15 }} numberOfLines={1}>{term}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { void removeFromHistory(term).then(setHistory); }}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${term} from search history`}
+                >
+                  <Ionicons name="close" size={17} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {(trendingSearches.length > 0 || hasPopularContent) && (
+          <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold", paddingTop: history.length ? 8 : 6, paddingBottom: 4 }}>
+            {history.length ? "Trending searches" : "Popular searches"}
+          </Text>
+        )}
+        {trendingSearches.slice(0, 8).map((item) => (
+          <TouchableOpacity
+            key={`overlay-trend-${item.term}`}
+            onPress={() => onSuggestionPress({
+              kind: "term",
+              term: item.term,
+              score: item.score,
+              growth: item.growth,
+              engagementRate: item.engagementRate,
+              exactMatch: item.exactMatch,
+            })}
+            style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}
+            activeOpacity={0.72}
+            accessibilityRole="button"
+            accessibilityLabel={`Search for ${item.term}`}
+          >
+            <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>
+              <Ionicons name={item.growth > 0.35 ? "trending-up" : "search-outline"} size={17} color={item.growth > 0.35 ? BRAND : colors.textMuted} />
+            </View>
+            <Text style={{ flex: 1, color: colors.text, fontSize: 15 }} numberOfLines={1}>{item.term}</Text>
+            <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
+          </TouchableOpacity>
+        ))}
+
+        {trendingPosts.length > 0 && (
+          <View style={{ gap: 8, paddingTop: 10 }}>
+            {trendingPosts.slice(0, 4).map((post, index) => <PostCard key={`overlay-post-${post.id}`} p={post} i={index} />)}
+          </View>
+        )}
+        {trendingVideos.slice(0, 3).map((video) => (
+          <View key={`overlay-video-${video.id}`} style={{ paddingTop: 8 }}>
+            <DiscoveryVideoRow video={video} />
+          </View>
+        ))}
+        {trendingMusic.slice(0, 4).map((track) => (
+          <View key={`overlay-music-${track.id}`} style={{ paddingTop: 8 }}>
+            <DiscoveryMusicRow track={track} queue={trendingMusic} />
+          </View>
+        ))}
+
+        {history.length === 0 && trendingSearches.length === 0 && !hasPopularContent && (
+          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 20 }}>
+            <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+            <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 10, textAlign: "center" }}>Popular searches will appear here.</Text>
+          </View>
+        )}
+      </ScrollView>
+    );
+  }
+
+  function renderAfuSearchOverlay() {
+    if (!isAfuSearch || !searchOverlayOpen) return null;
+    return (
+      <Modal
+        visible
+        animationType="fade"
+        onRequestClose={() => closeSearchOverlay(true)}
+        statusBarTranslucent={false}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingTop: insets.top + 6, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
+            <TouchableOpacity
+              onPress={() => closeSearchOverlay(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+              hitSlop={8}
+              style={{ width: 34, height: 42, alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <View style={[ss.searchBar, { flex: 1, height: 48, marginBottom: 0, backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
+              <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
+              <TextInput
+                ref={overlayInputRef}
+                style={[ss.searchInput, { color: colors.text }]}
+                placeholder="Search AfuChat"
+                placeholderTextColor={colors.textMuted}
+                value={query}
+                onChangeText={onChangeText}
+                onSubmitEditing={onSubmit}
+                returnKeyType="search"
+                numberOfLines={1}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {query.length > 0 && (
+                <TouchableOpacity onPress={() => onChangeText("")} hitSlop={8} accessibilityLabel="Clear search text">
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => { closeSearchOverlay(); void openLens(); }}
+              accessibilityRole="button"
+              accessibilityLabel="Search with an image"
+              hitSlop={8}
+              style={{ width: 34, height: 42, alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="scan" size={22} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          {query.trim().length > 0 ? renderSuggestionPage() : renderAfuSearchOverlayList()}
+        </View>
+      </Modal>
+    );
+  }
+
   function clearSearch() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
     setSearchSuggestions([]); setDidYouMean(null);
     clearLensResults();
-    inputRef.current?.focus();
+    if (isAfuSearch) openSearchOverlay();
+    else inputRef.current?.focus();
   }
 
   function onHistoryPress(term: string) {
@@ -1350,6 +1576,7 @@ export function SearchScreen({
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
+    closeSearchOverlay();
     setQuery(term);
     performSearch(term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
@@ -1360,6 +1587,7 @@ export function SearchScreen({
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
+    closeSearchOverlay();
     const q = `#${tag}`;
     setQuery(q); setTab("posts");
     performSearch(q, "posts", verifiedOnly, sortMode, dateRange, true, undefined, true);
@@ -1586,6 +1814,7 @@ export function SearchScreen({
   // ─── PostCard ────────────────────────────────────────────────────────────────
 
   function PostCard({ p, i }: { p: PostResult; i: number }) {
+    const showSideImage = isAfuSearch && Boolean(p.image_url);
     return (
       <View >
         <TouchableOpacity
@@ -1596,16 +1825,35 @@ export function SearchScreen({
             router.push((p.post_type === "article" ? `/article/${p.id}` : `/post/${p.id}`) as any);
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            {p.author_avatar
-              ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 28, height: 28, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
-              : <AvatarPlaceholder name={p.author_name} size={28} color={BRAND} />}
-            <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>@{p.author_handle}</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(p.created_at)}</Text>
-          </View>
-          {p.article_title && <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 5 }} numberOfLines={2}>{p.article_title}</Text>}
-          <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }} numberOfLines={3}>{p.content}</Text>
-          {p.image_url && <ExpoImage source={{ uri: p.image_url }} style={ss.postImage} contentFit="cover" cachePolicy="memory-disk" />}
+          {showSideImage ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                  {p.author_avatar
+                    ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 24, height: 24, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" />
+                    : <AvatarPlaceholder name={p.author_name} size={24} color={BRAND} />}
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>@{p.author_handle}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(p.created_at)}</Text>
+                </View>
+                {p.article_title && <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 4 }} numberOfLines={2}>{p.article_title}</Text>}
+                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }} numberOfLines={3}>{p.content}</Text>
+              </View>
+              <ExpoImage source={{ uri: p.image_url! }} style={{ width: 88, height: 88, borderRadius: 10, backgroundColor: colors.inputBg }} contentFit="cover" cachePolicy="memory-disk" />
+            </View>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                {p.author_avatar
+                  ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 28, height: 28, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
+                  : <AvatarPlaceholder name={p.author_name} size={28} color={BRAND} />}
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>@{p.author_handle}</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(p.created_at)}</Text>
+              </View>
+              {p.article_title && <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 5 }} numberOfLines={2}>{p.article_title}</Text>}
+              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }} numberOfLines={3}>{p.content}</Text>
+              {p.image_url && <ExpoImage source={{ uri: p.image_url }} style={ss.postImage} contentFit="cover" cachePolicy="memory-disk" />}
+            </>
+          )}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Ionicons name="eye" size={12} color={colors.textMuted} />
@@ -1619,6 +1867,95 @@ export function SearchScreen({
           </View>
         </TouchableOpacity>
       </View>
+    );
+  }
+
+  async function openDiscoveryTrack(track: AfuMusicTrack, queue: AfuMusicTrack[]) {
+    if (track.price > 0 && !track.isOwned) {
+      safeRouter.push("/app/afumusic" as any);
+      return;
+    }
+    try {
+      const uri = await getMusicPlaybackUri(track);
+      if (uri) {
+        const playableQueue = queue.filter((item) => item.isOwned || item.price === 0);
+        playMusic(track, uri, playableQueue, getMusicPlaybackUri);
+      } else {
+        safeRouter.push("/app/afumusic" as any);
+      }
+    } catch {
+      safeRouter.push("/app/afumusic" as any);
+    }
+  }
+
+  function DiscoveryVideoRow({ video }: { video: VideoResult }) {
+    return (
+      <TouchableOpacity
+        onPress={() => router.push(`/video/${video.id}` as any)}
+        activeOpacity={0.78}
+        accessibilityRole="button"
+        accessibilityLabel={`Open video by ${video.author_name || video.author_handle}`}
+        style={{
+          minHeight: 104,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          padding: 12,
+          borderRadius: 14,
+          backgroundColor: colors.surface,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
+          <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14, lineHeight: 19 }} numberOfLines={3}>
+            {video.content || "Video"}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
+            @{video.author_handle} · {fmtNum(video.view_count)} views
+          </Text>
+        </View>
+        <View style={{ width: 92, height: 78, borderRadius: 10, overflow: "hidden", backgroundColor: colors.inputBg }}>
+          <VideoThumbnailImage videoUrl={video.video_url} imageUrl={video.image_url} style={{ width: "100%", height: "100%" }} />
+          <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" } as any}>
+            <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "#00000088" }}>
+              <Ionicons name="play" size={13} color="#fff" style={{ marginLeft: 2 }} />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  function DiscoveryMusicRow({ track, queue }: { track: AfuMusicTrack; queue: AfuMusicTrack[] }) {
+    const action = track.price > 0 && !track.isOwned ? "Unlock" : "Play";
+    return (
+      <TouchableOpacity
+        onPress={() => void openDiscoveryTrack(track, queue)}
+        activeOpacity={0.78}
+        accessibilityRole="button"
+        accessibilityLabel={`${action} ${track.title} by ${track.artist}`}
+        style={{
+          minHeight: 82,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          padding: 12,
+          borderRadius: 14,
+          backgroundColor: colors.surface,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+        }}
+      >
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14 }} numberOfLines={1}>{track.title}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>{track.artist} · {track.genre}</Text>
+          <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>{action}</Text>
+        </View>
+        <View style={{ width: 58, height: 58, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: track.coverColor || "#19172F" }}>
+          <Ionicons name="musical-notes" size={22} color={track.accentColor || BRAND} />
+        </View>
+      </TouchableOpacity>
     );
   }
 
@@ -2414,108 +2751,97 @@ export function SearchScreen({
       : (personalizedTags.length > 0 ? personalizedTags : FALLBACK_TAGS).slice(0, 10).map(t => ({ tag: t, count: 0 }));
 
     if (isAfuSearch) {
+      const feedRows: Array<
+        | { kind: "post"; item: PostResult }
+        | { kind: "video"; item: VideoResult }
+        | { kind: "music"; item: AfuMusicTrack }
+      > = [];
+      const rowCount = Math.max(trendingPosts.length, trendingVideos.length, trendingMusic.length);
+      for (let index = 0; index < rowCount; index++) {
+        if (trendingPosts[index]) feedRows.push({ kind: "post", item: trendingPosts[index] });
+        if (trendingVideos[index]) feedRows.push({ kind: "video", item: trendingVideos[index] });
+        if (trendingMusic[index]) feedRows.push({ kind: "music", item: trendingMusic[index] });
+      }
+
       return (
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: scrollPB }}
+          contentContainerStyle={{ paddingBottom: scrollPB }}
         >
-          {history.length > 0 && (
-            <View style={{ paddingTop: 14, paddingBottom: 8 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Recent</Text>
-                <TouchableOpacity onPress={() => clearHistory().then(() => setHistory([]))} hitSlop={8}>
-                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>Clear</Text>
-                </TouchableOpacity>
-              </View>
-              {history.slice(0, 3).map((term) => (
-                <View key={`recent-${term}`} style={{ minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={() => onHistoryPress(term)}
-                    style={{ flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10 }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-                    <Text style={{ flex: 1, color: colors.text, fontSize: 14 }} numberOfLines={1}>{term}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => removeFromHistory(term).then(setHistory)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${term} from recent searches`}
-                  >
-                    <Ionicons name="close" size={15} color={colors.textMuted} />
-                  </TouchableOpacity>
-                </View>
-              ))}
+          <View style={{ paddingHorizontal: 16, paddingTop: insets.top + 6 }}>
+            <View style={{ height: 48, alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+              <AfuSearchBackButton style={{ position: "absolute", left: 0 }} />
+              <Text style={{ color: colors.text, fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -1.2 }}>AfuSearch</Text>
             </View>
-          )}
 
-          {trendingSearches.length > 0 && (
-            <View style={{ paddingTop: history.length > 0 ? 14 : 18, paddingBottom: 8 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 4 }}>
-                Trending searches
-              </Text>
-              {trendingSearches.slice(0, 7).map((item) => (
-                <TouchableOpacity
-                  key={`trend-${item.term}`}
-                  onPress={() => onSuggestionPress({
-                    kind: "term",
-                    term: item.term,
-                    score: item.score,
-                    growth: item.growth,
-                    engagementRate: item.engagementRate,
-                    exactMatch: item.exactMatch,
-                  })}
-                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10 }}
-                  activeOpacity={0.72}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Search for ${item.term}`}
-                >
-                  <Ionicons
-                    name={item.growth > 0.35 ? "trending-up" : "search-outline"}
-                    size={16}
-                    color={item.growth > 0.35 ? BRAND : colors.textMuted}
-                  />
-                  <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
-                    {item.term}
-                  </Text>
-                  <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
-                </TouchableOpacity>
-              ))}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+              <TouchableOpacity
+                testID="afusearch-home-search"
+                onPress={openSearchOverlay}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel="Open AfuSearch"
+                style={[ss.searchBar, { flex: 1, height: 54, marginBottom: 0, paddingHorizontal: 17, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+              >
+                <Ionicons name="search" size={20} color={colors.textMuted} />
+                <Text style={{ flex: 1, color: colors.textMuted, fontSize: 16, fontFamily: "Inter_400Regular" }}>Search AfuChat</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openLens}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Search with an image"
+                style={{ width: 50, height: 50, alignItems: "center", justifyContent: "center", borderRadius: 25, backgroundColor: colors.surface, borderWidth: 0.5, borderColor: colors.border }}
+              >
+                {lensLoading ? <ActivityIndicator size="small" color={BRAND} /> : <Ionicons name="scan" size={22} color={BRAND} />}
+              </TouchableOpacity>
             </View>
-          )}
 
-          {trendingPosts.length > 0 && (
-            <View style={{ paddingTop: 16 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 4 }}>
-                Posts
-              </Text>
-              {trendingPosts.slice(0, 3).map((post) => (
+            <View style={{ flexDirection: "row", gap: 8, paddingTop: 12, paddingBottom: 8 }}>
+              {([
+                { id: "all", label: "All", icon: "apps-outline" },
+                { id: "posts", label: "Posts", icon: "document-text-outline" },
+                { id: "videos", label: "Videos", icon: "play-circle-outline" },
+                { id: "music", label: "Music", icon: "musical-notes-outline" },
+              ] as const).map((category) => (
                 <TouchableOpacity
-                  key={`post-${post.id}`}
-                  onPress={() => router.push((post.post_type === "article" ? `/article/${post.id}` : `/post/${post.id}`) as any)}
-                  activeOpacity={0.72}
-                  style={{ paddingVertical: 10 }}
+                  key={category.id}
+                  onPress={() => { setTab(category.id); openSearchOverlay(); }}
+                  style={{ flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 6, borderRadius: 20, backgroundColor: tab === category.id ? BRAND + "18" : colors.surface, borderWidth: 0.5, borderColor: tab === category.id ? BRAND + "55" : colors.border }}
+                  activeOpacity={0.75}
                   accessibilityRole="button"
-                  accessibilityLabel={`Open post by ${post.author_name || post.author_handle}`}
+                  accessibilityLabel={`Search ${category.label.toLowerCase()}`}
                 >
-                  <Text style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }} numberOfLines={1}>
-                    {post.author_name || `@${post.author_handle}`} · {timeAgo(post.created_at)}
-                  </Text>
-                  {!!post.article_title && (
-                    <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 3 }} numberOfLines={1}>
-                      {post.article_title}
-                    </Text>
-                  )}
-                  <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
-                    {post.content}
+                  <Ionicons name={category.icon as any} size={14} color={tab === category.id ? BRAND : colors.textMuted} />
+                  <Text style={{ color: tab === category.id ? BRAND : colors.textSecondary, fontSize: 11, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
+                    {category.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+
+          <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="sparkles" size={16} color={BRAND} />
+            <Text style={{ color: colors.text, fontSize: 17, fontFamily: "Inter_700Bold" }}>For you</Text>
+          </View>
+
+          {feedRows.length > 0 ? (
+            <View style={{ paddingHorizontal: 12, gap: 9 }}>
+              {feedRows.map((row, index) => row.kind === "post"
+                ? <PostCard key={`post-${row.item.id}`} p={row.item} i={index} />
+                : row.kind === "video"
+                  ? <DiscoveryVideoRow key={`video-${row.item.id}`} video={row.item} />
+                  : <DiscoveryMusicRow key={`music-${row.item.id}`} track={row.item} queue={trendingMusic} />)}
+            </View>
+          ) : (
+            <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 42 }}>
+              <Ionicons name="search-outline" size={28} color={colors.textMuted} />
+              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 15, marginTop: 10 }}>Nothing to explore yet</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: 4 }}>Posts, videos, and music will appear here as they’re available.</Text>
+            </View>
           )}
-          <View style={{ height: 20 }} />
         </ScrollView>
       );
     }
@@ -2868,65 +3194,88 @@ export function SearchScreen({
   return (
     <View style={[ss.root, { backgroundColor: colors.backgroundSecondary }]}>
 
-      {/* Header */}
+      {/* Keep AfuSearch's home hero inside its feed; the compact header is for search results and other search pages. */}
+      {(!isAfuSearch || hasSearched) && (
       <View style={[ss.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface + "CC", borderBottomColor: colors.border }]}>
 
         {/* Title + image search */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-            <GlassBackButton
-              onPress={() => safeRouter.back(title === "AfuSearch" ? "/apps" : "/(tabs)/discover")}
-              style={{ marginRight: 6 }}
-              accessibilityLabel="Go back"
-            />
+            {isAfuSearch
+              ? <AfuSearchBackButton style={{ marginRight: 6 }} />
+              : <GlassBackButton
+                  onPress={() => safeRouter.back("/(tabs)/discover")}
+                  style={{ marginRight: 6 }}
+                  accessibilityLabel="Go back"
+                />}
             <Text style={{ fontSize: 24, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: -0.3 }}>{title}</Text>
           </View>
         </View>
 
         {/* Search bar */}
-        <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
-          <TouchableOpacity
-            onPress={onSubmit}
-            accessibilityRole="button"
-            accessibilityLabel="Submit search"
-            hitSlop={8}
-          >
-            <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
-          </TouchableOpacity>
-          <TextInput
-            ref={inputRef}
-            style={[ss.searchInput, { color: colors.text }]}
-            placeholder="Search…"
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={onChangeText}
-            onSubmitEditing={onSubmit}
-            returnKeyType="search"
-            numberOfLines={1}
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          {query.length > 0
-            ? <TouchableOpacity onPress={clearSearch} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></TouchableOpacity>
-            : null}
-          <TouchableOpacity
-            onPress={openLens}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Search AfuChat with an image"
-            hitSlop={8}
-            style={[
-              ss.lensInlineButton,
-              {
-                backgroundColor: colors.text + "18",
-              },
-            ]}
-          >
-            {lensLoading
-              ? <ActivityIndicator size="small" color={colors.text} />
-              : <Ionicons name="scan" size={22} color={colors.text} />}
-          </TouchableOpacity>
-        </View>
+        {isAfuSearch ? (
+          <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
+            <TouchableOpacity
+              onPress={openSearchOverlay}
+              style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 }}
+              accessibilityRole="button"
+              accessibilityLabel="Edit AfuSearch query"
+            >
+              <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
+              <Text style={{ flex: 1, color: query ? colors.text : colors.textMuted, fontSize: 15 }} numberOfLines={1}>
+                {query || "Search AfuChat"}
+              </Text>
+            </TouchableOpacity>
+            {query.length > 0 && <TouchableOpacity onPress={clearSearch} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></TouchableOpacity>}
+            <TouchableOpacity
+              onPress={openLens}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Search AfuChat with an image"
+              hitSlop={8}
+              style={[ss.lensInlineButton, { backgroundColor: colors.text + "18" }]}
+            >
+              {lensLoading ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name="scan" size={22} color={colors.text} />}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
+            <TouchableOpacity
+              onPress={onSubmit}
+              accessibilityRole="button"
+              accessibilityLabel="Submit search"
+              hitSlop={8}
+            >
+              <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
+            </TouchableOpacity>
+            <TextInput
+              ref={inputRef}
+              style={[ss.searchInput, { color: colors.text }]}
+              placeholder="Search…"
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={onChangeText}
+              onSubmitEditing={onSubmit}
+              returnKeyType="search"
+              numberOfLines={1}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {query.length > 0
+              ? <TouchableOpacity onPress={clearSearch} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></TouchableOpacity>
+              : null}
+            <TouchableOpacity
+              onPress={openLens}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Search AfuChat with an image"
+              hitSlop={8}
+              style={[ss.lensInlineButton, { backgroundColor: colors.text + "18" }]}
+            >
+              {lensLoading ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name="scan" size={22} color={colors.text} />}
+            </TouchableOpacity>
+          </View>
+        )}
         {!!lensError && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 4, paddingTop: 6 }}>
             <Ionicons name="alert-circle-outline" size={15} color={RED} />
@@ -2938,6 +3287,7 @@ export function SearchScreen({
         )}
 
       </View>
+      )}
 
       {/* Tab bar — only shown when results are present */}
       {hasSearched && !loading && (
@@ -2961,22 +3311,21 @@ export function SearchScreen({
         </View>
       )}
 
-      {(lensResult || lensLoading) && !hasSearched && !isAfuSearchTyping && (
+      {(lensResult || lensLoading) && !hasSearched && (
         <View style={{ paddingHorizontal: 14, paddingTop: 14 }}>
           <LensCard />
         </View>
       )}
 
       {/* Content area */}
-      {isAfuSearchTyping
-        ? renderSuggestionPage()
-        : loading
-          ? <View style={{ flex: 1 }}>
-              {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} />)}
-            </View>
-          : hasSearched
-            ? renderResults()
-            : renderDiscovery()}
+      {loading
+        ? <View style={{ flex: 1 }}>
+            {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} />)}
+          </View>
+        : hasSearched
+          ? renderResults()
+          : renderDiscovery()}
+      {renderAfuSearchOverlay()}
     </View>
   );
 }

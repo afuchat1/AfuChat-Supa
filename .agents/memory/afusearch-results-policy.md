@@ -3,8 +3,10 @@ name: AfuSearch results policy
 description: Product scope and result behavior for AfuSearch visual search.
 ---
 
-AfuSearch searches public AfuChat posts only. It should find related posts using image matching, readable text inside the submitted image, and typed keywords. Keep results in one search screen: show matching posts as normal content rows and image results in a two-column, Google Images-style grid. Keep category tabs without numeric counts, omit the filter/sort strip and result-count summaries, and do not show an app-shell bottom navigation bar. Preserve a clear empty state. Do not scrape Google, TikTok, or other external image sources.
+AfuSearch discovery is a flat, vertically mixed feed using existing Afu product data: public AfuChat posts and videos plus published AfuMusic tracks. Avoid horizontal content carousels and do not show an app-shell bottom navigation bar. Tapping the search bar opens a full-screen overlay with recent searches first, then ranked search terms and available popular content in one vertical list; when there is no history, lead with popular searches and results. For image-bearing post/video results, keep text on the left and the image on the right.
 
-**Why:** The user selected AfuChat public posts as the source, asked for one results page with normal content and image matches, requested categories without result counts or the filter/sort row, and said AfuSearch does not need a bottom navigation bar.
+Visual search and typed post searches remain grounded in existing public AfuChat content and current search helpers. Preserve category tabs without numeric counts, omit the filter/sort strip and result-count summaries, and keep a clear empty state. Do not scrape Google, TikTok, or other external image sources.
 
-**How to apply:** Keep result queries limited to public, non-blocked AfuChat posts; display OCR/text/caption matches as content results and image matches in the image grid. Keep category navigation clean of counts and extra filter/sort controls, and omit the app-shell bottom navigation.
+**Why:** The user expanded AfuSearch from a posts-only discovery screen to a Google-inspired mixed Afu content feed with a full-screen history/trending search overlay, while keeping the existing public-post visual search.
+
+**How to apply:** Use existing Supabase-backed posts, video, music, and ranked-search helpers rather than inventing endpoints or migrations. Keep the home feed and overlay results flat, place available thumbnails to the right of text, and omit the app-shell bottom navigation.
