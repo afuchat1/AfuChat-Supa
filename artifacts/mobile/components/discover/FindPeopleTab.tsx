@@ -34,6 +34,7 @@ type Person = {
 };
 
 type Filter = "all" | "online" | "recent";
+type DiscoveryType = "all" | "people" | "groups" | "channels";
 type PublicGroup = {
   id: string;
   name: string;
@@ -88,6 +89,7 @@ export default function FindPeopleTab() {
   const [people, setPeople] = useState<Person[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [discoveryType, setDiscoveryType] = useState<DiscoveryType>("all");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -381,20 +383,13 @@ export default function FindPeopleTab() {
     );
   }
 
-  const mixedItems = useMemo(() => {
-    const items: Array<
-      | { kind: "person"; value: Person }
-      | { kind: "group"; value: PublicGroup }
-      | { kind: "channel"; value: PublicChannel }
-    > = [];
-    const count = Math.max(visiblePeople.length, visibleGroups.length, visibleChannels.length);
-    for (let index = 0; index < count; index++) {
-      if (visiblePeople[index]) items.push({ kind: "person", value: visiblePeople[index] });
-      if (visibleGroups[index]) items.push({ kind: "group", value: visibleGroups[index] });
-      if (visibleChannels[index]) items.push({ kind: "channel", value: visibleChannels[index] });
-    }
-    return items;
-  }, [visiblePeople, visibleGroups, visibleChannels]);
+  const showPeople = discoveryType === "all" || discoveryType === "people";
+  const showGroups = discoveryType === "all" || discoveryType === "groups";
+  const showChannels = discoveryType === "all" || discoveryType === "channels";
+  const hasResults =
+    (showPeople && visiblePeople.length > 0) ||
+    (showGroups && visibleGroups.length > 0) ||
+    (showChannels && visibleChannels.length > 0);
 
   return (
     <ScrollView
@@ -410,191 +405,351 @@ export default function FindPeopleTab() {
       }
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.searchRow}>
-        <View style={[styles.searchBox, { backgroundColor: colors.surface, flex: 1 }]}>
+      <View style={styles.pageHeader}>
+        <View style={styles.pageHeading}>
+          <Text style={[styles.eyebrow, { color: accent }]}>DISCOVER</Text>
+          <Text style={[styles.pageTitle, { color: colors.text }]}>Find your people</Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>People, groups and channels</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.refreshButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => { setRefreshing(true); void loadPeople(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh discovery"
+          testID="discover-refresh"
+        >
+          <Ionicons name="refresh" size={19} color={accent} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search people, groups, and channels"
+            placeholder="Search people or places"
             placeholderTextColor={colors.textMuted}
             style={[styles.searchInput, { color: colors.text }]}
             returnKeyType="search"
+            accessibilityLabel="Search people, groups and channels"
+            testID="discover-search"
           />
           {!!query && (
-            <TouchableOpacity onPress={() => setQuery("")} accessibilityLabel="Clear search">
+            <TouchableOpacity
+              onPress={() => setQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              hitSlop={8}
+            >
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
-        </View>
-        <TouchableOpacity
-          style={[styles.refreshButton, { backgroundColor: accent + "14" }]}
-          onPress={() => { setRefreshing(true); void loadPeople(); }}
-          accessibilityLabel="Refresh discover results"
-        >
-          <Ionicons name="refresh" size={20} color={accent} />
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.sectionHeading}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Discover</Text>
-        <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-          People, groups and channels
-        </Text>
-      </View>
-
-      <View style={styles.filterRow}>
-        {([[ "all", "Everyone" ], [ "online", "Online now" ], [ "recent", "Active today" ]] as const).map(([value, label]) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryRow}
+        accessibilityLabel="Discovery categories"
+      >
+        {([
+          ["all", "All"],
+          ["people", "People"],
+          ["groups", "Groups"],
+          ["channels", "Channels"],
+        ] as const).map(([value, label]) => (
           <TouchableOpacity
             key={value}
-            onPress={() => setFilter(value)}
-            style={[styles.filterChip, { backgroundColor: filter === value ? accent : colors.surface }]}
+            onPress={() => setDiscoveryType(value)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: discoveryType === value }}
+            style={[
+              styles.categoryChip,
+              {
+                backgroundColor: discoveryType === value ? accent : colors.surface,
+                borderColor: discoveryType === value ? accent : colors.border,
+              },
+            ]}
           >
-            {value === "online" && <View style={[styles.tinyDot, { backgroundColor: filter === value ? "#fff" : "#36C96F" }]} />}
-            <Text style={[styles.filterText, { color: filter === value ? "#fff" : colors.textMuted }]}>{label}</Text>
+            <Text style={[styles.categoryText, { color: discoveryType === value ? "#fff" : colors.textMuted }]}>
+              {label}
+            </Text>
           </TouchableOpacity>
         ))}
-      </View>
-      <Text style={[styles.sectionCaption, { color: colors.textMuted, marginBottom: 10 }]}>
-        Activity filters apply to people. Search filters all results.
-      </Text>
+      </ScrollView>
+
+      {(discoveryType === "all" || discoveryType === "people") && (
+        <View style={styles.activityFilters}>
+          <Text style={[styles.activityLabel, { color: colors.textMuted }]}>PEOPLE</Text>
+          <View style={styles.filterRow}>
+            {([
+              ["all", "Everyone"],
+              ["online", "Online"],
+              ["recent", "Today"],
+            ] as const).map(([value, label]) => (
+              <TouchableOpacity
+                key={value}
+                onPress={() => setFilter(value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: filter === value }}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: filter === value ? accent + "14" : "transparent",
+                    borderColor: filter === value ? accent + "40" : "transparent",
+                  },
+                ]}
+              >
+                {value === "online" && <View style={[styles.tinyDot, { backgroundColor: colors.online }]} />}
+                <Text style={[styles.filterText, { color: filter === value ? accent : colors.textMuted }]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       {loading && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
         <ScrollView
           horizontal
           nestedScrollEnabled
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.mixedRail}
+          contentContainerStyle={styles.cardRail}
           accessibilityLabel="Loading discover results"
         >
           {[0, 1, 2, 3].map((item) => (
-            <View key={item} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-              <Skeleton width={58} height={58} borderRadius={16} />
-              <View style={{ gap: 8, marginTop: 8 }}>
-                <Skeleton width={124} height={14} borderRadius={5} />
-                <Skeleton width={88} height={11} borderRadius={4} />
-                <Skeleton width={148} height={11} borderRadius={4} />
-                <Skeleton width={104} height={11} borderRadius={4} />
+            <View key={item} style={[styles.personCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.skeletonIdentity}>
+                <Skeleton width={48} height={48} borderRadius={24} />
+                <View style={{ gap: 8 }}>
+                  <Skeleton width={100} height={13} borderRadius={5} />
+                  <Skeleton width={76} height={10} borderRadius={4} />
+                </View>
               </View>
-              <Skeleton width="100%" height={31} borderRadius={16} style={{ marginTop: 10 }} />
+              <Skeleton width="100%" height={28} borderRadius={8} />
+              <Skeleton width={96} height={30} borderRadius={16} />
             </View>
           ))}
         </ScrollView>
       ) : error && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} />
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>{error}</Text>
-          <TouchableOpacity onPress={() => void loadPeople()}><Text style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>Try again</Text></TouchableOpacity>
+        <View style={[styles.emptyState, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.emptyIcon, { backgroundColor: accent + "14" }]}>
+            <Ionicons name="cloud-offline-outline" size={22} color={accent} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Couldn’t load discovery</Text>
+          <Text style={[styles.emptyCopy, { color: colors.textMuted }]}>{error}</Text>
+          <TouchableOpacity
+            style={[styles.emptyAction, { backgroundColor: accent }]}
+            onPress={() => void loadPeople()}
+            accessibilityRole="button"
+          >
+            <Text style={styles.emptyActionText}>Try again</Text>
+          </TouchableOpacity>
         </View>
-      ) : mixedItems.length === 0 ? (
-        <View style={styles.center}>
-          <Ionicons name="search-outline" size={34} color={colors.textMuted} />
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>Nothing found</Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            {query ? "Try another name, username, group or channel." : "New people and public spaces will appear here."}
+      ) : !hasResults ? (
+        <View style={styles.emptyState}>
+          <View style={[styles.emptyIcon, { backgroundColor: colors.surface }]}>
+            <Ionicons name="search-outline" size={22} color={colors.textMuted} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No matches yet</Text>
+          <Text style={[styles.emptyCopy, { color: colors.textMuted }]}>
+            {query ? "Try another search." : "New people and public spaces will appear here."}
           </Text>
+          {(query || discoveryType !== "all" || filter !== "all") && (
+            <TouchableOpacity
+              style={[styles.clearFilters, { borderColor: colors.border }]}
+              onPress={() => {
+                setQuery("");
+                setDiscoveryType("all");
+                setFilter("all");
+              }}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.clearFiltersText, { color: colors.text }]}>Clear filters</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.mixedRail}
-        >
-          {mixedItems.map((item) => {
-            if (item.kind === "person") {
-              const person = item.value;
-              return (
-                <View key={`person-${person.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-                  <TouchableOpacity style={styles.mixedIdentity} onPress={() => navigateToKnownProfile(person)} activeOpacity={0.75}>
-                    <View>
-                      <Avatar person={person} accent={accent} />
-                      {isOnline(person.last_seen) && <View style={[styles.onlineDot, { backgroundColor: "#36C96F", borderColor: colors.surface }]} />}
-                    </View>
-                    <View style={styles.mixedNameRow}>
-                      <Text style={[styles.communityName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{person.display_name}</Text>
-                      {(person.is_verified || person.is_organization_verified) && <Ionicons name="checkmark-circle" size={14} color={accent} />}
-                    </View>
-                    <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>@{person.handle}</Text>
-                    <Text style={[styles.communityDescription, { color: isOnline(person.last_seen) ? "#36C96F" : colors.textMuted }]} numberOfLines={2}>
-                      {relativeSeen(person.last_seen)} · {person.follower_count.toLocaleString()} followers
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.communityAction, { backgroundColor: person.is_following ? colors.inputBg : accent }]}
-                    onPress={() => void toggleFollow(person)}
-                    disabled={followBusy === person.id}
-                  >
-                    {followBusy === person.id
-                      ? <ActivityIndicator size="small" color={person.is_following ? colors.textMuted : "#fff"} />
-                      : <Text style={{ color: person.is_following ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
-                          {person.is_following && person.is_following_me ? "Friend" : person.is_following ? "Following" : person.is_following_me ? "Follow back" : "Follow"}
-                        </Text>}
-                  </TouchableOpacity>
+        <>
+          {showPeople && visiblePeople.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>People</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{visiblePeople.length}</Text>
                 </View>
-              );
-            }
-            if (item.kind === "group") {
-              const group = item.value;
-              return (
-                <View key={`group-${group.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-                  <TouchableOpacity onPress={() => void joinGroup(group)} activeOpacity={0.75}>
-                    {group.avatar_url
-                      ? <ExpoImage source={{ uri: group.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
-                      : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "18" }]}><Ionicons name="people" size={25} color={accent} /></View>}
-                    <Text style={[styles.communityName, { color: colors.text }]} numberOfLines={1}>{group.name}</Text>
-                    <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>{group.description || "Public group"}</Text>
-                    <Text style={[styles.communityMeta, { color: accent }]}>{group.member_count.toLocaleString()} members</Text>
+                {discoveryType === "all" && (
+                  <TouchableOpacity onPress={() => setDiscoveryType("people")} accessibilityRole="button">
+                    <Text style={[styles.seeAll, { color: accent }]}>See all</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.communityAction, { backgroundColor: group.is_member ? colors.inputBg : accent }]}
-                    onPress={() => void joinGroup(group)}
-                    disabled={joiningId === group.id}
-                  >
-                    {joiningId === group.id
-                      ? <ActivityIndicator size="small" color={group.is_member ? colors.textMuted : "#fff"} />
-                      : <Text style={{ color: group.is_member ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{group.is_member ? "Open" : "Join"}</Text>}
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-            const channel = item.value;
-            return (
-              <View key={`channel-${channel.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-                <TouchableOpacity onPress={() => openChannel(channel)} activeOpacity={0.75}>
-                  {channel.avatar_url
-                    ? <ExpoImage source={{ uri: channel.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
-                    : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: "#8B5CF618" }]}><Ionicons name="megaphone" size={25} color="#8B5CF6" /></View>}
-                  <View style={styles.communityNameRow}>
-                    <Text style={[styles.communityName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{channel.name}</Text>
-                    {channel.is_verified && <Ionicons name="checkmark-circle" size={14} color="#8B5CF6" />}
-                  </View>
-                  <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>{channel.handle ? `@${channel.handle}` : "Public channel"}</Text>
-                  <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>{channel.description || "Public channel"}</Text>
-                  <Text style={[styles.communityMeta, { color: "#8B5CF6" }]}>{channel.subscriber_count.toLocaleString()} subscribers</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.communityAction, { backgroundColor: channel.is_subscriber ? colors.inputBg : "#8B5CF6" }]}
-                  onPress={() => openChannel(channel)}
-                >
-                  <Text style={{ color: channel.is_subscriber ? colors.textMuted : "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{channel.is_subscriber ? "Open" : "View"}</Text>
-                </TouchableOpacity>
+                )}
               </View>
-            );
-          })}
-        </ScrollView>
+              <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRail}>
+                {visiblePeople.map((person) => {
+                  const online = isOnline(person.last_seen);
+                  const followLabel = person.is_following && person.is_following_me
+                    ? "Friend"
+                    : person.is_following
+                      ? "Following"
+                      : person.is_following_me
+                        ? "Follow back"
+                        : "Follow";
+                  return (
+                    <View key={person.id} style={[styles.personCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <TouchableOpacity
+                        style={styles.personIdentity}
+                        onPress={() => navigateToKnownProfile(person)}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View ${person.display_name}'s profile`}
+                      >
+                        <View>
+                          <Avatar person={person} accent={accent} />
+                          {online && <View style={[styles.onlineDot, { backgroundColor: colors.online, borderColor: colors.surface }]} />}
+                        </View>
+                        <View style={styles.personDetails}>
+                          <View style={styles.personNameRow}>
+                            <Text style={[styles.personName, { color: colors.text }]} numberOfLines={1}>{person.display_name}</Text>
+                            {(person.is_verified || person.is_organization_verified) && (
+                              <Ionicons name="checkmark-circle" size={15} color={accent} />
+                            )}
+                          </View>
+                          <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>@{person.handle}</Text>
+                        </View>
+                      </TouchableOpacity>
+                      <Text style={[styles.personBio, { color: colors.textMuted }]} numberOfLines={2}>
+                        {person.bio || "AfuChat member"}
+                      </Text>
+                      <View style={styles.personFooter}>
+                        <Text style={[styles.personActivity, { color: online ? colors.online : colors.textMuted }]} numberOfLines={1}>
+                          {relativeSeen(person.last_seen)}
+                        </Text>
+                        <Text style={[styles.personFollowers, { color: colors.textMuted }]}>
+                          {person.follower_count.toLocaleString()} followers
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.personAction,
+                          {
+                            backgroundColor: person.is_following ? colors.inputBg : accent,
+                            borderColor: person.is_following ? colors.border : accent,
+                          },
+                        ]}
+                        onPress={() => void toggleFollow(person)}
+                        disabled={followBusy === person.id}
+                        accessibilityRole="button"
+                      >
+                        {followBusy === person.id
+                          ? <ActivityIndicator size="small" color={person.is_following ? colors.textMuted : "#fff"} />
+                          : <Text style={[styles.actionText, { color: person.is_following ? colors.text : "#fff" }]}>{followLabel}</Text>}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {showGroups && visibleGroups.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Groups</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{visibleGroups.length}</Text>
+                </View>
+                {discoveryType === "all" && (
+                  <TouchableOpacity onPress={() => setDiscoveryType("groups")} accessibilityRole="button">
+                    <Text style={[styles.seeAll, { color: accent }]}>See all</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRail}>
+                {visibleGroups.map((group) => (
+                  <View key={group.id} style={[styles.communityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <TouchableOpacity style={styles.communityMain} onPress={() => void joinGroup(group)} activeOpacity={0.75}>
+                      {group.avatar_url
+                        ? <ExpoImage source={{ uri: group.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                        : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "16" }]}><Ionicons name="people" size={23} color={accent} /></View>}
+                      <Text style={[styles.communityName, { color: colors.text }]} numberOfLines={1}>{group.name}</Text>
+                      <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>{group.description || "Public group"}</Text>
+                      <Text style={[styles.communityMeta, { color: colors.textMuted }]}>{group.member_count.toLocaleString()} members</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.communityAction, { backgroundColor: group.is_member ? colors.inputBg : accent }]}
+                      onPress={() => void joinGroup(group)}
+                      disabled={joiningId === group.id}
+                      accessibilityRole="button"
+                    >
+                      {joiningId === group.id
+                        ? <ActivityIndicator size="small" color={group.is_member ? colors.textMuted : "#fff"} />
+                        : <Text style={[styles.actionText, { color: group.is_member ? colors.text : "#fff" }]}>{group.is_member ? "Open" : "Join"}</Text>}
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {showChannels && visibleChannels.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Channels</Text>
+                  <Text style={[styles.sectionCount, { color: colors.textMuted }]}>{visibleChannels.length}</Text>
+                </View>
+                {discoveryType === "all" && (
+                  <TouchableOpacity onPress={() => setDiscoveryType("channels")} accessibilityRole="button">
+                    <Text style={[styles.seeAll, { color: accent }]}>See all</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRail}>
+                {visibleChannels.map((channel) => (
+                  <View key={channel.id} style={[styles.communityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <TouchableOpacity style={styles.communityMain} onPress={() => openChannel(channel)} activeOpacity={0.75}>
+                      {channel.avatar_url
+                        ? <ExpoImage source={{ uri: channel.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                        : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "16" }]}><Ionicons name="megaphone" size={22} color={accent} /></View>}
+                      <View style={styles.communityNameRow}>
+                        <Text style={[styles.communityName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{channel.name}</Text>
+                        {channel.is_verified && <Ionicons name="checkmark-circle" size={15} color={accent} />}
+                      </View>
+                      <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                        {channel.handle ? `@${channel.handle}` : "Public channel"}
+                      </Text>
+                      <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>
+                        {channel.description || "Public channel"}
+                      </Text>
+                      <Text style={[styles.communityMeta, { color: colors.textMuted }]}>
+                        {channel.subscriber_count.toLocaleString()} subscribers
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.communityAction, { backgroundColor: channel.is_subscriber ? colors.inputBg : accent }]}
+                      onPress={() => openChannel(channel)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={[styles.actionText, { color: channel.is_subscriber ? colors.text : "#fff" }]}>
+                        {channel.is_subscriber ? "Open" : "View"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </>
       )}
-      {!!error && <Text style={[styles.inlineError, { color: colors.textMuted }]}>{error}</Text>}
+      {!!error && hasResults && <Text style={[styles.inlineError, { color: colors.textMuted }]}>{error}</Text>}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 16 },
-  pageContent: { flexGrow: 1 },
-  mixedRail: { gap: 10, paddingBottom: 8, paddingRight: 4 },
-  mixedCard: { width: 184, minHeight: 224, borderRadius: 17, padding: 12, justifyContent: "space-between" },
-  mixedIdentity: { alignItems: "flex-start" },
+  pageContent: { flexGrow: 1, paddingTop: 20 },
   inlineError: { fontSize: 12, marginTop: 8, marginBottom: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 14 },
   heroIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
@@ -602,37 +757,60 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, lineHeight: 20, textAlign: "center", maxWidth: 320 },
   primaryButton: { minHeight: 46, borderRadius: 23, paddingHorizontal: 24, justifyContent: "center" },
   primaryButtonText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 14, paddingBottom: 10 },
-  refreshButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  searchBox: { height: 46, borderRadius: 14, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", gap: 9 },
+  pageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
+  pageHeading: { flex: 1, gap: 3 },
+  eyebrow: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1.2 },
+  pageTitle: { fontSize: 24, lineHeight: 30, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  refreshButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: "center", justifyContent: "center", marginLeft: 12 },
+  searchBox: { height: 48, borderRadius: 15, borderWidth: 1, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 10 },
   searchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", paddingVertical: 0 },
-  communitiesSection: { paddingBottom: 10 },
-  sectionHeading: { flexDirection: "row", alignItems: "baseline", gap: 8, marginBottom: 9 },
-  sectionTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  sectionCaption: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  communityType: { fontSize: 12, fontFamily: "Inter_700Bold", marginBottom: 7, marginTop: 4 },
-  communityRail: { gap: 10, paddingBottom: 8 },
-  communityCard: { width: 190, minHeight: 214, borderRadius: 17, padding: 12 },
-  communityAvatar: { width: 58, height: 58, borderRadius: 16, marginBottom: 9 },
-  communityPlaceholder: { alignItems: "center", justifyContent: "center" },
-  communityNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  communityName: { fontSize: 14, fontFamily: "Inter_700Bold", marginBottom: 3 },
-  communityDescription: { fontSize: 11, lineHeight: 16, minHeight: 32 },
-  communityMeta: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 5 },
-  communityAction: { height: 31, borderRadius: 16, alignItems: "center", justifyContent: "center", marginTop: 10 },
-  filterRow: { flexDirection: "row", gap: 8, paddingVertical: 14 },
-  filterChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
-  filterText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  categoryRow: { gap: 8, paddingVertical: 15, paddingRight: 4 },
+  categoryChip: { minHeight: 36, paddingHorizontal: 15, borderRadius: 18, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  categoryText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  activityFilters: { marginBottom: 7 },
+  activityLabel: { fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 0.9, marginBottom: 5 },
+  filterRow: { flexDirection: "row", gap: 6 },
+  filterChip: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, borderRadius: 15, borderWidth: 1 },
+  filterText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   tinyDot: { width: 6, height: 6, borderRadius: 3 },
-  personCard: { borderRadius: 17, padding: 12, flexDirection: "row", alignItems: "center", gap: 10 },
-  personIdentity: { flex: 1, flexDirection: "row", alignItems: "center", gap: 11 },
+  section: { marginTop: 18 },
+  sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  sectionTitle: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
+  sectionCount: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  seeAll: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  cardRail: { gap: 10, paddingRight: 4, paddingBottom: 4 },
+  personCard: { width: 230, minHeight: 204, borderRadius: 18, borderWidth: 1, padding: 13, justifyContent: "space-between", gap: 11 },
+  skeletonIdentity: { flexDirection: "row", alignItems: "center", gap: 10 },
+  personIdentity: { flexDirection: "row", alignItems: "center", gap: 11 },
+  personDetails: { flex: 1, minWidth: 0 },
   avatar: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
   initial: { fontSize: 20, fontFamily: "Inter_700Bold" },
   onlineDot: { position: "absolute", right: 0, bottom: 1, width: 13, height: 13, borderRadius: 7, borderWidth: 2 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  personName: { maxWidth: "88%", fontSize: 14, fontFamily: "Inter_700Bold" },
-  handle: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  activity: { fontSize: 11, fontFamily: "Inter_600SemiBold", marginTop: 3 },
-  followButton: { minWidth: 78, height: 33, borderRadius: 17, borderWidth: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  personNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  personName: { flexShrink: 1, fontSize: 13, fontFamily: "Inter_700Bold" },
+  handle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3 },
+  personBio: { fontSize: 12, lineHeight: 17, minHeight: 34 },
+  personFooter: { gap: 3 },
+  personActivity: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  personFollowers: { fontSize: 10, fontFamily: "Inter_400Regular" },
+  personAction: { height: 34, borderWidth: 1, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  actionText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  communityCard: { width: 210, minHeight: 224, borderRadius: 18, borderWidth: 1, padding: 12, justifyContent: "space-between" },
+  communityMain: { flex: 1 },
+  communityAvatar: { width: 50, height: 50, borderRadius: 15, marginBottom: 10 },
+  communityPlaceholder: { alignItems: "center", justifyContent: "center" },
+  communityNameRow: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 },
+  communityName: { fontSize: 14, fontFamily: "Inter_700Bold", marginBottom: 4 },
+  communityDescription: { fontSize: 11, lineHeight: 16, minHeight: 32 },
+  communityMeta: { fontSize: 10, fontFamily: "Inter_600SemiBold", marginTop: 6 },
+  communityAction: { height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 38, gap: 11 },
+  emptyIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", marginBottom: 2 },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_700Bold", textAlign: "center" },
+  emptyCopy: { fontSize: 13, lineHeight: 19, textAlign: "center", maxWidth: 270 },
+  emptyAction: { minHeight: 36, borderRadius: 18, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  emptyActionText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  clearFilters: { minHeight: 34, borderWidth: 1, borderRadius: 17, paddingHorizontal: 14, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  clearFiltersText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });
