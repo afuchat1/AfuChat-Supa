@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -9,12 +9,14 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,21 +35,42 @@ type Person = {
   last_seen: string | null;
   is_following: boolean;
   is_following_me: boolean;
-  mutualName: string | null;
-  mutualAvatar: string | null;
+  mutualPeople: MutualPerson[];
+  mutualCount: number;
 };
+
+type MutualPerson = {
+  id: string;
+  display_name: string;
+  handle: string;
+  avatar_url: string | null;
+};
+
 const ONLINE_WINDOW = 10 * 60_000;
 const DISMISSED_KEY = "suggested_users_dismissed_v1";
 const MAX_FOF_SOURCES = 60;
 const MAX_RECOMMENDATIONS = 60;
+const INITIAL_VISIBLE_COUNT = 20;
+const LOAD_MORE_COUNT = 12;
+const MAX_MUTUAL_AVATARS = 3;
 
-function shuffle<T>(items: T[]) {
-  const result = [...items];
-  for (let index = result.length - 1; index > 0; index--) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+function interleavePeople(recommended: Person[], discovery: Person[]): Person[] {
+  const mixed: Person[] = [];
+  let recommendationIndex = 0;
+  let discoveryIndex = 0;
+
+  while (recommendationIndex < recommended.length || discoveryIndex < discovery.length) {
+    if (recommendationIndex < recommended.length) {
+      mixed.push(recommended[recommendationIndex]);
+      recommendationIndex += 1;
+    }
+    if (discoveryIndex < discovery.length) {
+      mixed.push(discovery[discoveryIndex]);
+      discoveryIndex += 1;
+    }
   }
-  return result;
+
+  return mixed;
 }
 
 function isOnline(lastSeen: string | null) {
@@ -69,100 +92,171 @@ function Avatar({ person, accent, size = 70 }: { person: Person; accent: string;
 export default function FindPeopleTab() {
   const { colors, accent } = useTheme();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const userId = user?.id;
   const [people, setPeople] = useState<Person[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
   const [error, setError] = useState<string | null>(null);
   const [followBusy, setFollowBusy] = useState<string | null>(null);
+  const loadRequestRef = useRef(0);
+  const lastRevealAtRef = useRef(0);
 
-  const loadRecommendations = useCallback(async (silent = false) => {
-    if (!user) return;
-    if (!silent) setLoading(true);
+  const loadRecommendations = useCallback(async (manualRefresh = false) => {
+    if (!userId) return;
+    const requestId = ++loadRequestRef.current;
+    if (manualRefresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       let dismissedIds = new Set<string>();
       try {
         const rawDismissed = await AsyncStorage.getItem(DISMISSED_KEY);
-        dismissedIds = new Set(rawDismissed ? JSON.parse(rawDismissed) : []);
-      } catch {}
+        const parsed = rawDismissed ? JSON.parse(rawDismissed) : [];
+        if (Array.isArray(parsed)) {
+          dismissedIds = new Set(parsed.filter((id): id is string => typeof id === "string"));
+        }
+      } catch (storageError) {
+        console.warn("[find-people] Could not load dismissed suggestions", storageError);
+      }
+      if (requestId !== loadRequestRef.current) return;
       setDismissed(dismissedIds);
 
       const [
         { data: followingRows, error: followingError },
         { data: followerRows, error: followerError },
       ] = await Promise.all([
-        supabase.from("follows").select("following_id").eq("follower_id", user.id),
-        supabase.from("follows").select("follower_id").eq("following_id", user.id),
+        supabase.from("follows").select("following_id").eq("follower_id", userId),
+        supabase.from("follows").select("follower_id").eq("following_id", userId),
       ]);
       if (followingError) throw followingError;
       if (followerError) throw followerError;
 
-      const followingIds = (followingRows ?? []).map((row: any) => row.following_id as string);
-      const alreadyFollowing = new Set([user.id, ...followingIds]);
-      if (followingIds.length === 0) {
-        setPeople([]);
-        return;
-      }
+      const followingIds = (followingRows ?? [])
+        .map((row: any) => row.following_id as string)
+        .sort();
+      const alreadyFollowing = new Set([userId, ...followingIds]);
 
       const sourceIds = followingIds.slice(0, MAX_FOF_SOURCES);
-      const { data: connectionEdges, error: connectionError } = await supabase
-        .from("follows")
-        .select("follower_id, following_id")
-        .in("follower_id", sourceIds)
-        .limit(2000);
-      if (connectionError) throw connectionError;
+      const connectionResult = sourceIds.length
+        ? await supabase
+          .from("follows")
+          .select("follower_id, following_id")
+          .in("follower_id", sourceIds)
+          .limit(2000)
+        : { data: [] as any[], error: null };
+      if (connectionResult.error) throw connectionResult.error;
 
       const mutualCounts = new Map<string, number>();
-      const sourceForCandidate = new Map<string, string>();
-      for (const edge of connectionEdges ?? []) {
+      const mutualIdsByCandidate = new Map<string, string[]>();
+      for (const edge of connectionResult.data ?? []) {
         const candidateId = edge.following_id as string;
         if (alreadyFollowing.has(candidateId) || dismissedIds.has(candidateId)) continue;
         mutualCounts.set(candidateId, (mutualCounts.get(candidateId) ?? 0) + 1);
-        if (!sourceForCandidate.has(candidateId)) {
-          sourceForCandidate.set(candidateId, edge.follower_id as string);
-        }
+        const mutualIds = mutualIdsByCandidate.get(candidateId) ?? [];
+        mutualIds.push(edge.follower_id as string);
+        mutualIdsByCandidate.set(candidateId, mutualIds);
       }
 
       const candidateIds = Array.from(mutualCounts.entries())
-        .sort((a, b) => b[1] - a[1])
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .slice(0, MAX_RECOMMENDATIONS)
         .map(([id]) => id);
-      if (candidateIds.length === 0) {
-        setPeople([]);
-        return;
-      }
 
-      const mutualProfileIds = Array.from(new Set(candidateIds.map((id) => sourceForCandidate.get(id)).filter(Boolean))) as string[];
-      const [
-        { data: profileRows, error: profileError },
-        { data: mutualProfiles },
-      ] = await Promise.all([
+      const mutualProfileIds = Array.from(new Set(
+        candidateIds.flatMap((id) => mutualIdsByCandidate.get(id) ?? []),
+      ));
+      const profileSelection = "id, display_name, handle, avatar_url, banner_url, bio, is_verified, is_organization_verified, last_seen";
+      const [recommendationResult, mutualResult, discoveryResult] = await Promise.all([
+        candidateIds.length
+          ? supabase
+            .from("profiles")
+            .select(profileSelection)
+            .in("id", candidateIds)
+            .eq("onboarding_completed", true)
+            .eq("is_banned", false)
+            .eq("account_deleted", false)
+            .not("handle", "is", null)
+            .not("display_name", "is", null)
+            .not("avatar_url", "is", null)
+          : Promise.resolve({ data: [] as any[], error: null }),
+        mutualProfileIds.length
+          ? supabase
+            .from("profiles")
+            .select("id, display_name, handle, avatar_url")
+            .in("id", mutualProfileIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
         supabase
           .from("profiles")
-          .select("id, display_name, handle, avatar_url, banner_url, bio, is_verified, is_organization_verified, last_seen")
-          .in("id", candidateIds)
+          .select(`${profileSelection}, follower_count`)
           .eq("onboarding_completed", true)
           .eq("is_banned", false)
           .eq("account_deleted", false)
           .not("handle", "is", null)
           .not("display_name", "is", null)
-          .not("avatar_url", "is", null),
-        mutualProfileIds.length
-          ? supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", mutualProfileIds)
-          : Promise.resolve({ data: [] as any[] }),
+          .not("avatar_url", "is", null)
+          .order("follower_count", { ascending: false })
+          .limit(MAX_RECOMMENDATIONS * 2),
       ]);
-      if (profileError) throw profileError;
+      if (recommendationResult.error) throw recommendationResult.error;
 
-      const mutualProfileById = new Map((mutualProfiles ?? []).map((profile: any) => [profile.id, profile]));
-      const theyFollowMe = new Set((followerRows ?? []).map((row: any) => row.follower_id as string));
-      const recommendations = (profileRows ?? [])
-        .filter((person: any) => person.handle && person.display_name && person.avatar_url)
-        .map((person: any): Person => {
-          const source = mutualProfileById.get(sourceForCandidate.get(person.id) || "");
-          return {
+      const discoveryError = discoveryResult.error;
+      if (discoveryError) {
+        console.warn("[find-people] Could not load general discovery suggestions", discoveryError);
+        setError("Some suggestions could not be loaded.");
+      }
+
+      const mutualProfileById = new Map<string, MutualPerson>(
+        (mutualResult.data ?? []).map((profile: any) => [profile.id, profile]),
+      );
+      const [
+        recommendedPeople,
+        discoveryPeople,
+      ] = (() => {
+        const profilesById = new Map(
+          (recommendationResult.data ?? []).map((profile: any) => [profile.id, profile]),
+        );
+        const theyFollowMe = new Set((followerRows ?? []).map((row: any) => row.follower_id as string));
+        const recommended: Person[] = candidateIds.flatMap((id): Person[] => {
+          const person: any = profilesById.get(id);
+          if (!person?.handle || !person?.display_name || !person?.avatar_url) return [];
+          const mutualPeople = (mutualIdsByCandidate.get(id) ?? [])
+            .map((mutualId) => mutualProfileById.get(mutualId))
+            .filter((mutual): mutual is MutualPerson => !!mutual)
+            .sort((a, b) => a.display_name.localeCompare(b.display_name));
+          return [{
+            id: person.id as string,
+            display_name: person.display_name.trim() as string,
+            handle: person.handle.trim() as string,
+            avatar_url: person.avatar_url as string,
+            banner_url: (person.banner_url || null) as string | null,
+            bio: (person.bio?.trim() || null) as string | null,
+            is_verified: !!person.is_verified,
+            is_organization_verified: !!person.is_organization_verified,
+            last_seen: (person.last_seen || null) as string | null,
+            is_following: false,
+            is_following_me: theyFollowMe.has(person.id),
+            mutualPeople,
+            mutualCount: mutualCounts.get(id) ?? mutualPeople.length,
+          }];
+        });
+
+        const recommendedIds = new Set(recommended.map((person) => person.id));
+        const discovery: Person[] = (discoveryResult.data ?? [])
+          .filter((person: any) =>
+            person.handle &&
+            person.display_name &&
+            person.avatar_url &&
+            !alreadyFollowing.has(person.id) &&
+            !dismissedIds.has(person.id) &&
+            !recommendedIds.has(person.id),
+          )
+          .slice(0, MAX_RECOMMENDATIONS)
+          .map((person: any) => ({
             id: person.id,
             display_name: person.display_name.trim(),
             handle: person.handle.trim(),
@@ -174,75 +268,46 @@ export default function FindPeopleTab() {
             last_seen: person.last_seen || null,
             is_following: false,
             is_following_me: theyFollowMe.has(person.id),
-            mutualName: source?.display_name || (source?.handle ? `@${source.handle}` : null),
-            mutualAvatar: source?.avatar_url || null,
-          };
-        });
-      setPeople(shuffle(recommendations));
-    } catch {
-      setError("Couldn’t load suggestions.");
+            mutualPeople: [],
+            mutualCount: 0,
+          }));
+        return [recommended, discovery] as const;
+      })();
+
+      if (requestId !== loadRequestRef.current) return;
+      setPeople(interleavePeople(recommendedPeople, discoveryPeople));
+      setVisibleCount(INITIAL_VISIBLE_COUNT);
+    } catch (loadError) {
+      if (requestId === loadRequestRef.current) {
+        console.warn("[find-people] Could not load suggestions", loadError);
+        setError("Couldn’t load suggestions.");
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === loadRequestRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [user]);
+  }, [userId]);
 
   useEffect(() => {
-    if (user) void loadRecommendations();
-  }, [loadRecommendations, user]);
+    if (userId) void loadRecommendations();
+    return () => {
+      loadRequestRef.current += 1;
+    };
+  }, [loadRecommendations, userId]);
 
   useEffect(() => {
-    if (!user) return;
-    // Keep the current user's activity timestamp fresh while discovery is open.
+    if (!userId) return;
     const heartbeat = () => {
       supabase.rpc("update_last_seen").then(() => {}, () => {});
     };
     heartbeat();
     const heartbeatTimer = setInterval(heartbeat, 60_000);
-    const pollTimer = setInterval(() => void loadRecommendations(true), 60_000);
-    const channelName = `find-network-${user.id}`;
-    const channelTopic = `realtime:${channelName}`;
-    let channel: import("@supabase/supabase-js").RealtimeChannel | null = null;
-    let cancelled = false;
-
-    const setupChannel = async () => {
-      const staleChannels = supabase
-        .getChannels()
-        .filter((existing) => existing.topic === channelTopic);
-      await Promise.all(
-        staleChannels.map((staleChannel) =>
-          supabase.removeChannel(staleChannel).catch(() => "error"),
-        ),
-      );
-      if (cancelled) return;
-
-      const nextChannel = supabase
-        .channel(channelName)
-        .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadRecommendations(true))
-        .on("postgres_changes", { event: "*", schema: "public", table: "follows" }, (payload) => {
-          if ((payload.new as any)?.follower_id === user.id || (payload.old as any)?.follower_id === user.id) return;
-          void loadRecommendations(true);
-        });
-
-      if (cancelled) {
-        await supabase.removeChannel(nextChannel).catch(() => {});
-        return;
-      }
-      channel = nextChannel;
-      channel.subscribe();
-    };
-    void setupChannel();
-
     return () => {
-      cancelled = true;
       clearInterval(heartbeatTimer);
-      clearInterval(pollTimer);
-      if (channel) {
-        void supabase.removeChannel(channel).catch(() => {});
-        channel = null;
-      }
     };
-  }, [loadRecommendations, user]);
+  }, [userId]);
 
   const dismissPerson = useCallback(async (personId: string) => {
     void Haptics.selectionAsync();
@@ -282,6 +347,19 @@ export default function FindPeopleTab() {
     }
   }, [followBusy, user]);
 
+  const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (visibleCount >= people.length) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const remainingDistance = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    if (remainingDistance > 420 || Date.now() - lastRevealAtRef.current < 350) return;
+    lastRevealAtRef.current = Date.now();
+    setVisibleCount((current) =>
+      current >= people.length
+        ? current
+        : Math.min(current + LOAD_MORE_COUNT, people.length),
+    );
+  }, [people.length, visibleCount]);
+
   if (!user) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -299,8 +377,9 @@ export default function FindPeopleTab() {
   const cardWidth = Math.floor((width - 36) / 2);
   const bannerHeight = Math.min(112, Math.max(88, cardWidth * 0.52));
   const gridRows: Person[][] = [];
-  for (let index = 0; index < people.length; index += 2) {
-    gridRows.push(people.slice(index, index + 2));
+  const visiblePeople = people.slice(0, visibleCount);
+  for (let index = 0; index < visiblePeople.length; index += 2) {
+    gridRows.push(visiblePeople.slice(index, index + 2));
   }
   const hasResults = people.length > 0;
 
@@ -309,10 +388,12 @@ export default function FindPeopleTab() {
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={[styles.pageContent, { paddingBottom: insets.bottom + 112 }]}
       showsVerticalScrollIndicator={false}
+      onScroll={handleListScroll}
+      scrollEventThrottle={200}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => { setRefreshing(true); void loadRecommendations(); }}
+          onRefresh={() => { void loadRecommendations(true); }}
           tintColor={accent}
         />
       }
@@ -358,6 +439,18 @@ export default function FindPeopleTab() {
               {row.map((person) => {
                 const connected = person.is_following;
                 const buttonLabel = connected ? "Following" : person.is_following_me ? "Follow back" : "Connect";
+                const mutualPeople = person.mutualPeople.slice(0, MAX_MUTUAL_AVATARS);
+                const mutualNames = mutualPeople.map((mutual) =>
+                  mutual.display_name?.trim() || (mutual.handle ? `@${mutual.handle}` : ""),
+                ).filter(Boolean);
+                const otherCount = Math.max(0, person.mutualCount - mutualNames.length);
+                const joinedNames = mutualNames.length < 2
+                  ? mutualNames[0] ?? ""
+                  : mutualNames.length === 2
+                    ? `${mutualNames[0]} ${t("and")} ${mutualNames[1]}`
+                    : otherCount > 0
+                      ? mutualNames.join(", ")
+                      : `${mutualNames[0]}, ${mutualNames[1]} ${t("and")} ${mutualNames[2]}`;
                 return (
                   <View
                     key={person.id}
@@ -419,20 +512,57 @@ export default function FindPeopleTab() {
                     </TouchableOpacity>
 
                     <View style={styles.mutualRow}>
-                      {person.mutualAvatar ? (
-                        <ExpoImage
-                          source={{ uri: person.mutualAvatar }}
-                          style={styles.mutualAvatar}
-                          contentFit="cover"
-                          cachePolicy="memory-disk"
-                        />
-                      ) : (
-                        <View style={[styles.mutualAvatarFallback, { backgroundColor: colors.inputBg }]}>
-                          <Ionicons name="people" size={13} color={colors.textMuted} />
-                        </View>
-                      )}
+                      <View style={styles.mutualAvatars}>
+                        {mutualPeople.length ? mutualPeople.map((mutual, index) => (
+                          <View
+                            key={mutual.id}
+                            style={[
+                              styles.mutualAvatarFrame,
+                              {
+                                backgroundColor: colors.inputBg,
+                                borderColor: colors.surface,
+                                marginLeft: index ? -8 : 0,
+                              },
+                            ]}
+                          >
+                            {mutual.avatar_url ? (
+                              <ExpoImage
+                                source={{ uri: mutual.avatar_url }}
+                                style={styles.mutualAvatarImage}
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                              />
+                            ) : (
+                              <View style={[styles.mutualAvatarFallback, { backgroundColor: colors.inputBg }]}>
+                                <Text style={[styles.mutualInitial, { color: colors.textMuted }]}>
+                                  {(mutual.display_name || mutual.handle || "?")[0].toUpperCase()}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        )) : (
+                          <View style={[styles.mutualSuggestedIcon, { backgroundColor: accent + "14" }]}>
+                            <Ionicons name="sparkles-outline" size={14} color={accent} />
+                          </View>
+                        )}
+                      </View>
                       <Text style={[styles.mutualCopy, { color: colors.textMuted }]} numberOfLines={2}>
-                        Followed by <Text style={[styles.mutualName, { color: colors.text }]}>{person.mutualName || "your connection"}</Text>
+                        {person.mutualCount > 0 ? (
+                          <>
+                            {t("Followed by")}{" "}
+                            <Text style={[styles.mutualName, { color: colors.text }]}>
+                              {joinedNames || t("{{count}} people", { count: person.mutualCount })}
+                            </Text>
+                            {otherCount > 0 && (
+                              <>
+                                {" "}{t("and")}{" "}
+                                <Text style={[styles.mutualName, { color: colors.text }]}>
+                                  {t(otherCount === 1 ? "{{count}} other" : "{{count}} others", { count: otherCount })}
+                                </Text>
+                              </>
+                            )}
+                          </>
+                        ) : t("Suggested for you")}
                       </Text>
                     </View>
 
@@ -465,6 +595,9 @@ export default function FindPeopleTab() {
           ))}
         </View>
       )}
+      {hasResults && visibleCount < people.length && (
+        <Text style={[styles.moreHint, { color: colors.textMuted }]}>{t("Keep scrolling to see more")}</Text>
+      )}
       {!!error && hasResults && <Text style={[styles.inlineError, { color: colors.textMuted }]}>{error}</Text>}
     </ScrollView>
   );
@@ -492,11 +625,16 @@ const styles = StyleSheet.create({
   cardName: { flexShrink: 1, fontSize: 14, fontFamily: "Inter_700Bold", textAlign: "center" },
   handle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3 },
   bio: { width: "100%", minHeight: 32, fontSize: 11, lineHeight: 15, textAlign: "center", marginTop: 7 },
-  mutualRow: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, marginHorizontal: 10, marginTop: 8, marginBottom: 8 },
-  mutualAvatar: { width: 26, height: 26, borderRadius: 13 },
-  mutualAvatarFallback: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  mutualCopy: { flex: 1, fontSize: 10, lineHeight: 13 },
+  mutualRow: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 10, marginTop: 8, marginBottom: 8 },
+  mutualAvatars: { minWidth: 26, flexDirection: "row", alignItems: "center" },
+  mutualAvatarFrame: { width: 27, height: 27, borderRadius: 14, borderWidth: 2, overflow: "hidden" },
+  mutualAvatarImage: { width: "100%", height: "100%" },
+  mutualAvatarFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
+  mutualInitial: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  mutualSuggestedIcon: { width: 27, height: 27, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  mutualCopy: { flex: 1, minHeight: 26, fontSize: 10, lineHeight: 13 },
   mutualName: { fontFamily: "Inter_600SemiBold" },
+  moreHint: { paddingVertical: 14, textAlign: "center", fontSize: 11, fontFamily: "Inter_500Medium" },
   connectButton: { minHeight: 38, borderWidth: 1.4, borderRadius: 20, marginHorizontal: 12, alignItems: "center", justifyContent: "center" },
   connectText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   skeletonBody: { alignItems: "center", paddingHorizontal: 12, marginTop: -34 },
