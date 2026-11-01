@@ -1,5 +1,5 @@
 - [AfuSearch results policy](afusearch-results-policy.md) — Search public AfuChat posts only; show OCR/text matches in an image/post grid and a clear empty state.
-- [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A pinned/global pnpm mismatch can spawn recursive installers; preview workflows can call installed CLIs directly.
+- [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
 - [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
 - [AfuChat brand colors](afuchat-brand-colors.md) — Keep the original AfuChat palette; the primary brand blue is #1018D8.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Keep the main nav as a floating overlay; content scrolls behind it without reserved space or a background layer.

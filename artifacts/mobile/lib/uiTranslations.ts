@@ -2786,6 +2786,7 @@ export function translateUi(
   params?: Record<string, string | number>,
 ): string {
   if (!text) return text;
+  if (text.trim().toLowerCase() === "afuchat") return text;
   const normalized = languageKey(language) ?? "";
   const uiLanguage = LANGUAGE_ALIASES[language?.trim().toLowerCase() ?? ""] ?? LANGUAGE_ALIASES[normalized];
   const semanticEnglish = SEMANTIC_UI_TABLES.en[text];
@@ -2793,6 +2794,19 @@ export function translateUi(
     params
       ? value.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params[name] ?? `{{${name}}}`))
       : value;
+  const words = uiLanguage ? OFFLINE_WORDS[uiLanguage as UiLanguage] ?? {} : {};
+  const translateWordByWord = (value: string): string =>
+    value.replace(/[A-Za-zÀ-ÿ]+/g, (word) => {
+      if (word.toLowerCase() === "afuchat") return word;
+      const replacement = words[word.toLowerCase()];
+      if (!replacement) return word;
+      if (word[0] === word[0].toUpperCase() && replacement.length > 0) {
+        return replacement[0].toUpperCase() + replacement.slice(1);
+      }
+      return replacement;
+    });
+  const countBrand = (value: string, exactCase = false): number =>
+    (value.match(exactCase ? /\bAfuChat\b/g : /\bAfuChat\b/gi) ?? []).length;
 
   // Semantic keys always resolve to their English source value when the
   // locale is unset or English, preventing raw key names from leaking during
@@ -2801,11 +2815,16 @@ export function translateUi(
     const translatedSemantic = uiLanguage && uiLanguage !== "en"
       ? SEMANTIC_UI_TABLES[uiLanguage]?.[text] ?? semanticEnglish
       : semanticEnglish;
-    return interpolate(translatedSemantic);
+    const safeSemantic =
+      countBrand(semanticEnglish) > countBrand(translatedSemantic, true)
+        ? translateWordByWord(semanticEnglish)
+        : translatedSemantic;
+    return interpolate(safeSemantic);
   }
 
   if (!language || uiLanguage === "en" || normalized === "en") return text;
   const languageTable = uiLanguage as UiLanguage;
+  const sourceBrandCount = countBrand(text);
   const leading = text.match(/^\s*/)?.[0] ?? "";
   const trailing = text.match(/\s*$/)?.[0] ?? "";
   const trimmed = text.slice(leading.length, text.length - trailing.length || undefined);
@@ -2814,21 +2833,19 @@ export function translateUi(
     ?? OFFLINE_PHRASES[languageTable]?.[trimmed]
     ?? TABLES[languageTable]?.[trimmed]
     ?? CORE_TABLES[languageTable]?.[trimmed];
-  if (translated) return `${leading}${interpolate(translated)}${trailing}`;
 
-  // Translate a literal UI phrase word-by-word as a local fallback. Keep
-  // URLs, handles, product names, numbers, and interpolation-like tokens
-  // intact; those are identifiers, not interface copy.
-  const words = OFFLINE_WORDS[languageTable] ?? {};
-  const localized = trimmed.replace(/[A-Za-zÀ-ÿ]+/g, (word) => {
-    const replacement = words[word.toLowerCase()];
-    if (!replacement) return word;
-    if (word[0] === word[0].toUpperCase() && replacement.length > 0) {
-      return replacement[0].toUpperCase() + replacement.slice(1);
-    }
-    return replacement;
-  });
-  return `${leading}${interpolate(localized)}${trailing}`;
+  if (translated) {
+    const translatedBrandCount = countBrand(translated, true);
+    const safeTranslation =
+      sourceBrandCount > translatedBrandCount
+        ? interpolate(translateWordByWord(trimmed))
+        : interpolate(translated);
+    return `${leading}${safeTranslation}${trailing}`;
+  }
+
+  // Keep AfuChat's exact spelling, like other identifiers, while translating
+  // the surrounding words in this offline fallback.
+  return `${leading}${interpolate(translateWordByWord(trimmed))}${trailing}`;
 }
 
 export function setCurrentUiLanguage(language: string | null): void {

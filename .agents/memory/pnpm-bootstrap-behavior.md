@@ -3,8 +3,10 @@ name: pnpm bootstrap behavior
 description: A workspace toolchain mismatch that can exhaust processes during preview startup.
 ---
 
-When the workspace-pinned pnpm version differs from the installed global pnpm, `pnpm run` may repeatedly spawn `pnpm add pnpm@<pinned-version>` processes and exhaust resources. In this environment the app preview can avoid that loop by invoking already-installed project binaries directly.
+When the workspace-pinned pnpm version differs from the installed global pnpm, invoking the global binary may repeatedly spawn `pnpm add pnpm@<pinned-version>` processes and exhaust resources. Avoid the global binary for installs and version checks.
 
-**Why:** The recursive bootstrap prevented both the web preview and Expo Go from starting until their workflows bypassed pnpm.
+For workspace dependency changes, use Corepack's project-pinned pnpm shim in a temporary directory and prepend that directory to `PATH`; verify the reported version matches the root `packageManager` first. A direct symlink to the Corepack executable is not a working pnpm shim. Preview workflows can avoid bootstrap loops by invoking already-installed project binaries directly.
 
-**How to apply:** If pnpm bootstrap errors recur, inspect running processes before retrying; prefer the installed Expo/Node binaries in preview workflows instead of changing dependency versions blindly.
+**Why:** A global/pinned mismatch caused recursive bootstrap, while Corepack's generated shim ran the workspace's pinned version and allowed the Expo dependencies to be aligned safely.
+
+**How to apply:** Before retrying a pnpm failure, inspect for leftover processes. Use installed Expo/Node binaries in preview workflows and Corepack's generated shim for package changes; don't invoke the mismatched global pnpm.
