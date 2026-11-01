@@ -81,7 +81,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && if [ -n \"$REPLIT_EXPO_SESSION_SECRET\" ]; then ./node_modules/.bin/create-launch login --session \"$REPLIT_EXPO_SESSION_SECRET\" || true; fi; unset EXPO_OFFLINE; NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel --port 8000"
+args = "cd artifacts/mobile && if [ -n \"$REPLIT_EXPO_SESSION_SECRET\" ]; then ./node_modules/.bin/create-launch login --session \"$REPLIT_EXPO_SESSION_SECRET\" || true; fi; unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN; CI=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel --port 8000"
 waitForPort = 8000
 
 [[ports]]
