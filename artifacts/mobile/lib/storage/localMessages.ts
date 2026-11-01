@@ -4,7 +4,7 @@
 // messages NEWER than that — exactly how WhatsApp / Telegram work.
 //
 // RULES:
-//   • INSERT OR IGNORE  — never overwrite an existing message row
+//   • INSERT OR IGNORE  — never overwrite message content; fill sender snapshots safely
 //   • No TTL, no auto-trim — messages live until the user deletes the conversation
 //   • getNewestMessageDate() → cursor for delta sync
 
@@ -14,6 +14,9 @@ export type LocalMessage = {
   id: string;
   conversation_id: string;
   sender_id: string;
+  sender_display_name: string | null;
+  sender_avatar_url: string | null;
+  sender_handle: string | null;
   content: string | null;
   attachment_url: string | null;
   attachment_type: string | null;
@@ -26,10 +29,27 @@ export type LocalMessage = {
 };
 
 export function mapToLocal(msg: any, conversationId: string): LocalMessage {
+  const rawSender = msg.sender ?? msg.profiles ?? null;
+  const sender = Array.isArray(rawSender) ? rawSender[0] : rawSender;
+  const senderDisplayName =
+    (typeof sender?.display_name === "string" ? sender.display_name.trim() : "") ||
+    (typeof msg.sender_display_name === "string" ? msg.sender_display_name.trim() : "") ||
+    null;
+  const senderAvatarUrl =
+    (typeof sender?.avatar_url === "string" && sender.avatar_url.trim() ? sender.avatar_url : null) ??
+    msg.sender_avatar_url ??
+    null;
+  const senderHandle =
+    (typeof sender?.handle === "string" ? sender.handle.trim() : "") ||
+    (typeof msg.sender_handle === "string" ? msg.sender_handle.trim() : "") ||
+    null;
   return {
     id: msg.id,
     conversation_id: conversationId,
     sender_id: msg.sender_id,
+    sender_display_name: senderDisplayName,
+    sender_avatar_url: senderAvatarUrl,
+    sender_handle: senderHandle,
     content: msg.encrypted_content ?? msg.content ?? null,
     attachment_url: msg.attachment_url ?? null,
     attachment_type: msg.attachment_type ?? null,
@@ -123,7 +143,8 @@ export async function getLocalMessageCount(conversationId: string): Promise<numb
 
 /**
  * Persist messages permanently. Uses INSERT OR IGNORE — already-stored messages
- * are never overwritten or re-downloaded. Only edited_at and status may be updated.
+ * are never overwritten or re-downloaded. Status, edited_at, and non-empty sender
+ * identity snapshots may be refreshed without replacing known identity with blanks.
  */
 export async function saveMessages(conversationId: string, messages: any[]): Promise<void> {
   if (!messages.length) return;
@@ -136,8 +157,9 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
       await db.runAsync(
         `INSERT OR IGNORE INTO messages
          (id, conversation_id, sender_id, content, attachment_url, attachment_type,
-          reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at,
+          sender_display_name, sender_avatar_url, sender_handle)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           local.id,
           local.conversation_id,
@@ -152,16 +174,30 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
           local.is_pending ? 1 : 0,
           local.synced ? 1 : 0,
           now,
+          local.sender_display_name,
+          local.sender_avatar_url,
+          local.sender_handle,
         ],
       );
-      // Allow status and edited_at to be updated on existing rows (delivery receipts)
-      if (msg.status || msg.edited_at) {
+      // Fill or refresh identity snapshots only with non-empty profile data.
+      // This keeps sender names and avatars when later payloads omit profiles.
+      if (msg.status || msg.edited_at || local.sender_display_name || local.sender_avatar_url || local.sender_handle) {
         await db.runAsync(
           `UPDATE messages SET
              status = COALESCE(?, status),
-             edited_at = COALESCE(?, edited_at)
+             edited_at = COALESCE(?, edited_at),
+             sender_display_name = COALESCE(NULLIF(?, ''), sender_display_name),
+             sender_avatar_url = COALESCE(?, sender_avatar_url),
+             sender_handle = COALESCE(NULLIF(?, ''), sender_handle)
            WHERE id = ?`,
-          [msg.status ?? null, msg.edited_at ?? null, local.id],
+          [
+            msg.status ?? null,
+            msg.edited_at ?? null,
+            local.sender_display_name,
+            local.sender_avatar_url,
+            local.sender_handle,
+            local.id,
+          ],
         );
       }
     }
@@ -250,6 +286,9 @@ export async function deleteAllLocalMessages(conversationId: string): Promise<vo
 function rowToMsg(r: any): LocalMessage {
   return {
     ...r,
+    sender_display_name: r.sender_display_name ?? null,
+    sender_avatar_url: r.sender_avatar_url ?? null,
+    sender_handle: r.sender_handle ?? null,
     is_pending: r.is_pending === 1,
     synced: r.synced === 1,
   };

@@ -6,13 +6,15 @@
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { VideoFeed } from "@/app/video/[id]";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function ShortsTab() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <VideoFeed isEmbedded />
-      {/* Black padding that fills the system nav / home-indicator area */}
+      {/* Theme-matched padding fills the system nav / home-indicator area. */}
       {insets.bottom > 0 && (
         <View
           style={{
@@ -21,7 +23,7 @@ export default function ShortsTab() {
             left: 0,
             right: 0,
             height: insets.bottom,
-            backgroundColor: "#000",
+            backgroundColor: colors.background,
             pointerEvents: "none",
           }}
         />

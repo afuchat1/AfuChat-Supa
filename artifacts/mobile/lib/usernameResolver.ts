@@ -18,28 +18,6 @@ export type UsernameTarget =
       handle: string;
     };
 
-export type UsernameLoadingState = {
-  handle: string;
-};
-
-type LoadingListener = (state: UsernameLoadingState | null) => void;
-
-let loadingState: UsernameLoadingState | null = null;
-let loadingListener: LoadingListener | null = null;
-
-export function subscribeUsernameLoading(listener: LoadingListener): () => void {
-  loadingListener = listener;
-  listener(loadingState);
-  return () => {
-    if (loadingListener === listener) loadingListener = null;
-  };
-}
-
-export function setUsernameLoading(handle: string | null): void {
-  loadingState = handle ? { handle } : null;
-  loadingListener?.(loadingState);
-}
-
 /**
  * Resolves the shared username namespace before navigation. Public chat
  * usernames are stored on both the chat/channel records and an immutable

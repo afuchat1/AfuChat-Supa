@@ -8,8 +8,10 @@ import { storage, KEYS } from "@/lib/storage/mmkv";
 import { safeRouter } from "@/lib/navUtils";
 import { handleIncomingUrl, isAfuChatDeepLink } from "@/lib/deepLinkHandler";
 import { LANGUAGE_PREFERENCE_KEY } from "@/context/LanguageContext";
+import { useTheme } from "@/hooks/useTheme";
 
 export default function IndexScreen() {
+  const { colors } = useTheme();
   const { session, profile, loading, user } = useAuth();
   const redirected = useRef(false);
   const [initialUrlChecked, setInitialUrlChecked] = useState(false);
@@ -168,7 +170,7 @@ export default function IndexScreen() {
   // This route is only a navigation handoff. Returning users are routed from
   // the synchronous local identity cache, so never show an account-restoring
   // or loading message while background auth work continues.
-  return <View style={styles.boot} />;
+  return <View style={[styles.boot, { backgroundColor: colors.background }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -177,6 +179,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 14,
-    backgroundColor: "#000000",
   },
 });

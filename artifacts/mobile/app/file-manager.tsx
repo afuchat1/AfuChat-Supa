@@ -520,7 +520,7 @@ export default function FileManagerScreen() {
         animationType="fade"
         onRequestClose={() => setPreviewFile(null)}
       >
-        <View style={styles.previewRoot}>
+        <View style={[styles.previewRoot, { backgroundColor: colors.background }]}>
           <View style={styles.previewHeader}>
             <Pressable
               onPress={() => setPreviewFile(null)}
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
   sendBar: { flex: 1, minHeight: 52, borderRadius: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, gap: 9 },
   sendBarText: { fontSize: 14, fontFamily: "Inter_700Bold" },
   sendBarHint: { marginLeft: "auto", fontSize: 11, fontFamily: "Inter_500Medium" },
-  previewRoot: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
+  previewRoot: { flex: 1, alignItems: "center", justifyContent: "center" },
   previewHeader: { position: "absolute", top: 50, left: 16, right: 16, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   previewClose: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   previewTitle: { flex: 1, color: "#fff", textAlign: "center", fontSize: 15, fontFamily: "Inter_600SemiBold", paddingHorizontal: 12 },

@@ -430,6 +430,7 @@ const pill = StyleSheet.create({
 });
 
 function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
+  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{
@@ -449,7 +450,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       <Tabs.Screen name="index"         options={{ href: null }} />
       <Tabs.Screen name="chats"         options={{ href: isLoggedIn ? undefined : null }} />
       <Tabs.Screen name="discover"      options={{ href: isLoggedIn ? undefined : null, lazy: true }} />
-      <Tabs.Screen name="shorts"        options={{ href: isLoggedIn ? undefined : null, lazy: true, sceneStyle: { backgroundColor: "#000" } }} />
+      <Tabs.Screen name="shorts"        options={{ href: isLoggedIn ? undefined : null, lazy: true, sceneStyle: { backgroundColor: colors.background } }} />
       <Tabs.Screen name="search"        options={{ href: null }} />
       <Tabs.Screen name="contacts"      options={{ href: null }} />
       <Tabs.Screen name="communities"   options={{ href: null }} />

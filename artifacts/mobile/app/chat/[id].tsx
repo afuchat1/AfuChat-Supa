@@ -327,6 +327,100 @@ function isOptimisticMatch(local: Message, server: Message): boolean {
     Math.abs(localTime - serverTime) <= 15000;
 }
 
+type SenderSnapshot = NonNullable<Message["sender"]>;
+
+function mergeSenderSnapshot(
+  previous: SenderSnapshot | undefined,
+  incoming: Partial<SenderSnapshot> | null | undefined,
+): SenderSnapshot | undefined {
+  const incomingName = typeof incoming?.display_name === "string" ? incoming.display_name.trim() : "";
+  const incomingAvatar = typeof incoming?.avatar_url === "string" && incoming.avatar_url
+    ? incoming.avatar_url
+    : null;
+  const incomingHandle = typeof incoming?.handle === "string" ? incoming.handle.trim() : "";
+  const displayName = incomingName || previous?.display_name?.trim() || "";
+  const avatarUrl = incomingAvatar ?? previous?.avatar_url ?? null;
+  const handle = incomingHandle || previous?.handle || "";
+
+  if (!displayName && !avatarUrl && !handle) return undefined;
+  return { display_name: displayName, avatar_url: avatarUrl, handle };
+}
+
+function normalizeSenderSnapshot(value: any): SenderSnapshot | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && typeof candidate === "object"
+    ? mergeSenderSnapshot(undefined, candidate)
+    : undefined;
+}
+
+function localSenderSnapshot(message: any): SenderSnapshot | undefined {
+  const cached = getProfileCache(message.sender_id);
+  const cachedSender = cached
+    ? mergeSenderSnapshot(undefined, {
+        display_name: cached.display_name || "",
+        avatar_url: cached.avatar_url ?? null,
+        handle: cached.handle || "",
+      })
+    : undefined;
+  return mergeSenderSnapshot(cachedSender, {
+    display_name: message.sender_display_name || "",
+    avatar_url: message.sender_avatar_url ?? null,
+    handle: message.sender_handle || "",
+  });
+}
+
+function hydrateLocalSenderSnapshots(
+  conversationId: string,
+  localRows: any[],
+  isCurrentLoad: () => boolean,
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+): void {
+  if (!isOnline() || localRows.length === 0) return;
+  const senderIds = Array.from(new Set(
+    localRows
+      .filter((row) => {
+        const cached = getProfileCache(row.sender_id);
+        return !row.sender_display_name?.trim() &&
+          !row.sender_avatar_url &&
+          !cached?.display_name?.trim() &&
+          !cached?.avatar_url;
+      })
+      .map((row) => row.sender_id)
+      .filter(Boolean),
+  )).slice(0, 100);
+  if (senderIds.length === 0) return;
+
+  void supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url, handle")
+    .in("id", senderIds)
+    .then(({ data }) => {
+      if (!isCurrentLoad() || !data?.length) return;
+      const senderById = new Map<string, SenderSnapshot>();
+      for (const profile of data as any[]) {
+        const snapshot = normalizeSenderSnapshot(profile);
+        if (!profile.id || !snapshot) continue;
+        senderById.set(profile.id, snapshot);
+        setProfileCache(profile.id, { ...snapshot, id: profile.id });
+      }
+
+      setMessages((previous) => previous.map((message) => {
+        const resolved = senderById.get(message.sender_id);
+        return resolved
+          ? { ...message, sender: mergeSenderSnapshot(message.sender, resolved) }
+          : message;
+      }));
+
+      const backfilled = localRows.flatMap((row) => {
+        const resolved = senderById.get(row.sender_id);
+        return resolved
+          ? [{ ...row, sender: mergeSenderSnapshot(localSenderSnapshot(row), resolved) }]
+          : [];
+      });
+      if (backfilled.length > 0) saveMessages(conversationId, backfilled).catch(() => {});
+    }, () => {});
+}
+
 type NotificationMessageData = {
   id: string;
   kind: string;
@@ -1439,6 +1533,19 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   ) : null;
 
   const displayText = msg.encrypted_content ?? "";
+  const senderName = msg.sender?.display_name?.trim() ?? "";
+  const senderIdentity = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 }}>
+      <Avatar uri={msg.sender?.avatar_url} name={senderName} size={16} userId={msg.sender_id} />
+      {senderName ? (
+        <UserName
+          userId={msg.sender_id}
+          name={senderName}
+          style={[st.senderName, { color: BRAND, marginBottom: 0, lineHeight: 16 }]}
+        />
+      ) : null}
+    </View>
+  );
   const useSelectablePlainText = Boolean(isTextSelectionEnabled)
     && !/(?<![A-Za-z0-9._%+-])@[A-Za-z0-9_]{1,30}\b/.test(displayText);
 
@@ -1539,26 +1646,17 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
             isPending && { opacity: 0.6 },
             !flatSurface && chatPrefsLocal.compact_mode && { paddingVertical: 5 },
           ]}>
-          {!isMe && showName && (
+          {!isMe && showName && (senderName || msg.sender?.avatar_url) && (
             onSenderPress ? (
               <TouchableOpacity
                 onPress={() => onSenderPress(msg.sender_id)}
                 activeOpacity={0.65}
                 hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                style={{ alignSelf: "flex-start" }}
               >
-                <UserName
-                  userId={msg.sender_id}
-                  name={msg.sender?.display_name ?? ""}
-                  style={[st.senderName, { color: BRAND }]}
-                />
+                {senderIdentity}
               </TouchableOpacity>
-            ) : (
-              <UserName
-                userId={msg.sender_id}
-                name={msg.sender?.display_name ?? ""}
-                style={[st.senderName, { color: BRAND }]}
-              />
-            )
+            ) : senderIdentity
           )}
 
           {replyPreview && (
@@ -3019,13 +3117,28 @@ function ChatScreen() {
       const cached = clearedAt ? allCached.filter((m) => m.sent_at > clearedAt) : allCached;
       if (cached.length > 0) {
         const newestFirst = [...cached].reverse();
-        setMessages(newestFirst.map((m) => ({
-          id: m.id, chat_id: m.conversation_id, sender_id: m.sender_id,
-          encrypted_content: m.content ?? "", sent_at: m.sent_at,
-          reply_to_message_id: m.reply_to_id, attachment_url: m.attachment_url,
-          attachment_type: m.attachment_type, edited_at: m.edited_at,
-          status: m.status as any, reactions: [], _pending: m.is_pending,
-        })));
+        setMessages((previous) => {
+          const previousById = new Map(previous.map((message) => [message.id, message]));
+          return newestFirst.map((m) => {
+            const previousMessage = previousById.get(m.id);
+            return {
+              id: m.id,
+              chat_id: m.conversation_id,
+              sender_id: m.sender_id,
+              encrypted_content: m.content ?? "",
+              sent_at: m.sent_at,
+              reply_to_message_id: m.reply_to_id,
+              attachment_url: m.attachment_url,
+              attachment_type: m.attachment_type,
+              edited_at: m.edited_at,
+              status: m.status as any,
+              reactions: [],
+              _pending: m.is_pending,
+              sender: mergeSenderSnapshot(previousMessage?.sender, localSenderSnapshot(m)),
+            };
+          });
+        });
+        hydrateLocalSenderSnapshots(chatId, cached, isCurrentLoad, setMessages);
         setLoading(false);
         // Seed the pagination cursor from the OLDEST cached message.
         if (!oldestCursorRef.current || cached[0].sent_at < oldestCursorRef.current) {
@@ -3109,6 +3222,8 @@ function ChatScreen() {
       const mapped = data.map((m: any) => {
         const isBot = m.sender_id === AFUAI_BOT_ID;
         const aiParsed = isBot ? parseAfuAiTags(m.encrypted_content || "") : null;
+        const sender = normalizeSenderSnapshot(m.profiles);
+        if (sender) setProfileCache(m.sender_id, { ...sender, id: m.sender_id });
         return {
           id: m.id,
           chat_id: m.chat_id,
@@ -3119,7 +3234,7 @@ function ChatScreen() {
           attachment_url: m.attachment_url,
           attachment_type: m.attachment_type,
           edited_at: m.edited_at,
-          sender: m.profiles,
+          sender,
           reactions: [],
           status: undefined as any,
           _isAi: isBot || undefined,
@@ -3146,6 +3261,7 @@ function ChatScreen() {
           return previous
             ? {
                 ...m,
+                sender: mergeSenderSnapshot(previous.sender, m.sender),
                 status: previous.status ?? m.status,
                 read_at: previous.read_at ?? m.read_at,
                 delivered_at: previous.delivered_at ?? m.delivered_at,
@@ -3296,6 +3412,7 @@ function ChatScreen() {
               attachment_url: message.attachment_url,
               attachment_type: message.attachment_type,
               edited_at: message.edited_at,
+              sender: localSenderSnapshot(message),
               status: message.status as any,
               reactions: [],
               _pending: message.is_pending,
@@ -3306,8 +3423,16 @@ function ChatScreen() {
           });
           setMessages((prev) => {
             const existingIds = new Set(prev.map((message) => message.id));
-            return [...prev, ...mappedLocal.filter((message) => !existingIds.has(message.id))];
+            const localById = new Map(mappedLocal.map((message) => [message.id, message]));
+            const refreshed = prev.map((message) => {
+              const local = localById.get(message.id);
+              return local
+                ? { ...message, sender: mergeSenderSnapshot(message.sender, local.sender) }
+                : message;
+            });
+            return [...refreshed, ...mappedLocal.filter((message) => !existingIds.has(message.id))];
           });
+          hydrateLocalSenderSnapshots(chatId, localPage, isCurrentLoad, setMessages);
           setHasMore(true);
 
           const localIds = localPage
@@ -3412,12 +3537,14 @@ function ChatScreen() {
         const mapped = data.map((m: any) => {
           const isBot = m.sender_id === AFUAI_BOT_ID;
           const aiParsed = isBot ? parseAfuAiTags(m.encrypted_content || "") : null;
+          const sender = normalizeSenderSnapshot(m.profiles);
+          if (sender) setProfileCache(m.sender_id, { ...sender, id: m.sender_id });
           return {
             id: m.id, chat_id: m.chat_id, sender_id: m.sender_id,
             encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
             sent_at: m.sent_at, reply_to_message_id: m.reply_to_message_id,
             attachment_url: m.attachment_url, attachment_type: m.attachment_type, edited_at: m.edited_at,
-            sender: m.profiles, reactions: reactionMap[m.id] || [],
+            sender, reactions: reactionMap[m.id] || [],
             status: m.sender_id === user.id
               ? (statusMap2.get(m.id)?.read_at ? "read" : statusMap2.get(m.id)?.delivered_at ? "delivered" : "sent")
               : undefined,
@@ -3432,8 +3559,16 @@ function ChatScreen() {
         setHasMore(data.length >= 50);
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
-          return [...prev, ...mapped.filter((m: Message) => !existingIds.has(m.id))];
+          const mappedById = new Map(mapped.map((message: Message) => [message.id, message]));
+          const refreshed = prev.map((message) => {
+            const serverMessage = mappedById.get(message.id);
+            return serverMessage
+              ? { ...message, sender: mergeSenderSnapshot(message.sender, serverMessage.sender) }
+              : message;
+          });
+          return [...refreshed, ...mapped.filter((m: Message) => !existingIds.has(m.id))];
         });
+        saveMessages(chatId, mapped).catch(() => {});
       } else {
         setHasMore(false);
       }
@@ -3710,13 +3845,31 @@ function ChatScreen() {
     const unsubFastPath = subscribeToChat(activeChatId, (gMsg) => {
       if (!isCurrentSubscription() || !user || gMsg.sender_id === user.id) return;
       const cachedSender = getProfileCache(gMsg.sender_id);
-      const senderSnap = cachedSender
-        ? { display_name: cachedSender.display_name, avatar_url: cachedSender.avatar_url ?? null, handle: cachedSender.handle }
-        : { display_name: gMsg.sender_display_name || "User", avatar_url: gMsg.sender_avatar_url ?? null, handle: gMsg.sender_handle || "" };
+      const senderSnap = mergeSenderSnapshot(
+        normalizeSenderSnapshot(cachedSender),
+        {
+          display_name: gMsg.sender_display_name || "",
+          avatar_url: gMsg.sender_avatar_url ?? null,
+          handle: gMsg.sender_handle || "",
+        },
+      );
+      if (senderSnap) setProfileCache(gMsg.sender_id, { ...senderSnap, id: gMsg.sender_id });
+      const receivedMessage = {
+        ...gMsg,
+        encrypted_content: gMsg.encrypted_content ?? "",
+        sender: senderSnap,
+        reactions: [],
+        status: undefined,
+      };
       setMessages((prev) => {
-        if (prev.some((m) => m.id === gMsg.id)) return prev;
-        return [{ ...gMsg, encrypted_content: gMsg.encrypted_content ?? "", sender: senderSnap as any, reactions: [], status: undefined }, ...prev];
+        if (prev.some((m) => m.id === gMsg.id)) {
+          return prev.map((message) => message.id === gMsg.id
+            ? { ...message, sender: mergeSenderSnapshot(message.sender, senderSnap) }
+            : message);
+        }
+        return [receivedMessage, ...prev];
       });
+      saveMessages(activeChatId, [receivedMessage]).catch(() => {});
     });
 
     // Evict any stale channel with this name before creating a fresh one.
@@ -3749,9 +3902,10 @@ function ChatScreen() {
           // Cache-first: show the message instantly with cached sender data;
           // only fire a Supabase round-trip when we haven't seen this sender before.
           const _cachedSender = getProfileCache(newMsg.sender_id);
-          const _senderSnap = _cachedSender
-            ? { display_name: _cachedSender.display_name, avatar_url: _cachedSender.avatar_url ?? null, handle: _cachedSender.handle }
-            : { display_name: "User", avatar_url: null, handle: "" };
+          const _senderSnap = mergeSenderSnapshot(
+            normalizeSenderSnapshot(_cachedSender),
+            normalizeSenderSnapshot(newMsg.sender),
+          );
           const fetchNotificationData = async () => {
             if (!isNotificationsChat || !user) return null;
             const { data: event } = await supabase
@@ -3764,11 +3918,27 @@ function ChatScreen() {
           };
           const notificationData = await fetchNotificationData();
           if (!isCurrentSubscription()) return;
+          const receivedMessage = {
+            ...newMsg,
+            sender: _senderSnap,
+            reactions: [],
+            status: undefined,
+            _notification: notificationData,
+          };
           setMessages((prev) => {
             // Deduplicate — broadcast fast-path may have already inserted this message
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [{ ...newMsg, sender: _senderSnap as any, reactions: [], status: undefined, _notification: notificationData }, ...prev];
+            if (prev.some((m) => m.id === newMsg.id)) {
+              return prev.map((message) => message.id === newMsg.id
+                ? {
+                    ...message,
+                    sender: mergeSenderSnapshot(message.sender, _senderSnap),
+                    _notification: notificationData ?? message._notification,
+                  }
+                : message);
+            }
+            return [receivedMessage, ...prev];
           });
+          saveMessages(activeChatId, [receivedMessage]).catch(() => {});
           // The messages and notification_events rows are created in one
           // transaction, but their realtime events can arrive in either order.
           // Retry the metadata lookup so the CTA is not permanently lost when
@@ -3788,11 +3958,15 @@ function ChatScreen() {
               }
             })();
           }
-          if (!_cachedSender) {
+          if (!_senderSnap?.display_name) {
             supabase.from("profiles").select("display_name, avatar_url, handle").eq("id", newMsg.sender_id).single().then(({ data: _sp }) => {
-              if (_sp && isCurrentSubscription()) {
+              const resolvedSender = normalizeSenderSnapshot(_sp);
+              if (resolvedSender && isCurrentSubscription()) {
                 setProfileCache(newMsg.sender_id, _sp as any);
-                setMessages((prev) => prev.map((m) => m.id === newMsg.id ? { ...m, sender: _sp as any } : m));
+                setMessages((prev) => prev.map((message) => message.id === newMsg.id
+                  ? { ...message, sender: mergeSenderSnapshot(message.sender, resolvedSender) }
+                  : message));
+                saveMessages(activeChatId, [{ ...newMsg, sender: resolvedSender }]).catch(() => {});
               }
             });
           }
@@ -7819,7 +7993,7 @@ STRICT RULES:
                 activeOpacity={0.7}
               >
                 <Avatar uri={s.avatar_url} name={s.display_name} size={22} />
-                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }}>{s.display_name || "User"}</Text>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: colors.text }}>@{s.handle}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>

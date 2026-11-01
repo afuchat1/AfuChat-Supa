@@ -301,4 +301,12 @@ async function runMigrations(db: DB) {
     await safeAdd("ALTER TABLE conversations ADD COLUMN created_by TEXT");
     await db.runAsync("UPDATE schema_version SET version = 17");
   }
+
+  if (currentVersion < 18) {
+    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
+    await safeAdd("ALTER TABLE messages ADD COLUMN sender_display_name TEXT");
+    await safeAdd("ALTER TABLE messages ADD COLUMN sender_avatar_url TEXT");
+    await safeAdd("ALTER TABLE messages ADD COLUMN sender_handle TEXT");
+    await db.runAsync("UPDATE schema_version SET version = 18");
+  }
 }

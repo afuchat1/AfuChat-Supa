@@ -451,7 +451,7 @@ export default function QRScannerScreen() {
   }
 
   return (
-    <View style={[s.root, { backgroundColor: "#000" }]}>
+    <View style={[s.root, { backgroundColor: colors.background }]}>
       {/* Camera */}
       <CameraView
         style={StyleSheet.absoluteFill}

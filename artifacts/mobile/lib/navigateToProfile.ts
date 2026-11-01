@@ -9,12 +9,11 @@
 
 import { router } from "expo-router";
 import { showToast } from "@/lib/toast";
-import { notificationAsync, NotificationFeedbackType } from "@/lib/haptics";
+import { impactAsync, ImpactFeedbackStyle } from "@/lib/haptics";
 import { setProfileCache, type CachedProfile } from "@/lib/profileCache";
 import {
   navigateToUsernameTarget,
   resolveUsernameTarget,
-  setUsernameLoading,
 } from "@/lib/usernameResolver";
 
 let latestRequest = 0;
@@ -41,26 +40,19 @@ export async function navigateToProfile(
   if (!clean) return;
 
   const requestId = ++latestRequest;
-  setUsernameLoading(clean);
   try {
     const target = await resolveUsernameTarget(clean);
     if (requestId !== latestRequest) return;
-    setUsernameLoading(null);
 
     if (!target) {
-      notificationAsync(NotificationFeedbackType.Error);
-      showToast("Username unavailable", {
-        type: "error",
-        icon: "close-circle-outline",
-      });
+      impactAsync(ImpactFeedbackStyle.Heavy);
       return;
     }
 
     navigateToUsernameTarget(target);
   } catch {
     if (requestId !== latestRequest) return;
-    setUsernameLoading(null);
-    notificationAsync(NotificationFeedbackType.Error);
+    impactAsync(ImpactFeedbackStyle.Heavy);
     showToast("Username unavailable", {
       type: "error",
       icon: "close-circle-outline",

@@ -499,16 +499,17 @@ export function MeTabSkeleton() {
 }
 
 export function VideoFeedSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: "#000", flexDirection: "column" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background, flexDirection: "column" }}>
 
       {/* ── Video area (fills remaining space) ── */}
-      <View style={{ flex: 1, backgroundColor: "#000" }} />
+      <View style={{ flex: 1, backgroundColor: colors.background }} />
 
       {/* ── Caption strip (56 px, matches CAPTION_H in VideoFeed) ── */}
       <View style={{
         height: 56,
-        backgroundColor: "#000",
+        backgroundColor: colors.background,
         paddingHorizontal: 14,
         paddingVertical: 10,
         justifyContent: "center",
@@ -527,7 +528,7 @@ export function VideoFeedSkeleton() {
         alignItems: "center",
         paddingHorizontal: 12,
         paddingVertical: 10,
-        backgroundColor: "#000",
+        backgroundColor: colors.background,
         gap: 10,
         borderTopWidth: 0.5,
         borderTopColor: "rgba(255,255,255,0.08)",
@@ -567,7 +568,7 @@ export function VideoFeedSkeleton() {
 
 export function ShortsFeedSkeleton({ dark = true }: { dark?: boolean }) {
   const { colors } = useTheme();
-  const bg = dark ? "#000" : colors.background;
+  const bg = colors.background;
   return (
     <View style={{ flex: 1, backgroundColor: bg, flexDirection: "column" }}>
 
@@ -596,7 +597,7 @@ export function ShortsFeedSkeleton({ dark = true }: { dark?: boolean }) {
         alignItems: "center",
         paddingHorizontal: 12,
         paddingVertical: 10,
-        backgroundColor: dark ? "#000" : colors.card,
+        backgroundColor: dark ? colors.background : colors.card,
         gap: 10,
         borderTopWidth: 0.5,
         borderTopColor: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",

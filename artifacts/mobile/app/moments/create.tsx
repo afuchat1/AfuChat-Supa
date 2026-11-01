@@ -630,7 +630,7 @@ export default function CreatePostScreen() {
                 <TouchableOpacity style={ss.mentionRow} onPress={() => insertMention(item.handle)} activeOpacity={0.75}>
                   <Avatar uri={item.avatar_url} name={item.display_name} size={38} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[ss.mentionName, { color: colors.text }]}>{item.display_name || "User"}</Text>
+                    <Text style={[ss.mentionName, { color: colors.text }]}>@{item.handle}</Text>
                   </View>
                 </TouchableOpacity>
               )}

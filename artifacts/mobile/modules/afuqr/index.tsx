@@ -111,7 +111,7 @@ export default function AfuQRApp() {
   const isUrl = result && /^https?:\/\//i.test(result.data);
 
   return (
-    <View style={[s.root, { backgroundColor: "#000" }]}>
+    <View style={[s.root, { backgroundColor: colors.background }]}>
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"

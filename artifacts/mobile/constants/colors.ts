@@ -94,20 +94,20 @@ const light = {
 
 const dark = {
   // ── Typography ──────────────────────────────────────────────────────────────
-  text:              "#FFF8F0",
-  textSecondary:     "#AAAAAA",
-  textMuted:         "#717171",
+  text:              "#E8EAED",
+  textSecondary:     "#BDC1C6",
+  textMuted:         "#9AA0A6",
 
   // ── Backgrounds — flat UI: one universal BG, no card elevation ──────────────
-  background:        "#000000",
-  backgroundSecondary: "#000000", // same — no layering
-  backgroundTertiary:  "#000000", // same — no layering
-  surface:           "#000000",
-  card:              "#000000",
+  background:        "#202124",
+  backgroundSecondary: "#202124", // AfuSearch's shared dark surface
+  backgroundTertiary:  "#202124", // same — no layering
+  surface:           "#202124",
+  card:              "#202124",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "rgba(255,255,255,0.10)",
-  separator:         "rgba(255,255,255,0.07)",
+  border:            "#3C4043",
+  separator:         "rgba(255,255,255,0.08)",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
@@ -116,26 +116,26 @@ const dark = {
   tabIconSelected:   BRAND,
 
   // ── Icons ───────────────────────────────────────────────────────────────────
-  icon:              "#AEAEB2",
-  iconMuted:         "#636366",
+  icon:              "#BDC1C6",
+  iconMuted:         "#9AA0A6",
 
   // ── Chat bubbles ────────────────────────────────────────────────────────────
   bubble:            BRAND,
   bubbleText:        "#FFFFFF",
-  bubbleIncoming:    "#111111",
-  bubbleIncomingText:"#F1F1F1",
+  bubbleIncoming:    "#303134",
+  bubbleIncomingText:"#E8EAED",
 
   // ── Form inputs — glass style matching auth screens ──────────────────────────
-  inputBg:           "rgba(255,255,255,0.06)",
+  inputBg:           "#303134",
 
   // ── Glass surface tokens (match login / welcome glass aesthetic) ─────────────
   glassBg:           "rgba(255,255,255,0.08)",
   glassBgSubtle:     "rgba(255,255,255,0.05)",
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  header:            "#000000",
-  navigationSurface: "#252830",
-  navigationBorder:  "rgba(255,255,255,0.24)",
+  header:            "#202124",
+  navigationSurface: "#202124",
+  navigationBorder:  "#3C4043",
   navigationActive:  "#FFF8F0",
   navigationInactive: "#B9BAC4",
 
@@ -146,7 +146,7 @@ const dark = {
   // ── Presence ────────────────────────────────────────────────────────────────
   online:            BRAND,
   unread:            BRAND,
-  avatar:            "#111111",
+  avatar:            "#303134",
 
   // ── Semantic status (reflected from STATUS for component convenience) ────────
   success:           STATUS.success,

@@ -136,14 +136,13 @@ function extractColor(style: any, fallback: string): string {
 
 // ─── Mention avatar ───────────────────────────────────────────────────────────
 
-type MentionProfile = { avatarUrl: string | null; displayName: string | null };
+type MentionProfile = { avatarUrl: string | null; handle: string };
 
 /** Simple module-level cache: handle (no @) → public profile details. */
 const _mentionProfileCache = new Map<string, MentionProfile | null>();
 
 /**
- * Renders a resolved @mention as an inline profile picture and display name.
- * The handle is used only for lookup and is never shown in the rendered text.
+ * Renders a resolved @mention as an inline profile picture and @handle.
  */
 function MentionAvatar({
   handle,
@@ -166,14 +165,14 @@ function MentionAvatar({
       try {
         const { data } = await supabase
           .from("profiles")
-          .select("avatar_url,display_name")
+          .select("avatar_url,handle")
           .eq("handle", raw)
           .maybeSingle();
         if (cancelled) return;
         const resolved = data
           ? {
               avatarUrl: (data as any).avatar_url ?? null,
-              displayName: (data as any).display_name?.trim() || null,
+              handle: (data as any).handle?.trim().replace(/^@/, "") || raw,
             }
           : null;
         _mentionProfileCache.set(raw, resolved);
@@ -185,7 +184,8 @@ function MentionAvatar({
     return () => { cancelled = true; };
   }, [raw]);
 
-  const label = profile?.displayName?.trim() || "User";
+  const resolvedHandle = profile?.handle?.replace(/^@/, "").trim() || raw;
+  const label = `@${resolvedHandle}`;
   const avatarBackground = /^#[\da-f]{6}$/i.test(mentionColor)
     ? `${mentionColor}22`
     : "rgba(127,127,127,0.18)";
@@ -197,7 +197,7 @@ function MentionAvatar({
         <Image source={{ uri: profile.avatarUrl }} style={styles.mentionAvatar} />
       ) : (
         <Text style={[styles.mentionAvatarPlaceholder, { color: mentionColor, backgroundColor: avatarBackground }]}>
-          {label.charAt(0).toUpperCase()}
+          {resolvedHandle.charAt(0).toUpperCase() || "?"}
         </Text>
       )}
       <Text style={[styles.mention, { color: mentionColor }]}> {label}</Text>
@@ -247,7 +247,7 @@ type RichTextProps = {
   linkColor?: string;
   numberOfLines?: number;
   selectable?: boolean;
-  /** When true, @mentions show the same avatar and display name without
+  /** When true, @mentions show the same avatar and @handle without
    *  navigating when tapped. */
   plainMentions?: boolean;
   /** Transparent inline spacer appended after all spans — used for the
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     overflow: "hidden" as const,
-    marginTop: 2,
+    verticalAlign: "middle" as any,
   },
   mentionAvatarPlaceholder: {
     width: 16,
@@ -472,6 +472,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden" as const,
     textAlign: "center",
+    textAlignVertical: "center" as any,
+    verticalAlign: "middle" as any,
     lineHeight: 16,
     fontSize: 9,
     fontFamily: "Inter_700Bold",

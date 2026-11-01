@@ -77,7 +77,6 @@ import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastContainer } from "@/components/ui/ToastContainer";
-import { UsernameLoadingOverlay } from "@/components/ui/UsernameLoadingOverlay";
 import AlertModal from "@/components/ui/AlertModal";
 import { GlobalInboxListener } from "@/components/GlobalInboxListener";
 import { IncomingCallModal } from "@/components/IncomingCallModal";
@@ -679,7 +678,6 @@ export default function RootLayout() {
                                 <NativeShareShortcutSync />
                                 <AppNavigationStack />
                                 <IncomingCallModal />
-                                 <UsernameLoadingOverlay />
                                 <ToastContainer />
                                 <AlertModal />
                                 </GlobalMusicPlayerProvider>

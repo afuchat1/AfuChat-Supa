@@ -451,20 +451,8 @@ export function SearchScreen({
   // Shadow the module-level BRAND constant so every reference inside this
   // component (and all its inner functions) uses the user's chosen accent.
   const isAfuSearch = title === "AfuSearch";
-  const colors = isAfuSearch
-    ? {
-        ...themeColors,
-        background: "#202124",
-        backgroundSecondary: "#202124",
-        surface: "#202124",
-        inputBg: "#303134",
-        text: "#E8EAED",
-        textSecondary: "#BDC1C6",
-        textMuted: "#9AA0A6",
-        border: "#3C4043",
-      }
-    : themeColors;
-  const isDark = isAfuSearch || themeIsDark;
+  const colors = themeColors;
+  const isDark = themeIsDark;
   const BRAND = colors.accent;
 
   const CATEGORIES = [

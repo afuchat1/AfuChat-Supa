@@ -219,7 +219,7 @@ export default function HandleScreen() {
     if (!denied || hasNavigated.current || deniedHandleRef.current === cleanHandle) return;
 
     deniedHandleRef.current = cleanHandle;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     denyShake.setValue(0);
     Animated.sequence([
       Animated.timing(denyShake, { toValue: 9, duration: 55, useNativeDriver: Platform.OS !== "web" }),
