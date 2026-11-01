@@ -5,40 +5,11 @@
  * messages and posts. UI/page copy belongs in the bundled local i18n module.
  */
 
+import { protectAfuChatBrand } from "./brandName";
+
 const CACHE = new Map<string, string>();
 const IN_FLIGHT = new Map<string, Promise<string>>();
 const SOURCE_LANGUAGE_CACHE = new Map<string, string | null>();
-
-function protectAppBrand(text: string): {
-  text: string;
-  restore: (translated: string) => string | null;
-} {
-  const placeholders: Array<{ token: string; original: string }> = [];
-  let nextPlaceholder = 0;
-  const protectedText = text.replace(/\bAfuChat\b/gi, (original) => {
-    let token: string;
-    do {
-      token = `ZXQLOCKEDNAME${nextPlaceholder++}QXZ`;
-    } while (
-      text.includes(token) ||
-      placeholders.some((placeholder) => placeholder.token === token)
-    );
-    placeholders.push({ token, original });
-    return token;
-  });
-
-  return {
-    text: protectedText,
-    restore(translated) {
-      let restored = translated;
-      for (const { token, original } of placeholders) {
-        if (!restored.toUpperCase().includes(token)) return null;
-        restored = restored.replace(new RegExp(token, "gi"), original);
-      }
-      return restored;
-    },
-  };
-}
 
 function cacheKey(text: string, targetLang: string): string {
   return `${targetLang}:${text.slice(0, 120)}`;
@@ -57,7 +28,7 @@ export async function translateUserContent(text: string, targetLang: string): Pr
 
   const request = (async () => {
     try {
-      const brandProtected = protectAppBrand(text);
+      const brandProtected = protectAfuChatBrand(text);
       const url =
         `https://translate.googleapis.com/translate_a/single` +
         `?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t` +

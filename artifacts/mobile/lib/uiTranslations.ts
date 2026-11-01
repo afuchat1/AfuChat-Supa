@@ -1,3 +1,8 @@
+import {
+  AFUCHAT_BRAND_NAME,
+  normalizeAfuChatBrandName,
+} from "./brandName";
+
 export type UiLanguage = "en" | "sw" | "fr" | "es" | "ar" | "zh" | "am" | "rw";
 
 export type UiLanguageDefinition = {
@@ -2786,7 +2791,10 @@ export function translateUi(
   params?: Record<string, string | number>,
 ): string {
   if (!text) return text;
-  if (text.trim().toLowerCase() === "afuchat") return text;
+  const standaloneBrand = text.match(/^(\s*)afuchat(\s*)$/i);
+  if (standaloneBrand) {
+    return `${standaloneBrand[1]}${AFUCHAT_BRAND_NAME}${standaloneBrand[2]}`;
+  }
   const normalized = languageKey(language) ?? "";
   const uiLanguage = LANGUAGE_ALIASES[language?.trim().toLowerCase() ?? ""] ?? LANGUAGE_ALIASES[normalized];
   const semanticEnglish = SEMANTIC_UI_TABLES.en[text];
@@ -2797,7 +2805,7 @@ export function translateUi(
   const words = uiLanguage ? OFFLINE_WORDS[uiLanguage as UiLanguage] ?? {} : {};
   const translateWordByWord = (value: string): string =>
     value.replace(/[A-Za-zÀ-ÿ]+/g, (word) => {
-      if (word.toLowerCase() === "afuchat") return word;
+      if (word.toLowerCase() === "afuchat") return AFUCHAT_BRAND_NAME;
       const replacement = words[word.toLowerCase()];
       if (!replacement) return word;
       if (word[0] === word[0].toUpperCase() && replacement.length > 0) {
@@ -2819,10 +2827,12 @@ export function translateUi(
       countBrand(semanticEnglish) > countBrand(translatedSemantic, true)
         ? translateWordByWord(semanticEnglish)
         : translatedSemantic;
-    return interpolate(safeSemantic);
+    return normalizeAfuChatBrandName(interpolate(safeSemantic));
   }
 
-  if (!language || uiLanguage === "en" || normalized === "en") return text;
+  if (!language || uiLanguage === "en" || normalized === "en") {
+    return normalizeAfuChatBrandName(text);
+  }
   const languageTable = uiLanguage as UiLanguage;
   const sourceBrandCount = countBrand(text);
   const leading = text.match(/^\s*/)?.[0] ?? "";
@@ -2840,12 +2850,12 @@ export function translateUi(
       sourceBrandCount > translatedBrandCount
         ? interpolate(translateWordByWord(trimmed))
         : interpolate(translated);
-    return `${leading}${safeTranslation}${trailing}`;
+    return `${leading}${normalizeAfuChatBrandName(safeTranslation)}${trailing}`;
   }
 
   // Keep AfuChat's exact spelling, like other identifiers, while translating
   // the surrounding words in this offline fallback.
-  return `${leading}${interpolate(translateWordByWord(trimmed))}${trailing}`;
+  return `${leading}${normalizeAfuChatBrandName(interpolate(translateWordByWord(trimmed)))}${trailing}`;
 }
 
 export function setCurrentUiLanguage(language: string | null): void {

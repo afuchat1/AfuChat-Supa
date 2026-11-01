@@ -1,4 +1,5 @@
 import { SUPABASE_URL as supabaseUrl, SUPABASE_ANON_KEY as supabaseAnonKey } from "./env";
+import { protectAfuChatBrand } from "./brandName";
 
 /**
  * Returns the Supabase edge function base URL.
@@ -195,11 +196,13 @@ export async function aiEmojifyText(text: string): Promise<string> {
 }
 
 export async function aiTranslateMessage(text: string, targetLang: string): Promise<string> {
-  return askAi(
-    `Translate to ${targetLang}. Return ONLY the translation:\n\n${text}`,
+  const brandProtected = protectAfuChatBrand(text);
+  const translated = await askAi(
+    `Translate to ${targetLang}. Keep every placeholder exactly unchanged. Return ONLY the translation:\n\n${brandProtected.text}`,
     "Translator. Return ONLY translated text.",
     { fast: true, maxTokens: 200 }
   );
+  return brandProtected.restore(translated) ?? text;
 }
 
 export async function aiGenerateCaption(imageDescription?: string): Promise<string> {

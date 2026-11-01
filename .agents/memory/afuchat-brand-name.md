@@ -7,4 +7,4 @@ Keep the product name “AfuChat” exactly spelled in localized UI and translat
 
 **Why:** the user asked.
 
-**How to apply:** preserve the brand token in every translation path and verify standalone and in-sentence uses.
+**How to apply:** protect and restore the exact brand token across bundled UI, Google, and AI translation paths. If a translator alters a protected token, return the original text rather than a translated brand.

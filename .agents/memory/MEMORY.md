@@ -2,4 +2,5 @@
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
 - [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
 - [AfuChat brand colors](afuchat-brand-colors.md) — Keep the original AfuChat palette; the primary brand blue is #1018D8.
+- [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Keep the main nav as a floating overlay; content scrolls behind it without reserved space or a background layer.
