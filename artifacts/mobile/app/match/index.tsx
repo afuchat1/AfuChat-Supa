@@ -527,30 +527,30 @@ function MatchesTab() {
               {m.other.primary_photo ? (
                 <Image source={{ uri: m.other.primary_photo }} style={styles.matchAvatar} />
               ) : (
-                <View style={[styles.matchAvatar, { backgroundColor: "#F2F2F7", alignItems: "center", justifyContent: "center" }]}>
-                  <Ionicons name="person" size={24} color="#C7C7CC" />
+                <View style={[styles.matchAvatar, { backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }]}>
+                  <Ionicons name="person" size={24} color={colors.textMuted} />
                 </View>
               )}
               {m.is_super_match && (
-                <View style={styles.superDot}><Ionicons name="star" size={10} color="#FFD60A" /></View>
+                <View style={[styles.superDot, { backgroundColor: colors.surface }]}><Ionicons name="star" size={10} color="#FFD60A" /></View>
               )}
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={styles.matchName}>{m.other.name}{age ? `, ${age}` : ""}</Text>
+                <Text style={[styles.matchName, { color: colors.text }]}>{m.other.name}{age ? `, ${age}` : ""}</Text>
                 {m.is_super_match && <Ionicons name="star" size={12} color="#FFD60A" />}
               </View>
               {lastMsg ? (
-                <Text style={styles.matchLastMsg} numberOfLines={1}>
-                  {lastMsg.sender_id === user?.id ? "You: " : ""}{lastMsg.content ?? "Sent a gift 🎁"}
+                <Text style={[styles.matchLastMsg, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {lastMsg.sender_id === user?.id ? "You: " : ""}{lastMsg.content ?? "Sent a gift"}
                 </Text>
               ) : (
-                <Text style={[styles.matchLastMsg, { color: BRAND, fontFamily: "Inter_600SemiBold" }]}>Say hello! 👋</Text>
+                <Text style={[styles.matchLastMsg, { color: BRAND, fontFamily: "Inter_600SemiBold" }]}>Say hello!</Text>
               )}
             </View>
             <View style={styles.matchMeta}>
-              {lastMsg && <Text style={styles.matchTime}>{new Date(lastMsg.sent_at).toLocaleDateString([], { month: "short", day: "numeric" })}</Text>}
-              <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+              {lastMsg && <Text style={[styles.matchTime, { color: colors.textMuted }]}>{new Date(lastMsg.sent_at).toLocaleDateString([], { month: "short", day: "numeric" })}</Text>}
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </View>
           </Pressable>
         );
@@ -561,7 +561,7 @@ function MatchesTab() {
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 export default function MatchScreen({ initialTab }: { initialTab?: "discover" | "matches" } = {}) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -738,13 +738,13 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
 
   // ── Guard: no profile ──
   if (profileLoading) return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7", alignItems: "center", justifyContent: "center" }]}>
+    <View style={[styles.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
       <ActivityIndicator size="large" color={BRAND} />
     </View>
   );
 
   if (!myProfile) return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="chevron-back" />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -785,7 +785,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
 
   // ── Guard: paused ──
   if (myProfile.is_paused) return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="chevron-back" />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -811,7 +811,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#F2F2F7" }]}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="chevron-back" />
@@ -823,7 +823,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Pressable
-            style={styles.acoinBadge}
+            style={[styles.acoinBadge, { backgroundColor: colors.surface }]}
             onPress={() => router.push("/app/afupay" as any)}
             hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}
           >
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
   headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   headerLogo: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  acoinBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
+  acoinBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
   acoinBadgeText: { color: "#FFD60A", fontSize: 13, fontFamily: "Inter_700Bold" },
   tabBar: { flexDirection: "row", marginBottom: 4 },
   tabItem: { flex: 1, alignItems: "center", paddingVertical: 12 },
@@ -963,7 +963,7 @@ const styles = StyleSheet.create({
   cardArea: { flex: 1, alignItems: "center", justifyContent: "center" },
   cardWrapper: { position: "absolute", alignItems: "center" },
   card: {
-    borderRadius: 20, overflow: "hidden", backgroundColor: "#1C1C1E",
+    borderRadius: 20, overflow: "hidden",
   },
   photoBars: { position: "absolute", top: 10, left: 10, right: 10, flexDirection: "row", gap: 4, zIndex: 5 },
   photoBar: { flex: 1, height: 3, borderRadius: 2 },
@@ -1015,8 +1015,8 @@ const styles = StyleSheet.create({
   matchAvatarWrap: { position: "relative" },
   matchAvatar: { width: 60, height: 60, borderRadius: 30 },
   superDot: { position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderRadius: 10, backgroundColor: "#1C1C1E", alignItems: "center", justifyContent: "center" },
-  matchName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#1C1C1E" },
-  matchLastMsg: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#8E8E93", marginTop: 3 },
+  matchName: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  matchLastMsg: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 3 },
   matchMeta: { alignItems: "flex-end", gap: 4 },
-  matchTime: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#C7C7CC" },
+  matchTime: { fontSize: 11, fontFamily: "Inter_400Regular" },
 });

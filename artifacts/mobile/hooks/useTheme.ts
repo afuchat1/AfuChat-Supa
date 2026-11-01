@@ -10,7 +10,7 @@ export function useTheme() {
   const colors = {
     ...baseColors,
     accent,
-    navigationActive: isDark ? baseColors.navigationActive : accent,
+    navigationActive: accent,
     tint: accent,
     tabIconSelected: accent,
     online: accent,

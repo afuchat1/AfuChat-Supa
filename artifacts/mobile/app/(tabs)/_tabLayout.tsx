@@ -436,7 +436,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       screenOptions={{
         headerShown: false,
         animation: "none",
-        sceneStyle: { backgroundColor: "transparent" },
+        sceneStyle: { backgroundColor: colors.background },
         tabBarStyle: {
           display: "none",
           backgroundColor: "transparent",
@@ -462,6 +462,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export default function TabLayout() {
   const { session, profile, loading, user } = useAuth();
+  const { colors } = useTheme();
   const isLoggedIn     = !!session || !!user;
   const prevSessionRef = useRef<Session | null>(null);
   const insets         = useSafeAreaInsets();
@@ -495,12 +496,12 @@ export default function TabLayout() {
     (!loading && isLoggedIn && profile?.onboarding_completed === false);
 
   if (loading || isRedirecting) {
-    return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
   return (
     <TabSwipeProvider>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <ClassicTabLayout isLoggedIn={isLoggedIn} />
 
         {isLoggedIn && !isDesktop && !isAfuSearch && (

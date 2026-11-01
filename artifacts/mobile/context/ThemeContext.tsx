@@ -3,7 +3,7 @@ import { Appearance, type ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ThemeMode = "system" | "light" | "dark";
-const THEME_MODE_KEY = "afuchat_theme_mode";
+export const THEME_MODE_KEY = "afuchat_theme_mode";
 
 type ThemeContextType = {
   themeMode: ThemeMode;

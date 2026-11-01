@@ -23,6 +23,7 @@ import Svg, {
 } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "@/context/LanguageContext";
+import { useTheme } from "@/hooks/useTheme";
 import { LANG_LABELS, BUNDLED_UI_LANGUAGES } from "@/lib/i18n";
 import AfuLogo from "@/components/ui/AfuLogo";
 import OnboardingBackdrop, { ONBOARDING_THEME } from "@/components/onboarding/OnboardingBackdrop";
@@ -102,6 +103,7 @@ type LanguageSelectionStepProps = {
 };
 
 export default function LanguageSelectionStep({ onComplete }: LanguageSelectionStepProps) {
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const { setPreferredLang, t } = useLanguage();
@@ -134,8 +136,8 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
   }
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
       <OnboardingBackdrop />
 
       <View style={styles.headerPositioner}>
@@ -155,10 +157,10 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           <View style={styles.headerInner}>
             <View style={styles.brandLockup}>
               <View style={styles.brandIconFrame}>
-                <AfuLogo size={24} forceTheme="dark" />
+                <AfuLogo size={24} forceTheme={isDark ? "dark" : "light"} />
               </View>
               <View>
-                <Text style={styles.brandText}>AfuChat</Text>
+                <Text style={[styles.brandText, { color: colors.text }]}>AfuChat</Text>
               </View>
             </View>
 
@@ -167,14 +169,14 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
                 <PlanetIcon />
               </View>
               <Text
-                style={styles.title}
+                style={[styles.title, { color: colors.text }]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.72}
               >
                 {t("Choose your language")}
               </Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 {t("Select the language you understand best. We will use it to make your AfuChat experience easier to follow.")}
               </Text>
             </View>
@@ -204,15 +206,16 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
                 accessibilityState={{ checked: isSelected }}
                 style={({ pressed }) => [
                   styles.languageRow,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                   isSelected && styles.languageRowSelected,
                   pressed && styles.languageRowPressed,
                 ]}
               >
-                <View style={[styles.badgeBubble, isSelected && styles.badgeBubbleSelected]}>
+                <View style={[styles.badgeBubble, { backgroundColor: colors.inputBg }, isSelected && styles.badgeBubbleSelected]}>
                   <Text style={styles.flag}>{language.flag}</Text>
                 </View>
                 <View style={styles.languageInfo}>
-                  <Text style={[styles.languageName, isSelected && styles.languageNameSelected]}>
+                  <Text style={[styles.languageName, { color: colors.text }, isSelected && styles.languageNameSelected]}>
                     {language.name}
                   </Text>
                 </View>
@@ -231,6 +234,7 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           disabled={!selected || saving}
           style={({ pressed }) => [
             styles.continueButton,
+            { backgroundColor: colors.accent },
             !selected && styles.continueButtonDisabled,
             pressed && selected && styles.continueButtonPressed,
           ]}
@@ -254,7 +258,7 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
             </>
           )}
         </Pressable>
-        <Text style={styles.requiredHint}>
+        <Text style={[styles.requiredHint, { color: colors.textMuted }]}>
           {selected ? t("You can change this later in Settings.") : t("Select one option to continue.")}
         </Text>
       </View>

@@ -42,7 +42,7 @@ import { ensureAfuAiChat } from "@/lib/afuAiBot";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 import { checkUsernameAvailability, usernamePurchasePrompt } from "@/lib/usernameAvailability";
-import OnboardingBackdrop, { ONBOARDING_THEME } from "@/components/onboarding/OnboardingBackdrop";
+import OnboardingBackdrop from "@/components/onboarding/OnboardingBackdrop";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TOTAL_STEPS  = 5;
@@ -105,21 +105,7 @@ function DotIndicator({ index, step, accent }: { index: number; step: number; ac
 
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
-  const { colors: themeColors } = useTheme();
-  const colors = {
-    ...themeColors,
-    background: ONBOARDING_THEME.background,
-    backgroundSecondary: ONBOARDING_THEME.background,
-    backgroundTertiary: ONBOARDING_THEME.background,
-    surface: ONBOARDING_THEME.background,
-    card: ONBOARDING_THEME.background,
-    text: ONBOARDING_THEME.text,
-    textSecondary: ONBOARDING_THEME.textSecondary,
-    textMuted: ONBOARDING_THEME.textMuted,
-    border: ONBOARDING_THEME.border,
-    separator: "rgba(255,255,255,0.10)",
-    inputBg: ONBOARDING_THEME.inputBackground,
-  };
+  const { colors } = useTheme();
   const { user, refreshProfile } = useAuth();
   const { appTheme, setAppTheme } = useAppAccent();
   const insets = useSafeAreaInsets();

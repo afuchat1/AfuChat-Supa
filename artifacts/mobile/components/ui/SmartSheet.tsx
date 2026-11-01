@@ -241,7 +241,7 @@ export function SmartSheet({
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: "#000",
+            backgroundColor: "rgba(0,0,0,0.72)",
             opacity: backdropOpacity,
             pointerEvents: "none",
           } as any,

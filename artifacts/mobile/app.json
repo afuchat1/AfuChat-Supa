@@ -7,7 +7,7 @@
     "scheme": "afuchat",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F0E8",
     "android": {
       "package": "com.afuchat.mobile",
       "googleServicesFile": "./google-services.json",
@@ -82,11 +82,11 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFFFFF",
+          "backgroundColor": "#F5F0E8",
           "image": "./assets/images/black-logo.png",
           "imageWidth": 180,
           "dark": {
-            "backgroundColor": "#000000",
+            "backgroundColor": "#202124",
             "image": "./assets/images/white-logo-bold.png"
           }
         }

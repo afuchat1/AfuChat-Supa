@@ -271,7 +271,7 @@ export default function MatchOnboarding() {
   });
 
   return (
-    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#FFF" }]}>
+      <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Progress bar */}
       <View style={[styles.progressTrack, { marginTop: insets.top + 8 }]}>
         <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
