@@ -4,9 +4,9 @@
 // Import `useTheme()` for the live, resolved theme object inside components.
 
 // Sampled from the dominant blue in the supplied AfuChat app icon.
-const BRAND        = "#1018D8";   // primary brand — all interactive elements
-const BRAND_DARK   = "#0B10A8";   // pressed / darker variant of brand
-const BRAND_BLUE   = "#1018D8";   // compatibility alias for the icon blue
+const BRAND        = "#1F95FF";   // primary brand — all interactive elements
+const BRAND_DARK   = "#1475D1";   // pressed / darker variant of brand
+const BRAND_BLUE   = "#1F95FF";   // compatibility alias for the icon blue
 const GOLD         = "#D4A853";   // prestige / premium / ACoin
 
 // ─── Semantic status palette (theme-independent) ──────────────────────────────
@@ -27,46 +27,46 @@ export const STATUS = {
 
 const light = {
   // ── Typography ──────────────────────────────────────────────────────────────
-  text:              "#000000",
-  textSecondary:     "#5A5040",
-  textMuted:         "#8C7F6A",
+  text:              "#152638",
+  textSecondary:     "#52677B",
+  textMuted:         "#8193A5",
 
-  // ── Backgrounds — flat UI: one universal BG, no card elevation ──────────────
-  background:        "#F5F0E8",   // page / screen
-  backgroundSecondary: "#F5F0E8", // same — no layering
-  backgroundTertiary:  "#F5F0E8", // same — no layering
-  surface:           "#F5F0E8",   // elevated surfaces
-  card:              "#F5F0E8",
+  // ── Nature-inspired cool neutrals ──────────────────────────────────────────
+  background:        "#F3F7FB",   // page / screen
+  backgroundSecondary: "#EAF1F7", // inset areas and quiet controls
+  backgroundTertiary:  "#DFEAF3", // selected and nested surfaces
+  surface:           "#FFFFFF",   // cards, sheets, floating controls
+  card:              "#FFFFFF",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "#DDD7C9",
-  separator:         "#DDD7C9",
+  border:            "#D8E3ED",
+  separator:         "#E7EEF4",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
   tint:              BRAND,
-  tabIconDefault:    "#8C7F6A",
+  tabIconDefault:    "#8193A5",
   tabIconSelected:   BRAND,
 
   // ── Icons ───────────────────────────────────────────────────────────────────
-  icon:              "#4A4035",
-  iconMuted:         "#8C7F6A",
+  icon:              "#52677B",
+  iconMuted:         "#8193A5",
 
   // ── Chat bubbles ────────────────────────────────────────────────────────────
   bubble:            BRAND,
   bubbleText:        "#FFFFFF",
-  bubbleIncoming:    "#EDE8DC",
-  bubbleIncomingText:"#1A1208",
+  bubbleIncoming:    "#E7EFF6",
+  bubbleIncomingText:"#152638",
 
   // ── Form inputs ─────────────────────────────────────────────────────────────
-  inputBg:           "#EDE8DC",
+  inputBg:           "#EDF3F8",
 
   // ── Glass surface tokens (light equivalents — subtle shadows) ────────────────
-  glassBg:           "rgba(0,0,0,0.05)",
-  glassBgSubtle:     "rgba(0,0,0,0.03)",
+  glassBg:           "rgba(255,255,255,0.78)",
+  glassBgSubtle:     "rgba(255,255,255,0.58)",
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  header:            "#F5F0E8",
+  header:            "#F3F7FB",
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeBg:           STATUS.error,
@@ -90,46 +90,46 @@ const light = {
 
 const dark = {
   // ── Typography ──────────────────────────────────────────────────────────────
-  text:              "#FFF8F0",
-  textSecondary:     "#AAAAAA",
-  textMuted:         "#717171",
+  text:              "#F3F8FC",
+  textSecondary:     "#A9BBCB",
+  textMuted:         "#7E91A3",
 
   // ── Backgrounds — flat UI: one universal BG, no card elevation ──────────────
-  background:        "#000000",
-  backgroundSecondary: "#000000", // same — no layering
-  backgroundTertiary:  "#000000", // same — no layering
-  surface:           "#000000",
-  card:              "#000000",
+  background:        "#080E14",
+  backgroundSecondary: "#101A25",
+  backgroundTertiary:  "#172532",
+  surface:           "#111D29",
+  card:              "#162431",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "rgba(255,255,255,0.10)",
-  separator:         "rgba(255,255,255,0.07)",
+  border:            "rgba(210,228,242,0.12)",
+  separator:         "rgba(210,228,242,0.08)",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
   tint:              BRAND,
-  tabIconDefault:    "#717171",
+  tabIconDefault:    "#8294A5",
   tabIconSelected:   BRAND,
 
   // ── Icons ───────────────────────────────────────────────────────────────────
-  icon:              "#AEAEB2",
-  iconMuted:         "#636366",
+  icon:              "#B1C0CE",
+  iconMuted:         "#8294A5",
 
   // ── Chat bubbles ────────────────────────────────────────────────────────────
   bubble:            BRAND,
   bubbleText:        "#FFFFFF",
-  bubbleIncoming:    "#111111",
-  bubbleIncomingText:"#F1F1F1",
+  bubbleIncoming:    "#1A2A38",
+  bubbleIncomingText:"#EAF2F8",
 
   // ── Form inputs — glass style matching auth screens ──────────────────────────
-  inputBg:           "rgba(255,255,255,0.06)",
+  inputBg:           "rgba(255,255,255,0.07)",
 
   // ── Glass surface tokens (match login / welcome glass aesthetic) ─────────────
-  glassBg:           "rgba(255,255,255,0.08)",
-  glassBgSubtle:     "rgba(255,255,255,0.05)",
+  glassBg:           "rgba(17,29,41,0.80)",
+  glassBgSubtle:     "rgba(17,29,41,0.58)",
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  header:            "#000000",
+  header:            "#080E14",
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeBg:           STATUS.error,
@@ -138,7 +138,7 @@ const dark = {
   // ── Presence ────────────────────────────────────────────────────────────────
   online:            BRAND,
   unread:            BRAND,
-  avatar:            "#111111",
+  avatar:            "#172532",
 
   // ── Semantic status (reflected from STATUS for component convenience) ────────
   success:           STATUS.success,

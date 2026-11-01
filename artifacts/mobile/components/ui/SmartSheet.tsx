@@ -15,7 +15,6 @@ import React, {
 } from "react";
 import {
   Animated,
-  Easing,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -28,6 +27,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
+import { T } from "@/constants/theme";
 
 type Props = {
   visible: boolean;
@@ -86,10 +86,9 @@ export function SmartSheet({
   snapToFullRef.current = () => {
     isFullRef.current = true;
     setIsFull(true);
-    Animated.timing(sheetH, {
+    Animated.spring(sheetH, {
       toValue: fullHRef.current,
-      duration: 240,
-      easing: Easing.out(Easing.cubic),
+      ...T.motion.spring.gentle,
       useNativeDriver: false,
     }).start();
   };
@@ -98,10 +97,9 @@ export function SmartSheet({
     isFullRef.current = false;
     setIsFull(false);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-    Animated.timing(sheetH, {
+    Animated.spring(sheetH, {
       toValue: peekHRef.current,
-      duration: 240,
-      easing: Easing.out(Easing.cubic),
+      ...T.motion.spring.gentle,
       useNativeDriver: false,
     }).start();
   };
@@ -109,9 +107,9 @@ export function SmartSheet({
   dismissRef.current = () => {
     isFullRef.current = false;
     setIsFull(false);
-    Animated.timing(sheetH, {
+    Animated.spring(sheetH, {
       toValue: 0,
-      duration: 220,
+      ...T.motion.spring.snappy,
       useNativeDriver: false,
     }).start(() => {
       sheetH.setValue(0);
@@ -129,10 +127,9 @@ export function SmartSheet({
       isFullRef.current = true;
       setIsFull(true);
     }
-    Animated.timing(sheetH, {
+    Animated.spring(sheetH, {
       toValue: contentPeekH,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
+      ...T.motion.spring.gentle,
       useNativeDriver: false,
     }).start();
   }, [contentH, contentPeekH, fullH, visible]);
@@ -143,10 +140,9 @@ export function SmartSheet({
        setIsFull(false);
        setContentH(0);
       sheetH.setValue(0);
-      Animated.timing(sheetH, {
+      Animated.spring(sheetH, {
          toValue: peekHRef.current,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
+        ...T.motion.spring.gentle,
         useNativeDriver: false,
       }).start();
     }
@@ -300,8 +296,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: T.radius.xl,
+    borderTopRightRadius: T.radius.xl,
     overflow: "hidden",
     ...Platform.select({
       web: {

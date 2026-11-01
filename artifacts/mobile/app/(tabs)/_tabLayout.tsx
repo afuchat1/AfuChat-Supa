@@ -2,9 +2,10 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { LinearGradient } from "@/components/ui/SafeGradient";
+import { BlurView } from "expo-blur";
 import { Security2FABanner } from "@/components/ui/Security2FABanner";
 import {
+  Animated,
   Platform,
   Pressable,
   StyleSheet,
@@ -26,6 +27,7 @@ import { supabase } from "@/lib/supabase";
 import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
+import { T } from "@/constants/theme";
 
 // Visible bottom bar tabs — Chat · Feed · Shorts · Apps · Me
 const BOTTOM_TABS = [
@@ -163,10 +165,38 @@ export function CompactTabBar({
   const totalUnread        = useTotalUnread(userId);
   const active             = normalizeTabPath(pathname);
   const [showCreateActions, setShowCreateActions] = useState(false);
+  const [barWidth, setBarWidth] = useState(0);
+  const activeIndex = Math.max(0, BOTTOM_TABS.findIndex((tab) => tab.route === active));
+  const activeIndexAnim = useRef(new Animated.Value(activeIndex)).current;
+  const createFabScale = useRef(new Animated.Value(1)).current;
+  const composeFabScale = useRef(new Animated.Value(1)).current;
+  const itemWidth = Math.max(0, (barWidth - 12) / BOTTOM_TABS.length);
+  const activeTranslateX = activeIndexAnim.interpolate({
+    inputRange: [0, 1, 2, 3, 4],
+    outputRange: [0, 1, 2, 3, 4].map((index) => index * itemWidth),
+  });
   // Keep this binding distinct from older module-level brand constants. A
   // previous name collided in the transformed web bundle and caused a TDZ
   // crash while TabLayout was mounting.
   const accentColor = colors.accent;
+
+  useEffect(() => {
+    Animated.spring(activeIndexAnim, {
+      toValue: activeIndex,
+      ...T.motion.spring.snappy,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [activeIndex, activeIndexAnim]);
+
+  function animateFab(scale: Animated.Value, toValue: number) {
+    Animated.spring(scale, {
+      toValue,
+      damping: 16,
+      stiffness: 280,
+      mass: 0.8,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }
 
   const CREATE_OPTIONS = [
     { icon: "camera",        label: "navigation.story",   route: "/stories/camera",        color: accentColor },
@@ -180,7 +210,6 @@ export function CompactTabBar({
   const PILL_BOTTOM    = Math.max(insets.bottom, 8) + 6;
   const PILL_H         = 56;
   const BAR_BORDER     = colors.border;
-  const ACTIVE_WRAP    = colors.accent;
 
   function handleTabPress(route: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -207,7 +236,7 @@ export function CompactTabBar({
             pill.bar,
             {
               height: PILL_H,
-              backgroundColor: colors.surface,
+              backgroundColor: colors.glassBg,
               borderColor: BAR_BORDER,
               ...Platform.select({
                 ios: {
@@ -221,10 +250,32 @@ export function CompactTabBar({
               }),
             },
           ]}
+          onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
         >
+          <BlurView
+            intensity={Platform.OS === "web" ? 0 : 48}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassBg }]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              pill.activeTabHighlight,
+              {
+                width: itemWidth,
+                backgroundColor: accentColor + (isDark ? "34" : "1C"),
+                transform: [{ translateX: activeTranslateX }],
+              },
+            ]}
+          />
           {BOTTOM_TABS.map((tab) => {
             const focused   = active === tab.route;
-            const iconColor = focused ? colors.bubbleText : INACTIVE_ICON;
+            const iconColor = focused ? ACTIVE_ICON : INACTIVE_ICON;
 
             return (
               <TouchableOpacity
@@ -239,14 +290,6 @@ export function CompactTabBar({
                 <View
                   style={pill.iconWrap}
                 >
-                  {focused && (
-                    <View
-                      style={[
-                        pill.activeIconOval,
-                        { backgroundColor: ACTIVE_WRAP, pointerEvents: "none" },
-                      ]}
-                    />
-                  )}
                   {tab.route === "/(tabs)/me" ? (
                     <Avatar
                       uri={avatarUrl}
@@ -319,6 +362,8 @@ export function CompactTabBar({
             </TouchableOpacity>
           ))}
           <TouchableOpacity
+            onPressIn={() => animateFab(createFabScale, 0.91)}
+            onPressOut={() => animateFab(createFabScale, 1)}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
               setShowCreateActions((open) => !open);
@@ -329,6 +374,7 @@ export function CompactTabBar({
                 bottom: PILL_BOTTOM + PILL_H + 12,
                 right: 24,
                 backgroundColor: accentColor,
+                transform: [{ scale: createFabScale }],
               },
             ]}
             activeOpacity={0.82}
@@ -344,6 +390,8 @@ export function CompactTabBar({
       {/* FAB — Compose, right side, chats tab only */}
       {active === "/(tabs)/chats" && !!userId && (
         <TouchableOpacity
+          onPressIn={() => animateFab(composeFabScale, 0.91)}
+          onPressOut={() => animateFab(composeFabScale, 1)}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
             safeRouter.push("/chat/new" as any);
@@ -354,6 +402,7 @@ export function CompactTabBar({
               bottom: PILL_BOTTOM + PILL_H + 12,
               right: 24,
               backgroundColor: accentColor,
+              transform: [{ scale: composeFabScale }],
             },
           ]}
           activeOpacity={0.82}
@@ -384,6 +433,13 @@ const pill = StyleSheet.create({
     width: "100%",
     overflow: "hidden",
   },
+  activeTabHighlight: {
+    position: "absolute",
+    left: 6,
+    top: 5,
+    bottom: 5,
+    borderRadius: 999,
+  },
   tab: {
     flex: 1,
     flexBasis: 0,
@@ -394,6 +450,7 @@ const pill = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 0,
+    zIndex: 1,
   },
   iconWrap: {
     width: 44,
@@ -402,21 +459,16 @@ const pill = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
-  activeIconOval: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 9999,
-  },
   label: {
     width: "100%",
-    fontSize: 9,
-    lineHeight: 10,
-    fontFamily: "Inter_700Bold",
-    fontWeight: "700",
-    letterSpacing: 0.2,
-    marginTop: 0,
+    fontSize: 10,
+    lineHeight: 13,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+    letterSpacing: 0,
+    marginTop: 1,
     textAlign: "center",
     includeFontPadding: false,
-    textTransform: "uppercase",
   },
   fab: {
     position: "absolute",

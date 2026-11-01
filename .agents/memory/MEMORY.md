@@ -1,2 +1,3 @@
 - [AfuSearch results policy](afusearch-results-policy.md) — Search public AfuChat posts only; show OCR/text matches in an image/post grid and a clear empty state.
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A pinned/global pnpm mismatch can spawn recursive installers; preview workflows can call installed CLIs directly.
+- [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
