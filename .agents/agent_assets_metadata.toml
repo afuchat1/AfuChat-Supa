@@ -117,3 +117,17 @@ mtime_ms = 1789430977122
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/6cc38b9e-d900-4c3c-8580-d73f1dbff6b7/56b1a38b-9481-4393-99cd-c39bb90c74d8"
 storage_version_token = "1789430985837440"
 content_type = "image/png"
+
+[[outputs]]
+id = "7CMuO_DSJUl0uoCQDEAaO"
+uri = "file://attached_assets/expo-go-qr.png"
+type = "image"
+title = "Expo Go QR code"
+description = "Scan this QR code with Expo Go to open the running AfuChat native app."
+logical_id = "e59becc7-5cc1-4ab0-aabb-ca5af86cec9c"
+content_hash = "sha256:cce1166aff03813ef510f4dbc3b63b8f65e8912b214b9fea29078e1cce602f7f"
+size = 4743
+mtime_ms = 1793545469089
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:10052b23-87ab-499b-a02a-a55cf2258bf2/e59becc7-5cc1-4ab0-aabb-ca5af86cec9c/a0803fc0-15c9-4434-ac88-b7876b7c906b"
+storage_version_token = "1793545475166622"
+content_type = "image/png"
