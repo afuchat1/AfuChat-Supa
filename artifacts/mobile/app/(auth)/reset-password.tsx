@@ -18,12 +18,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
 import Colors from "@/constants/colors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Step = "email" | "code";
 
 export default function ResetPasswordNative() {
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -81,10 +83,16 @@ export default function ResetPasswordNative() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
-      
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
-        contentContainerStyle={[s.root, { backgroundColor: colors.background }]}
+        contentContainerStyle={[
+          s.root,
+          {
+            backgroundColor: colors.background,
+            paddingTop: Math.max(56, insets.top + 24),
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

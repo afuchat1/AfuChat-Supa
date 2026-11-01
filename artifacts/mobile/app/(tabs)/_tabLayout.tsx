@@ -6,6 +6,7 @@ import { BlurView } from "expo-blur";
 import { Security2FABanner } from "@/components/ui/Security2FABanner";
 import {
   Animated,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -38,6 +39,20 @@ const BOTTOM_TABS = [
   { route: "/(tabs)/apps",     icon: "grid",               label: "navigation.apps"     },
   { route: "/(tabs)/me",       icon: "person-circle",      label: "navigation.me"       },
 ] as const;
+
+const FLOATING_TAB_HEIGHT = 56;
+const FLOATING_TAB_BOTTOM_GAP = 6;
+const FLOATING_TAB_MIN_SAFE_BOTTOM = 8;
+const FLOATING_TAB_CONTENT_CLEARANCE = 16;
+
+function getFloatingTabSlotHeight(bottomInset: number): number {
+  return (
+    Math.max(bottomInset, FLOATING_TAB_MIN_SAFE_BOTTOM) +
+    FLOATING_TAB_BOTTOM_GAP +
+    FLOATING_TAB_HEIGHT +
+    FLOATING_TAB_CONTENT_CLEARANCE
+  );
+}
 
 function normalizeTabPath(p: string): string {
   if (p === "/" || p === "/(tabs)" || p === "/(tabs)/index") return "/(tabs)/chats";
@@ -209,8 +224,8 @@ export function CompactTabBar({
 
   const INACTIVE_ICON  = colors.textSecondary;
   const ACTIVE_ICON    = colors.accent;
-  const PILL_BOTTOM    = Math.max(insets.bottom, 8) + 6;
-  const PILL_H         = 56;
+  const PILL_BOTTOM    = Math.max(insets.bottom, FLOATING_TAB_MIN_SAFE_BOTTOM) + FLOATING_TAB_BOTTOM_GAP;
+  const PILL_H         = FLOATING_TAB_HEIGHT;
   const BAR_BORDER     = colors.border;
 
   function handleTabPress(route: string) {
@@ -576,6 +591,21 @@ export default function TabLayout() {
   const insets         = useSafeAreaInsets();
   const { width }      = useWindowDimensions();
   const isDesktop      = Platform.OS === "web" && width >= 980;
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -598,6 +628,7 @@ export default function TabLayout() {
   const isRedirecting =
     (!loading && prevSessionRef.current !== null && !isLoggedIn) ||
     (!loading && isLoggedIn && profile?.onboarding_completed === false);
+  const showCompactTabBar = isLoggedIn && !isDesktop && !keyboardVisible;
 
   if (loading || isRedirecting) {
     return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
@@ -606,14 +637,24 @@ export default function TabLayout() {
   return (
     <TabSwipeProvider>
       <View style={{ flex: 1 }}>
-        <ClassicTabLayout isLoggedIn={isLoggedIn} />
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <ClassicTabLayout isLoggedIn={isLoggedIn} />
+        </View>
 
-        {isLoggedIn && !isDesktop && (
-          <CompactTabBar
-            userId={user?.id}
-            avatarUrl={profile?.avatar_url}
-            displayName={profile?.display_name}
-          />
+        {showCompactTabBar && (
+          <View
+            pointerEvents="box-none"
+            style={{
+              height: getFloatingTabSlotHeight(insets.bottom),
+              overflow: "visible",
+            }}
+          >
+            <CompactTabBar
+              userId={user?.id}
+              avatarUrl={profile?.avatar_url}
+              displayName={profile?.display_name}
+            />
+          </View>
         )}
 
         {isLoggedIn && (
