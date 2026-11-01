@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -6,72 +6,60 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Skeleton } from "@/components/ui/Skeleton";
+import * as Haptics from "@/lib/haptics";
 
 type Person = {
   id: string;
   display_name: string;
   handle: string;
   avatar_url: string | null;
+  banner_url: string | null;
   bio: string | null;
   is_verified: boolean;
   is_organization_verified: boolean;
   last_seen: string | null;
   is_following: boolean;
   is_following_me: boolean;
-};
-
-type Filter = "all" | "online" | "recent";
-type DiscoveryType = "all" | "people" | "groups" | "channels";
-type PublicGroup = {
-  id: string;
-  name: string;
-  description: string | null;
-  avatar_url: string | null;
-  is_member: boolean;
-};
-type PublicChannel = {
-  id: string;
-  name: string;
-  handle: string | null;
-  description: string | null;
-  avatar_url: string | null;
-  is_verified: boolean;
-  is_subscriber: boolean;
+  mutualName: string | null;
+  mutualAvatar: string | null;
 };
 const ONLINE_WINDOW = 10 * 60_000;
-const RECENT_WINDOW = 24 * 60 * 60_000;
+const DISMISSED_KEY = "suggested_users_dismissed_v1";
+const MAX_FOF_SOURCES = 60;
+const MAX_RECOMMENDATIONS = 60;
+
+function shuffle<T>(items: T[]) {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+  }
+  return result;
+}
 
 function isOnline(lastSeen: string | null) {
   return !!lastSeen && Date.now() - new Date(lastSeen).getTime() <= ONLINE_WINDOW;
 }
 
-function relativeSeen(lastSeen: string | null) {
-  if (!lastSeen) return "Not active recently";
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60_000));
-  if (minutes < 1) return "Active now";
-  if (minutes < 60) return `Active ${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Active ${hours}h ago`;
-  return "Active recently";
-}
-
-function Avatar({ person, accent }: { person: Person; accent: string }) {
+function Avatar({ person, accent, size = 70 }: { person: Person; accent: string; size?: number }) {
   return person.avatar_url ? (
-    <ExpoImage source={{ uri: person.avatar_url }} style={styles.avatar} contentFit="cover" cachePolicy="memory-disk" />
+    <ExpoImage source={{ uri: person.avatar_url }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} contentFit="cover" cachePolicy="memory-disk" />
   ) : (
-    <View style={[styles.avatar, { backgroundColor: accent + "20" }]}>
-      <Text style={[styles.initial, { color: accent }]}>
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: accent + "20" }]}>
+      <Text style={[styles.initial, { color: accent, fontSize: size * 0.3 }]}>
         {(person.display_name || person.handle || "?")[0].toUpperCase()}
       </Text>
     </View>
@@ -82,124 +70,117 @@ export default function FindPeopleTab() {
   const { colors, accent } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [people, setPeople] = useState<Person[]>([]);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [discoveryType, setDiscoveryType] = useState<DiscoveryType>("all");
-  const [loading, setLoading] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [followBusy, setFollowBusy] = useState<string | null>(null);
-  const [joiningId, setJoiningId] = useState<string | null>(null);
-  const [groups, setGroups] = useState<PublicGroup[]>([]);
-  const [channels, setChannels] = useState<PublicChannel[]>([]);
-  const [lastUpdated, setLastUpdated] = useState(Date.now());
 
-  const loadPeople = useCallback(async (silent = false) => {
+  const loadRecommendations = useCallback(async (silent = false) => {
     if (!user) return;
     if (!silent) setLoading(true);
     setError(null);
     try {
-      // This is deliberately a live presence query, not a recommendation or
-      // history query. last_seen is updated by the session heartbeat.
+      let dismissedIds = new Set<string>();
+      try {
+        const rawDismissed = await AsyncStorage.getItem(DISMISSED_KEY);
+        dismissedIds = new Set(rawDismissed ? JSON.parse(rawDismissed) : []);
+      } catch {}
+      setDismissed(dismissedIds);
+
       const [
-        { data, error: profileError },
-        { data: follows, error: followError },
-        { data: followers, error: followersError },
+        { data: followingRows, error: followingError },
+        { data: followerRows, error: followerError },
+      ] = await Promise.all([
+        supabase.from("follows").select("following_id").eq("follower_id", user.id),
+        supabase.from("follows").select("follower_id").eq("following_id", user.id),
+      ]);
+      if (followingError) throw followingError;
+      if (followerError) throw followerError;
+
+      const followingIds = (followingRows ?? []).map((row: any) => row.following_id as string);
+      const alreadyFollowing = new Set([user.id, ...followingIds]);
+      if (followingIds.length === 0) {
+        setPeople([]);
+        return;
+      }
+
+      const sourceIds = followingIds.slice(0, MAX_FOF_SOURCES);
+      const { data: connectionEdges, error: connectionError } = await supabase
+        .from("follows")
+        .select("follower_id, following_id")
+        .in("follower_id", sourceIds)
+        .limit(2000);
+      if (connectionError) throw connectionError;
+
+      const mutualCounts = new Map<string, number>();
+      const sourceForCandidate = new Map<string, string>();
+      for (const edge of connectionEdges ?? []) {
+        const candidateId = edge.following_id as string;
+        if (alreadyFollowing.has(candidateId) || dismissedIds.has(candidateId)) continue;
+        mutualCounts.set(candidateId, (mutualCounts.get(candidateId) ?? 0) + 1);
+        if (!sourceForCandidate.has(candidateId)) {
+          sourceForCandidate.set(candidateId, edge.follower_id as string);
+        }
+      }
+
+      const candidateIds = Array.from(mutualCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, MAX_RECOMMENDATIONS)
+        .map(([id]) => id);
+      if (candidateIds.length === 0) {
+        setPeople([]);
+        return;
+      }
+
+      const mutualProfileIds = Array.from(new Set(candidateIds.map((id) => sourceForCandidate.get(id)).filter(Boolean))) as string[];
+      const [
+        { data: profileRows, error: profileError },
+        { data: mutualProfiles },
       ] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, display_name, handle, avatar_url, bio, is_verified, is_organization_verified, last_seen")
-          .neq("id", user.id)
+          .select("id, display_name, handle, avatar_url, banner_url, bio, is_verified, is_organization_verified, last_seen")
+          .in("id", candidateIds)
           .eq("onboarding_completed", true)
           .eq("is_banned", false)
           .eq("account_deleted", false)
           .not("handle", "is", null)
           .not("display_name", "is", null)
-          .not("avatar_url", "is", null)
-          .not("bio", "is", null)
-          .order("last_seen", { ascending: false, nullsFirst: false })
-          .limit(100),
-        supabase.from("follows").select("following_id").eq("follower_id", user.id),
-        supabase.from("follows").select("follower_id").eq("following_id", user.id),
+          .not("avatar_url", "is", null),
+        mutualProfileIds.length
+          ? supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", mutualProfileIds)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       if (profileError) throw profileError;
-      if (followError) throw followError;
-      if (followersError) throw followersError;
 
-      const [
-        { data: groupData, error: groupError },
-        { data: memberships, error: membershipError },
-        { data: channelData, error: channelError },
-        { data: subscriptions, error: subscriptionError },
-      ] = await Promise.all([
-        supabase
-          .from("chats")
-          .select("id, name, description, avatar_url, is_group, is_channel, is_public")
-          .eq("is_group", true)
-          .eq("is_public", true)
-          .order("updated_at", { ascending: false })
-          .limit(30),
-        supabase.from("chat_members").select("chat_id").eq("user_id", user.id),
-        supabase
-          .from("channels")
-          .select("id, name, handle, description, avatar_url, is_verified, is_public")
-          .eq("is_public", true)
-          .order("subscriber_count", { ascending: false })
-          .limit(30),
-        supabase.from("channel_subscriptions").select("channel_id").eq("user_id", user.id),
-      ]);
-      const followed = new Set((follows ?? []).map((row: any) => row.following_id));
-      const followingMe = new Set((followers ?? []).map((row: any) => row.follower_id));
-      const memberSet = new Set((memberships ?? []).map((row: any) => row.chat_id));
-      const subscriptionSet = new Set((subscriptions ?? []).map((row: any) => row.channel_id));
-      const completeProfiles = ((data ?? []) as any[]).filter((person) =>
-        typeof person.handle === "string" && person.handle.trim().length > 0 &&
-        typeof person.display_name === "string" && person.display_name.trim().length > 0 &&
-        typeof person.avatar_url === "string" && person.avatar_url.trim().length > 0 &&
-        typeof person.bio === "string" && person.bio.trim().length > 0
-      );
-      setPeople(completeProfiles
-        .filter((person) =>
-          typeof person.handle === "string" && person.handle.trim().length > 0 &&
-          typeof person.display_name === "string" && person.display_name.trim().length > 0 &&
-          typeof person.avatar_url === "string" && person.avatar_url.trim().length > 0 &&
-          typeof person.bio === "string" && person.bio.trim().length > 0
-        )
-        .map((person) => ({
-          id: person.id,
-          display_name: person.display_name.trim(),
-          handle: person.handle.trim(),
-          avatar_url: person.avatar_url,
-          bio: person.bio.trim(),
-          is_verified: !!person.is_verified,
-          is_organization_verified: !!person.is_organization_verified,
-          last_seen: person.last_seen || null,
-          is_following: followed.has(person.id),
-          is_following_me: followingMe.has(person.id),
-        })));
-      if (!groupError && !membershipError) {
-        setGroups(((groupData ?? []) as any[]).map((group) => ({
-          id: group.id,
-          name: group.name || "Unnamed group",
-          description: group.description || null,
-          avatar_url: group.avatar_url || null,
-          is_member: memberSet.has(group.id),
-        })));
-      }
-      if (!channelError && !subscriptionError) {
-        setChannels(((channelData ?? []) as any[]).map((channel) => ({
-          id: channel.id,
-          name: channel.name || "Unnamed channel",
-          handle: channel.handle || null,
-          description: channel.description || null,
-          avatar_url: channel.avatar_url || null,
-          is_verified: !!channel.is_verified,
-          is_subscriber: subscriptionSet.has(channel.id),
-        })));
-      }
-      setLastUpdated(Date.now());
+      const mutualProfileById = new Map((mutualProfiles ?? []).map((profile: any) => [profile.id, profile]));
+      const theyFollowMe = new Set((followerRows ?? []).map((row: any) => row.follower_id as string));
+      const recommendations = (profileRows ?? [])
+        .filter((person: any) => person.handle && person.display_name && person.avatar_url)
+        .map((person: any): Person => {
+          const source = mutualProfileById.get(sourceForCandidate.get(person.id) || "");
+          return {
+            id: person.id,
+            display_name: person.display_name.trim(),
+            handle: person.handle.trim(),
+            avatar_url: person.avatar_url,
+            banner_url: person.banner_url || null,
+            bio: person.bio?.trim() || null,
+            is_verified: !!person.is_verified,
+            is_organization_verified: !!person.is_organization_verified,
+            last_seen: person.last_seen || null,
+            is_following: false,
+            is_following_me: theyFollowMe.has(person.id),
+            mutualName: source?.display_name || (source?.handle ? `@${source.handle}` : null),
+            mutualAvatar: source?.avatar_url || null,
+          };
+        });
+      setPeople(shuffle(recommendations));
     } catch {
-      setError("Live users could not be loaded right now.");
+      setError("Couldn’t load suggestions.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -207,26 +188,23 @@ export default function FindPeopleTab() {
   }, [user]);
 
   useEffect(() => {
-    if (user) void loadPeople();
-  }, [loadPeople, user]);
+    if (user) void loadRecommendations();
+  }, [loadRecommendations, user]);
 
   useEffect(() => {
     if (!user) return;
-    // Keep the current user eligible for the live feed while this tab is open.
+    // Keep the current user's activity timestamp fresh while discovery is open.
     const heartbeat = () => {
       supabase.rpc("update_last_seen").then(() => {}, () => {});
     };
     heartbeat();
     const heartbeatTimer = setInterval(heartbeat, 60_000);
-    const pollTimer = setInterval(() => void loadPeople(true), 30_000);
-    const channelName = `find-presence-${user.id}`;
+    const pollTimer = setInterval(() => void loadRecommendations(true), 60_000);
+    const channelName = `find-network-${user.id}`;
     const channelTopic = `realtime:${channelName}`;
     let channel: import("@supabase/supabase-js").RealtimeChannel | null = null;
     let cancelled = false;
 
-    // Strict Mode and fast route/auth changes can remount this effect while
-    // an earlier channel with the same topic is still subscribed. Remove
-    // stale channels before adding callbacks to the replacement channel.
     const setupChannel = async () => {
       const staleChannels = supabase
         .getChannels()
@@ -240,11 +218,11 @@ export default function FindPeopleTab() {
 
       const nextChannel = supabase
         .channel(channelName)
-        .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadPeople(true))
-        .on("postgres_changes", { event: "*", schema: "public", table: "chats" }, () => void loadPeople(true))
-        .on("postgres_changes", { event: "*", schema: "public", table: "channels" }, () => void loadPeople(true))
-        .on("postgres_changes", { event: "*", schema: "public", table: "chat_members" }, () => void loadPeople(true))
-        .on("postgres_changes", { event: "*", schema: "public", table: "channel_subscriptions" }, () => void loadPeople(true));
+        .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => void loadRecommendations(true))
+        .on("postgres_changes", { event: "*", schema: "public", table: "follows" }, (payload) => {
+          if ((payload.new as any)?.follower_id === user.id || (payload.old as any)?.follower_id === user.id) return;
+          void loadRecommendations(true);
+        });
 
       if (cancelled) {
         await supabase.removeChannel(nextChannel).catch(() => {});
@@ -264,74 +242,45 @@ export default function FindPeopleTab() {
         channel = null;
       }
     };
-  }, [loadPeople, user]);
+  }, [loadRecommendations, user]);
 
-  const visiblePeople = useMemo(() => {
-    return people.filter((person) => {
-      const age = person.last_seen ? Date.now() - new Date(person.last_seen).getTime() : Infinity;
-      const matchesFilter = filter === "all" || (filter === "online" ? age <= ONLINE_WINDOW : age <= RECENT_WINDOW);
-      return matchesFilter;
-    }).sort((a, b) => Number(isOnline(b.last_seen)) - Number(isOnline(a.last_seen)));
-  }, [filter, lastUpdated, people]);
+  const dismissPerson = useCallback(async (personId: string) => {
+    void Haptics.selectionAsync();
+    setPeople((current) => current.filter((person) => person.id !== personId));
+    const nextDismissed = new Set(dismissed);
+    nextDismissed.add(personId);
+    setDismissed(nextDismissed);
+    try {
+      await AsyncStorage.setItem(
+        DISMISSED_KEY,
+        JSON.stringify(Array.from(nextDismissed).slice(-200)),
+      );
+    } catch {}
+  }, [dismissed]);
 
-  const visibleGroups = groups;
-  const visibleChannels = channels;
-
-  const joinGroup = useCallback(async (group: PublicGroup) => {
+  const connect = useCallback(async (person: Person) => {
     if (!user) return router.push("/(auth)/login" as any);
-    if (group.is_member) {
-      return router.push({ pathname: "/chat/[id]", params: { id: group.id } } as any);
-    }
-    setJoiningId(group.id);
-    const { error: joinError } = await supabase.from("chat_members").insert({
-      chat_id: group.id,
-      user_id: user.id,
-      is_admin: false,
-    });
-    if (!joinError) {
-      setGroups((current) => current.map((item) => item.id === group.id
-        ? { ...item, is_member: true }
-        : item));
-      router.push({ pathname: "/chat/[id]", params: { id: group.id } } as any);
-    } else {
-      setError("Could not join that group right now.");
-    }
-    setJoiningId(null);
-  }, [user]);
-
-  const openChannel = useCallback((channel: PublicChannel) => {
-    if (!user) return router.push("/(auth)/login" as any);
-    router.push({
-      pathname: "/chat/[id]",
-      params: {
-        id: channel.id,
-        isChannel: "true",
-        channelRole: channel.is_subscriber ? "member" : "",
-        chatName: channel.name,
-      },
-    } as any);
-  }, [user]);
-
-  const toggleFollow = useCallback(async (person: Person) => {
-    if (!user) return router.push("/(auth)/login" as any);
+    if (person.is_following || followBusy === person.id) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFollowBusy(person.id);
-    const next = !person.is_following;
     setPeople((current) => current.map((item) => item.id === person.id
-      ? { ...item, is_following: next }
+      ? { ...item, is_following: true }
       : item));
     try {
-      const result = next
-        ? await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id })
-        : await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", person.id);
-      if (result.error) throw result.error;
+      const { error: followError } = await supabase.from("follows").upsert({
+        follower_id: user.id,
+        following_id: person.id,
+      }, { onConflict: "follower_id,following_id" });
+      if (followError) throw followError;
     } catch {
       setPeople((current) => current.map((item) => item.id === person.id
-        ? { ...item, is_following: !next }
+        ? { ...item, is_following: false }
         : item));
+      setError("Couldn’t connect right now. Try again.");
     } finally {
       setFollowBusy(null);
     }
-  }, [user]);
+  }, [followBusy, user]);
 
   if (!user) {
     return (
@@ -347,25 +296,13 @@ export default function FindPeopleTab() {
     );
   }
 
-  const showPeople = discoveryType === "all" || discoveryType === "people";
-  const showGroups = discoveryType === "all" || discoveryType === "groups";
-  const showChannels = discoveryType === "all" || discoveryType === "channels";
-  const mixedItems: Array<
-    | { kind: "person"; value: Person }
-    | { kind: "group"; value: PublicGroup }
-    | { kind: "channel"; value: PublicChannel }
-  > = [];
-  const itemCount = Math.max(
-    showPeople ? visiblePeople.length : 0,
-    showGroups ? visibleGroups.length : 0,
-    showChannels ? visibleChannels.length : 0,
-  );
-  for (let index = 0; index < itemCount; index++) {
-    if (showPeople && visiblePeople[index]) mixedItems.push({ kind: "person", value: visiblePeople[index] });
-    if (showGroups && visibleGroups[index]) mixedItems.push({ kind: "group", value: visibleGroups[index] });
-    if (showChannels && visibleChannels[index]) mixedItems.push({ kind: "channel", value: visibleChannels[index] });
+  const cardWidth = Math.floor((width - 36) / 2);
+  const bannerHeight = Math.min(112, Math.max(88, cardWidth * 0.52));
+  const gridRows: Person[][] = [];
+  for (let index = 0; index < people.length; index += 2) {
+    gridRows.push(people.slice(index, index + 2));
   }
-  const hasResults = mixedItems.length > 0;
+  const hasResults = people.length > 0;
 
   return (
     <ScrollView
@@ -375,234 +312,158 @@ export default function FindPeopleTab() {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => { setRefreshing(true); void loadPeople(); }}
+          onRefresh={() => { setRefreshing(true); void loadRecommendations(); }}
           tintColor={accent}
         />
       }
-      keyboardShouldPersistTaps="handled"
     >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryRow}
-        accessibilityLabel="Discovery categories"
-      >
-        {([
-          ["all", "All"],
-          ["people", "People"],
-          ["groups", "Groups"],
-          ["channels", "Channels"],
-        ] as const).map(([value, label]) => (
-          <TouchableOpacity
-            key={value}
-            onPress={() => setDiscoveryType(value)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: discoveryType === value }}
-            style={[
-              styles.categoryChip,
-              {
-                backgroundColor: discoveryType === value ? accent : colors.surface,
-                borderColor: discoveryType === value ? accent : colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.categoryText, { color: discoveryType === value ? "#fff" : colors.textMuted }]}>
-              {label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {(discoveryType === "all" || discoveryType === "people") && (
-        <View style={styles.activityFilters}>
-          <View style={styles.filterRow}>
-            {([
-              ["all", "All people"],
-              ["online", "Online"],
-              ["recent", "Today"],
-            ] as const).map(([value, label]) => (
-              <TouchableOpacity
-                key={value}
-                onPress={() => setFilter(value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: filter === value }}
-                style={[
-                  styles.filterChip,
-                  {
-                    backgroundColor: filter === value ? accent + "14" : "transparent",
-                    borderColor: filter === value ? accent + "40" : "transparent",
-                  },
-                ]}
-              >
-                {value === "online" && <View style={[styles.tinyDot, { backgroundColor: colors.online }]} />}
-                <Text style={[styles.filterText, { color: filter === value ? accent : colors.textMuted }]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {loading && people.length === 0 && groups.length === 0 && channels.length === 0 ? (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.cardRail}
-          accessibilityLabel="Loading discovery"
-        >
-          {[0, 1, 2, 3].map((item) => (
-            <View key={item} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-              <View style={styles.skeletonIdentity}>
-                <Skeleton width={52} height={52} borderRadius={26} />
-                <View style={{ gap: 8 }}>
-                  <Skeleton width={105} height={13} borderRadius={5} />
-                  <Skeleton width={78} height={10} borderRadius={4} />
+      {loading && !hasResults ? (
+        <View style={styles.grid}>
+          {[0, 1].map((row) => (
+            <View key={row} style={styles.gridRow}>
+              {[0, 1].map((column) => (
+                <View key={column} style={[styles.card, { width: cardWidth, backgroundColor: colors.surface }]}>
+                  <Skeleton width="100%" height={bannerHeight} borderRadius={0} />
+                  <View style={styles.skeletonBody}>
+                    <Skeleton width={66} height={66} borderRadius={33} />
+                    <Skeleton width="78%" height={15} borderRadius={7} style={{ marginTop: 8 }} />
+                    <Skeleton width="56%" height={11} borderRadius={5} style={{ marginTop: 6 }} />
+                    <Skeleton width="100%" height={30} borderRadius={7} style={{ marginTop: 10 }} />
+                    <Skeleton width="100%" height={36} borderRadius={18} style={{ marginTop: 10 }} />
+                  </View>
                 </View>
-              </View>
-              <Skeleton width="100%" height={34} borderRadius={8} />
-              <Skeleton width={90} height={32} borderRadius={16} />
+              ))}
             </View>
           ))}
-        </ScrollView>
+        </View>
       ) : error && !hasResults ? (
         <View style={styles.emptyState}>
           <Text style={[styles.emptyCopy, { color: colors.textMuted }]}>{error}</Text>
           <TouchableOpacity
-            style={[styles.emptyAction, { backgroundColor: accent }]}
-            onPress={() => void loadPeople()}
+            style={[styles.emptyAction, { borderColor: accent }]}
+            onPress={() => void loadRecommendations()}
             accessibilityRole="button"
           >
-            <Text style={styles.emptyActionText}>Try again</Text>
+            <Text style={[styles.emptyActionText, { color: accent }]}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : !hasResults ? (
         <View style={styles.emptyState}>
-          <Ionicons name="people-outline" size={24} color={colors.textMuted} />
-          <Text style={[styles.emptyCopy, { color: colors.textMuted }]}>Nothing here yet</Text>
-          {(discoveryType !== "all" || filter !== "all") && (
-            <TouchableOpacity
-              style={styles.clearFilters}
-              onPress={() => {
-                setDiscoveryType("all");
-                setFilter("all");
-              }}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.clearFiltersText, { color: colors.textMuted }]}>Reset</Text>
-            </TouchableOpacity>
-          )}
+          <Text style={[styles.emptyCopy, { color: colors.textMuted }]}>No suggestions yet</Text>
         </View>
       ) : (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.cardRail}
-        >
-          {mixedItems.map((item) => {
-            if (item.kind === "person") {
-              const person = item.value;
-              const online = isOnline(person.last_seen);
-              const followLabel = person.is_following && person.is_following_me
-                ? "Friend"
-                : person.is_following
-                  ? "Following"
-                  : person.is_following_me
-                    ? "Follow back"
-                    : "Follow";
-              return (
-                <View key={`person-${person.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-                  <TouchableOpacity
-                    style={styles.personIdentity}
-                    onPress={() => navigateToKnownProfile(person)}
-                    activeOpacity={0.75}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${person.display_name}'s profile`}
+        <View style={styles.grid}>
+          {gridRows.map((row, rowIndex) => (
+            <View key={`row-${rowIndex}`} style={styles.gridRow}>
+              {row.map((person) => {
+                const connected = person.is_following;
+                const buttonLabel = connected ? "Following" : person.is_following_me ? "Follow back" : "Connect";
+                return (
+                  <View
+                    key={person.id}
+                    style={[styles.card, { width: cardWidth, backgroundColor: colors.surface }]}
                   >
-                    <View>
-                      <Avatar person={person} accent={accent} />
-                      {online && <View style={[styles.onlineDot, { backgroundColor: colors.online, borderColor: colors.surface }]} />}
+                    <View style={[styles.banner, { height: bannerHeight, backgroundColor: colors.inputBg }]}>
+                      {person.banner_url ? (
+                        <ExpoImage
+                          source={{ uri: person.banner_url }}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                        />
+                      ) : (
+                        <View style={[styles.bannerFallback, { backgroundColor: accent + "18" }]}>
+                          <Ionicons name="people-outline" size={26} color={accent + "88"} />
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.dismissButton}
+                        onPress={() => void dismissPerson(person.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Dismiss ${person.display_name}`}
+                        hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                      >
+                        <Ionicons name="close" size={18} color="#fff" />
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.personDetails}>
-                      <View style={styles.personNameRow}>
-                        <Text style={[styles.personName, { color: colors.text }]} numberOfLines={1}>{person.display_name}</Text>
+
+                    <TouchableOpacity
+                      style={styles.profileBody}
+                      onPress={() => navigateToKnownProfile(person)}
+                      activeOpacity={0.82}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${person.display_name}'s profile`}
+                    >
+                      <View style={[styles.avatarFrame, { backgroundColor: colors.surface }]}>
+                        <Avatar person={person} accent={accent} size={68} />
+                        {isOnline(person.last_seen) && (
+                          <View style={[styles.onlineDot, { backgroundColor: colors.online, borderColor: colors.surface }]} />
+                        )}
+                      </View>
+                      <View style={styles.cardNameRow}>
+                        <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
+                          {person.display_name}
+                        </Text>
                         {(person.is_verified || person.is_organization_verified) && (
                           <Ionicons name="checkmark-circle" size={15} color={accent} />
                         )}
                       </View>
-                      <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>@{person.handle}</Text>
+                      <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>
+                        @{person.handle}
+                      </Text>
+                      {!!person.bio && (
+                        <Text style={[styles.bio, { color: colors.textMuted }]} numberOfLines={2}>
+                          {person.bio}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <View style={styles.mutualRow}>
+                      {person.mutualAvatar ? (
+                        <ExpoImage
+                          source={{ uri: person.mutualAvatar }}
+                          style={styles.mutualAvatar}
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
+                        />
+                      ) : (
+                        <View style={[styles.mutualAvatarFallback, { backgroundColor: colors.inputBg }]}>
+                          <Ionicons name="people" size={13} color={colors.textMuted} />
+                        </View>
+                      )}
+                      <Text style={[styles.mutualCopy, { color: colors.textMuted }]} numberOfLines={2}>
+                        Followed by <Text style={[styles.mutualName, { color: colors.text }]}>{person.mutualName || "your connection"}</Text>
+                      </Text>
                     </View>
-                  </TouchableOpacity>
-                  <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={2}>{person.bio}</Text>
-                  <Text style={[styles.personActivity, { color: online ? colors.online : colors.textMuted }]}>
-                    {relativeSeen(person.last_seen)}
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.communityAction, { backgroundColor: person.is_following ? colors.inputBg : accent }]}
-                    onPress={() => void toggleFollow(person)}
-                    disabled={followBusy === person.id}
-                    accessibilityRole="button"
-                  >
-                    {followBusy === person.id
-                      ? <ActivityIndicator size="small" color={person.is_following ? colors.textMuted : "#fff"} />
-                      : <Text style={[styles.actionText, { color: person.is_following ? colors.text : "#fff" }]}>{followLabel}</Text>}
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-            if (item.kind === "group") {
-              const group = item.value;
-              return (
-                <View key={`group-${group.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-                  <TouchableOpacity style={styles.communityMain} onPress={() => void joinGroup(group)} activeOpacity={0.75}>
-                    {group.avatar_url
-                      ? <ExpoImage source={{ uri: group.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
-                      : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "16" }]}><Ionicons name="people" size={23} color={accent} /></View>}
-                    <Text style={[styles.communityName, { color: colors.text }]} numberOfLines={1}>{group.name}</Text>
-                    {!!group.description && <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={3}>{group.description}</Text>}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.communityAction, { backgroundColor: group.is_member ? colors.inputBg : accent }]}
-                    onPress={() => void joinGroup(group)}
-                    disabled={joiningId === group.id}
-                    accessibilityRole="button"
-                  >
-                    {joiningId === group.id
-                      ? <ActivityIndicator size="small" color={group.is_member ? colors.textMuted : "#fff"} />
-                      : <Text style={[styles.actionText, { color: group.is_member ? colors.text : "#fff" }]}>{group.is_member ? "Open" : "Join"}</Text>}
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-            const channel = item.value;
-            return (
-              <View key={`channel-${channel.id}`} style={[styles.mixedCard, { backgroundColor: colors.surface }]}>
-                <TouchableOpacity style={styles.communityMain} onPress={() => openChannel(channel)} activeOpacity={0.75}>
-                  {channel.avatar_url
-                    ? <ExpoImage source={{ uri: channel.avatar_url }} style={styles.communityAvatar} contentFit="cover" cachePolicy="memory-disk" />
-                    : <View style={[styles.communityAvatar, styles.communityPlaceholder, { backgroundColor: accent + "16" }]}><Ionicons name="megaphone" size={22} color={accent} /></View>}
-                  <View style={styles.communityNameRow}>
-                    <Text style={[styles.communityName, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>{channel.name}</Text>
-                    {channel.is_verified && <Ionicons name="checkmark-circle" size={15} color={accent} />}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.connectButton,
+                        {
+                          borderColor: accent,
+                          backgroundColor: connected ? accent : "transparent",
+                        },
+                      ]}
+                      onPress={() => void connect(person)}
+                      disabled={followBusy === person.id || connected}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${buttonLabel} ${person.display_name}`}
+                    >
+                      {followBusy === person.id ? (
+                        <ActivityIndicator size="small" color={connected ? "#fff" : accent} />
+                      ) : (
+                        <Text style={[styles.connectText, { color: connected ? "#fff" : accent }]}>
+                          {buttonLabel}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
                   </View>
-                  {!!channel.handle && <Text style={[styles.communityMeta, { color: colors.textMuted }]} numberOfLines={1}>@{channel.handle}</Text>}
-                  {!!channel.description && <Text style={[styles.communityDescription, { color: colors.textMuted }]} numberOfLines={3}>{channel.description}</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.communityAction, { backgroundColor: channel.is_subscriber ? colors.inputBg : accent }]}
-                  onPress={() => openChannel(channel)}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.actionText, { color: channel.is_subscriber ? colors.text : "#fff" }]}>
-                    {channel.is_subscriber ? "Open" : "View"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-        </ScrollView>
+                );
+              })}
+              {row.length === 1 && <View style={{ width: cardWidth }} />}
+            </View>
+          ))}
+        </View>
       )}
       {!!error && hasResults && <Text style={[styles.inlineError, { color: colors.textMuted }]}>{error}</Text>}
     </ScrollView>
@@ -612,43 +473,35 @@ export default function FindPeopleTab() {
 const styles = StyleSheet.create({
   root: { flex: 1, width: "100%", paddingHorizontal: 0 },
   pageContent: { flexGrow: 1, paddingTop: 8 },
-  inlineError: { fontSize: 12, marginTop: 8, marginBottom: 4 },
+  inlineError: { fontSize: 12, marginTop: 8, marginBottom: 4, paddingHorizontal: 14 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 14 },
   primaryButton: { minHeight: 42, borderRadius: 21, paddingHorizontal: 22, justifyContent: "center" },
   primaryButtonText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  categoryRow: { gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  categoryChip: { minHeight: 34, paddingHorizontal: 14, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  categoryText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  activityFilters: { marginBottom: 6, paddingHorizontal: 10 },
-  filterRow: { flexDirection: "row", gap: 6 },
-  filterChip: { minHeight: 28, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, borderRadius: 14 },
-  filterText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  tinyDot: { width: 6, height: 6, borderRadius: 3 },
-  cardRail: { gap: 10, paddingHorizontal: 14, paddingBottom: 8 },
-  mixedCard: { width: 226, minHeight: 218, borderRadius: 18, borderWidth: 0, padding: 14, justifyContent: "space-between", gap: 11 },
-  skeletonIdentity: { flexDirection: "row", alignItems: "center", gap: 10 },
-  personIdentity: { flexDirection: "row", alignItems: "center", gap: 11 },
-  personDetails: { flex: 1, minWidth: 0 },
-  avatar: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center" },
-  initial: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  onlineDot: { position: "absolute", right: 0, bottom: 1, width: 13, height: 13, borderRadius: 7, borderWidth: 2 },
-  personNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  personName: { flexShrink: 1, fontSize: 13, fontFamily: "Inter_700Bold" },
+  grid: { gap: 10, paddingHorizontal: 12, paddingBottom: 8 },
+  gridRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  card: { overflow: "hidden", borderRadius: 16, paddingBottom: 12 },
+  banner: { width: "100%", alignItems: "center", justifyContent: "center" },
+  bannerFallback: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+  dismissButton: { position: "absolute", top: 8, right: 8, width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.62)" },
+  profileBody: { alignItems: "center", paddingHorizontal: 10, marginTop: -34 },
+  avatarFrame: { padding: 3, borderRadius: 40, marginBottom: 8 },
+  avatar: { alignItems: "center", justifyContent: "center" },
+  initial: { fontFamily: "Inter_700Bold" },
+  onlineDot: { position: "absolute", right: 3, bottom: 4, width: 13, height: 13, borderRadius: 7, borderWidth: 2 },
+  cardNameRow: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  cardName: { flexShrink: 1, fontSize: 14, fontFamily: "Inter_700Bold", textAlign: "center" },
   handle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3 },
-  personActivity: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  actionText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  communityMain: { flex: 1, gap: 2 },
-  communityAvatar: { width: 50, height: 50, borderRadius: 15, marginBottom: 10 },
-  communityPlaceholder: { alignItems: "center", justifyContent: "center" },
-  communityNameRow: { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 2 },
-  communityName: { fontSize: 14, fontFamily: "Inter_700Bold", marginBottom: 4 },
-  communityDescription: { fontSize: 11, lineHeight: 16, minHeight: 32 },
-  communityMeta: { fontSize: 10, fontFamily: "Inter_600SemiBold", marginTop: 6 },
-  communityAction: { height: 33, borderRadius: 17, alignItems: "center", justifyContent: "center", marginTop: 10 },
+  bio: { width: "100%", minHeight: 32, fontSize: 11, lineHeight: 15, textAlign: "center", marginTop: 7 },
+  mutualRow: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7, marginHorizontal: 10, marginTop: 8, marginBottom: 8 },
+  mutualAvatar: { width: 26, height: 26, borderRadius: 13 },
+  mutualAvatarFallback: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  mutualCopy: { flex: 1, fontSize: 10, lineHeight: 13 },
+  mutualName: { fontFamily: "Inter_600SemiBold" },
+  connectButton: { minHeight: 38, borderWidth: 1.4, borderRadius: 20, marginHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  connectText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  skeletonBody: { alignItems: "center", paddingHorizontal: 12, marginTop: -34 },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 38, gap: 11 },
   emptyCopy: { fontSize: 12, lineHeight: 18, textAlign: "center", maxWidth: 270 },
-  emptyAction: { minHeight: 34, borderRadius: 17, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  emptyActionText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  clearFilters: { minHeight: 30, borderRadius: 15, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  clearFiltersText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  emptyAction: { minHeight: 34, borderWidth: 1, borderRadius: 17, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  emptyActionText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });
