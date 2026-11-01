@@ -465,7 +465,11 @@ export default function TabLayout() {
   const prevSessionRef = useRef<Session | null>(null);
   const insets         = useSafeAreaInsets();
   const { width }      = useWindowDimensions();
+  const pathname       = usePathname();
   const isDesktop      = Platform.OS === "web" && width >= 980;
+  const activeRoute    = normalizeTabPath(pathname);
+  const isAfuSearch    =
+    activeRoute === "/app/afusearch" || activeRoute.startsWith("/app/afusearch/");
 
   useEffect(() => {
     if (loading) return;
@@ -498,7 +502,7 @@ export default function TabLayout() {
       <View style={{ flex: 1 }}>
         <ClassicTabLayout isLoggedIn={isLoggedIn} />
 
-        {isLoggedIn && !isDesktop && (
+        {isLoggedIn && !isDesktop && !isAfuSearch && (
           <CompactTabBar
             userId={user?.id}
             avatarUrl={profile?.avatar_url}
