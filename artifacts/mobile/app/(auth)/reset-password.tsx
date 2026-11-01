@@ -13,6 +13,7 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import AuthContent from "@/components/ui/AuthContent";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
@@ -96,6 +97,7 @@ export default function ResetPasswordNative() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <AuthContent style={{ flexGrow: 1 }}>
         {/* Back */}
         <GlassBackButton
           style={s.back}
@@ -154,8 +156,8 @@ export default function ResetPasswordNative() {
               activeOpacity={0.85}
             >
               {loading
-                ? <ActivityIndicator color="#000" size="small" />
-                : <Text style={s.btnTxt}>{t("Send Reset Code")}</Text>}
+                ? <ActivityIndicator color={colors.bubbleText} size="small" />
+                : <Text style={[s.btnTxt, { color: colors.bubbleText }]}>{t("Send Reset Code")}</Text>}
             </TouchableOpacity>
           </>
         ) : (
@@ -221,6 +223,7 @@ export default function ResetPasswordNative() {
             </TouchableOpacity>
           </>
         )}
+        </AuthContent>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -235,7 +238,7 @@ const s = StyleSheet.create({
   errBox: { backgroundColor: "rgba(192,57,43,.12)", borderColor: "rgba(192,57,43,.3)", borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 14 },
   errTxt: { color: "#FF6B6B", fontSize: 13, fontFamily: "Inter_400Regular" },
   inputWrap: { flexDirection: "row", alignItems: "center", borderWidth: 0.5, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, ...Platform.select({ web: { boxShadow: "0 3px 12px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.13, shadowRadius: 12, elevation: 8 } }) },
-  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", outlineStyle: "none" } as any,
   btn: { borderRadius: 999, paddingVertical: 14, alignItems: "center", marginTop: 4 },
   btnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
 });

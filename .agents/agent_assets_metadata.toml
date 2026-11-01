@@ -131,3 +131,17 @@ mtime_ms = 1793545469089
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:10052b23-87ab-499b-a02a-a55cf2258bf2/e59becc7-5cc1-4ab0-aabb-ca5af86cec9c/a0803fc0-15c9-4434-ac88-b7876b7c906b"
 storage_version_token = "1793545475166622"
 content_type = "image/png"
+
+[[outputs]]
+id = "G8ztXeEDyfdCCosUzCL-L"
+uri = "file://screenshots/register-email-mobile.png"
+type = "image"
+title = "Register email form — phone layout"
+description = "Mobile screenshot after opening Continue with email at a 402×874 viewport."
+logical_id = "1352852d-9e78-4ee2-b0fd-03f6b4f764a1"
+content_hash = "sha256:1f7a6fe3d82b0607bdecf5b86c76c32d44a86f89ba76ae8904d0045086634330"
+size = 45463
+mtime_ms = 1793570813558
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:79fab581-ef26-43e1-910e-ea37e0d89725/1352852d-9e78-4ee2-b0fd-03f6b4f764a1/fdd23988-9dd5-43a1-be38-ab72c41c0972"
+storage_version_token = "1793570977140294"
+content_type = "image/png"

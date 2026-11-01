@@ -21,6 +21,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import AuthContent from "@/components/ui/AuthContent";
 import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "@/components/ui/SafeGradient";
@@ -89,7 +90,7 @@ function Checkbox({ checked, onToggle, accent, children }: { checked: boolean; o
       }]}>
         {checked && <Ionicons name="checkmark" size={12} color="#fff" />}
       </View>
-      <View style={{ flex: 1 }}>{children}</View>
+      <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
     </TouchableOpacity>
   );
 }
@@ -378,7 +379,7 @@ export default function SignUpScreen() {
 
       {/* ── LANDING PANEL ── */}
       <Animated.View style={[sc.panel, { transform: [{ translateX: landingX }], pointerEvents: step === "landing" ? "auto" : "none" } as any]}>
-        <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 32 }}>
+        <AuthContent style={{ flex: 1, paddingHorizontal: 28, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 32 }}>
 
           {/* Logo + tagline */}
           <View style={{ alignItems: "center", marginBottom: 48 }}>
@@ -387,7 +388,7 @@ export default function SignUpScreen() {
             </View>
             <Text style={[sc.logoWordmark, { color: colors.text }]}>AfuChat</Text>
             <View style={sc.freeBadge}>
-              <Text style={sc.freeBadgeText}>Free forever</Text>
+              <Text style={[sc.freeBadgeText, { color: colors.text }]}>Free forever</Text>
             </View>
           </View>
 
@@ -405,12 +406,12 @@ export default function SignUpScreen() {
 
             {/* GitHub */}
             <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "github" && { opacity: 0.62 }]} onPress={handleGitHub} disabled={oauthLoading !== null} activeOpacity={0.78}>
-              {oauthLoading === "github" ? <ActivityIndicator size="small" color={accent} /> : <GitHubLogo size={20} color="rgba(255,255,255,0.85)" />}
+              {oauthLoading === "github" ? <ActivityIndicator size="small" color={accent} /> : <GitHubLogo size={20} color={colors.text} />}
               <Text style={[sc.glassBtnText, { color: colors.text }]}>{oauthLoading === "github" ? t("Signing up…") : t("Continue with GitHub")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={goToEmail} activeOpacity={0.78}>
-              <Ionicons name="mail" size={20} color="rgba(255,255,255,0.75)" />
+              <Ionicons name="mail" size={20} color={colors.icon} />
               <Text style={[sc.glassBtnText, { color: colors.text }]}>{t("Continue with email")}</Text>
             </TouchableOpacity>
           </View>
@@ -440,17 +441,18 @@ export default function SignUpScreen() {
               © {new Date().getFullYear()} AfuChat Technologies Limited
             </Text>
           </View>
-        </View>
+      </AuthContent>
       </Animated.View>
 
       {/* ── EMAIL FORM PANEL ── */}
       <Animated.View style={[sc.panel, { transform: [{ translateX: formX }], pointerEvents: step === "email" ? "auto" : "none" } as any]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
+            contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28 }}>
             <GlassBackButton onPress={goToLanding} style={sc.backBtn} color={colors.icon} />
 
             <View style={{ marginTop: 24, marginBottom: 32 }}>
@@ -484,13 +486,13 @@ export default function SignUpScreen() {
 
             <View style={{ gap: 14, marginTop: 20, marginBottom: 24 }}>
               <Checkbox checked={ageOk} onToggle={() => setAgeOk(p => !p)} isDark={isDark} accent={accent}>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 19, flex: 1 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 19, flex: 1, minWidth: 0, textAlign: "left" }}>
                   I confirm I am{" "}
                   <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>13 years of age or older</Text>
                 </Text>
               </Checkbox>
               <Checkbox checked={termsOk} onToggle={() => setTermsOk(p => !p)} isDark={isDark} accent={accent}>
-                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 19, flex: 1 }}>
+                <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 19, flex: 1, minWidth: 0, textAlign: "left" }}>
                   I agree to the{" "}
                   <Text style={{ color: accent, fontFamily: "Inter_500Medium" }} onPress={() => Linking.openURL("https://afuchat.com/terms").catch(() => {})}>Terms of Service</Text>
                   {" "}and{" "}
@@ -519,6 +521,7 @@ export default function SignUpScreen() {
                 <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: accent }}>{t("Sign in")}</Text>
               </TouchableOpacity>
             </View>
+            </AuthContent>
           </ScrollView>
         </KeyboardAvoidingView>
       </Animated.View>
@@ -563,7 +566,6 @@ const sc = StyleSheet.create({
     borderRadius: 999,
   },
   freeBadgeText: {
-    color: "#FFFFFF",
     fontSize: 11.5,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 0.2,

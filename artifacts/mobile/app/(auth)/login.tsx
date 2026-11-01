@@ -21,6 +21,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import AuthContent from "@/components/ui/AuthContent";
 import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -609,7 +610,7 @@ export default function SignInScreen() {
 
       {/* ── LANDING PANEL ── */}
       <Animated.View style={[sc.panel, { transform: [{ translateX: landingX }], pointerEvents: step === "landing" ? "auto" : "none" } as any]}>
-        <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 32 }}>
+        <AuthContent style={{ flex: 1, paddingHorizontal: 28, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 32 }}>
 
           {/* Logo + wordmark */}
           <View style={{ alignItems: "center", marginBottom: showBioBtn ? 32 : 48 }}>
@@ -696,17 +697,18 @@ export default function SignInScreen() {
               © {new Date().getFullYear()} AfuChat Technologies Limited
             </Text>
           </View>
-        </View>
+        </AuthContent>
       </Animated.View>
 
       {/* ── EMAIL FORM PANEL ── */}
       <Animated.View style={[sc.panel, { transform: [{ translateX: formX }], pointerEvents: step === "email" ? "auto" : "none" } as any]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
+            contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28 }}>
             {/* Back */}
             <GlassBackButton onPress={goToLanding} style={sc.backBtn} color={colors.icon} />
 
@@ -765,6 +767,7 @@ export default function SignInScreen() {
                 <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: accent }}>{t("Sign up")}</Text>
               </TouchableOpacity>
             </View>
+            </AuthContent>
           </ScrollView>
         </KeyboardAvoidingView>
       </Animated.View>
