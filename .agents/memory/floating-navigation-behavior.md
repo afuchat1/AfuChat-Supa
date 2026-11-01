@@ -7,7 +7,7 @@ The main bottom navigation must remain a floating overlay. Content scrolls behin
 
 Every app back or close control must use the shared floating button treatment: match the bottom navigation's surface, border, blur, shadow, sizing, and pressed state. Use the close icon for dismiss actions while preserving each screen's existing placement and navigation behavior.
 
-All multi-destination app navigation bars and the Files app category bar must share the same floating capsule, item sizing, theme colors, blur, and shadow in both light and dark modes. Single-destination utilities may omit a redundant one-item bar.
+All multi-destination app navigation bars and the Files app category bar must share the same floating capsule, item sizing, theme colors, blur, and shadow in both light and dark modes. AfuSearch is an explicit exception and has no app-shell bottom navigation. Single-destination utilities may omit a redundant one-item bar.
 
 **Why:** the user explicitly asked for HiOS-style floating navigation with content passing behind the bar and no added background layer.
 
@@ -15,4 +15,4 @@ All multi-destination app navigation bars and the Files app category bar must sh
 
 **Why:** the user asked for the same bottom-bar design across the other apps, including Files, in light and dark modes.
 
-**How to apply:** keep the main tab scene full-height and position the pill absolutely over it. Do not shrink the scene or add bottom padding to simulate clearance. Use shared navigation and back-control components instead of one-off bar or route-back styles.
+**How to apply:** keep the main tab scene full-height and position the pill absolutely over it where navigation is present. Do not shrink the scene or add bottom padding to simulate clearance. Use shared navigation and back-control components instead of one-off bar or route-back styles; do not add the AfuSearch app-shell bar.

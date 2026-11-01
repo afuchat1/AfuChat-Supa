@@ -105,7 +105,7 @@ function AppContent({
     case "afubusiness":
       return <AfuBusinessApp initialScreen={section as any} />;
     case "afusearch":
-      return <SearchScreen title="AfuSearch" initialTab={section as any} />;
+      return <SearchScreen title="AfuSearch" initialTab={section as any} hasAppBottomNav={false} />;
     case "afufreelance":
       if (section === "detail") return <FreelanceDetailScreen />;
       return <AfuFreelanceApp initialScreen={section as any} />;

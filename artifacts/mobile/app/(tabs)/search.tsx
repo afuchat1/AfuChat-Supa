@@ -434,7 +434,15 @@ function RowSkeleton() {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
+export function SearchScreen({
+  title = "AfuSearch",
+  initialTab,
+  hasAppBottomNav = true,
+}: {
+  title?: string;
+  initialTab?: SearchTab;
+  hasAppBottomNav?: boolean;
+} = {}) {
   const { playMusic } = useGlobalMusicPlayer();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
@@ -461,7 +469,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
   const handledQRef   = useRef<string | null>(null);
   const handledImageRef = useRef<string | null>(null);
 
-  const scrollPB = insets.bottom + 90;
+  const scrollPB = insets.bottom + (hasAppBottomNav ? 90 : 16);
 
   const inputRef    = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -471,13 +479,12 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
 
   const [query,        setQuery]        = useState("");
   const [tab,          setTab]          = useState<SearchTab>(initialTab ?? "all");
-  const [sortMode,     setSortMode]     = useState<SortMode>("relevance");
-  const [dateRange,    setDateRange]    = useState<DateRange>("all");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const sortMode: SortMode = "relevance";
+  const dateRange: DateRange = "all";
+  const verifiedOnly = false;
   const [loading,     setLoading]     = useState(false);
   const [results,     setResults]     = useState<AllResults>(EMPTY);
   const [hasSearched, setHasSearched] = useState(false);
-  const [totalCount,  setTotalCount]  = useState(0);
   const isAfuSearchTyping = isAfuSearch && query.trim().length > 0 && !hasSearched;
 
   const [history,          setHistory]          = useState<string[]>([]);
@@ -776,7 +783,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     const trimmed = q.trim();
     if (!fallbackFor) setDidYouMean(null);
     if (trimmed.length < 1 && currentTab !== "videos" && currentTab !== "jobs") {
-      setResults(EMPTY); setHasSearched(false); setTotalCount(0); setDidYouMean(null); return;
+      setResults(EMPTY); setHasSearched(false); setDidYouMean(null); return;
     }
 
     const id = ++searchIdRef.current;
@@ -1098,7 +1105,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
       }
 
       setResults(finalResults);
-      setTotalCount(total);
       setLoading(false);
       if (fallbackFor) setDidYouMean(total > 0 ? fallbackFor : null);
       if (recordExplicitSubmission && trimmed.length > 0 && publicResultCount > 0 && user) {
@@ -1118,7 +1124,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         if (fallbackFor) {
           setDidYouMean(null);
           setResults(EMPTY);
-          setTotalCount(0);
         }
       }
     }
@@ -1158,7 +1163,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     searchIdRef.current += 1;
     setResults(EMPTY);
     setHasSearched(false);
-    setTotalCount(0);
     setLoading(false);
     if (t.trim().length === 0) {
       suggestionRequestRef.current += 1;
@@ -1336,7 +1340,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     if (debounceRef.current) clearTimeout(debounceRef.current);
     suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
-    setTotalCount(0); setSearchSuggestions([]); setDidYouMean(null);
+    setSearchSuggestions([]); setDidYouMean(null);
     clearLensResults();
     inputRef.current?.focus();
   }
@@ -1456,7 +1460,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     setLensError(null);
     setTab("all");
     setResults(EMPTY);
-    setTotalCount(0);
     setDidYouMean(null);
     setHasSearched(true);
     const requestController = new AbortController();
@@ -1491,7 +1494,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         : [];
       setLensResult({
         title: matches.length
-          ? `${matches.length} result${matches.length === 1 ? "" : "s"}`
+          ? "Visual search matches"
           : "No results found",
         description: String(payload.message || "AfuSearch combines traditional image matching with OCR text search."),
         matches,
@@ -1499,7 +1502,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         algorithm: String(payload.algorithm || "dhash"),
         indexing: Boolean(payload.indexing),
       });
-      setTotalCount(matches.length);
       if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
     } catch (error: any) {
       lensRetryImageRef.current = null;
@@ -1512,31 +1514,17 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
     }
   }
 
-  function onSortPress(s: SortMode) {
-    setSortMode(s);
-    if (hasSearched) performSearch(query, tab, verifiedOnly, s, dateRange);
-  }
-
-  function onDatePress(dr: DateRange) {
-    setDateRange(dr);
-    if (hasSearched) performSearch(query, tab, verifiedOnly, sortMode, dr);
-  }
-
   // ─── Section header ──────────────────────────────────────────────────────────
 
-  function SectionHeader({ icon, label, color, count, onSeeAll }: {
-    icon: string; label: string; color: string; count: number; onSeeAll?: () => void;
+  function SectionHeader({ icon, label, color, onSeeAll }: {
+    icon: string; label: string; color: string; onSeeAll?: () => void;
   }) {
-    if (count === 0) return null;
     return (
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 22, paddingBottom: 8, gap: 8 }}>
         <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: color + "1A", alignItems: "center", justifyContent: "center" }}>
           <Ionicons name={icon as any} size={14} color={color} />
         </View>
         <Text style={{ flex: 1, fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: 0.1 }}>{label}</Text>
-        <View style={{ backgroundColor: color + "1A", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
-          <Text style={{ color, fontSize: 11, fontFamily: "Inter_700Bold" }}>{count}</Text>
-        </View>
         {onSeeAll && (
           <TouchableOpacity onPress={onSeeAll} style={{ flexDirection: "row", alignItems: "center", gap: 2, marginLeft: 2 }}>
             <Text style={{ color, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>See all</Text>
@@ -2023,7 +2011,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
               clearLensResults();
               setHasSearched(false);
               setResults(EMPTY);
-              setTotalCount(0);
               setTab("all");
             }}
             hitSlop={10}
@@ -2071,7 +2058,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
               clearLensResults();
               setHasSearched(false);
               setResults(EMPTY);
-              setTotalCount(0);
               setTab("all");
             }}
             hitSlop={10}
@@ -2096,13 +2082,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <>
             {imageItems.length > 0 && (
               <>
-                <SectionHeader icon="images" label="Matching images" color={BRAND} count={imageItems.length} />
+                <SectionHeader icon="images" label="Matching images" color={BRAND} />
                 <ImageSearchGrid items={imageItems} />
               </>
             )}
             {contentMatches.length > 0 && (
               <>
-                <SectionHeader icon="document-text" label="Related AfuChat posts" color={BLUE} count={contentMatches.length} />
+                <SectionHeader icon="document-text" label="Related AfuChat posts" color={BLUE} />
                 <View style={{ paddingHorizontal: 16 }}>
                   {contentMatches.map((match) => (
                     <TouchableOpacity
@@ -2266,7 +2252,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
 
   function renderResults() {
     const showLens = isVisualSearchActive;
-    const visualImageCount = lensResult?.matches.filter((match) => Boolean(match.imageUrl)).length ?? 0;
     const showImages = !isVisualSearchActive && tab === "images" && results.posts.length > 0;
     const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
     const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
@@ -2283,30 +2268,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
 
     return (
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: scrollPB }}>
-        {/* Results summary */}
-        <View style={[ss.resultsBanner, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Ionicons name="search" size={13} color={BRAND} />
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
-              {isVisualSearchActive
-                ? <>
-                    <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>
-                      {tab === "images" ? visualImageCount : lensResult?.matches.length ?? 0}
-                    </Text>{" "}{tab === "images" ? "image matches" : "matches"} from your image
-                  </>
-                : didYouMean
-                ? <>
-                    Showing <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text> results for{" "}
-                    <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{didYouMean.suggested}"</Text>
-                  </>
-                : <>
-                    <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text>{" "}results for{" "}
-                    <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{query.trim()}"</Text>
-                  </>}
-            </Text>
-          </View>
-        </View>
-
         {didYouMean && (
           <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
             <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 }}>
@@ -2343,20 +2304,20 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
 
         {showImages && (
           <View>
-            <SectionHeader icon="images" label="Images" color={BRAND} count={results.posts.length} />
+            <SectionHeader icon="images" label="Images" color={BRAND} />
             <PostImageGrid posts={results.posts} />
           </View>
         )}
 
         {showPeople && (
           <View>
-            <SectionHeader icon="people" label="People & Organizations" color={BRAND} count={results.people.length} onSeeAll={tab === "all" && results.people.length >= 5 ? () => onTabPress("people") : undefined} />
+            <SectionHeader icon="people" label="People & Organizations" color={BRAND} onSeeAll={tab === "all" && results.people.length >= 5 ? () => onTabPress("people") : undefined} />
             {results.people.map((p, i) => <PersonCard key={`${(p as any).kind}-${p.id}`} p={p} i={i} />)}
           </View>
         )}
         {showPosts && (
           <View>
-            <SectionHeader icon="document-text" label="Posts & Articles" color={BLUE} count={results.posts.length} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
+            <SectionHeader icon="document-text" label="Posts & Articles" color={BLUE} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
             <View style={{ paddingHorizontal: 12, gap: 10 }}>
               {results.posts.map((p, i) => <PostCard key={p.id} p={p} i={i} />)}
             </View>
@@ -2364,13 +2325,13 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         )}
         {showVideos && (
           <View>
-            <SectionHeader icon="play-circle" label="Videos" color={RED} count={results.videos.length} onSeeAll={tab === "all" && results.videos.length >= 4 ? () => onTabPress("videos") : undefined} />
+            <SectionHeader icon="play-circle" label="Videos" color={RED} onSeeAll={tab === "all" && results.videos.length >= 4 ? () => onTabPress("videos") : undefined} />
             <VideoGrid videos={tab === "all" ? results.videos.slice(0, 4) : results.videos} />
           </View>
         )}
         {showMusic && (
           <View>
-            <SectionHeader icon="musical-notes" label="Music" color={BRAND} count={results.music.length} onSeeAll={tab === "all" && results.music.length >= 4 ? () => onTabPress("music") : undefined} />
+            <SectionHeader icon="musical-notes" label="Music" color={BRAND} onSeeAll={tab === "all" && results.music.length >= 4 ? () => onTabPress("music") : undefined} />
             <View style={{ paddingHorizontal: 12 }}>
               {results.music.slice(0, tab === "all" ? 4 : results.music.length).map((track) => (
                 <TouchableOpacity
@@ -2411,7 +2372,7 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         )}
         {showJobs && (
           <View>
-            <SectionHeader icon="briefcase" label="Jobs & Opportunities" color={SUCCESS} count={results.jobs.length} onSeeAll={tab === "all" && results.jobs.length >= 4 ? () => onTabPress("jobs") : undefined} />
+            <SectionHeader icon="briefcase" label="Jobs & Opportunities" color={SUCCESS} onSeeAll={tab === "all" && results.jobs.length >= 4 ? () => onTabPress("jobs") : undefined} />
             <View style={{ paddingHorizontal: 12, gap: 10 }}>
               {results.jobs.map((j, i) => <JobCard key={j.id} j={j} i={i} />)}
             </View>
@@ -2419,25 +2380,25 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
         )}
         {showChannels && (
           <View>
-            <SectionHeader icon="megaphone" label="Channels" color={PURPLE} count={results.channels.length} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />
+            <SectionHeader icon="megaphone" label="Channels" color={PURPLE} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />
             {results.channels.map((ch, i) => <ChannelCard key={ch.id} ch={ch} i={i} />)}
           </View>
         )}
         {showEvents && (
           <View>
-            <SectionHeader icon="calendar" label="Events" color={WARN} count={results.events.length} onSeeAll={tab === "all" && results.events.length >= 3 ? () => onTabPress("events") : undefined} />
+            <SectionHeader icon="calendar" label="Events" color={WARN} onSeeAll={tab === "all" && results.events.length >= 3 ? () => onTabPress("events") : undefined} />
             {results.events.map((ev, i) => <EventCard key={ev.id} ev={ev} i={i} />)}
           </View>
         )}
         {showGifts && (
           <View>
-            <SectionHeader icon="gift" label="Gifts" color={GOLD} count={results.gifts.length} onSeeAll={tab === "all" && results.gifts.length >= 6 ? () => onTabPress("gifts") : undefined} />
+            <SectionHeader icon="gift" label="Gifts" color={GOLD} onSeeAll={tab === "all" && results.gifts.length >= 6 ? () => onTabPress("gifts") : undefined} />
             <GiftGrid gifts={results.gifts} />
           </View>
         )}
         {showMarket && (
           <View>
-            <SectionHeader icon="storefront" label="Marketplace" color={INDIGO} count={results.market.length} onSeeAll={tab === "all" && results.market.length >= 5 ? () => onTabPress("market") : undefined} />
+            <SectionHeader icon="storefront" label="Marketplace" color={INDIGO} onSeeAll={tab === "all" && results.market.length >= 5 ? () => onTabPress("market") : undefined} />
             {results.market.map((s, i) => <MarketCard key={`${s.kind}-${s.id}`} s={s} i={i} />)}
           </View>
         )}
@@ -2976,30 +2937,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           </View>
         )}
 
-        {/* Filter pills — only shown when actively searching */}
-        {(query.length > 0 || hasSearched) && !isAfuSearchTyping && !isVisualSearchActive && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 6 }}>
-          <TouchableOpacity
-            style={[ss.filterPill, verifiedOnly && { backgroundColor: BRAND, borderColor: BRAND }]}
-            onPress={() => { const nv = !verifiedOnly; setVerifiedOnly(nv); if (hasSearched) performSearch(query, tab, nv, sortMode, dateRange); }}
-          >
-            <Ionicons name="checkmark-circle" size={12} color={verifiedOnly ? "#fff" : colors.textMuted} />
-            <Text style={{ color: verifiedOnly ? "#fff" : colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>Verified</Text>
-          </TouchableOpacity>
-          {(["relevance", "recent", "popular"] as SortMode[]).map(s => (
-            <TouchableOpacity key={s} style={[ss.filterPill, sortMode === s && { backgroundColor: BRAND + "18", borderColor: BRAND + "44" }]} onPress={() => onSortPress(s)}>
-              <Ionicons name={s === "relevance" ? "flash" : s === "recent" ? "time" : "trending-up"} size={12} color={sortMode === s ? BRAND : colors.textMuted} />
-              <Text style={{ color: sortMode === s ? BRAND : colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", textTransform: "capitalize" }}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-          {(["all", "24h", "7d", "30d"] as DateRange[]).map(dr => (
-            <TouchableOpacity key={dr} style={[ss.filterPill, dateRange === dr && dr !== "all" && { backgroundColor: BRAND + "18", borderColor: BRAND + "44" }]} onPress={() => onDatePress(dr)}>
-              <Text style={{ color: dateRange === dr && dr !== "all" ? BRAND : colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>{dr}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        )}
-
       </View>
 
       {/* Tab bar — only shown when results are present */}
@@ -3008,20 +2945,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4, paddingHorizontal: 12 }}>
             {(isVisualSearchActive ? TABS.filter((item) => item.id === "all" || item.id === "images") : TABS).map((t) => {
               const active = tab === t.id;
-              const cnt = t.id === "all" ? totalCount
-                : t.id === "images"
-                  ? isVisualSearchActive
-                    ? lensResult?.matches.filter((match) => Boolean(match.imageUrl)).length || 0
-                    : results.posts.filter((post) => Boolean(post.image_url)).length
-                : t.id === "people" ? results.people.length
-                : t.id === "posts" ? results.posts.length
-                : t.id === "videos" ? results.videos.length
-                : t.id === "music" ? results.music.length
-                : t.id === "channels" ? results.channels.length
-                : t.id === "events" ? results.events.length
-                : t.id === "gifts" ? results.gifts.length
-                : t.id === "market" ? results.market.length
-                : results.jobs.length;
               return (
                 <TouchableOpacity
                   key={t.id}
@@ -3031,11 +2954,6 @@ export function SearchScreen({ title = "AfuSearch", initialTab }: { title?: stri
                 >
                   <Ionicons name={t.icon as any} size={13} color={active ? "#fff" : colors.textMuted} />
                   <Text style={{ color: active ? "#fff" : colors.textSecondary, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{t.label}</Text>
-                  {cnt > 0 && (
-                    <View style={{ backgroundColor: active ? "#ffffff33" : BRAND + "18", borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 }}>
-                      <Text style={{ color: active ? "#fff" : BRAND, fontSize: 10, fontFamily: "Inter_700Bold" }}>{cnt > 99 ? "99+" : cnt}</Text>
-                    </View>
-                  )}
                 </TouchableOpacity>
               );
             })}
@@ -3118,17 +3036,6 @@ const ss = StyleSheet.create({
     borderRadius: 16,
   },
 
-  filterPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-
   tabBar: {
     paddingVertical: 8,
   },
@@ -3139,14 +3046,6 @@ const ss = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 20,
-  },
-
-  resultsBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
   },
 
   listRow: {

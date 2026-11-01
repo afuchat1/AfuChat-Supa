@@ -43,12 +43,7 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "products", label: "Products", icon: "pricetag-outline", href: "/app/afubusiness?section=products" },
     { key: "orders", label: "Orders", icon: "receipt-outline", href: "/app/afubusiness?section=orders" },
   ],
-  afusearch: [
-    { key: "all", label: "Search", icon: "search-outline", href: "/app/afusearch" },
-    { key: "people", label: "People", icon: "people-outline", href: "/app/afusearch?section=people" },
-    { key: "posts", label: "Posts", icon: "document-text-outline", href: "/app/afusearch?section=posts" },
-    { key: "events", label: "Events", icon: "calendar-outline", href: "/app/afusearch?section=events" },
-  ],
+  afusearch: [],
   afufreelance: [
     { key: "browse", label: "Browse", icon: "search-outline", href: "/app/afufreelance" },
     { key: "post-gig", label: "Post a gig", icon: "add-circle-outline", href: "/app/afufreelance?section=post-gig" },
@@ -93,7 +88,7 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
 };
 
 // App modules own their in-flow header and back control. The shell places the
-// shared floating app navigation over each full-height page.
+// shared floating navigation over pages that define app destinations.
 
 export function getAppNav(appId: FullAppId) {
   const items = NAV[appId];
