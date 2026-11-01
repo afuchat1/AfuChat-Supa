@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Appearance, type ColorSchemeName } from "react-native";
+import { Appearance, Platform, type ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -25,8 +25,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.getItem(THEME_MODE_KEY).then((saved) => {
       if (saved === "system" || saved === "light" || saved === "dark") {
         setThemeModeState(saved);
+        if (Platform.OS !== "web") {
+          Appearance.setColorScheme(saved === "system" ? "unspecified" : saved);
+        }
+      } else if (Platform.OS !== "web") {
+        Appearance.setColorScheme("unspecified");
       }
-    }).catch(() => {});
+    }).catch(() => {
+      if (Platform.OS !== "web") Appearance.setColorScheme("unspecified");
+    });
 
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
       setSystemScheme(colorScheme);
@@ -37,6 +44,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setThemeMode = useCallback((mode: ThemeMode) => {
     setThemeModeState(mode);
     AsyncStorage.setItem(THEME_MODE_KEY, mode).catch(() => {});
+    if (Platform.OS !== "web") {
+      Appearance.setColorScheme(mode === "system" ? "unspecified" : mode);
+    }
   }, []);
 
   // System is the default: an unknown scheme follows the safer light palette
