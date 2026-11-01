@@ -60,6 +60,7 @@ import { formatCompactAmount } from "@/lib/formatCompactAmount";
 import { Avatar } from "@/components/ui/Avatar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import UserName from "@/components/ui/UserName";
+import { RichText } from "@/components/ui/RichText";
 import { getPersonalizedTags } from "@/lib/personalization";
 import Colors from "@/constants/colors";
 import { searchMusicTracksByIds, getMusicPlaybackUri, listMusicTracks } from "@/lib/afuMusic";
@@ -1184,7 +1185,7 @@ export function SearchScreen({
         accessibilityRole="button"
         accessibilityLabel="Go back"
         style={[
-          { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+          { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: colors.surface },
           style,
         ]}
       >
@@ -1514,7 +1515,7 @@ export function SearchScreen({
         statusBarTranslucent={false}
       >
         <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingTop: insets.top + 6, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingTop: insets.top + 6, paddingBottom: 10, backgroundColor: colors.surface }}>
             <TouchableOpacity
               onPress={() => closeSearchOverlay(true)}
               accessibilityRole="button"
@@ -1524,7 +1525,7 @@ export function SearchScreen({
             >
               <Ionicons name="arrow-back" size={22} color={colors.text} />
             </TouchableOpacity>
-            <View style={[ss.searchBar, { flex: 1, height: 48, marginBottom: 0, backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
+            <View style={[ss.searchBar, { flex: 1, height: 48, marginBottom: 0, backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border, borderWidth: 0 }]}>
               <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
               <TextInput
                 ref={overlayInputRef}
@@ -1832,11 +1833,11 @@ export function SearchScreen({
                   {p.author_avatar
                     ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 24, height: 24, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" />
                     : <AvatarPlaceholder name={p.author_name} size={24} color={BRAND} />}
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>@{p.author_handle}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{p.author_name || p.author_handle}</Text>
                   <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(p.created_at)}</Text>
                 </View>
                 {p.article_title && <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 4 }} numberOfLines={2}>{p.article_title}</Text>}
-                <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }} numberOfLines={3}>{p.content}</Text>
+                <RichText style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }} numberOfLines={3} plainMentions>{p.content}</RichText>
               </View>
               <ExpoImage source={{ uri: p.image_url! }} style={{ width: 88, height: 88, borderRadius: 10, backgroundColor: colors.inputBg }} contentFit="cover" cachePolicy="memory-disk" />
             </View>
@@ -1846,11 +1847,11 @@ export function SearchScreen({
                 {p.author_avatar
                   ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 28, height: 28, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
                   : <AvatarPlaceholder name={p.author_name} size={28} color={BRAND} />}
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>@{p.author_handle}</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>{p.author_name || p.author_handle}</Text>
                 <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(p.created_at)}</Text>
               </View>
               {p.article_title && <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 5 }} numberOfLines={2}>{p.article_title}</Text>}
-              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }} numberOfLines={3}>{p.content}</Text>
+              <RichText style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }} numberOfLines={3} plainMentions>{p.content}</RichText>
               {p.image_url && <ExpoImage source={{ uri: p.image_url }} style={ss.postImage} contentFit="cover" cachePolicy="memory-disk" />}
             </>
           )}
@@ -1903,17 +1904,20 @@ export function SearchScreen({
           padding: 12,
           borderRadius: 14,
           backgroundColor: colors.surface,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.border,
         }}
       >
         <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
           <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14, lineHeight: 19 }} numberOfLines={3}>
             {video.content || "Video"}
           </Text>
-          <Text style={{ color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-            @{video.author_handle} · {fmtNum(video.view_count)} views
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            {video.author_avatar
+              ? <ExpoImage source={{ uri: video.author_avatar }} style={{ width: 18, height: 18, borderRadius: 9 }} contentFit="cover" cachePolicy="memory-disk" />
+              : <AvatarPlaceholder name={video.author_name || video.author_handle} size={18} color={RED} />}
+            <Text style={{ flex: 1, color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
+              {video.author_name || video.author_handle} · {fmtNum(video.view_count)} views
+            </Text>
+          </View>
         </View>
         <View style={{ width: 92, height: 78, borderRadius: 10, overflow: "hidden", backgroundColor: colors.inputBg }}>
           <VideoThumbnailImage videoUrl={video.video_url} imageUrl={video.image_url} style={{ width: "100%", height: "100%" }} />
@@ -1943,8 +1947,6 @@ export function SearchScreen({
           padding: 12,
           borderRadius: 14,
           backgroundColor: colors.surface,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.border,
         }}
       >
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
@@ -2011,7 +2013,7 @@ export function SearchScreen({
             {v.author_name ? (
               <>
                 <Text style={{ color: "#ffffff55", fontSize: 10 }}>·</Text>
-                <Text style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1}>@{v.author_handle || v.author_name}</Text>
+                <Text style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1}>{v.author_name || v.author_handle}</Text>
               </>
             ) : null}
           </View>
@@ -2135,7 +2137,7 @@ export function SearchScreen({
           const rc = RARITY_COLORS[g.rarity] || "#9E9E9E";
           return (
             <View key={g.id} >
-              <TouchableOpacity onPress={() => { trackSearchClick(); router.push("/app/afugifts?section=marketplace" as any); }} activeOpacity={0.8} style={{ width: GIFT_W, backgroundColor: colors.surface, borderRadius: 14, padding: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: rc + "30" }}>
+              <TouchableOpacity onPress={() => { trackSearchClick(); router.push("/app/afugifts?section=marketplace" as any); }} activeOpacity={0.8} style={{ width: GIFT_W, backgroundColor: colors.surface, borderRadius: 14, padding: 10, alignItems: "center", gap: 4, borderWidth: isAfuSearch ? 0 : 1, borderColor: rc + "30" }}>
                 <Text style={{ fontSize: 26 }}>{g.emoji}</Text>
                 <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.text, textAlign: "center" }} numberOfLines={2}>{g.name}</Text>
                 <View style={{ backgroundColor: rc + "1A", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
@@ -2434,7 +2436,7 @@ export function SearchScreen({
                       activeOpacity={0.76}
                       accessibilityRole="button"
                       accessibilityLabel={`Open matching AfuChat content: ${match.content || matchLabel(match)}`}
-                      style={{ flexDirection: "row", alignItems: "flex-start", gap: 11, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+                      style={{ flexDirection: "row", alignItems: "flex-start", gap: 11, paddingVertical: 12, borderBottomWidth: isAfuSearch ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
                     >
                       {match.imageUrl ? (
                         <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 54, height: 54, borderRadius: 9, backgroundColor: colors.inputBg }} contentFit="cover" cachePolicy="memory-disk" />
@@ -2573,7 +2575,7 @@ export function SearchScreen({
             </View>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {tags.map(({ tag }) => (
-                <TouchableOpacity key={tag} style={{ backgroundColor: BRAND + "12", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: BRAND + "25" }} onPress={() => onTagPress(tag)} activeOpacity={0.7}>
+                <TouchableOpacity key={tag} style={{ backgroundColor: BRAND + "12", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: isAfuSearch ? 0 : 1, borderColor: BRAND + "25" }} onPress={() => onTagPress(tag)} activeOpacity={0.7}>
                   <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_500Medium" }}>#{tag}</Text>
                 </TouchableOpacity>
               ))}
@@ -2606,7 +2608,7 @@ export function SearchScreen({
     return (
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: scrollPB }}>
         {didYouMean && (
-          <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+          <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: isAfuSearch ? 0 : 0.5, borderBottomColor: colors.border }}>
             <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 }}>
               <Text style={{ color: colors.textSecondary, fontSize: 13 }}>No exact match for "{didYouMean.original}". Did you mean</Text>
               <TouchableOpacity
@@ -2690,7 +2692,7 @@ export function SearchScreen({
                       safeRouter.push("/app/afumusic" as any);
                     }
                   }}
-                  style={[ss.musicResultRow, { borderBottomColor: colors.border }]}
+                  style={[ss.musicResultRow, { borderBottomColor: colors.border, borderBottomWidth: isAfuSearch ? 0 : StyleSheet.hairlineWidth }]}
                 >
                   <View style={[ss.musicResultArt, { backgroundColor: track.coverColor || "#19172F" }]}>
                     <Ionicons name="musical-notes" size={19} color={track.accentColor || BRAND} />
@@ -2782,7 +2784,7 @@ export function SearchScreen({
                 activeOpacity={0.78}
                 accessibilityRole="button"
                 accessibilityLabel="Open AfuSearch"
-                style={[ss.searchBar, { flex: 1, height: 54, marginBottom: 0, paddingHorizontal: 17, backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                style={[ss.searchBar, { flex: 1, height: 54, marginBottom: 0, paddingHorizontal: 17, backgroundColor: colors.inputBg, borderColor: colors.border, borderWidth: 0 }]}
               >
                 <Ionicons name="search" size={20} color={colors.textMuted} />
                 <Text style={{ flex: 1, color: colors.textMuted, fontSize: 16, fontFamily: "Inter_400Regular" }}>Search AfuChat</Text>
@@ -2792,7 +2794,7 @@ export function SearchScreen({
                 activeOpacity={0.75}
                 accessibilityRole="button"
                 accessibilityLabel="Search with an image"
-                style={{ width: 50, height: 50, alignItems: "center", justifyContent: "center", borderRadius: 25, backgroundColor: colors.surface, borderWidth: 0.5, borderColor: colors.border }}
+                style={{ width: 50, height: 50, alignItems: "center", justifyContent: "center", borderRadius: 25, backgroundColor: colors.surface }}
               >
                 {lensLoading ? <ActivityIndicator size="small" color={BRAND} /> : <Ionicons name="scan" size={22} color={BRAND} />}
               </TouchableOpacity>
@@ -2808,7 +2810,7 @@ export function SearchScreen({
                 <TouchableOpacity
                   key={category.id}
                   onPress={() => { setTab(category.id); openSearchOverlay(); }}
-                  style={{ flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 6, borderRadius: 20, backgroundColor: tab === category.id ? BRAND + "18" : colors.surface, borderWidth: 0.5, borderColor: tab === category.id ? BRAND + "55" : colors.border }}
+                  style={{ flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 6, borderRadius: 20, backgroundColor: tab === category.id ? BRAND + "18" : colors.surface }}
                   activeOpacity={0.75}
                   accessibilityRole="button"
                   accessibilityLabel={`Search ${category.label.toLowerCase()}`}
@@ -3141,7 +3143,7 @@ export function SearchScreen({
                             ? <ExpoImage source={{ uri: v.author_avatar }} style={{ width: 18, height: 18, borderRadius: 9 }} contentFit="cover" cachePolicy="memory-disk" />
                             : <AvatarPlaceholder name={v.author_name || v.author_handle} size={18} color={RED} />
                           }
-                          <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_500Medium" }} numberOfLines={1}>@{v.author_handle}</Text>
+                <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_500Medium" }} numberOfLines={1}>{v.author_name || v.author_handle}</Text>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -3214,7 +3216,7 @@ export function SearchScreen({
 
         {/* Search bar */}
         {isAfuSearch ? (
-          <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
+          <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border, borderWidth: 0 }]}>
             <TouchableOpacity
               onPress={openSearchOverlay}
               style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 }}

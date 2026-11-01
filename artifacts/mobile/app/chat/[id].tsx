@@ -1439,6 +1439,8 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   ) : null;
 
   const displayText = msg.encrypted_content ?? "";
+  const useSelectablePlainText = Boolean(isTextSelectionEnabled)
+    && !/(?<![A-Za-z0-9._%+-])@[A-Za-z0-9_]{1,30}\b/.test(displayText);
 
   const isRedEnvelope = msg.encrypted_content?.startsWith("🧧") ?? false;
   const isGiftMsg = msg.encrypted_content?.startsWith("🎁") ?? false;
@@ -1618,13 +1620,13 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                   )}
               </TouchableOpacity>
               {hasTextContent && (
-                isTextSelectionEnabled ? (
+                useSelectablePlainText ? (
                   <AutoSelectMessageText
                     value={displayText}
                     style={[st.bubbleText, { color: textColor, marginTop: 3, fontSize: _perChatFont, lineHeight: _perChatFont + 5 }]}
                   />
                 ) : (
-                  <RichText style={[st.bubbleText, { color: textColor, marginTop: 3, fontSize: _perChatFont, lineHeight: _perChatFont + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND} showMentionAvatars={!isChannel}>{displayText}</RichText>
+                  <RichText style={[st.bubbleText, { color: textColor, marginTop: 3, fontSize: _perChatFont, lineHeight: _perChatFont + 5 }]} linkColor={isMe ? "#FFFFFF" : BRAND}>{displayText}</RichText>
                 )
               )}
             </>
@@ -1863,7 +1865,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                             : { minWidth: _tsWidth + 16 },
                         ]}
                       >
-                         {isTextSelectionEnabled ? (
+                         {useSelectablePlainText ? (
                            <AutoSelectMessageText
                              value={displayText}
                              style={[
@@ -1888,8 +1890,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                                  ? { paddingRight: _tsWidth }
                                  : null,
                              ]}
-                             linkColor={isMe ? "#FFFFFF" : BRAND}
-                              showMentionAvatars={!isChannel}
+                              linkColor={isMe ? "#FFFFFF" : BRAND}
                              tail={ghost}
                            >
                              {displayText}
@@ -1905,7 +1906,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                 <TouchableOpacity onLongPress={messageLongPress} delayLongPress={500} activeOpacity={0.9}>
                          {msg._isAi
                     ? (
-                      isTextSelectionEnabled ? (
+                      useSelectablePlainText ? (
                         <AutoSelectMessageText
                           value={displayText}
                           style={[st.bubbleText, { color: textColor, fontSize: _perChatFont, lineHeight: _perChatFont + 5 }]}
@@ -1915,7 +1916,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                       )
                     )
                     : (
-                      isTextSelectionEnabled ? (
+                      useSelectablePlainText ? (
                         <AutoSelectMessageText
                           value={displayText}
                           style={[st.bubbleText, {
@@ -1932,7 +1933,6 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                             lineHeight: _perChatFont + 5,
                           }]}
                           linkColor={isMe ? "#FFFFFF" : BRAND}
-                          showMentionAvatars={!isChannel}
                         >
                           {displayText}
                         </RichText>

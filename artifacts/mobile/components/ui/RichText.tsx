@@ -12,7 +12,7 @@
  * Also renders URLs, @mentions, and #hashtags as tappable links.
  */
 import React, { useEffect, useMemo, useState } from "react";
-import { Image as RNImage, Linking, Platform, StyleSheet, Text } from "react-native";
+import { Linking, StyleSheet, Text } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -136,104 +136,82 @@ function extractColor(style: any, fallback: string): string {
 
 // ─── Mention avatar ───────────────────────────────────────────────────────────
 
-/** Simple module-level cache: handle (no @) → avatar_url | null */
-const _avatarCache = new Map<string, string | null>();
+type MentionProfile = { avatarUrl: string | null; displayName: string | null };
+
+/** Simple module-level cache: handle (no @) → public profile details. */
+const _mentionProfileCache = new Map<string, MentionProfile | null>();
 
 /**
- * Renders an @mention as a small rounded profile picture when the handle
- * resolves to a known user, or as bold unclickable text when not found.
- * On web, always renders as text (inline Image in Text is unreliable there).
+ * Renders a resolved @mention as an inline profile picture and display name.
+ * The handle is only used when no public profile name is available.
  */
 function MentionAvatar({
   handle,
   onPress,
-  textColor,
   mentionColor,
-  showAvatar,
 }: {
   handle: string;       // includes the leading @
   onPress?: () => void;
-  textColor: string;
   mentionColor: string;
-  showAvatar: boolean;
 }) {
   const raw = handle.replace("@", "").toLowerCase();
-  const [avatarUrl, setAvatarUrl] = useState<string | null | undefined>(
-    _avatarCache.has(raw) ? _avatarCache.get(raw) : undefined
+  const [profile, setProfile] = useState<MentionProfile | null | undefined>(
+    _mentionProfileCache.has(raw) ? _mentionProfileCache.get(raw) : undefined
   );
 
   useEffect(() => {
-    if (_avatarCache.has(raw)) return;   // already resolved
+    if (_mentionProfileCache.has(raw)) return;   // already resolved
     let cancelled = false;
     (async () => {
       try {
         const { data } = await supabase
           .from("profiles")
-          .select("avatar_url")
+          .select("avatar_url,display_name")
           .eq("handle", raw)
           .maybeSingle();
         if (cancelled) return;
-        const url = (data as any)?.avatar_url ?? null;
-        _avatarCache.set(raw, url);
-        setAvatarUrl(url);
+        const resolved = data
+          ? {
+              avatarUrl: (data as any).avatar_url ?? null,
+              displayName: (data as any).display_name?.trim() || null,
+            }
+          : null;
+        _mentionProfileCache.set(raw, resolved);
+        setProfile(resolved);
       } catch {
-        if (!cancelled) { _avatarCache.set(raw, null); setAvatarUrl(null); }
+        if (!cancelled) { _mentionProfileCache.set(raw, null); setProfile(null); }
       }
     })();
     return () => { cancelled = true; };
   }, [raw]);
 
-  // Channel announcements keep the actual @handle visible so the mentioned
-  // username can be clearly highlighted instead of being replaced by an avatar.
-  if (!showAvatar) {
+  // Keep a small placeholder while profile details load; don't expose the handle.
+  if (profile === undefined) {
+    return (
+      <Text style={[styles.mention, { color: mentionColor }]}>…</Text>
+    );
+  }
+
+  const label = profile?.displayName || raw;
+
+  // No usable avatar: keep the resolved display name and existing profile link.
+  if (!profile?.avatarUrl) {
     return (
       <Text
         style={[styles.mention, { color: mentionColor }]}
         onPress={onPress}
         suppressHighlighting
       >
-        {handle}
+        {label}
       </Text>
     );
   }
 
-  // Still loading — show @handle as a placeholder so layout doesn't jump
-  if (avatarUrl === undefined) {
-    return (
-      <Text style={[styles.mention, { color: mentionColor }]}>{handle}</Text>
-    );
-  }
-
-  // User not found — bold, unclickable
-  if (avatarUrl === null) {
-    return (
-      <Text
-        style={[styles.bold, { color: mentionColor }]}
-        onPress={onPress}
-        suppressHighlighting
-      >
-        {handle}
-      </Text>
-    );
-  }
-
-  // Web — inline Image inside Text is unreliable; fall back to tappable text
-  if (Platform.OS === "web") {
-    return (
-      <Text
-        style={[styles.mention, { color: mentionColor }]}
-        onPress={onPress}
-        suppressHighlighting
-      >
-        {handle}
-      </Text>
-    );
-  }
-
-  // Native — small rounded avatar inline with the message text
+  // Inline image plus display name on both native and web.
   return (
     <Text onPress={onPress} suppressHighlighting>
-      <Image source={{ uri: avatarUrl }} style={styles.mentionAvatar} />
+      <Image source={{ uri: profile.avatarUrl }} style={styles.mentionAvatar} />
+      <Text style={[styles.mention, { color: mentionColor }]}> {label}</Text>
     </Text>
   );
 }
@@ -280,13 +258,9 @@ type RichTextProps = {
   linkColor?: string;
   numberOfLines?: number;
   selectable?: boolean;
-  /** When true, @mentions render as plain (non-tappable) bold text instead
-   *  of navigable links.  Use in feed post bodies where mentions should
-   *  stay in-place but not trigger navigation. */
+  /** When true, @mentions show the same avatar and display name without
+   *  navigating when tapped. */
   plainMentions?: boolean;
-  /** When false, channel mentions stay visible as highlighted @handles
-   *  instead of being replaced by inline profile avatars. */
-  showMentionAvatars?: boolean;
   /** Transparent inline spacer appended after all spans — used for the
    *  WhatsApp-style timestamp ghost: reserves horizontal space on the last
    *  line so the real (absolute-positioned) timestamp never overlaps text. */
@@ -300,7 +274,6 @@ export function RichText({
   numberOfLines,
   selectable,
   plainMentions,
-  showMentionAvatars = true,
   tail,
 }: RichTextProps) {
   const { accent } = useAppAccent();
@@ -441,9 +414,7 @@ export function RichText({
                 key={i}
                 handle={span.text}
                 onPress={plainMentions ? undefined : () => handlePress(span)}
-                textColor={inheritedColor}
                 mentionColor={effectiveLinkColor}
-                showAvatar={showMentionAvatars}
               />
             );
           case "email":

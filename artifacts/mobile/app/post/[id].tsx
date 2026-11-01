@@ -957,7 +957,7 @@ export default function PostDetailScreen() {
               {replyingTo && (
                 <View style={[st.replyBanner, { borderBottomColor: separatorClr }]}>
                   <Text style={[st.replyBannerText, { color: replyToTxt }]}>
-                    Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
+                    Replying to <Text style={{ color: accent }}>{replyingTo.profile.display_name || replyingTo.profile.handle}</Text>
                   </Text>
                   <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={8}>
                     <Ionicons name="close-circle" size={16} color={replyToTxt} />
@@ -1015,8 +1015,8 @@ export default function PostDetailScreen() {
                   activeOpacity={0.7}
                 >
                   <Avatar uri={u.avatar_url} name={u.display_name} size={28} userId={u.id} />
-                  <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
-                    @{u.handle}
+                  <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
+                    {u.display_name || u.handle}
                   </Text>
                 </TouchableOpacity>
               ))}

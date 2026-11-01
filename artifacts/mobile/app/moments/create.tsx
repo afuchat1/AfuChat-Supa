@@ -631,7 +631,6 @@ export default function CreatePostScreen() {
                   <Avatar uri={item.avatar_url} name={item.display_name} size={38} />
                   <View style={{ flex: 1 }}>
                     <Text style={[ss.mentionName, { color: colors.text }]}>{item.display_name}</Text>
-                    <Text style={[ss.mentionHandle, { color: colors.textMuted }]}>@{item.handle}</Text>
                   </View>
                 </TouchableOpacity>
               )}
