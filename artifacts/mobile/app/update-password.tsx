@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { router } from "expo-router";
 import { useTheme } from "@/hooks/useTheme";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
 
 export default function UpdatePasswordNative() {
   const { colors } = useTheme();
@@ -19,7 +18,7 @@ export default function UpdatePasswordNative() {
         onPress={() => router.replace("/(auth)/login" as any)}
         activeOpacity={0.85}
       >
-        <Text style={s.btnTxt}>Go to sign-in</Text>
+        <Text style={[s.btnTxt, { color: colors.bubbleText }]}>Go to sign-in</Text>
       </TouchableOpacity>
     </View>
   );
@@ -30,5 +29,5 @@ const s = StyleSheet.create({
   title: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "center" },
   body: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22, maxWidth: 320 },
   btn: { marginTop: 8, paddingHorizontal: 28, paddingVertical: 13, borderRadius: 14 },
-  btnTxt: { color: "#000", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  btnTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });

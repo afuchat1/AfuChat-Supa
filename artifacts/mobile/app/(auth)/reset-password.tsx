@@ -210,8 +210,8 @@ export default function ResetPasswordNative() {
               activeOpacity={0.85}
             >
               {loading
-                ? <ActivityIndicator color="#000" size="small" />
-                : <Text style={s.btnTxt}>{t("Update Password")}</Text>}
+                ? <ActivityIndicator color={colors.bubbleText} size="small" />
+                : <Text style={[s.btnTxt, { color: colors.bubbleText }]}>{t("Update Password")}</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity onPress={sendCode} style={{ alignSelf: "center", paddingVertical: 8 }}>
@@ -237,5 +237,5 @@ const s = StyleSheet.create({
   inputWrap: { flexDirection: "row", alignItems: "center", borderWidth: 0.5, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, ...Platform.select({ web: { boxShadow: "0 3px 12px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.13, shadowRadius: 12, elevation: 8 } }) },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   btn: { borderRadius: 999, paddingVertical: 14, alignItems: "center", marginTop: 4 },
-  btnTxt: { color: "#000", fontSize: 15, fontFamily: "Inter_700Bold" },
+  btnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
 });

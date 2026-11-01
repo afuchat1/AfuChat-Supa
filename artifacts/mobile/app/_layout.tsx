@@ -101,11 +101,10 @@ import { getNativeShareChatId } from "@/lib/nativeShareShortcuts";
 // Conversations pre-warm remains in the useEffect below (not at module-eval time)
 // so MMKV is only accessed after the full native runtime is ready.
 
-// Lock out system-level font scaling so the app always renders at its
-// intended sizes regardless of the device's accessibility font-size setting.
+// Keep Android text line boxes consistent across screens while allowing the
+// operating system's accessibility font-size setting to scale app content.
 (Text as any).defaultProps = {
   ...((Text as any).defaultProps ?? {}),
-  allowFontScaling: false,
   // Android reserves extra top/bottom font space by default. That space is
   // useful for some native text editing scenarios, but it makes icon/text
   // rows appear to have gaps behind their visible glyphs throughout the app.
@@ -113,7 +112,6 @@ import { getNativeShareChatId } from "@/lib/nativeShareShortcuts";
 };
 (TextInput as any).defaultProps = {
   ...((TextInput as any).defaultProps ?? {}),
-  allowFontScaling: false,
   includeFontPadding: false,
 };
 

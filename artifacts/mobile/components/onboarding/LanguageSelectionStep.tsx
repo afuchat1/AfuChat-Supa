@@ -145,7 +145,11 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           style={[
             styles.header,
             isMobile && styles.headerMobile,
-            { width: headerWidth, paddingTop: insets.top + (isMobile ? 16 : 24) },
+            {
+              width: headerWidth,
+              paddingTop: insets.top + (isMobile ? 16 : 24),
+              backgroundColor: colors.background,
+            },
           ]}
           onLayout={(event) => {
             const measuredHeight = Math.ceil(event.nativeEvent.layout.height);
@@ -228,14 +232,25 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View
+        style={[
+          styles.bottomFooter,
+          {
+            backgroundColor: colors.background,
+            paddingBottom: Math.max(insets.bottom, 8),
+          },
+        ]}
+      >
         <Pressable
           onPress={continueSelection}
           disabled={!selected || saving}
           style={({ pressed }) => [
             styles.continueButton,
             { backgroundColor: colors.accent },
-            !selected && styles.continueButtonDisabled,
+            !selected && [
+              styles.continueButtonDisabled,
+              { backgroundColor: colors.inputBg },
+            ],
             pressed && selected && styles.continueButtonPressed,
           ]}
           accessibilityRole="button"
@@ -247,18 +262,28 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           ) : (
             <>
               <Text
-                style={[styles.continueText, !selected && styles.continueTextDisabled]}
+                style={[
+                  styles.continueText,
+                  !selected && { color: colors.textSecondary },
+                ]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
               >
                 {continueLabel}
               </Text>
-              <Text style={[styles.continueArrow, !selected && styles.continueTextDisabled]}>→</Text>
+              <Text
+                style={[
+                  styles.continueArrow,
+                  !selected && { color: colors.textSecondary },
+                ]}
+              >
+                →
+              </Text>
             </>
           )}
         </Pressable>
-        <Text style={[styles.requiredHint, { color: colors.textMuted }]}>
+        <Text style={[styles.requiredHint, { color: colors.textSecondary }]}>
           {selected ? t("You can change this later in Settings.") : t("Select one option to continue.")}
         </Text>
       </View>
@@ -276,8 +301,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 22,
-    // Keep the language header opaque while matching the shared onboarding
-    // backdrop's visible dark-blue top tone.
+    // Keep the header opaque; its rendered background follows the selected theme.
     backgroundColor: ONBOARDING_THEME.gradientTop,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
@@ -298,7 +322,6 @@ const styles = StyleSheet.create({
     position: "relative",
     alignItems: "center",
     paddingTop: 18, paddingHorizontal: 22,
-    backgroundColor: "transparent",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
@@ -382,7 +405,6 @@ const styles = StyleSheet.create({
     }),
   },
   continueButtonDisabled: {
-    backgroundColor: "rgba(255,255,255,0.18)",
     ...Platform.select({
       ios: { shadowOpacity: 0 },
       android: { elevation: 0 },
@@ -401,7 +423,6 @@ const styles = StyleSheet.create({
       web: { whiteSpace: "nowrap" } as any,
     }),
   },
-  continueTextDisabled: { color: "rgba(255,255,255,0.62)" },
   continueArrow: { color: "#FFFFFF", fontSize: 21, lineHeight: 24, fontFamily: "Inter_700Bold" },
   requiredHint: { color: "rgba(255,255,255,0.38)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 10 },
 });
