@@ -8379,6 +8379,7 @@ STRICT RULES:
         ) : isRecording && recLocked ? (
           <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <AfuInputSurface
+              variant="navigation"
               style={[st.inputComposerSurface, st.recHoldGlass]}
               contentStyle={st.recLockedInner}
             >
@@ -8456,6 +8457,7 @@ STRICT RULES:
               />
               {/* One shared glass bar contains the message field and its primary action. */}
               <AfuInputSurface
+                variant="navigation"
                 style={[
                   st.inputComposerSurface,
                   isRecording && !recLocked ? st.recHoldGlass : undefined,
