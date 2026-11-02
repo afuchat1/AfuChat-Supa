@@ -39,10 +39,10 @@ export default function PostUploadBanner() {
           <Ionicons
             name={isDone ? "checkmark-circle" : isFailed ? "alert-circle" : isVideo ? "videocam" : "image"}
             size={16}
-            color={accentColor}
+            color={colors.accent}
           />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[s.label, { color: colors.text }]}>
             {isDone
               ? `${isVideo ? "Video" : "Post"} published!`
@@ -81,7 +81,7 @@ export default function PostUploadBanner() {
       {!isDone && !isFailed && est && isVideo && (
         <View style={[s.compressionCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
           <View style={s.compressionHeader}>
-            <Ionicons name="flash" size={13} color="#FACC15" />
+            <Ionicons name="flash" size={13} color={colors.accent} />
             <Text style={[s.compressionHeaderText, { color: colors.textMuted }]}>
               {isCompressing ? "Reducing file size…" : "Optimized for upload"}
             </Text>
@@ -91,7 +91,7 @@ export default function PostUploadBanner() {
               <Text style={[s.compressionBlockLabel, { color: colors.textMuted }]}>Original</Text>
               <Text style={[s.compressionBlockValue, { color: colors.text }]}>{est.originalLabel}</Text>
             </View>
-            <Ionicons name="arrow-forward" size={14} color={colors.textMuted} style={{ marginTop: 12 }} />
+            <Ionicons name="arrow-forward" size={14} color={colors.accent} style={{ marginTop: 12 }} />
             <View style={s.compressionBlock}>
               <Text style={[s.compressionBlockLabel, { color: "#4ADE80" }]}>After</Text>
               <Text style={[s.compressionBlockValue, { color: "#4ADE80" }]}>{est.estimatedLabel}</Text>
@@ -111,8 +111,8 @@ const s = StyleSheet.create({
   wrap:              { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10 },
   row:               { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
   iconCircle:        { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  label:             { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  caption:           { fontSize: 11, marginTop: 1 },
+  label:             { fontSize: 13, fontFamily: "Inter_600SemiBold", minWidth: 0, textAlign: "left" },
+  caption:           { fontSize: 11, marginTop: 1, minWidth: 0, textAlign: "left" },
   pct:               { fontSize: 12, fontFamily: "Inter_600SemiBold", minWidth: 30, textAlign: "right" },
   track:             { height: 3, borderRadius: 2, overflow: "hidden", marginBottom: 8 },
   fill:              { height: 3, borderRadius: 2 },
@@ -121,11 +121,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, gap: 6,
   },
   compressionHeader: { flexDirection: "row", alignItems: "center", gap: 5 },
-  compressionHeaderText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  compressionHeaderText: { fontSize: 11, fontFamily: "Inter_500Medium", minWidth: 0, textAlign: "left" },
   compressionRow:    { flexDirection: "row", alignItems: "flex-end", gap: 10 },
-  compressionBlock:  { gap: 2 },
-  compressionBlockLabel: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  compressionBlockValue: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  compressionBlock:  { flex: 1, minWidth: 0, gap: 2 },
+  compressionBlockLabel: { fontSize: 10, fontFamily: "Inter_400Regular", minWidth: 0, textAlign: "left" },
+  compressionBlockValue: { fontSize: 17, fontFamily: "Inter_700Bold", minWidth: 0, textAlign: "left" },
   savingsBadge:      {
     marginLeft: "auto" as any, borderRadius: 16, borderWidth: 1,
     paddingHorizontal: 9, paddingVertical: 3, alignSelf: "center",

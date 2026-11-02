@@ -821,7 +821,7 @@ export default function ContactScreen() {
               </View>
 
               {/* Label */}
-              <View style={{ flex: 1, paddingLeft: 10 }}>
+              <View style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
                 <Text style={[s.mutualsTitle, { color: colors.text }]} numberOfLines={2}>
                   {(() => {
                     const names = mutuals.slice(0, 2).map(m => `@${m.handle}`);
@@ -865,7 +865,7 @@ export default function ContactScreen() {
                     onPress={() => router.push({ pathname: "/contact/[id]", params: { id: m.id } })}
                     activeOpacity={0.7}>
                     <Avatar uri={m.avatar_url} name={m.handle} size={34} />
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={[s.mutualRowName, { color: colors.text }]} numberOfLines={1}>
                         {(m as any).display_name || `@${m.handle}`}
                       </Text>
@@ -1018,6 +1018,7 @@ const s = StyleSheet.create({
   },
   identityLeft: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   identityRight: {
@@ -1045,8 +1046,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     marginTop: 2,
+    minWidth: 0,
   },
-  displayName: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2, flexShrink: 1 },
+  displayName: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2, flexShrink: 1, minWidth: 0, textAlign: "left" },
   prestigePill: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 8, paddingVertical: 3,
@@ -1065,7 +1067,7 @@ const s = StyleSheet.create({
   handleRow: {
     flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap",
   },
-  handle: { fontSize: 12.5, fontFamily: "Inter_400Regular" },
+  handle: { fontSize: 12.5, fontFamily: "Inter_400Regular", flexShrink: 1, minWidth: 0, textAlign: "left" },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11.5, fontFamily: "Inter_400Regular" },
 
@@ -1121,7 +1123,7 @@ const s = StyleSheet.create({
     paddingVertical: 11,
     gap: 6,
   },
-  expandTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  expandTitle: { fontSize: 14, fontFamily: "Inter_700Bold", minWidth: 0, textAlign: "left" },
   expandCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
   expandViewAll: {
     flexDirection: "row",
@@ -1191,6 +1193,7 @@ const s = StyleSheet.create({
   bio: {
     fontSize: 14, fontFamily: "Inter_400Regular",
     lineHeight: 21, marginHorizontal: 16, marginBottom: 8,
+    minWidth: 0, textAlign: "left",
   },
   metaStrip: {
     flexDirection: "row", flexWrap: "wrap", gap: 6,
@@ -1205,7 +1208,7 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     gap: 5, marginHorizontal: 16, marginBottom: 6, flexWrap: "wrap",
   },
-  metaBodyText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+  metaBodyText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, textAlign: "left" },
 
   // ── Mutual followers — advanced card ───────────────────────────────────────
   mutualsCard: {
@@ -1226,8 +1229,8 @@ const s = StyleSheet.create({
     zIndex: 0,
   },
   mutualMoreText: { fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" },
-  mutualsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 17 },
-  mutualsSubtitle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
+  mutualsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 17, minWidth: 0, textAlign: "left" },
+  mutualsSubtitle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1, textAlign: "left" },
   mutualsControls: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 6 },
   mutualsExpandBtn: {
     width: 28, height: 28, borderRadius: 14,
@@ -1244,8 +1247,8 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 14, paddingVertical: 10, gap: 10,
   },
-  mutualRowName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  mutualRowHandle: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  mutualRowName: { fontSize: 13, fontFamily: "Inter_600SemiBold", minWidth: 0, textAlign: "left" },
+  mutualRowHandle: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "left" },
   mutualSeeAll: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14, paddingVertical: 11,

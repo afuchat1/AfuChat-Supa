@@ -621,7 +621,7 @@ export default function PremiumScreen() {
           >
             <Ionicons name="wallet" size={15} color={colors.accent} />
             <Text style={[s.walletTxt, { color: colors.textMuted }]}>
-              Balance:{" "}
+              {"Balance: "}
               <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>
                 {profile?.acoin ?? 0} AC
               </Text>
@@ -763,7 +763,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignSelf: "stretch",
   },
-  activeBarTxt: { flex: 1, fontSize: 13, fontFamily: "Inter_500Medium" },
+  activeBarTxt: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "left" },
   cancelTxt: { fontSize: 12, fontFamily: "Inter_400Regular" },
 
   tabs: {
@@ -790,7 +790,7 @@ const s = StyleSheet.create({
     padding: 18,
   },
   priceTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-  priceLeft: { flex: 1, gap: 5 },
+  priceLeft: { flex: 1, minWidth: 0, gap: 5 },
   priceMainRow: { flexDirection: "row", alignItems: "baseline", gap: 5, flexWrap: "wrap" },
   priceNum: { fontSize: 40, fontFamily: "Inter_700Bold", letterSpacing: -1.5 },
   priceUnit: { fontSize: 20, fontFamily: "Inter_400Regular", marginBottom: 2 },
@@ -822,10 +822,10 @@ const s = StyleSheet.create({
   featSec: { padding: 16 },
   featSecHead: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 },
   featIco: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center" },
-  featSecTitle: { fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
+  featSecTitle: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.2, textAlign: "left" },
   featItems: { gap: 9, paddingLeft: 2 },
   featItem: { flexDirection: "row", alignItems: "center", gap: 9 },
-  featItemTxt: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 20 },
+  featItemTxt: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, lineHeight: 20, textAlign: "left" },
 
   walletRow: {
     flexDirection: "row",
@@ -836,7 +836,7 @@ const s = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 0.5,
   },
-  walletTxt: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular" },
+  walletTxt: { flex: 1, minWidth: 0, fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "left" },
 
   cta: {
     
@@ -867,7 +867,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   currentBarEmoji: { fontSize: 22 },
-  currentBarTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
+  currentBarTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1, minWidth: 0, textAlign: "left" },
   ctaBtn: {
     flexDirection: "row",
     alignItems: "center",

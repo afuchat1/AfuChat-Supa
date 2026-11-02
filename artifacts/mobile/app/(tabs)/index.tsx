@@ -438,10 +438,10 @@ function StoryUploadBanner({ colors }: { colors: any }) {
           <Ionicons
             name={isDone ? "checkmark-circle" : isFailed ? "alert-circle" : "camera"}
             size={16}
-            color={isDone ? "#22C55E" : isFailed ? "#EF4444" : colors.accent}
+            color={colors.accent}
           />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[uploadBannerStyles.label, { color: colors.text }]}>
             {isDone ? "Story posted!" : isFailed ? "Story upload failed" : "Posting your story…"}
           </Text>
