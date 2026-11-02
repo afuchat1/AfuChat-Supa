@@ -10,11 +10,11 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

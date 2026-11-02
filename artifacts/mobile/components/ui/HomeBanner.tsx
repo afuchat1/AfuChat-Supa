@@ -9,10 +9,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router, useFocusEffect } from "expo-router";

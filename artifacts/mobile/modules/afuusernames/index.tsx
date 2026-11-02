@@ -7,10 +7,10 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { SmartSheet } from "@/components/ui/SmartSheet";

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { safeRouter } from "@/lib/navUtils";

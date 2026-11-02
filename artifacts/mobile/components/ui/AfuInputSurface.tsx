@@ -7,7 +7,10 @@ import {
 } from "react-native";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 
-type AfuInputSurfaceProps = ViewProps;
+type AfuInputSurfaceProps = ViewProps & {
+  variant?: "navigation" | "input";
+  contentStyle?: StyleProp<ViewStyle>;
+};
 
 const OUTER_STYLE_KEYS = new Set([
   "alignSelf",
@@ -66,20 +69,23 @@ export function AfuInputSurface({
   style,
   children,
   onLayout,
+  variant = "input",
+  contentStyle,
   ...viewProps
 }: AfuInputSurfaceProps) {
   const { outer, content } = splitSurfaceStyle(style);
   const minHeight =
     typeof outer.minHeight === "number"
-      ? Math.max(46, outer.minHeight)
-      : outer.minHeight ?? 46;
+      ? Math.max(44, outer.minHeight)
+      : outer.minHeight ?? 44;
 
   return (
     <FloatingGlassSurface
       {...viewProps}
       fill={outer.height !== undefined}
+      variant={variant}
       style={[styles.surface, outer, { minHeight }]}
-      contentStyle={[styles.content, content]}
+      contentStyle={[styles.content, content, contentStyle]}
       onLayout={onLayout}
     >
       {children}
@@ -90,11 +96,11 @@ export function AfuInputSurface({
 const styles = StyleSheet.create({
   surface: {
     alignSelf: "stretch",
-    minHeight: 46,
+    minHeight: 44,
   },
   content: {
     width: "100%",
-    minHeight: 46,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,

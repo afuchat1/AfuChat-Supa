@@ -26,15 +26,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 // expo-av: lazy-load on native only.
 // Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
 // production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
@@ -1213,8 +1214,10 @@ export function VideoCommentsSheet({
           <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
 
           {/* ── Glass pill — text + all buttons on the right ── */}
-          <View style={[cStyles.inputGlassPill, { backgroundColor: inputBg, borderColor: isDark ? "rgba(255,255,255,0.13)" : "rgba(26,18,8,0.13)" }]}>
-            <View style={cStyles.inputBarRow}>
+          <AfuInputSurface
+            style={cStyles.inputGlassPill}
+            contentStyle={cStyles.inputBarRow}
+          >
               {recordState === "recording" ? (
                 /* Active recording fills the whole pill */
                 <RecordingBar elapsed={recordElapsed} onStop={() => stopRecording()} accent={accent} />
@@ -1223,6 +1226,7 @@ export function VideoCommentsSheet({
                   {/* Text input — grows to fill available space */}
                   <TextInput
                     ref={inputRef}
+                    appearance="embedded"
                     style={[cStyles.input, { color: inputTxt }]}
                     placeholder={recordState === "recorded" ? "Add a caption… (optional)" : "Add a comment…"}
                     placeholderTextColor={inputPH}
@@ -1297,8 +1301,7 @@ export function VideoCommentsSheet({
                   )}
                 </>
               )}
-            </View>
-          </View>
+          </AfuInputSurface>
         </View>
       ) : (
         <TouchableOpacity

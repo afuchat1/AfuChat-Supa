@@ -16,8 +16,9 @@ import { floatingNavigationShadow, GLASS, glassTokens } from "@/constants/glass"
 import { T } from "@/constants/theme";
 
 type FloatingGlassSurfaceProps = Omit<ViewProps, "children" | "style" | "onLayout"> & {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   fill?: boolean;
+  variant?: "navigation" | "input";
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   onLayout?: ViewProps["onLayout"];
@@ -26,6 +27,7 @@ type FloatingGlassSurfaceProps = Omit<ViewProps, "children" | "style" | "onLayou
 export function FloatingGlassSurface({
   children,
   fill = true,
+  variant = "navigation",
   style,
   contentStyle,
   onLayout,
@@ -33,6 +35,18 @@ export function FloatingGlassSurface({
 }: FloatingGlassSurfaceProps) {
   const { colors, isDark } = useTheme();
   const glass = glassTokens(isDark);
+  const surfaceBackground =
+    variant === "input"
+      ? isDark
+        ? "rgba(255,255,255,0.12)"
+        : colors.inputBg
+      : colors.navigationSurface;
+  const surfaceBorder =
+    variant === "input"
+      ? isDark
+        ? "rgba(255,255,255,0.22)"
+        : colors.border
+      : colors.navigationBorder;
 
   return (
     <View
@@ -41,25 +55,28 @@ export function FloatingGlassSurface({
         styles.glassSurface,
         style,
         {
-          backgroundColor: colors.navigationSurface,
-          borderColor: colors.navigationBorder,
+          backgroundColor: surfaceBackground,
+          borderColor: surfaceBorder,
+          borderWidth: variant === "input" ? StyleSheet.hairlineWidth : 1,
           ...floatingNavigationShadow(isDark),
         },
       ]}
     >
       <View style={fill ? styles.glassClip : styles.glassClipAuto}>
-        {!isDark && (
+        {(variant === "input" || !isDark) && (
           <>
             <BlurView
               intensity={GLASS.blur.light}
-              tint="light"
+              tint={isDark ? "dark" : "light"}
               style={StyleSheet.absoluteFill}
               pointerEvents="none"
             />
-            <View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: glass.fillStrong }]}
-            />
+            {!(variant === "input" && isDark) && (
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: glass.fillStrong }]}
+              />
+            )}
           </>
         )}
         <View

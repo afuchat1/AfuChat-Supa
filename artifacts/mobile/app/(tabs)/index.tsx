@@ -15,11 +15,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 
 import AfuLogo from "@/components/ui/AfuLogo";
 import Image from "@/components/ui/OptimizedImage";

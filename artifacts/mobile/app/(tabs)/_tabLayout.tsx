@@ -27,6 +27,7 @@ import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
 import {
+  FloatingGlassSurface,
   FloatingNavIndicator,
   FloatingNavSurface,
   floatingNavigationStyles,
@@ -284,14 +285,16 @@ export function CompactTabBar({
                 {
                   bottom: PILL_BOTTOM + PILL_H + 72 + (CREATE_OPTIONS.length - index - 1) * 58,
                   right: 28,
-                  backgroundColor: isDark ? colors.surface : colors.card,
-                  borderColor: accentColor,
                 },
               ]}
               activeOpacity={0.8}
               accessibilityRole="button"
                accessibilityLabel={`${t("navigation.create")} ${t(opt.label)}`}
             >
+              <FloatingGlassSurface
+                pointerEvents="none"
+                style={StyleSheet.absoluteFill}
+              />
               <View style={pill.actionLabel}>
                 <Text
                   style={[
@@ -319,7 +322,6 @@ export function CompactTabBar({
               {
                 bottom: PILL_BOTTOM + PILL_H + 12,
                 right: 24,
-                backgroundColor: accentColor,
                 transform: [{ scale: createFabScale }],
               },
             ]}
@@ -328,7 +330,11 @@ export function CompactTabBar({
              accessibilityLabel={showCreateActions ? t("navigation.close_create_options") : t("navigation.create")}
             accessibilityState={{ expanded: showCreateActions }}
           >
-            <Ionicons name={showCreateActions ? "close" : "add"} size={28} color="#fff" />
+            <FloatingGlassSurface
+              pointerEvents="none"
+              style={StyleSheet.absoluteFill}
+            />
+            <Ionicons name={showCreateActions ? "close" : "add"} size={28} color={accentColor} />
           </TouchableOpacity>
         </>
       )}
@@ -347,13 +353,16 @@ export function CompactTabBar({
             {
               bottom: PILL_BOTTOM + PILL_H + 12,
               right: 24,
-              backgroundColor: accentColor,
               transform: [{ scale: composeFabScale }],
             },
           ]}
           activeOpacity={0.82}
         >
-          <Ionicons name="create-outline" size={24} color="#fff" />
+          <FloatingGlassSurface
+            pointerEvents="none"
+            style={StyleSheet.absoluteFill}
+          />
+          <Ionicons name="create-outline" size={24} color={accentColor} />
         </TouchableOpacity>
       )}
 
@@ -364,9 +373,9 @@ export function CompactTabBar({
 const pill = StyleSheet.create({
   fab: {
     position: "absolute",
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -375,23 +384,11 @@ const pill = StyleSheet.create({
     width: 142,
     height: 44,
     borderRadius: 22,
-    borderWidth: 2,
     flexDirection: "row",
     paddingLeft: 14,
     paddingRight: 4,
     justifyContent: "space-between",
-    overflow: "hidden",
     alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.18,
-        shadowRadius: 5,
-      },
-      android: { elevation: 5 },
-      web: { boxShadow: "0 2px 8px rgba(0,0,0,0.18)" } as any,
-    }),
   },
   actionLabel: {
     flex: 1,

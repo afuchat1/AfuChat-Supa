@@ -135,7 +135,7 @@ export default function ResetPasswordNative() {
 
         {step === "email" ? (
           <>
-            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
+            <FloatingGlassSurface fill={false} variant="input" style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="mail" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
               <AfuTextInput
                 appearance="embedded"
@@ -166,7 +166,7 @@ export default function ResetPasswordNative() {
         ) : (
           <>
             {/* OTP code */}
-            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
+            <FloatingGlassSurface fill={false} variant="input" style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="keypad" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
               <AfuTextInput
                 appearance="embedded"
@@ -180,7 +180,7 @@ export default function ResetPasswordNative() {
               />
             </FloatingGlassSurface>
             {/* New password */}
-            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
+            <FloatingGlassSurface fill={false} variant="input" style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="lock-closed" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
               <AfuTextInput
                 appearance="embedded"
@@ -196,7 +196,7 @@ export default function ResetPasswordNative() {
               </TouchableOpacity>
             </FloatingGlassSurface>
             {/* Confirm password */}
-            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
+            <FloatingGlassSurface fill={false} variant="input" style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="lock-closed" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
               <AfuTextInput
                 appearance="embedded"

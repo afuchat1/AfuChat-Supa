@@ -7,8 +7,8 @@ import {
   Text,
   useWindowDimensions,
   View,
-  TextInput,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { safeRouter } from "@/lib/navUtils";

@@ -15,13 +15,13 @@ import {
   StyleSheet,
   Dimensions,
   Text,
-  TextInput,
   UIManager,
   useWindowDimensions,
   Pressable,
   TouchableOpacity,
   View,
 } from "react-native";
+import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 
 // Cap screen width so attachment bubbles don't fill an entire desktop monitor.
@@ -36,6 +36,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
+import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import AfuTextInput from "@/components/ui/AfuTextInput";
 import { CHAT_FAST_DURATION, CHAT_FAST_EASING } from "@/lib/chatMotion";
 import * as Haptics from "@/lib/haptics";
@@ -8146,16 +8147,22 @@ STRICT RULES:
               }
             />
             <Animated.View
-              style={[st.scrollFab, { opacity: scrollBtnOpacity, backgroundColor: colors.surface, bottom: effectiveBottom + floatingInputHeight + 8, pointerEvents: showScrollBtn ? "auto" : "none" }]}
+              style={[st.scrollFab, { opacity: scrollBtnOpacity, bottom: effectiveBottom + floatingInputHeight + 8, pointerEvents: showScrollBtn ? "auto" : "none" }]}
             >
-              <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
-                <Ionicons name="chevron-down" size={22} color={colors.text} />
-                {newMsgCount > 0 && (
-                  <View style={[st.scrollFabBadge, { backgroundColor: BRAND }]}>
-                    <Text style={st.scrollFabBadgeText}>{newMsgCount > 99 ? "99+" : newMsgCount}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              <FloatingGlassSurface
+                fill={false}
+                style={st.scrollFabGlass}
+                contentStyle={st.scrollFabGlassContent}
+              >
+                <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
+                  <Ionicons name="chevron-down" size={22} color={colors.text} />
+                  {newMsgCount > 0 && (
+                    <View style={[st.scrollFabBadge, { backgroundColor: BRAND }]}>
+                      <Text style={st.scrollFabBadgeText}>{newMsgCount > 99 ? "99+" : newMsgCount}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </FloatingGlassSurface>
             </Animated.View>
           </View>
         )}
@@ -8370,9 +8377,8 @@ STRICT RULES:
           </View>
         ) : isRecording && recLocked ? (
           <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-            <FloatingGlassSurface
-              fill={false}
-              style={[st.inputGlassPill, st.recHoldGlass]}
+            <AfuInputSurface
+              style={[st.inputComposerSurface, st.recHoldGlass]}
               contentStyle={st.recLockedInner}
             >
                 <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recLockedTrash}>
@@ -8393,7 +8399,7 @@ STRICT RULES:
                 <TouchableOpacity onPress={stopVoiceRecording} style={[st.sendBtn, { backgroundColor: BRAND }]}>
                   <Ionicons name="send" size={18} color="#fff" />
                 </TouchableOpacity>
-            </FloatingGlassSurface>
+            </AfuInputSurface>
           </View>
         ) : chatInfo?.is_channel && !canPostToChannel ? (
           !channelMembershipKnown ? (
@@ -8447,17 +8453,15 @@ STRICT RULES:
                 onFormat={(newText) => { setInput(newText); saveDraft(newText); setInputSelection({ start: 0, end: 0 }); }}
                 onClose={() => setInputSelection({ start: 0, end: 0 })}
               />
-              {/* Pill + action button sit side-by-side; mic/send is outside the pill */}
-              <View style={st.inputRowOuter}>
-                <FloatingGlassSurface
-                  fill={false}
-                  style={[
-                    st.inputGlassPill,
-                    { flex: 1 },
-                    isRecording && !recLocked ? st.recHoldGlass : undefined,
-                  ]}
-                  contentStyle={st.inputBarRow}
-                >
+              {/* One shared glass bar contains the message field and its primary action. */}
+              <AfuInputSurface
+                style={[
+                  st.inputComposerSurface,
+                  isRecording && !recLocked ? st.recHoldGlass : undefined,
+                ]}
+                contentStyle={st.inputRowOuter}
+              >
+                <View style={[st.inputBarRow, { flex: 1 }]}>
                     {isRecording && !recLocked ? (
                       <>
                         <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recTrashBtn}>
@@ -8561,9 +8565,9 @@ STRICT RULES:
                         )}
                       </View>
                     )}
-                </FloatingGlassSurface>
+                </View>
 
-                {/* ── Mic / Send button — separated from the input pill ── */}
+                {/* ── Mic / Send button stays inside the shared glass bar ── */}
                 <View style={st.outerActionBtn}>
                   {isRecording && !recLocked && (
                     <View style={st.recLockHint}>
@@ -8624,7 +8628,7 @@ STRICT RULES:
                     </View>
                   )}
                 </View>
-              </View>
+              </AfuInputSurface>
             </View>
           </>
         )}
@@ -10332,13 +10336,9 @@ const st = StyleSheet.create({
     bottom: 8,
     width: 40,
     height: 40,
-    borderRadius: 20,
-    elevation: 4,
-    ...Platform.select({
-      web: { boxShadow: "0 2px 6px rgba(0,0,0,0.15)" } as any,
-      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6 },
-    }),
   },
+  scrollFabGlass: { width: "100%", height: "100%" },
+  scrollFabGlassContent: { flex: 1, alignItems: "center", justifyContent: "center" },
   scrollFabBtn: {
     width: 40,
     height: 40,
@@ -10670,10 +10670,7 @@ const st = StyleSheet.create({
     paddingTop: 4,
     ...Platform.select({ web: { paddingHorizontal: 8 } }),
   },
-  inputGlassPill: {
-    borderRadius: 999,
-    marginBottom: 6,
-  },
+  inputComposerSurface: { flex: 1, alignSelf: "stretch" },
   inputBarRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -10700,17 +10697,17 @@ const st = StyleSheet.create({
   sendBtnCol: { alignSelf: "stretch", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 },
   aiAboveSendBtn: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center", minWidth: 32, gap: 1 },
   wordCountLabel: { fontSize: 8, fontFamily: "Inter_600SemiBold", opacity: 0.75 },
-  recHoldGlass: { minHeight: 56 },
+  recHoldGlass: { minHeight: 44 },
   recWaveRow: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 8 },
   recCancelHint: { flexDirection: "row", alignItems: "center", gap: 2, paddingRight: 6 },
   recTrashBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center", marginLeft: 4 },
   recSlideText: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  inputRowOuter: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  outerActionBtn: { alignItems: "center", justifyContent: "flex-end", marginBottom: 6 },
-  recMicWrap: { alignItems: "center", justifyContent: "flex-end" },
+  inputRowOuter: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 0, paddingVertical: 0 },
+  outerActionBtn: { alignItems: "center", justifyContent: "center" },
+  recMicWrap: { alignItems: "center", justifyContent: "center" },
   recLockHint: { alignItems: "center", marginBottom: 4, opacity: 0.55 },
-  recMicBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center" },
-  recLockedInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, gap: 8, minHeight: 56 },
+  recMicBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: BRAND_FALLBACK, alignItems: "center", justifyContent: "center" },
+  recLockedInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, gap: 8, minHeight: 44 },
   recLockedTrash: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.12)", alignItems: "center", justifyContent: "center" },
   recPauseBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   recordingText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },

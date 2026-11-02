@@ -12,3 +12,4 @@
 - [Floating navigation behavior](floating-navigation-behavior.md) — Use the shared floating nav where needed; AfuSearch omits its app-shell bottom bar.
 - [Android module compatibility](android-module-compatibility.md) — App modules must work on Android 14 and earlier across phone brands; verify device-specific crashes from reports.
 - [TypeScript check heap](typescript-check-heap.md) — Run full mobile typechecks with a 4 GB Node heap; the default heap can run out before diagnostics.
+- [App-wide input and floating surfaces](afuchat-input-surface.md) — Keep all input bars compact, single-shell glass surfaces; share the same architecture for floating controls.

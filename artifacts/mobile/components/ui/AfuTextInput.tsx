@@ -134,14 +134,15 @@ const AfuTextInput = forwardRef<NativeTextInput, AfuTextInputProps>(
     const requestedMinHeight = outer.minHeight;
     const minHeight =
       typeof requestedMinHeight === "number"
-        ? Math.max(46, requestedMinHeight)
-        : requestedMinHeight ?? 46;
+        ? Math.max(44, requestedMinHeight)
+        : requestedMinHeight ?? 44;
     const fill = outer.height !== undefined;
     const textColor = (flattened.color as TextStyle["color"] | undefined) ?? colors.text;
 
     return (
       <FloatingGlassSurface
         fill={fill}
+        variant="input"
         style={[styles.surface, outer, { minHeight }]}
         contentStyle={[
           styles.content,
@@ -177,11 +178,11 @@ AfuTextInput.displayName = "AfuTextInput";
 const styles = StyleSheet.create({
   surface: {
     alignSelf: "stretch",
-    minHeight: 46,
+    minHeight: 44,
   },
   content: {
     width: "100%",
-    minHeight: 46,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -211,3 +212,5 @@ const styles = StyleSheet.create({
 });
 
 export default AfuTextInput;
+export type TextInput = NativeTextInput;
+export { AfuTextInput as TextInput };
