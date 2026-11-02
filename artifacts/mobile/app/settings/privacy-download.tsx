@@ -113,7 +113,7 @@ export default function PrivacyDownloadScreen() {
                 <View style={[s.infoIconWrap, { backgroundColor: accent + "18" }]}>
                   <Ionicons name="shield-checkmark" size={20} color={accent} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={[s.infoTitle, { color: colors.text }]}>{t("Your data is yours")}</Text>
                   <Text style={[s.infoText, { color: colors.textMuted }]}>
                     {t("AfuChat gives you full access to a copy of your personal data. Select what you'd like to include and we'll email it to you instantly.")}
@@ -154,7 +154,7 @@ export default function PrivacyDownloadScreen() {
             </GlassCard>
 
             <Text style={[s.hint, { color: colors.textMuted }]}>
-              Your selected data will be compiled into a JSON file and emailed to your registered address immediately — no waiting required.
+              {"Your selected data will be compiled into a JSON file and emailed to your registered address immediately — no waiting required."}
             </Text>
 
             <TouchableOpacity
@@ -186,8 +186,8 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   infoCard: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 16 },
   infoIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  infoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
-  infoText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  infoTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 4, textAlign: "left" },
+  infoText: { minWidth: 0, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, textAlign: "left" },
   sectionTitle: {
     fontSize: 11,
     fontFamily: "Inter_700Bold",
@@ -200,13 +200,13 @@ const s = StyleSheet.create({
   sep: { height: 0.5, marginLeft: 62 },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
   rowIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
-  rowText: { flex: 1 },
-  rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium", marginBottom: 2 },
-  rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  rowText: { flex: 1, minWidth: 0 },
+  rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium", marginBottom: 2, textAlign: "left" },
+  rowDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 16, textAlign: "left" },
   checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  hint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, paddingTop: 14, lineHeight: 18 },
+  hint: { fontSize: 13, fontFamily: "Inter_400Regular", paddingHorizontal: 20, paddingTop: 14, lineHeight: 18, textAlign: "left" },
   requestBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginHorizontal: 16, marginTop: 20, borderRadius: 16, paddingVertical: 16 },
-  requestBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  requestBtnText: { flexShrink: 1, minWidth: 0, color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   successContainer: { alignItems: "center", paddingHorizontal: 32, paddingTop: 60, gap: 16 },
   successIcon: { width: 100, height: 100, borderRadius: 50, alignItems: "center", justifyContent: "center" },
   successTitle: { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center" },
