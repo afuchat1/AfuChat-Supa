@@ -680,7 +680,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
             : <>
                 <Ionicons name="lock-closed" size={16} color="#fff" />
                 <Text style={s.primaryBtnText}>
-                  Pay {acoinAmt >= 50 ? `$${price} · ${fmtAmt(acoinAmt)} AC` : "Select a package"}
+                  {`Pay ${acoinAmt >= 50 ? `$${price} · ${fmtAmt(acoinAmt)} AC` : "Select a package"}`}
                 </Text>
               </>
           }
@@ -1118,7 +1118,7 @@ const s = StyleSheet.create({
   previewBox: { borderRadius: 12, borderWidth: 1, padding: 14 },
   previewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 15 },
-  primaryBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  primaryBtnText: { flexShrink: 1, minWidth: 0, color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "left" },
   currToggle: { flexDirection: "row", gap: 10 },
   currToggleBtn: { alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   currToggleText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
