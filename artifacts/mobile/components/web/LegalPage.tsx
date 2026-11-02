@@ -9,6 +9,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -253,11 +255,12 @@ const PAGES: Record<
 };
 
 function navigateTo(path: string) {
-  if (Platform.OS === "web" && typeof window !== "undefined") {
-    window.location.assign(path);
-    return;
-  }
-  Linking.openURL(`https://afuchat.com${path}`).catch(() => {});
+  router.push(path as any);
+}
+
+function navigateBack() {
+  if (router.canGoBack()) router.back();
+  else router.replace("/");
 }
 
 function LegalSection({ section, accent, colors }: { section: Section; accent: string; colors: any }) {
@@ -310,6 +313,7 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
   const page = PAGES[kind];
   const { width } = useWindowDimensions();
   const compact = width < 720;
+  const insets = useSafeAreaInsets();
 
   return (
     <ScrollView
@@ -317,8 +321,23 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <View style={[styles.nav, compact && styles.navCompact]}>
+      <View style={[
+        styles.header,
+        { backgroundColor: colors.background, borderBottomColor: colors.border },
+        Platform.OS !== "web" && { paddingTop: insets.top },
+      ]}>
+        <View style={[styles.nav, compact && styles.navCompact, Platform.OS !== "web" && styles.navNative]}>
+          {Platform.OS !== "web" && (
+            <Pressable
+              onPress={navigateBack}
+              style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={8}
+            >
+              <Ionicons name="arrow-back" size={20} color={colors.icon} />
+            </Pressable>
+          )}
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
             <Text style={[styles.logo, { color: colors.text }]}>
               Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
@@ -359,7 +378,7 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
         <View style={[styles.notice, { backgroundColor: colors.surface }]}>
           <Ionicons name="information-circle-outline" size={20} color={BRAND} />
           <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-            AfuChat’s legal pages are published for the web. Account actions and app settings remain inside the authenticated AfuChat app.
+            Review this document here in AfuChat. Related account and privacy controls are available in Settings.
           </Text>
         </View>
         {page.sections.map((section) => (
@@ -414,6 +433,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   navCompact: { paddingHorizontal: 20, minHeight: 68 },
+  navNative: { justifyContent: "flex-start", gap: 12, minHeight: 60 },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   logo: { color: "#fff", fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.8 },
   logoAccent: {},
   navLinks: { flexDirection: "row", alignItems: "center", gap: 26 },

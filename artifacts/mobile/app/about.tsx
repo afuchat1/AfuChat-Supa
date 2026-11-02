@@ -84,8 +84,8 @@ const STATS = [
 // ─── Links ────────────────────────────────────────────────────────────────────
 
 const LINKS = [
-  { icon: "document-text",   label: "about.terms",  onPress: () => Linking.openURL("https://afuchat.com/terms").catch(() => {}) },
-  { icon: "shield-checkmark",label: "about.privacy",    onPress: () => Linking.openURL("https://afuchat.com/privacy").catch(() => {}) },
+  { icon: "document-text",   label: "about.terms",  onPress: () => router.push("/terms") },
+  { icon: "shield-checkmark",label: "about.privacy",    onPress: () => router.push("/privacy") },
   { icon: "help-buoy",       label: "about.help_support",    onPress: () => router.push("/support" as any) },
   { icon: "star",            label: "about.rate_on_google_play", onPress: () => openAppReview().catch(() => {}) },
   { icon: "globe",           label: "about.visit_website", onPress: () => Linking.openURL("https://afuchat.com").catch(() => {}) },

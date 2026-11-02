@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -390,7 +389,7 @@ export default function SellerApplyScreen() {
           {/* Terms note */}
           <TouchableOpacity
             style={[st.termsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => Linking.openURL("https://afuchat.com/terms").catch(() => {})}
+            onPress={() => router.push("/terms")}
             activeOpacity={0.8}
           >
             <Ionicons name="shield-checkmark" size={15} color={colors.accent} />
