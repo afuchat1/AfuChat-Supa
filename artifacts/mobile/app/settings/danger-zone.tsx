@@ -90,7 +90,7 @@ function Step1({
     <>
       <Text style={[st.title, { color: "#FF3B30" }]}>What you will permanently lose</Text>
       <Text style={[st.subtitle, { color: colors.textMuted }]}>
-        Read every item carefully. You must check all {CONSEQUENCES.length} boxes before you can continue.
+        {`Read every item carefully. You must check all ${CONSEQUENCES.length} boxes before you can continue.`}
       </Text>
 
       <View style={{ gap: 9, marginVertical: 4 }}>
@@ -167,15 +167,15 @@ function Step2({
     <>
       <Text style={[st.title, { color: "#FF3B30" }]}>Mandatory waiting period</Text>
       <Text style={[st.subtitle, { color: colors.textMuted }]}>
-        We require a {STEP2_WAIT}-second pause so this decision isn't made in haste.
+        {`We require a ${STEP2_WAIT}-second pause so this decision isn't made in haste.`}
       </Text>
 
       {!timerDone ? (
         <View style={[st.timerBox, { backgroundColor: colors.backgroundTertiary }]}>
           <Ionicons name="time" size={16} color="#FF9F0A" />
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[st.timerLabel, { color: colors.text }]}>
-              Please wait {seconds}s before you can continue
+              {`Please wait ${seconds}s before you can continue`}
             </Text>
             <View style={[st.timerTrack, { backgroundColor: colors.border }]}>
               <Animated.View style={[st.timerFill, {
@@ -192,7 +192,7 @@ function Step2({
       )}
 
       <Text style={[st.fieldLabel, { color: colors.textMuted }]}>
-        Why are you deleting your account? <Text style={{ color: "#FF3B30" }}>*</Text>
+        {"Why are you deleting your account? "}<Text style={{ color: "#FF3B30" }}>*</Text>
       </Text>
       <View style={{ gap: 7 }}>
         {LEAVE_REASONS.map(r => (
@@ -245,7 +245,7 @@ function Step3({
     <>
       <Text style={[st.title, { color: "#FF3B30" }]}>Confirm your identity</Text>
       <Text style={[st.subtitle, { color: colors.textMuted }]}>
-        Type your exact account email address — character for character.
+        {"Type your exact account email address — character for character."}
       </Text>
 
       <Text style={[st.fieldLabel, { color: colors.textMuted }]}>Account email address</Text>
@@ -303,7 +303,7 @@ function Step4({
     <>
       <Text style={[st.title, { color: "#FF3B30" }]}>Username verification</Text>
       <Text style={[st.subtitle, { color: colors.textMuted }]}>
-        Type your exact @handle to prove you own this account.
+        {"Type your exact @handle to prove you own this account."}
       </Text>
 
       <Text style={[st.fieldLabel, { color: colors.textMuted }]}>Your account @handle</Text>
@@ -377,24 +377,24 @@ function Step5({
     <>
       <Text style={[st.title, { color: "#FF3B30" }]}>Final confirmation</Text>
       <Text style={[st.subtitle, { color: colors.textMuted }]}>
-        There is no going back after this. Your account enters a 30-day deletion queue.
+        {"There is no going back after this. Your account enters a 30-day deletion queue."}
       </Text>
 
       <View style={[st.warnBox, { backgroundColor: "#FF3B3012", borderColor: "#FF3B3035" }]}>
         <Ionicons name="skull" size={20} color="#FF3B30" />
         <Text style={[st.warnText, { color: colors.text }]}>
-          After 30 days your account and{" "}
+          {"After 30 days your account and "}
           <Text style={{ fontFamily: "Inter_700Bold", color: "#FF3B30" }}>all associated data</Text>
-          {" "}will be permanently erased. This cannot be undone.
+          {" will be permanently erased. This cannot be undone."}
         </Text>
       </View>
 
       <Text style={[st.fieldLabel, { color: colors.textMuted }]}>
-        Type{" "}
+        {"Type "}
         <Text style={{ fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: 0.3, fontSize: 12 }}>
           {FINAL_PHRASE}
         </Text>{" "}
-        exactly:
+        {"exactly:"}
       </Text>
       <TextInput
         style={[st.input, {
@@ -416,7 +416,7 @@ function Step5({
         <View style={[st.timerBox, { backgroundColor: colors.backgroundTertiary }]}>
           <Ionicons name="hourglass" size={15} color="#FF9F0A" />
           <Text style={[st.timerLabel, { color: colors.textMuted }]}>
-            Delete button unlocks in {countdown}s — this is your last chance to reconsider
+            {`Delete button unlocks in ${countdown}s — this is your last chance to reconsider`}
           </Text>
         </View>
       )}
@@ -447,27 +447,27 @@ function Step5({
 
 const st = StyleSheet.create({
   title:        { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 6 },
-  subtitle:     { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, marginBottom: 14 },
+  subtitle:     { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, marginBottom: 14, textAlign: "left" },
   ackRow:       { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 11, borderRadius: 11, borderWidth: 1 },
   checkbox:     { width: 19, height: 19, borderRadius: 5, borderWidth: 1.5, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
-  ackText:      { flex: 1, fontSize: 12.5, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  ackText:      { flex: 1, minWidth: 0, fontSize: 12.5, fontFamily: "Inter_400Regular", lineHeight: 17, textAlign: "left" },
   btn:          { height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 4 },
   btnText:      { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   cancelBtn:    { alignItems: "center", paddingVertical: 12 },
   cancelText:   { fontSize: 14, fontFamily: "Inter_400Regular" },
   timerBox:     { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, marginBottom: 12 },
-  timerLabel:   { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1, lineHeight: 18 },
+  timerLabel:   { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1, minWidth: 0, lineHeight: 18, textAlign: "left" },
   timerTrack:   { height: 4, borderRadius: 2, overflow: "hidden", marginTop: 6 },
   timerFill:    { height: "100%", borderRadius: 2, backgroundColor: "#FF9F0A" },
-  fieldLabel:   { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 8, lineHeight: 20 },
+  fieldLabel:   { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 8, lineHeight: 20, textAlign: "left" },
   input:        { borderRadius: 14, borderWidth: 1.5, padding: 14, fontSize: 15, fontFamily: "Inter_500Medium", marginBottom: 4 },
   mismatchText: { fontSize: 12, color: "#FF3B30", fontFamily: "Inter_400Regular", marginBottom: 6 },
   reasonRow:    { flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 11, borderWidth: 1 },
   radio:        { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   radioDot:     { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FF3B30" },
-  reasonText:   { fontSize: 13, fontFamily: "Inter_400Regular" },
+  reasonText:   { minWidth: 0, fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "left" },
   warnBox:      { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 14 },
-  warnText:     { flex: 1, fontSize: 13.5, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  warnText:     { flex: 1, minWidth: 0, fontSize: 13.5, fontFamily: "Inter_400Regular", lineHeight: 20, textAlign: "left" },
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -559,7 +559,7 @@ export default function DangerZoneScreen() {
                 </View>
                 <Text style={[s.heroTitle, { color: "#FF3B30" }]}>Account Closure</Text>
                 <Text style={[s.heroSub, { color: colors.textMuted }]}>
-                  This is a permanent and irreversible action. Your account, data, messages and purchases will be lost forever.
+                  {"This is a permanent and irreversible action. Your account, data, messages and purchases will be lost forever."}
                 </Text>
               </LinearGradient>
 
@@ -587,7 +587,7 @@ export default function DangerZoneScreen() {
               </TouchableOpacity>
 
               <Text style={[s.footerNote, { color: colors.textMuted }]}>
-                Changed your mind? Tap the back arrow above. Your account will remain active.
+                {"Changed your mind? Tap the back arrow above. Your account will remain active."}
               </Text>
             </>
           ) : (
