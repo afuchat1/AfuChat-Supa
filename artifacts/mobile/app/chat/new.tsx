@@ -388,9 +388,7 @@ export default function NewChatScreen() {
         ]}
       >
         <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={styles.backBtn} />
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          New Message
-        </Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{"New Message"}</Text>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => router.push("/app/afuqr")}
@@ -469,19 +467,13 @@ export default function NewChatScreen() {
             {searching ? (
               <View style={styles.searchingRow}>
                 <ActivityIndicator size="small" color={accent} />
-                <Text style={[styles.searchingText, { color: colors.textMuted }]}>
-                  Searching…
-                </Text>
+                <Text style={[styles.searchingText, { color: colors.textMuted }]}>{"Searching…"}</Text>
               </View>
             ) : searchResults.length === 0 ? (
               <View style={styles.emptySearch}>
                 <Ionicons name="search" size={44} color={colors.textMuted} />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  No results for "{query}"
-                </Text>
-                <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                  Try a different name or handle
-                </Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>{`No results for "${query}"`}</Text>
+                <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{"Try a different name or handle"}</Text>
               </View>
             ) : (
               <FlatList
@@ -578,12 +570,8 @@ export default function NewChatScreen() {
                     size={72}
                     color={colors.textMuted}
                   />
-                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                    No contacts yet
-                  </Text>
-                  <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                    Follow people to start chatting with them
-                  </Text>
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>{"No contacts yet"}</Text>
+                  <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{"Follow people to start chatting with them"}</Text>
                 </View>
               ) : null
             }
@@ -592,7 +580,7 @@ export default function NewChatScreen() {
                 <View style={{ paddingBottom: 40 }}>
                   <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary, marginTop: 8 }]}>
                     <Text style={[styles.sectionTitle, { color: accent }]}>
-                      INVITE FRIENDS: {phoneNotAfu.length}
+                      {"INVITE FRIENDS: "}{phoneNotAfu.length}
                     </Text>
                   </View>
                   {phoneNotAfu.map((item) => (
@@ -848,7 +836,7 @@ function ListHeader({
           ]}
         >
           <Text style={[styles.sectionTitle, { color: accent }]}>
-                    CONTACTS: {contactCount}
+            {"CONTACTS: "}{contactCount}
           </Text>
         </View>
       )}

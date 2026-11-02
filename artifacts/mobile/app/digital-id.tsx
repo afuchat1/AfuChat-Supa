@@ -232,7 +232,7 @@ export default function DigitalIdScreen() {
         <View style={[s.tip, { backgroundColor: isDark ? "#ffffff07" : "#00000007", borderColor: BRAND + "22" }]}>
           <Ionicons name="scan-circle" size={13} color={BRAND} />
           <Text style={[s.tipText, { color: colors.textMuted }]}>
-            Show your QR code so others can scan and send you payments instantly.
+            {"Show your QR code so others can scan and send you payments instantly."}
           </Text>
         </View>
       </ScrollView>
@@ -389,7 +389,7 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
       {/* HEADER */}
       <View style={s.frontHdr}>
         <AfuLogo size={28} style={{ marginRight: 8 }} />
-        <View style={{ flex: 1, marginLeft: 0 }}>
+        <View style={{ flex: 1, minWidth: 0, marginLeft: 0 }}>
           <Text style={s.frontBrand}>AFUCHAT</Text>
           <Text style={[s.frontSub, { color: colors.textMuted }]}>UNIVERSE · DIGITAL IDENTITY CARD</Text>
         </View>
@@ -415,7 +415,7 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
         </View>
 
         {/* RIGHT: info fields */}
-        <View style={{ flex: 1, gap: 7 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
           <Field label="FULL NAME" value={profile?.display_name ?? "N/A"} large />
           <Field label="MEMBER NO." value={`AFU-${padMember(memberNumber ?? 1)}`} mono accent={theme.primary} large />
           <Field label="NATIONALITY" value={profile?.country ?? "DIGITAL CITIZEN"} />
@@ -485,7 +485,7 @@ function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber,
         </View>
 
         {/* Right info panel */}
-        <View style={{ flex: 1, gap: 8 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
           <View>
           <Text style={[s.fLbl, { color: colors.textMuted }]}>AFU ID</Text>
             <Text style={[s.afuIdBig, { color: theme.primary }]} numberOfLines={1}>{afuId}</Text>
@@ -534,7 +534,7 @@ const s = StyleSheet.create({
   actionBtnDim: { opacity: 0.4 },
   actionBtnTxt: { fontSize: 13, fontWeight: "600" },
   tip: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 10, padding: 12, borderWidth: 0.5, maxWidth: 360, width: "90%" },
-  tipText: { flex: 1, fontSize: 11, lineHeight: 17 },
+  tipText: { flex: 1, minWidth: 0, fontSize: 11, lineHeight: 17, textAlign: "left" },
   captureLayer: { position: "absolute", left: 0, top: 0, opacity: 0, zIndex: -1, pointerEvents: "none" as any },
 
   /* Card shell */

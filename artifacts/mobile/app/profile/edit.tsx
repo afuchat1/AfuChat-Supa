@@ -118,7 +118,7 @@ function ProfileCompletionCard({
             color={allDone ? "#34C759" : colors.textMuted}
           />
           <Text style={[compStyles.title, { color: colors.textMuted }]}>
-            PROFILE COMPLETENESS
+            {"PROFILE COMPLETENESS"}
           </Text>
         </View>
         <Text style={[compStyles.pct, { color: allDone ? "#34C759" : accent }]}>
@@ -142,7 +142,7 @@ function ProfileCompletionCard({
       {/* Discovery nudge */}
       {!allDone && (
         <Text style={[compStyles.nudge, { color: colors.textMuted }]}>
-          Complete your profile to appear in People You May Know
+          {"Complete your profile to appear in People You May Know"}
         </Text>
       )}
 
@@ -171,7 +171,7 @@ function ProfileCompletionCard({
                 color={step.done ? (allDone ? "#34C759" : accent) : colors.textMuted}
               />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[compStyles.stepLabel, { color: step.done ? colors.text : colors.textSecondary }]}>
                 {step.label}
               </Text>
@@ -215,6 +215,7 @@ const compStyles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: 0.8,
     textTransform: "uppercase",
+    textAlign: "left",
   },
   pct: {
     fontSize: 15,
@@ -237,6 +238,7 @@ const compStyles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
     lineHeight: 17,
+    textAlign: "left",
   },
   steps: {
     marginTop: 10,
@@ -261,11 +263,13 @@ const compStyles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_500Medium",
     lineHeight: 18,
+    textAlign: "left",
   },
   stepHint: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
     marginTop: 1,
+    textAlign: "left",
   },
   doneTag: {
     fontSize: 11,
@@ -294,7 +298,7 @@ function FieldRow({ label, children, noBorder, colors }: {
   return (
     <View style={[styles.fieldRow, !noBorder && { borderBottomColor: colors.border }]}>
       <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
-      <View style={{ flex: 1 }}>{children}</View>
+      <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
     </View>
   );
 }
@@ -592,7 +596,7 @@ export default function EditProfileScreen() {
 
           {/* Center — title */}
           <Text style={[styles.navTitle, { color: colors.text }]} numberOfLines={1}>
-            Edit Profile
+            {"Edit Profile"}
           </Text>
 
           {/* Right — save */}
@@ -724,7 +728,7 @@ export default function EditProfileScreen() {
             </View>
             {nameLockedDays > 0 && (
               <Text style={[styles.handleHint, { color: colors.textMuted }]}>
-                Can change in {nameLockedDays} day{nameLockedDays !== 1 ? "s" : ""} · changes every {NAME_COOLDOWN_DAYS} days
+                {`Can change in ${nameLockedDays} day${nameLockedDays !== 1 ? "s" : ""} · changes every ${NAME_COOLDOWN_DAYS} days`}
               </Text>
             )}
           </FieldRow>
@@ -749,7 +753,7 @@ export default function EditProfileScreen() {
             </View>
             {handleLockedDays > 0 && (
               <Text style={[styles.handleHint, { color: colors.textMuted }]}>
-                Can change in {handleLockedDays} day{handleLockedDays !== 1 ? "s" : ""} · changes every {HANDLE_COOLDOWN_DAYS} days
+                {`Can change in ${handleLockedDays} day${handleLockedDays !== 1 ? "s" : ""} · changes every ${HANDLE_COOLDOWN_DAYS} days`}
               </Text>
             )}
             {handleLockedDays === 0 && handleStatus === "taken" && (
@@ -914,7 +918,7 @@ export default function EditProfileScreen() {
         {/* ── Interests ── */}
         <SectionCard title="INTERESTS" icon="compass" colors={colors}>
           <Text style={[styles.interestsHint, { color: colors.textMuted }]}>
-            Select topics you care about — they shape your feed and help others find you.
+            {"Select topics you care about — they shape your feed and help others find you."}
           </Text>
           <View style={styles.interestsGrid}>
             {INTERESTS.map(item => {
@@ -1028,6 +1032,7 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
+    minWidth: 0,
     textAlign: "center",
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
@@ -1084,9 +1089,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fieldLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 },
-  fieldInput: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  fieldInput: { minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, textAlign: "left" },
   handleAt: { fontSize: 15, fontFamily: "Inter_400Regular", marginRight: 2 },
-  handleHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
+  handleHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "left" },
 
   // Bio
   bioInput: { minHeight: 72 },
@@ -1097,7 +1102,7 @@ const styles = StyleSheet.create({
 
   // Picker button
   pickerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  pickerBtnText: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1 },
+  pickerBtnText: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, textAlign: "left" },
 
   // Gender
   genderGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
@@ -1110,7 +1115,7 @@ const styles = StyleSheet.create({
   dobPartDay: { flex: 0.8 },
   dobPartMonth: { flex: 1.45 },
   dobPartYear: { flex: 1 },
-  dobPartText: { fontSize: 14, fontFamily: "Inter_400Regular", flexShrink: 1 },
+  dobPartText: { fontSize: 14, fontFamily: "Inter_400Regular", flexShrink: 1, textAlign: "left" },
   dobPickerWrap: { borderRadius: 12, borderWidth: 0.5, overflow: "hidden", marginTop: 10 },
   dobPickerScroll: { maxHeight: 180 },
   dobPickerItem: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10 },
@@ -1118,7 +1123,7 @@ const styles = StyleSheet.create({
   clearText: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 6 },
 
   // Interests
-  interestsHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 4, paddingHorizontal: 16 },
+  interestsHint: { minWidth: 0, fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 4, paddingHorizontal: 16, textAlign: "left" },
   interestsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
   interestChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   interestChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
@@ -1132,6 +1137,6 @@ const styles = StyleSheet.create({
   modalSearchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   countryRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   countryFlag: { fontSize: 24 },
-  countryName: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  countryName: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "left" },
   clearCountryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 16 },
 });
