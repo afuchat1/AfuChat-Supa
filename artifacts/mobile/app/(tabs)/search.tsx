@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -1513,10 +1514,11 @@ export function SearchScreen({
             >
               <Ionicons name="arrow-back" size={22} color={colors.text} />
             </TouchableOpacity>
-            <View style={[ss.searchBar, { flex: 1, height: 48, marginBottom: 0, backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border, borderWidth: 0 }]}>
+            <AfuInputSurface style={[ss.searchBar, { flex: 1, height: 48, marginBottom: 0 }]}>
               <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
               <TextInput
                 ref={overlayInputRef}
+                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="Search AfuChat"
                 placeholderTextColor={colors.textMuted}
@@ -1533,7 +1535,7 @@ export function SearchScreen({
                   <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
-            </View>
+            </AfuInputSurface>
             <TouchableOpacity
               onPress={() => { closeSearchOverlay(); void openLens(); }}
               accessibilityRole="button"
@@ -3229,7 +3231,7 @@ export function SearchScreen({
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border }]}>
+          <AfuInputSurface style={ss.searchBar}>
             <TouchableOpacity
               onPress={onSubmit}
               accessibilityRole="button"
@@ -3240,6 +3242,7 @@ export function SearchScreen({
             </TouchableOpacity>
             <TextInput
               ref={inputRef}
+              appearance="embedded"
               style={[ss.searchInput, { color: colors.text }]}
               placeholder="Search…"
               placeholderTextColor={colors.textMuted}
@@ -3264,7 +3267,7 @@ export function SearchScreen({
             >
               {lensLoading ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name="scan" size={22} color={colors.text} />}
             </TouchableOpacity>
-          </View>
+          </AfuInputSurface>
         )}
         {!!lensError && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 4, paddingTop: 6 }}>

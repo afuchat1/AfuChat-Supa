@@ -30,6 +30,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { AnimatedSearchSurface } from "@/components/chat/AnimatedSearchSurface";
+import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import { Separator } from "@/components/ui/Separator";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -410,7 +411,7 @@ export default function NewChatScreen() {
       >
         <Text style={[styles.toLabel, { color: colors.textMuted }]}>To:</Text>
 
-        <View style={[styles.toPill, { backgroundColor: colors.inputBg, borderColor: colors.border, ...Platform.select({ web: { boxShadow: "0 2px 14px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.13, shadowRadius: 8, elevation: 4 } }) }]}>
+        <AfuInputSurface style={styles.toPill}>
           {/* Selected chips */}
           {selected.size > 0 && (
             <FlatList
@@ -439,6 +440,7 @@ export default function NewChatScreen() {
           <AnimatedSearchSurface style={{ flex: 1 }}>
             <TextInput
               ref={inputRef}
+              appearance="embedded"
               style={[styles.toInput, { color: colors.text }]}
               placeholder={selected.size === 0 ? "Search name or @handle…" : ""}
               placeholderTextColor={colors.textMuted}
@@ -457,7 +459,7 @@ export default function NewChatScreen() {
               </View>
             </Pressable>
           )}
-        </View>
+        </AfuInputSurface>
       </View>
 
       <View style={styles.body}>
