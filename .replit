@@ -81,7 +81,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && script -q -e -c 'unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN REPLIT_EXPO_SESSION_SECRET CI; NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel --port 8000' /dev/null"
+args = "cd artifacts/mobile && unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN REPLIT_EXPO_SESSION_SECRET CI; NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel --port 8000"
 waitForPort = 8000
 
 [[ports]]
