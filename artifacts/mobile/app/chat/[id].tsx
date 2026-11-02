@@ -36,7 +36,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
-import { CHAT_FAST_DURATION } from "@/lib/chatMotion";
+import { CHAT_FAST_DURATION, CHAT_FAST_EASING } from "@/lib/chatMotion";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import * as ImagePicker from "expo-image-picker";
@@ -2627,17 +2627,31 @@ function ChatScreen() {
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
   const [showEmojiStickerPicker, setShowEmojiStickerPicker] = useState(false);
+  const showEmojiStickerPickerRef = useRef(false);
+  const emojiPanelTranslateY = useRef(new Animated.Value(1)).current;
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const keyboardOffsetAnim = useRef(new Animated.Value(0)).current;
-  // If the system keyboard opens while the emoji/sticker picker is open, close it.
-  useEffect(() => {
-    if (showEmojiStickerPicker && keyboardHeight > 0) {
-      setShowEmojiStickerPicker(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyboardHeight]);
   const [miniProfileUserId, setMiniProfileUserId] = useState<string | null>(null);
   const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
+  const emojiKeyboardHeightRef = useRef(280);
+  const safeBottomRef = useRef(insets.bottom);
+  safeBottomRef.current = insets.bottom;
+  const keyboardOffsetAnim = useRef(new Animated.Value(insets.bottom)).current;
+  const composerBottomTargetRef = useRef(insets.bottom);
+  const setEmojiPickerVisible = useCallback((visible: boolean) => {
+    showEmojiStickerPickerRef.current = visible;
+    setShowEmojiStickerPicker(visible);
+  }, []);
+  const animateComposerBottom = useCallback((toValue: number, duration = CHAT_FAST_DURATION) => {
+    if (Math.abs(composerBottomTargetRef.current - toValue) < 1) return;
+    composerBottomTargetRef.current = toValue;
+    keyboardOffsetAnim.stopAnimation();
+    Animated.timing(keyboardOffsetAnim, {
+      toValue,
+      duration,
+      easing: CHAT_FAST_EASING,
+      useNativeDriver: false,
+    }).start();
+  }, [keyboardOffsetAnim]);
   const [iAmChatAdmin, setIAmChatAdmin] = useState(false);
   const [joiningChannel, setJoiningChannel] = useState(false);
   const [showAddMembers, setShowAddMembers] = useState(false);
@@ -2700,30 +2714,51 @@ function ChatScreen() {
 
 
   useEffect(() => {
-    // iOS: use Will events for zero-lag animation in sync with the keyboard.
-    // Android (pan mode): use Did events; animate layout changes manually.
-    const showEvent = "keyboardDidShow";
-    const hideEvent = "keyboardDidHide";
+    // iOS Will events match the native keyboard animation. Android exposes the
+    // reliable Did events; the shared height means the emoji panel won't jump.
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const onShow = Keyboard.addListener(showEvent, (e) => {
       const h = e.endCoordinates.height;
-      Animated.timing(keyboardOffsetAnim, {
-        toValue: h,
-        duration: Platform.OS === "ios" ? (e.duration ?? CHAT_FAST_DURATION) : CHAT_FAST_DURATION,
-        useNativeDriver: false,
-      }).start();
-      setKeyboardHeight(h);
-      if (h > 100) setEmojiKeyboardHeight(h);
+      if (h > 100) {
+        emojiKeyboardHeightRef.current = h;
+        setEmojiKeyboardHeight(h);
+      }
+      if (Platform.OS !== "ios") setKeyboardHeight(h);
+      animateComposerBottom(
+        Math.max(h, safeBottomRef.current),
+        Platform.OS === "ios" ? (e.duration ?? CHAT_FAST_DURATION) : CHAT_FAST_DURATION,
+      );
+      if (Platform.OS !== "ios" && showEmojiStickerPickerRef.current) {
+        setEmojiPickerVisible(false);
+      }
     });
     const onHide = Keyboard.addListener(hideEvent, (e) => {
-      Animated.timing(keyboardOffsetAnim, {
-        toValue: 0,
-        duration: Platform.OS === "ios" ? (e?.duration ?? CHAT_FAST_DURATION) : CHAT_FAST_DURATION,
-        useNativeDriver: false,
-      }).start();
-      setKeyboardHeight(0);
+      const nextBottom = showEmojiStickerPickerRef.current
+        ? emojiKeyboardHeightRef.current + safeBottomRef.current
+        : safeBottomRef.current;
+      if (Platform.OS !== "ios") setKeyboardHeight(0);
+      animateComposerBottom(
+        nextBottom,
+        Platform.OS === "ios" ? (e?.duration ?? CHAT_FAST_DURATION) : CHAT_FAST_DURATION,
+      );
     });
-    return () => { onShow.remove(); onHide.remove(); };
-  }, [keyboardOffsetAnim]);
+    const onIOSDidShow = Platform.OS === "ios"
+      ? Keyboard.addListener("keyboardDidShow", (e) => {
+          setKeyboardHeight(e.endCoordinates.height);
+          if (showEmojiStickerPickerRef.current) setEmojiPickerVisible(false);
+        })
+      : null;
+    const onIOSDidHide = Platform.OS === "ios"
+      ? Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0))
+      : null;
+    return () => {
+      onShow.remove();
+      onHide.remove();
+      onIOSDidShow?.remove();
+      onIOSDidHide?.remove();
+    };
+  }, [animateComposerBottom, setEmojiPickerVisible]);
   useEffect(() => {
     Animated.spring(chatSearchAnim, {
       toValue: searchActive ? 1 : 0,
@@ -2958,6 +2993,41 @@ function ChatScreen() {
   const [translatingLang, setTranslatingLang] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const chatInputRef = useRef<TextInput>(null);
+  const openEmojiStickerPicker = useCallback(() => {
+    if (showEmojiStickerPickerRef.current) return;
+    emojiPanelTranslateY.stopAnimation();
+    emojiPanelTranslateY.setValue(1);
+    setEmojiPickerVisible(true);
+    setShowAttachPanel(false);
+    animateComposerBottom(emojiKeyboardHeightRef.current + safeBottomRef.current);
+    Animated.timing(emojiPanelTranslateY, {
+      toValue: 0,
+      duration: CHAT_FAST_DURATION,
+      easing: CHAT_FAST_EASING,
+      useNativeDriver: true,
+    }).start();
+    chatInputRef.current?.blur();
+    Keyboard.dismiss();
+  }, [animateComposerBottom, emojiPanelTranslateY, setEmojiPickerVisible]);
+  const closeEmojiStickerPicker = useCallback((afterClose?: () => void) => {
+    if (!showEmojiStickerPickerRef.current) {
+      afterClose?.();
+      return;
+    }
+    showEmojiStickerPickerRef.current = false;
+    emojiPanelTranslateY.stopAnimation();
+    animateComposerBottom(safeBottomRef.current);
+    Animated.timing(emojiPanelTranslateY, {
+      toValue: 1,
+      duration: CHAT_FAST_DURATION,
+      easing: CHAT_FAST_EASING,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      setShowEmojiStickerPicker(false);
+      afterClose?.();
+    });
+  }, [animateComposerBottom, emojiPanelTranslateY]);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
   const selectionClearTimer = useRef<any>(null);
@@ -6606,12 +6676,12 @@ STRICT RULES:
   async function sendStickerMessage(emoji: string) {
     if (!user) return;
     if (isLocalNotes) {
-      setShowEmojiStickerPicker(false);
+      closeEmojiStickerPicker();
       await sendMessage(emoji);
       return;
     }
     if (blockMessageAction()) return;
-    setShowEmojiStickerPicker(false);
+    closeEmojiStickerPicker();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const activeChatId = await getOrCreateChatId();
@@ -7737,12 +7807,13 @@ STRICT RULES:
   // softwareKeyboardLayoutMode:"resize" (Expo Router's screen container does not
   // propagate the activity resize to absolutely-positioned children).
   // We therefore apply keyboardHeight manually on BOTH platforms, same as iOS.
-  // Custom emoji picker: use emojiKeyboardHeight (system keyboard is closed then).
+  // The custom emoji surface uses the same measured height as the native keyboard.
   // When the keyboard is open, always keep at least insets.bottom of clearance
   // so the input bar never intrudes into the gesture-navigation area on
   // devices where keyboardHeight does not already include that inset.
+  const emojiPanelHeight = emojiKeyboardHeight + insets.bottom;
   const effectiveBottom = showEmojiStickerPicker && !keyboardHeight
-    ? emojiKeyboardHeight + insets.bottom
+    ? emojiPanelHeight
     : keyboardHeight > 0
       ? Math.max(keyboardHeight, insets.bottom)
       : insets.bottom;
@@ -8090,7 +8161,7 @@ STRICT RULES:
       {/* ── Floating input container ── absolutely positioned, rises with keyboard ── */}
       <Animated.View
         style={[st.floatingInputContainer, {
-          bottom: showEmojiStickerPicker && !keyboardHeight ? effectiveBottom : keyboardOffsetAnim,
+          bottom: keyboardOffsetAnim,
           display: isNotificationsChat ? "none" : "flex",
           pointerEvents: "box-none",
         }]}
@@ -8404,13 +8475,13 @@ STRICT RULES:
                       <View style={st.inputInnerRow}>
                         <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
                           if (showEmojiStickerPicker) {
-                            setShowEmojiStickerPicker(false);
-                            setTimeout(() => chatInputRef.current?.focus(), 50);
+                            animateComposerBottom(Math.max(
+                              emojiKeyboardHeightRef.current,
+                              safeBottomRef.current,
+                            ));
+                            chatInputRef.current?.focus();
                           } else {
-                            chatInputRef.current?.blur();
-                            Keyboard.dismiss();
-                            setShowAttachPanel(false);
-                            setShowEmojiStickerPicker(true);
+                            openEmojiStickerPicker();
                           }
                         }}>
                           <Ionicons name={showEmojiStickerPicker ? "keypad" : "happy"} size={23} color={colors.textMuted} />
@@ -8437,7 +8508,12 @@ STRICT RULES:
                             }
                           }}
                           onFocus={() => {
-                            if (showEmojiStickerPicker) setShowEmojiStickerPicker(false);
+                            if (showEmojiStickerPickerRef.current) {
+                              animateComposerBottom(Math.max(
+                                emojiKeyboardHeightRef.current,
+                                safeBottomRef.current,
+                              ));
+                            }
                             if (showAttachPanel) setShowAttachPanel(false);
                           }}
                           onSelectionChange={(e) => {
@@ -8471,8 +8547,7 @@ STRICT RULES:
                             {!isAfuAiDirectChat && !isLocalNotes && (
                               <TouchableOpacity onPress={() => {
                                 Keyboard.dismiss();
-                                setShowEmojiStickerPicker(false);
-                                setShowAttachPanel((v) => !v);
+                                closeEmojiStickerPicker(() => setShowAttachPanel((v) => !v));
                               }} hitSlop={8} style={st.pillIcon}>
                                 {/* Bigger attach icon — easier to tap */}
                                 <Ionicons name={showAttachPanel ? "close" : "attach"} size={26} color={showAttachPanel ? colors.accent : colors.textMuted} style={showAttachPanel ? undefined : { transform: [{ rotate: "-45deg" }] }} />
@@ -8552,19 +8627,22 @@ STRICT RULES:
 
       </Animated.View>
 
-      {/* ── Emoji / sticker keyboard — anchored to screen bottom, same position as system keyboard ── */}
-      {/* NOTE: always keep this mounted while showEmojiStickerPicker=true so the
-          inner tab/search state is never reset by an unmount/remount cycle.
-          Closing on unexpected keyboard events is handled by the useEffect above. */}
+      {/* The system keyboard naturally covers this bottom-anchored panel. Keep it
+          mounted until keyboardDidShow so switching back does not flash empty space. */}
       {showEmojiStickerPicker && (
-        <View
+        <Animated.View
           style={{
             position: "absolute",
             left: 0,
             right: 0,
-            // Float above system keyboard when search is open; sit at bottom otherwise.
-            bottom: keyboardHeight,
-            height: emojiKeyboardHeight + (keyboardHeight ? 0 : insets.bottom),
+            bottom: 0,
+            height: emojiPanelHeight,
+            transform: [{
+              translateY: emojiPanelTranslateY.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, emojiPanelHeight],
+              }),
+            }],
             backgroundColor: colors.surface,
             zIndex: 50,
           }}
@@ -8574,7 +8652,7 @@ STRICT RULES:
             onEmojiSelected={(emoji) => setInput((prev) => prev + emoji)}
             onSendSticker={sendStickerMessage}
             onSendGif={async (url) => {
-              setShowEmojiStickerPicker(false);
+              closeEmojiStickerPicker();
               if (!user) return;
               if (isLocalNotes) {
                 showAlert("My Notes", "GIFs are available only in online chats.");
@@ -8614,12 +8692,12 @@ STRICT RULES:
                 return prev.replace(/[\s\S]$/u, "");
               }
             })}
-             onClose={() => { setShowEmojiStickerPicker(false); }}
+             onClose={closeEmojiStickerPicker}
           />
           {insets.bottom > 0 && (
             <View style={{ height: insets.bottom, backgroundColor: colors.surface }} />
           )}
-        </View>
+        </Animated.View>
       )}
 
       {/* ── Attachment actions — separate surface above the composer ─────── */}
