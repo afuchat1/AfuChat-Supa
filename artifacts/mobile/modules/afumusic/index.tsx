@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,11 +12,15 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "@/lib/alert";
 import { safeRouter } from "@/lib/navUtils";
+import { prepareMediaForUpload } from "@/lib/mediaUpload";
+import type { MusicTrackInput } from "@/lib/afuMusic";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -38,6 +42,8 @@ export type AfuMusicTrack = {
   isCached?: boolean;
   isFeatured?: boolean;
   audioUrl?: string | null;
+  coverUrl?: string;
+  coverStoragePath?: string;
   creatorId?: string;
   storagePath?: string;
   mimeType?: string;
@@ -55,15 +61,8 @@ export type AfuMusicCallbacks = {
   onListOffline?: () => Promise<AfuMusicTrack[]>;
   onResolveAudio?: (track: AfuMusicTrack) => Promise<string | null>;
   onPlay?: (track: AfuMusicTrack) => void | Promise<void>;
-  onUpload?: (input: {
-    title: string;
-    genre: string;
-    price: number;
-    fileUri: string;
-    fileName: string;
-    mimeType?: string;
-    fileSize?: number;
-  }) => Promise<AfuMusicTrack | void>;
+  onUpload?: (input: MusicTrackInput & { fileUri: string; fileName: string }) => Promise<AfuMusicTrack>;
+  onUpdateUpload?: (track: AfuMusicTrack, input: MusicTrackInput) => Promise<AfuMusicTrack>;
   onDeleteUpload?: (track: AfuMusicTrack) => Promise<void>;
   onOpenWallet?: () => void;
   onOpenPlans?: () => void;
@@ -121,9 +120,18 @@ function TrackArt({
         },
       ]}
     >
-      <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.2) }]}>
-      {initials(track.title || track.artist)}
-      </Text>
+      {track.coverUrl ? (
+        <Image
+          source={{ uri: track.coverUrl }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          transition={120}
+        />
+      ) : (
+        <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.2) }]}>
+          {initials(track.title || track.artist)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -136,6 +144,7 @@ function TrackRow({
   onOpen,
   onPlay,
   onCache,
+  onEdit,
   onDelete,
   canCache = true,
 }: {
@@ -146,6 +155,7 @@ function TrackRow({
   onOpen: () => void;
   onPlay: () => void;
   onCache: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
   canCache?: boolean;
 }) {
@@ -162,6 +172,20 @@ function TrackRow({
         {managed ? (
           <View style={styles.managedActions}>
             <Pressable
+              testID={`music-track-edit-${track.id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${track.title}`}
+              onPress={(event) => {
+                event.stopPropagation();
+                onEdit?.();
+              }}
+              hitSlop={8}
+              style={styles.removeTrackButton}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+            </Pressable>
+            <Pressable
+              testID={`music-track-play-${track.id}`}
               accessibilityLabel={`Play ${track.title}`}
               onPress={(event) => {
                 event.stopPropagation();
@@ -173,6 +197,7 @@ function TrackRow({
               <Ionicons name="play" size={13} color={PAPER} />
             </Pressable>
             <Pressable
+              testID={`music-track-remove-${track.id}`}
               onPress={(event) => {
                 event.stopPropagation();
                 onDelete?.();
@@ -248,6 +273,7 @@ export default function AfuMusicApp({
   onResolveAudio,
   onPlay,
   onUpload,
+  onUpdateUpload,
   onDeleteUpload,
   onOpenWallet,
   onOpenPlans,
@@ -278,11 +304,14 @@ export default function AfuMusicApp({
   const [purchasing, setPurchasing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editingTrack, setEditingTrack] = useState<AfuMusicTrack | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadGenre, setUploadGenre] = useState("Ambient");
   const [uploadMode, setUploadMode] = useState<"free" | "paid">("free");
   const [uploadPrice, setUploadPrice] = useState("20");
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
+  const [coverFile, setCoverFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const searchRequestRef = useRef(0);
 
   const loadTracks = useCallback(async () => {
     setLoadError(false);
@@ -325,6 +354,28 @@ export default function AfuMusicApp({
     }
   }, [onListOffline]);
 
+  const loadOfflineTracks = useCallback(async () => {
+    setLoadError(false);
+    setLoading(true);
+    try {
+      if (!onListOffline) throw new Error("AfuMusic downloads are unavailable.");
+      const result = await onListOffline();
+      setOfflineTracks(result);
+      setCachedIds(result.map((track) => track.id));
+      setOwnedIds((ids) => Array.from(new Set([...ids, ...result.map((track) => track.id)])));
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [onListOffline]);
+
+  const loadCurrentSection = useCallback(async () => {
+    if (section === "studio") return loadStudioTracks();
+    if (section === "offline") return loadOfflineTracks();
+    return loadTracks();
+  }, [loadOfflineTracks, loadStudioTracks, loadTracks, section]);
+
   useEffect(() => {
     const next = ["discover", "library", "offline", "studio"].includes(initialSection)
       ? initialSection as MusicSection
@@ -333,21 +384,20 @@ export default function AfuMusicApp({
   }, [initialSection]);
 
   useEffect(() => {
-    if (section === "studio") void loadStudioTracks();
-    else void loadTracks();
-    void syncOffline();
-  }, [loadStudioTracks, loadTracks, section, syncOffline]);
+    searchRequestRef.current += 1;
+    void loadCurrentSection();
+    if (section !== "offline") void syncOffline();
+  }, [loadCurrentSection, section, syncOffline]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      if (section === "studio") await loadStudioTracks();
-      else await loadTracks();
-      await syncOffline();
+      await loadCurrentSection();
+      if (section !== "offline") await syncOffline();
     } finally {
       setRefreshing(false);
     }
-  }, [loadStudioTracks, loadTracks, section, syncOffline]);
+  }, [loadCurrentSection, section, syncOffline]);
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -375,15 +425,25 @@ export default function AfuMusicApp({
 
   const handleSearch = useCallback(async (value: string) => {
     setQuery(value);
-    if (!onSearch || !value.trim()) return;
+    const requestId = ++searchRequestRef.current;
+    if (section !== "discover") return;
+    setLoadError(false);
+    setLoading(true);
     try {
-      const result = await onSearch(value.trim());
+      const normalized = value.trim();
+      const result = normalized
+        ? await onSearch?.(normalized)
+        : await onBrowse?.();
+      if (!result) throw new Error("AfuMusic search is unavailable.");
+      if (requestId !== searchRequestRef.current) return;
       setTracks(result);
-        setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
-    } catch {
-      setLoadError(true);
+      setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
+    } catch (error) {
+      if (requestId === searchRequestRef.current) setLoadError(true);
+    } finally {
+      if (requestId === searchRequestRef.current) setLoading(false);
     }
-  }, [onSearch]);
+  }, [onBrowse, onSearch, section]);
 
   const openTrack = useCallback(async (track: AfuMusicTrack) => {
     const owned = ownedIds.includes(track.id) || track.isOwned || track.price === 0;
@@ -449,11 +509,15 @@ export default function AfuMusicApp({
         style: "destructive",
         onPress: async () => {
           try {
-            await onDeleteUpload?.(track);
+            if (!onDeleteUpload) throw new Error("Track removal is unavailable.");
+            await onDeleteUpload(track);
             setTracks((current) => current.filter((item) => item.id !== track.id));
             setStudioTracks((current) => current.filter((item) => item.id !== track.id));
-          } catch {
-            showAlert("Could not remove track", "Try again in a moment.");
+          } catch (error) {
+            showAlert(
+              "Could not remove track",
+              error instanceof Error ? error.message : "Try again in a moment.",
+            );
           }
         },
       },
