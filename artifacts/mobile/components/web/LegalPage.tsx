@@ -378,7 +378,7 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
         <View style={[styles.notice, { backgroundColor: colors.surface }]}>
           <Ionicons name="information-circle-outline" size={20} color={BRAND} />
           <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-            Review this document here in AfuChat. Related account and privacy controls are available in Settings.
+            {"Review this document here in AfuChat. Related account and privacy controls are available in Settings."}
           </Text>
         </View>
         {page.sections.map((section) => (
@@ -472,6 +472,8 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: -1.8,
     marginBottom: 16,
+    minWidth: 0,
+    textAlign: "left",
   },
   titleCompact: { fontSize: 36, lineHeight: 43, letterSpacing: -1.2 },
   intro: {
@@ -480,12 +482,16 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     fontFamily: "Inter_400Regular",
     maxWidth: 720,
+    minWidth: 0,
+    textAlign: "left",
   },
   updated: {
     color: "rgba(255,255,255,0.42)",
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     marginTop: 22,
+    minWidth: 0,
+    textAlign: "left",
   },
   content: {
     width: "100%" as any,
@@ -506,10 +512,12 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     flex: 1,
+    minWidth: 0,
     color: "#35516e",
     fontSize: 13,
     lineHeight: 20,
     fontFamily: "Inter_500Medium",
+    textAlign: "left",
   },
   section: { paddingVertical: 20, borderBottomWidth: 1 },
   sectionTitle: {
@@ -518,12 +526,16 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.35,
     marginBottom: 12,
+    minWidth: 0,
+    textAlign: "left",
   },
   paragraph: {
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
     marginBottom: 11,
+    minWidth: 0,
+    textAlign: "left",
   },
   emailLink: {
     textDecorationLine: "underline",
@@ -539,9 +551,11 @@ const styles = StyleSheet.create({
   },
   bulletText: {
     flex: 1,
+    minWidth: 0,
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
+    textAlign: "left",
   },
   footer: {
     alignItems: "center",
