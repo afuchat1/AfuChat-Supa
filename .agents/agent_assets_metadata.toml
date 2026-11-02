@@ -159,3 +159,17 @@ mtime_ms = 1793602259279
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:d8871096-8607-4c87-ad64-5a64c5108bd2/94ba286e-9e04-4698-b32e-eeca3b54ff07/7a629202-c5c5-4b98-a4f0-e3abbc578bfc"
 storage_version_token = "1793602265540900"
 content_type = "image/png"
+
+[[outputs]]
+id = "YOposftFvF8pnZz8a0iFi"
+uri = "file://generated-artifacts/expo-go-qr.png"
+type = "image"
+title = "Expo Go QR code"
+description = "Scan this QR code in Expo Go while the Expo Go workflow remains running."
+logical_id = "7268245b-4119-435c-8e4b-8bf24ffbe01a"
+content_hash = "sha256:b91ac60c9b90a30ab1915433ff116faa655145f5c96bf67162418eac367ba990"
+size = 5598
+mtime_ms = 1793630002378
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:0a02b04d-f6ff-404f-bb55-a71ed61a0c4a/7268245b-4119-435c-8e4b-8bf24ffbe01a/b848f3ad-4a78-493c-9f54-840b8a7d56d3"
+storage_version_token = "1793630007517993"
+content_type = "image/png"
