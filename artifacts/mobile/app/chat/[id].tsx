@@ -8616,6 +8616,19 @@ STRICT RULES:
 
                 {/* ── Mic / Send button stays inside the shared glass bar ── */}
                 <View style={st.outerActionBtn}>
+                  {input.trim().length > 50 && composerInputLines > 1 && !editingMessage && !attachmentPreview && selectedImages.length === 0 && !isRecording && (
+                    <TouchableOpacity
+                      onPress={() => { Keyboard.dismiss(); setShowAiEditor(true); }}
+                      hitSlop={8}
+                      style={st.aiEditorIcon}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open AI message editor"
+                      accessibilityHint="Opens AI tools for the current draft"
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="sparkles" size={21} color={colors.accent} />
+                    </TouchableOpacity>
+                  )}
                   {isRecording && !recLocked && (
                     <View style={st.recLockHint}>
                       <Ionicons name="chevron-up" size={14} color={colors.textMuted} />
@@ -8665,19 +8678,6 @@ STRICT RULES:
                   )}
                 </View>
               </AfuInputSurface>
-                {input.trim().length > 50 && composerInputLines > 1 && !editingMessage && !attachmentPreview && selectedImages.length === 0 && (
-                  <TouchableOpacity
-                    onPress={() => { Keyboard.dismiss(); setShowAiEditor(true); }}
-                    hitSlop={8}
-                    style={[st.aiAboveSendBtn, { backgroundColor: colors.accent }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Open AI message editor"
-                    accessibilityHint="Opens AI tools for the current draft"
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="sparkles" size={21} color="#fff" />
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
           </>
@@ -10755,7 +10755,7 @@ const st = StyleSheet.create({
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, paddingTop: 6, paddingBottom: 6, minHeight: 24, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sendBtnCol: { alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
-  aiAboveSendBtn: { position: "absolute", right: 5, bottom: 54, width: 40, height: 40, borderRadius: 20, zIndex: 5, alignItems: "center", justifyContent: "center", elevation: 5, shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  aiEditorIcon: { width: 44, height: 36, marginBottom: 4, alignItems: "center", justifyContent: "center" },
   recHoldGlass: { minHeight: 44 },
   recWaveRow: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 8 },
   recCancelHint: { flexDirection: "row", alignItems: "center", gap: 2, paddingRight: 6 },
