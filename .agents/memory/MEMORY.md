@@ -4,6 +4,7 @@
 - [AfuChat brand colors](afuchat-brand-colors.md) — Keep the original AfuChat palette; the primary brand blue is #1018D8.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
 - [Mention display policy](mention-rendering-policy.md) — Show mentions as avatar plus `@handle`, aligned on one centered line.
+- [React Native text indentation](react-native-text-indentation.md) — Raw multiline JSX text can preserve source indentation; use explicit string expressions where copy must align with row content.
 - [Chat sender identity](chat-message-identity.md) — Preserve received sender names and avatars across realtime merges, SQLite cache, and reloads.
 - [Find People recommendations](find-people-recommendations.md) — Prefer unseen people on refresh, rank shared interests and mutual connections, and keep the layout free of suggestion labels/icons.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Use the shared floating nav where needed; AfuSearch omits its app-shell bottom bar.

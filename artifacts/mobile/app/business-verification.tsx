@@ -705,7 +705,7 @@ const st = StyleSheet.create({
   sectionMicro: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.9, marginBottom: 2 },
   criteriaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   criteriaIconWrap: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  criteriaText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular" },
+  criteriaText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular", textAlign: "left" },
   groupLabel: { fontSize: 15, fontFamily: "Inter_700Bold" },
   optionalTag: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#888" },
   fieldWrap: { borderRadius: 14, borderWidth: 0.5, paddingHorizontal: 14, paddingVertical: 12 },

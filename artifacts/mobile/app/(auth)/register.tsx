@@ -487,13 +487,13 @@ export default function SignUpScreen() {
             <View style={{ gap: 14, marginTop: 20, marginBottom: 24 }}>
               <Checkbox checked={ageOk} onToggle={() => setAgeOk(p => !p)} isDark={isDark} accent={accent}>
                 <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 19, flex: 1, minWidth: 0, textAlign: "left" }}>
-                  I confirm I am{" "}
+                  {"I confirm I am "}
                   <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>13 years of age or older</Text>
                 </Text>
               </Checkbox>
               <Checkbox checked={termsOk} onToggle={() => setTermsOk(p => !p)} isDark={isDark} accent={accent}>
                 <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.textSecondary, lineHeight: 19, flex: 1, minWidth: 0, textAlign: "left" }}>
-                  I agree to the{" "}
+                  {"I agree to the "}
                   <Text style={{ color: accent, fontFamily: "Inter_500Medium" }} onPress={() => Linking.openURL("https://afuchat.com/terms").catch(() => {})}>Terms of Service</Text>
                   {" "}and{" "}
                   <Text style={{ color: accent, fontFamily: "Inter_500Medium" }} onPress={() => Linking.openURL("https://afuchat.com/privacy").catch(() => {})}>Privacy Policy</Text>

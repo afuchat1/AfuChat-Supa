@@ -490,7 +490,7 @@ export default function FileManagerScreen() {
           >
             <Ionicons name="share-outline" size={19} color={colors.accent} />
             <Text style={[styles.sendBarText, { color: colors.accent }]}>
-              Share {selectedFiles.length > 1 ? `${selectedFiles.length} files` : "file"}
+              {"Share "}{selectedFiles.length > 1 ? `${selectedFiles.length} files` : "file"}
             </Text>
           </Pressable>
           <Pressable
@@ -594,9 +594,9 @@ const styles = StyleSheet.create({
   fileRow: { minHeight: 72, marginHorizontal: 12, marginBottom: 8, paddingHorizontal: 14, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 13 },
   thumbnail: { width: 48, height: 48, borderRadius: 13, backgroundColor: "rgba(128,128,128,0.15)" },
   fileIcon: { width: 43, height: 43, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  fileCopy: { flex: 1 },
-  fileName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  fileMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
+  fileCopy: { flex: 1, minWidth: 0 },
+  fileName: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "left" },
+  fileMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "left" },
   gridRow: { gap: 2 },
   gridTile: { flex: 1, aspectRatio: 1, margin: 1, position: "relative", overflow: "hidden", borderRadius: 4 },
   gridImage: { width: "100%", height: "100%" },
