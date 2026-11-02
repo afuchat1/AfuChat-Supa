@@ -9,6 +9,7 @@ import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 
 type AfuInputSurfaceProps = ViewProps & {
   variant?: "navigation" | "input";
+  cornerRadius?: number;
   contentStyle?: StyleProp<ViewStyle>;
 };
 
@@ -70,6 +71,7 @@ export function AfuInputSurface({
   children,
   onLayout,
   variant = "input",
+  cornerRadius,
   contentStyle,
   ...viewProps
 }: AfuInputSurfaceProps) {
@@ -84,6 +86,7 @@ export function AfuInputSurface({
       {...viewProps}
       fill={outer.height !== undefined}
       variant={variant}
+      cornerRadius={cornerRadius}
       style={[styles.surface, outer, { minHeight }]}
       contentStyle={[styles.content, content, contentStyle]}
       onLayout={onLayout}

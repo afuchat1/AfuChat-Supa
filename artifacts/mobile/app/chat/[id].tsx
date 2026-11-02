@@ -2495,6 +2495,8 @@ function ChatScreen() {
     });
   }, [messages.length]);
   const [input, setInput] = useState("");
+  const [composerInputLines, setComposerInputLines] = useState(1);
+  const composerInputHeight = 32 + (composerInputLines - 1) * 20;
   // Show skeleton immediately on open; setLoading(false) is called once messages are ready.
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -8219,19 +8221,6 @@ STRICT RULES:
           </ScrollView>
         )}
 
-        {replyTo && !editingMessage && (
-          <View style={[st.replyBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <View style={[st.replyBarAccent, { backgroundColor: BRAND }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={[st.replyBannerName, { color: BRAND }]}>{replyTo.sender?.display_name || "Message"}</Text>
-              <Text style={[st.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>{stripMdForPreview(replyTo.encrypted_content ?? "")}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={8}>
-              <Ionicons name="close" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        )}
-
         {(attachmentPreview || selectedImages.length > 0) && (
           <View style={[st.attachPreviewBar, {
             // Keep the attachment section opaque; only its controls adapt
@@ -8458,13 +8447,49 @@ STRICT RULES:
               {/* One shared glass bar contains the message field and its primary action. */}
               <AfuInputSurface
                 variant="navigation"
+                cornerRadius={composerInputLines > 1 || (!!replyTo && !editingMessage) ? 24 : 999}
                 style={[
                   st.inputComposerSurface,
                   isRecording && !recLocked ? st.recHoldGlass : undefined,
                 ]}
-                contentStyle={st.inputRowOuter}
+                contentStyle={[
+                  st.inputRowOuter,
+                  replyTo && !editingMessage ? st.inputRowWithReply : undefined,
+                  { alignItems: replyTo && !editingMessage ? "stretch" : "flex-end" },
+                ]}
               >
-                <View style={[st.inputBarRow, { flex: 1 }]}>
+                {replyTo && !editingMessage && (
+                  <View style={st.replyComposerPreview}>
+                    <View style={st.replyComposerIcon}>
+                      <Ionicons name="arrow-undo" size={20} color={colors.accent} />
+                    </View>
+                    <View style={st.replyComposerText}>
+                      <Text
+                        style={[st.replyComposerTitle, { color: colors.accent }]}
+                        numberOfLines={1}
+                      >
+                        Reply to {replyTo.sender?.display_name || "Message"}
+                      </Text>
+                      <Text
+                        style={[st.replyComposerSnippet, { color: colors.textSecondary }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {stripMdForPreview(replyTo.encrypted_content ?? "")}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setReplyTo(null)}
+                      hitSlop={8}
+                      style={st.replyComposerClose}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel reply"
+                    >
+                      <Ionicons name="close" size={20} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <View style={[st.inputBarRow, !(replyTo && !editingMessage) ? { flex: 1 } : undefined]}>
                     {isRecording && !recLocked ? (
                       <>
                         <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recTrashBtn}>
@@ -8505,12 +8530,22 @@ STRICT RULES:
                         <AfuTextInput
                           appearance="embedded"
                           ref={chatInputRef}
-                          style={[st.input, { color: colors.text }]}
+                          style={[
+                            st.input,
+                            {
+                              color: colors.text,
+                              height: composerInputHeight,
+                              minHeight: composerInputHeight,
+                              maxHeight: composerInputHeight,
+                              textAlignVertical: composerInputLines > 1 ? "top" : "center",
+                            },
+                          ]}
                           placeholder="Message"
                           placeholderTextColor={colors.textMuted}
                           value={input}
                           onChangeText={(t) => {
                             setInput(t);
+                            if (!t) setComposerInputLines(1);
                             handleTyping();
                             saveDraft(t);
                             if (advancedFeatures.user_tagging) {
@@ -8523,6 +8558,14 @@ STRICT RULES:
                                 setMentionSuggestions([]);
                               }
                             }
+                          }}
+                          onContentSizeChange={(event) => {
+                            const contentHeight = event.nativeEvent.contentSize.height;
+                            const measuredLines = Math.ceil(Math.max(0, contentHeight - 12) / 20);
+                            const nextLines = Math.max(1, Math.min(3, measuredLines));
+                            setComposerInputLines((current) =>
+                              current === nextLines ? current : nextLines,
+                            );
                           }}
                           onFocus={() => {
                             if (showAttachPanel) setShowAttachPanel(false);
@@ -8538,6 +8581,7 @@ STRICT RULES:
                             selectionClearTimer.current = setTimeout(() => setInputSelection(sel), 150);
                           }}
                           multiline
+                          scrollEnabled={composerInputLines === 3}
                           maxLength={4000}
                           returnKeyType={chatPrefs.enter_to_send ? "send" : "default"}
                           blurOnSubmit={false}
@@ -8584,10 +8628,9 @@ STRICT RULES:
                           <TouchableOpacity
                             onPress={() => { Keyboard.dismiss(); setShowAiEditor(true); }}
                             hitSlop={8}
-                            style={[st.aiAboveSendBtn, { backgroundColor: BRAND + "18", borderColor: BRAND + "50" }]}
+                            style={st.aiAboveSendBtn}
                           >
-                            <Text style={{ color: BRAND, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5 }}>Ai</Text>
-                            <Text style={[st.wordCountLabel, { color: BRAND }]}>{input.trim().split(/\s+/).filter(Boolean).length}w</Text>
+                            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.3 }}>AI</Text>
                           </TouchableOpacity>
                         ) : <View />}
                       <TouchableOpacity
@@ -10500,6 +10543,12 @@ const st = StyleSheet.create({
   replyBarAccent: { width: 3, height: 32, borderRadius: 2 },
   replyBannerName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   replyBannerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  replyComposerPreview: { flexDirection: "row", alignItems: "center", minHeight: 44, paddingHorizontal: 2, paddingVertical: 2 },
+  replyComposerIcon: { width: 52, height: 40, alignItems: "center", justifyContent: "center" },
+  replyComposerText: { flex: 1, minWidth: 0, gap: 1 },
+  replyComposerTitle: { fontSize: 14, lineHeight: 18, fontFamily: "Inter_600SemiBold" },
+  replyComposerSnippet: { fontSize: 13, lineHeight: 17, fontFamily: "Inter_400Regular" },
+  replyComposerClose: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
 
   attachPreviewBar: {
     flexDirection: "row",
@@ -10677,7 +10726,7 @@ const st = StyleSheet.create({
   inputComposerSurface: { flex: 1, alignSelf: "stretch" },
   inputBarRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     paddingHorizontal: 5,
     paddingVertical: 2,
     gap: 4,
@@ -10685,28 +10734,27 @@ const st = StyleSheet.create({
   inputInnerRow: {
     flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    minHeight: 40,
-    ...Platform.select({ web: { minHeight: 34 } }),
+    alignItems: "flex-end",
+    minHeight: 44,
   },
   emojiToggleButton: {
     width: 36,
-    height: 36,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  pillIcon: { paddingHorizontal: 5 },
+  pillIcon: { height: 44, paddingHorizontal: 5, alignItems: "center", justifyContent: "center" },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, paddingTop: 6, paddingBottom: 6, minHeight: 24, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  sendBtnCol: { alignSelf: "stretch", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 },
-  aiAboveSendBtn: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center", minWidth: 32, gap: 1 },
-  wordCountLabel: { fontSize: 8, fontFamily: "Inter_600SemiBold", opacity: 0.75 },
+  sendBtnCol: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 4 },
+  aiAboveSendBtn: { paddingHorizontal: 8, paddingVertical: 6, alignItems: "center", justifyContent: "center" },
   recHoldGlass: { minHeight: 44 },
   recWaveRow: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 8 },
   recCancelHint: { flexDirection: "row", alignItems: "center", gap: 2, paddingRight: 6 },
   recTrashBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,59,48,0.1)", alignItems: "center", justifyContent: "center", marginLeft: 4 },
   recSlideText: { fontSize: 11, fontFamily: "Inter_400Regular" },
   inputRowOuter: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 0, paddingVertical: 0 },
+  inputRowWithReply: { flexDirection: "column", alignItems: "stretch", gap: 2, paddingHorizontal: 8, paddingVertical: 4 },
   outerActionBtn: { alignItems: "center", justifyContent: "center" },
   recMicWrap: { alignItems: "center", justifyContent: "center" },
   recLockHint: { alignItems: "center", marginBottom: 4, opacity: 0.55 },

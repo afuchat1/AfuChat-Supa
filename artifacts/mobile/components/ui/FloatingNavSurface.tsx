@@ -19,6 +19,7 @@ type FloatingGlassSurfaceProps = Omit<ViewProps, "children" | "style" | "onLayou
   children?: React.ReactNode;
   fill?: boolean;
   variant?: "navigation" | "input";
+  cornerRadius?: number;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   onLayout?: ViewProps["onLayout"];
@@ -28,6 +29,7 @@ export function FloatingGlassSurface({
   children,
   fill = true,
   variant = "navigation",
+  cornerRadius,
   style,
   contentStyle,
   onLayout,
@@ -54,6 +56,7 @@ export function FloatingGlassSurface({
       style={[
         styles.glassSurface,
         style,
+        cornerRadius !== undefined ? { borderRadius: cornerRadius } : undefined,
         {
           backgroundColor: surfaceBackground,
           borderColor: surfaceBorder,
@@ -62,7 +65,12 @@ export function FloatingGlassSurface({
         },
       ]}
     >
-      <View style={fill ? styles.glassClip : styles.glassClipAuto}>
+      <View
+        style={[
+          fill ? styles.glassClip : styles.glassClipAuto,
+          cornerRadius !== undefined ? { borderRadius: cornerRadius } : undefined,
+        ]}
+      >
         {(variant === "input" || !isDark) && (
           <>
             <BlurView
