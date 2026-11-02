@@ -90,7 +90,6 @@ type TierCfg = {
   color: string;
   emoji: string;
   badge: string;
-  tagline: string;
   sections: { icon: string; title: string; items: string[] }[];
 };
 
@@ -99,7 +98,6 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     color: "#8D96A8",
     emoji: "○",
     badge: "FREE",
-    tagline: "Core AfuChat access",
     sections: [
       { icon: "sparkles", title: "AfuAI", items: ["10 AI messages per day"] },
       { icon: "people", title: "Social", items: ["Buy usernames and music"] },
@@ -110,7 +108,6 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     color: "#8E9BB5",
     emoji: "✓",
     badge: "STANDARD",
-    tagline: "Verified access for creators",
     sections: [
       {
         icon: "checkmark-circle-outline",
@@ -157,7 +154,6 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     color: "#C8923A",
     emoji: "★",
     badge: "PRO",
-    tagline: "Power tools for creators",
     sections: [
       {
         icon: "checkmark-circle-outline",
@@ -212,7 +208,6 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     color: "#1018D8",
     emoji: "💎",
     badge: "PLATINUM",
-    tagline: "Unlimited, elite, no limits",
     sections: [
       {
         icon: "checkmark-circle-outline",
@@ -504,15 +499,6 @@ export default function PremiumScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.pageContent, isWide && s.pageContentWide]}>
-            <View style={[s.loadingHero, { backgroundColor: cardBg, borderColor: sep }]}>
-              <View style={[s.loadingMark, { backgroundColor: colors.accent + "18" }]}>
-                <Ionicons name="diamond" size={24} color={colors.accent} />
-              </View>
-              <Text style={[s.heroTitle, { color: colors.text }]}>AfuChat Premium</Text>
-              <Text style={[s.heroSub, { color: colors.textSecondary }]}>
-                {"More tools and creator perks for the way you use AfuChat."}
-              </Text>
-            </View>
             <View style={[s.loadingCard, { backgroundColor: cardBg, borderColor: sep }]}>
               <View style={s.loadingHeader}>
                 <ActivityIndicator color={colors.accent} size="small" />
@@ -550,10 +536,7 @@ export default function PremiumScreen() {
               <View style={[s.errorIcon, { backgroundColor: colors.errorSubtle }]}>
                 <Ionicons name="cloud-offline-outline" size={22} color={colors.error} />
               </View>
-              <Text style={[s.errorTitle, { color: colors.text }]}>Plans didn’t load</Text>
-              <Text style={[s.errorBody, { color: colors.textSecondary }]}>
-                {"Check your connection and try again. Your account and wallet haven’t been changed."}
-              </Text>
+              <Text style={[s.errorTitle, { color: colors.text }]}>Plans unavailable</Text>
               <TouchableOpacity
                 style={[s.retryButton, { backgroundColor: colors.accent }]}
                 onPress={loadPlans}
@@ -563,40 +546,28 @@ export default function PremiumScreen() {
                 testID="premium-retry-plans"
               >
                 <Ionicons name="refresh" size={16} color={colors.bubbleText} />
-                <Text style={s.retryButtonText}>Try again</Text>
+                <Text style={s.retryButtonText}>Retry</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <>
-
-        {/* Hero */}
-        <View style={[s.hero, { backgroundColor: cardBg, borderColor: sep }]}>
-          <View style={s.heroHeading}>
-            <View style={[s.tierPill, { backgroundColor: tierColor + "18", borderColor: tierColor + "44" }]}>
-              <Text style={s.tierPillEmoji}>{cfg?.emoji}</Text>
-              <Text style={[s.tierPillText, { color: colors.textSecondary }]}>{cfg?.badge}</Text>
-            </View>
-            <Text style={[s.heroTitle, { color: colors.text }]}>AfuChat Premium</Text>
-            <Text style={[s.heroSub, { color: colors.textSecondary }]}>{cfg?.tagline}</Text>
+        {isPremium && subscription && (
+          <View style={[s.activeBar, { backgroundColor: tierColor + "12", borderColor: tierColor + "33" }]}>
+            <Ionicons name="shield-checkmark" size={14} color={tierColor} />
+            <Text style={[s.activeBarTxt, { color: colors.text }]}>
+              {TIER_CONFIG[subscription.plan_tier]?.badge ?? subscription.plan_name} · {daysLeft}d
+            </Text>
+            <TouchableOpacity
+              onPress={handleCancel}
+              disabled={cancelling}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel subscription"
+            >
+              <Text style={[s.cancelTxt, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-          {isPremium && subscription && (
-            <View style={[s.activeBar, { backgroundColor: tierColor + "12", borderColor: tierColor + "33" }]}>
-              <Ionicons name="shield-checkmark" size={14} color={tierColor} />
-              <Text style={[s.activeBarTxt, { color: colors.text }]}>
-                {TIER_CONFIG[subscription.plan_tier]?.badge ?? subscription.plan_name} · {daysLeft} days remaining
-              </Text>
-              <TouchableOpacity
-                onPress={handleCancel}
-                disabled={cancelling}
-                hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel subscription"
-              >
-                <Text style={[s.cancelTxt, { color: colors.textSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+        )}
 
         {/* Tier tabs */}
         <View style={[s.tabs, { backgroundColor: cardBg, borderColor: sep }]}>
@@ -652,7 +623,6 @@ export default function PremiumScreen() {
                     <Text style={[s.localTxt, { color: colors.textSecondary }]}> · ≈ {localPrice}</Text>
                   ) : null}
                 </View>
-                <Text style={[s.rateNote, { color: colors.textMuted }]}>1 AC = $0.01</Text>
               </View>
               {["silver", "gold", "platinum"].includes(activeTier) && (
                 <View style={[s.verBadge, { backgroundColor: tierColor + "15", borderColor: tierColor + "40" }]}>
@@ -746,7 +716,7 @@ export default function PremiumScreen() {
           <View style={[s.currentBar, { backgroundColor: tierColor + "14", borderColor: tierColor + "33" }]}>
             <Text style={s.currentBarEmoji}>{cfg?.emoji}</Text>
             <Text style={[s.currentBarTxt, { color: colors.text }]}>
-              {activeTier === "free" ? "You are on the Free plan" : `${cfg?.badge} · ${daysLeft} days remaining`}
+              {`Current plan · ${cfg?.badge}`}
             </Text>
           </View>
         ) : activeTier === "free" && isPremium ? (
@@ -785,15 +755,13 @@ export default function PremiumScreen() {
           </TouchableOpacity>
         ) : (
           <View style={[s.currentBar, { backgroundColor: cardBg, borderColor: sep }]}>
-            <Text style={[s.currentBarTxt, { color: colors.textMuted }]}>This plan is not available for purchase right now.</Text>
+            <Text style={[s.currentBarTxt, { color: colors.textMuted }]}>Unavailable for purchase</Text>
           </View>
         )}
 
-        {activeTier !== "free" && selectedPlan && !isCurrentPlan && (
+        {isSwitching && activeTier !== "free" && selectedPlan && (
           <Text style={[s.legal, { color: colors.textMuted }]}>
-            {isSwitching
-              ? "Switching cancels your current plan immediately. No refund."
-              : `${acoinPrice} AC deducted instantly · access for ${durationLabel(selectedPlan.duration_days)}`}
+            {"Current plan ends immediately · no refund"}
           </Text>
         )}
       </View>
@@ -831,23 +799,6 @@ const s = StyleSheet.create({
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", letterSpacing: -0.3 },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   loadingText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  loadingHero: {
-    marginTop: 16,
-    borderRadius: 22,
-    borderWidth: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 30,
-    alignItems: "center",
-    gap: 10,
-  },
-  loadingMark: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
   loadingCard: {
     borderRadius: 20,
     borderWidth: 1,
@@ -867,22 +818,9 @@ const s = StyleSheet.create({
   },
   errorIcon: { width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   errorTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
-  errorBody: { fontSize: 14, lineHeight: 21, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 420 },
   retryButton: { minHeight: 46, paddingHorizontal: 18, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4 },
   retryButtonText: { fontSize: 14, fontFamily: "Inter_700Bold" },
 
-  hero: {
-    alignItems: "center",
-    borderRadius: 22,
-    borderWidth: 1,
-    paddingVertical: 24,
-    paddingHorizontal: 24,
-    gap: 14,
-    marginTop: 16,
-  },
-  heroHeading: { alignItems: "center", gap: 4 },
-  heroSub: { fontSize: 14, lineHeight: 21, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "center", maxWidth: 420 },
-  heroTitle: { fontSize: 26, lineHeight: 32, fontFamily: "Inter_700Bold", letterSpacing: -0.6, textAlign: "center" },
   activeBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -893,18 +831,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignSelf: "stretch",
   },
-  tierPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 22,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  tierPillEmoji: { fontSize: 16 },
-  tierPillText: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 1.4 },
   activeBarTxt: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "left" },
   cancelTxt: { fontSize: 12, fontFamily: "Inter_400Regular" },
 
@@ -954,7 +880,6 @@ const s = StyleSheet.create({
   equivRow: { flexDirection: "row", alignItems: "center" },
   usdTxt: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
   localTxt: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  rateNote: { fontSize: 11, fontFamily: "Inter_400Regular" },
   verBadge: {
     flexDirection: "row",
     alignItems: "center",
