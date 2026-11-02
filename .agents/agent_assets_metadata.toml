@@ -145,3 +145,17 @@ mtime_ms = 1793570813558
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:79fab581-ef26-43e1-910e-ea37e0d89725/1352852d-9e78-4ee2-b0fd-03f6b4f764a1/fdd23988-9dd5-43a1-be38-ab72c41c0972"
 storage_version_token = "1793570977140294"
 content_type = "image/png"
+
+[[outputs]]
+id = "2gLzWKfPUAUHRyYxNKyQ5"
+uri = "file://generated-artifacts/afuchat-expo-go-qr.png"
+type = "image"
+title = "AfuChat Expo Go QR code"
+description = "Scan with Expo Go to open the live anonymous development tunnel. No EAS login is required."
+logical_id = "94ba286e-9e04-4698-b32e-eeca3b54ff07"
+content_hash = "sha256:d416b03c7d71fb8c5d136bbdb661393515b7350251652c8cec23b41ca79988b3"
+size = 4822
+mtime_ms = 1793601477167
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:d8871096-8607-4c87-ad64-5a64c5108bd2/94ba286e-9e04-4698-b32e-eeca3b54ff07/9c01672e-fde4-4c58-a36c-354911b2263e"
+storage_version_token = "1793601493320553"
+content_type = "image/png"
