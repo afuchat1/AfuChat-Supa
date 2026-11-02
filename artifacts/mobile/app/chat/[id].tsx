@@ -70,6 +70,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useGiftPrices } from "@/hooks/useGiftPrices";
 import { Avatar } from "@/components/ui/Avatar";
+import InAppNotificationCard, { type NotificationMessageData } from "@/components/chat/InAppNotificationCard";
 import { RichText } from "@/components/ui/RichText";
 import Colors from "@/constants/colors";
 import { LinearGradient } from "@/components/ui/SafeGradient";
@@ -421,15 +422,44 @@ function hydrateLocalSenderSnapshots(
     }, () => {});
 }
 
-type NotificationMessageData = {
-  id: string;
-  kind: string;
-  cta_label: string | null;
-  cta_route: string | null;
-  entity_id: string | null;
-  metadata: Record<string, unknown> | null;
-  read_at: string | null;
-};
+function getNotificationActorId(event: any): string | null {
+  const metadata = event?.metadata && typeof event.metadata === "object"
+    ? event.metadata as Record<string, unknown>
+    : {};
+  const candidates = [
+    event?.actor_id,
+    metadata.actor_id,
+    metadata.follower_id,
+    metadata.liker_id,
+    metadata.replier_id,
+  ];
+  return candidates.find((value): value is string => typeof value === "string" && value.length > 0) ?? null;
+}
+
+async function hydrateNotificationEvents(events: any[], viewerId: string): Promise<NotificationMessageData[]> {
+  if (events.length === 0) return [];
+  const actorIds = [...new Set(events.map(getNotificationActorId).filter((id): id is string => !!id))];
+  const [profileResult, followingResult] = actorIds.length > 0
+    ? await Promise.all([
+        supabase.from("profiles").select("id, handle, display_name, avatar_url").in("id", actorIds),
+        supabase.from("follows").select("following_id").eq("follower_id", viewerId).in("following_id", actorIds),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const actors = new Map<string, NotificationMessageData["actor"]>();
+  for (const profile of (profileResult.data ?? []) as any[]) {
+    actors.set(profile.id, profile);
+  }
+  const followingIds = new Set((followingResult.data ?? []).map((row: any) => row.following_id as string));
+  return events.map((event) => {
+    const actorId = getNotificationActorId(event);
+    return {
+      ...event,
+      actor_id: actorId,
+      actor: actorId ? actors.get(actorId) ?? null : null,
+      is_following: actorId ? followingIds.has(actorId) : false,
+    } as NotificationMessageData;
+  });
+}
 
 function getNotificationRoute(event: NotificationMessageData): { pathname: string; params?: Record<string, string> } | null {
   const route = event.cta_route?.trim();
@@ -2535,6 +2565,8 @@ function ChatScreen() {
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notificationTargetLoadRef = useRef<string | null>(null);
   const notificationTargetHandledRef = useRef<string | null>(null);
+  const notificationFollowBusyRef = useRef(new Set<string>());
+  const [notificationFollowBusyIds, setNotificationFollowBusyIds] = useState<Set<string>>(() => new Set());
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchCursor, setSearchCursor] = useState(0);
@@ -3210,12 +3242,14 @@ function ChatScreen() {
         if (isNotificationsChat && msgIds.length > 0) {
           const { data: notificationEvents } = await supabase
             .from("notification_events")
-            .select("id, message_id, kind, cta_label, cta_route, entity_id, metadata, read_at")
+            .select("id, message_id, actor_id, kind, title, body, cta_label, cta_route, entity_id, metadata, read_at")
             .eq("recipient_id", user.id)
             .in("message_id", msgIds);
-          for (const event of (notificationEvents ?? []) as any[]) {
+          const hydratedNotifications = await hydrateNotificationEvents(notificationEvents ?? [], user.id);
+          for (const event of hydratedNotifications) {
             if (event.message_id) notificationMap.set(event.message_id, event);
           }
+          if (!isCurrentLoad()) return;
         }
 
       // ── Fast path: map and display messages immediately, no reactions yet ────
@@ -3442,7 +3476,7 @@ function ChatScreen() {
             const notificationEventsRequest = isNotificationsChat
               ? supabase
                   .from("notification_events")
-                  .select("id, message_id, kind, cta_label, cta_route, entity_id, metadata, read_at")
+                  .select("id, message_id, actor_id, kind, title, body, cta_label, cta_route, entity_id, metadata, read_at")
                   .eq("recipient_id", user.id)
                   .in("message_id", localIds)
               : Promise.resolve({ data: [] as any[] });
@@ -3450,7 +3484,7 @@ function ChatScreen() {
               supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", localIds),
               supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", localIds),
               notificationEventsRequest,
-            ]).then(([{ data: reactions }, { data: statuses }, { data: notificationEvents }]) => {
+            ]).then(async ([{ data: reactions }, { data: statuses }, { data: notificationEvents }]) => {
               if (!isCurrentLoad()) return;
               const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
               for (const reaction of (reactions || []) as any[]) {
@@ -3475,7 +3509,9 @@ function ChatScreen() {
                 });
               }
               const notificationMap = new Map<string, NotificationMessageData>();
-              for (const event of (notificationEvents || []) as any[]) {
+              const hydratedNotifications = await hydrateNotificationEvents(notificationEvents || [], user.id);
+              if (!isCurrentLoad()) return;
+              for (const event of hydratedNotifications) {
                 if (event.message_id) notificationMap.set(event.message_id, event);
               }
               const localIdSet = new Set(localIds);
@@ -3519,10 +3555,24 @@ function ChatScreen() {
       if (error) return;
       if (data && data.length > 0) {
         const msgIds = data.map((m: any) => m.id);
-        const [{ data: reactions }, { data: statuses }] = await Promise.all([
+        const notificationEventsRequest = isNotificationsChat
+          ? supabase
+              .from("notification_events")
+              .select("id, message_id, actor_id, kind, title, body, cta_label, cta_route, entity_id, metadata, read_at")
+              .eq("recipient_id", user.id)
+              .in("message_id", msgIds)
+          : Promise.resolve({ data: [] as any[] });
+        const [{ data: reactions }, { data: statuses }, { data: notificationEvents }] = await Promise.all([
           supabase.from("message_reactions").select("message_id, reaction, user_id").in("message_id", msgIds),
           supabase.from("message_status").select("message_id, read_at, delivered_at").in("message_id", msgIds),
+          notificationEventsRequest,
         ]);
+        const hydratedNotifications = await hydrateNotificationEvents(notificationEvents || [], user.id);
+        if (!isCurrentLoad()) return;
+        const notificationMap = new Map<string, NotificationMessageData>();
+        for (const event of hydratedNotifications) {
+          if (event.message_id) notificationMap.set(event.message_id, event);
+        }
         const reactionMap: Record<string, { emoji: string; count: number; myReaction: boolean }[]> = {};
         for (const r of (reactions || []) as any[]) {
           if (!reactionMap[r.message_id]) reactionMap[r.message_id] = [];
@@ -3553,6 +3603,7 @@ function ChatScreen() {
             _isAi: isBot || undefined,
             _aiActions: aiParsed && aiParsed.actions.length > 0 ? aiParsed.actions : undefined,
             _aiInvoices: aiParsed && aiParsed.invoices.length > 0 ? aiParsed.invoices : undefined,
+            _notification: notificationMap.get(m.id),
           };
         });
         oldestCursorRef.current = data[data.length - 1].sent_at;
@@ -3910,11 +3961,11 @@ function ChatScreen() {
             if (!isNotificationsChat || !user) return null;
             const { data: event } = await supabase
               .from("notification_events")
-              .select("id, message_id, kind, cta_label, cta_route, entity_id, metadata, read_at")
+              .select("id, message_id, actor_id, kind, title, body, cta_label, cta_route, entity_id, metadata, read_at")
               .eq("recipient_id", user.id)
               .eq("message_id", newMsg.id)
               .maybeSingle();
-            return event ? ({ ...event } as NotificationMessageData) : undefined;
+            return event ? (await hydrateNotificationEvents([event], user.id))[0] : undefined;
           };
           const notificationData = await fetchNotificationData();
           if (!isCurrentSubscription()) return;
@@ -7437,23 +7488,85 @@ STRICT RULES:
     return () => clearTimeout(timer);
   }, [messageId, messages, scrollToMessage]);
 
-  const handleNotificationAction = useCallback(async (notification: NotificationMessageData) => {
-    const route = getNotificationRoute(notification);
-    if (!route) return;
-    if (!notification.read_at && user?.id) {
-      void supabase
-        .from("notification_events")
-        .update({ read_at: new Date().toISOString() })
-        .eq("id", notification.id)
-        .eq("recipient_id", user.id);
-      setMessages((previous) => previous.map((message) =>
-        message._notification?.id === notification.id
-          ? { ...message, _notification: { ...message._notification, read_at: new Date().toISOString() } }
-          : message
-      ));
-    }
-    router.push(route as any);
+  const markNotificationRead = useCallback((notification: NotificationMessageData) => {
+    if (notification.read_at || !user?.id) return;
+    const readAt = new Date().toISOString();
+    void supabase
+      .from("notification_events")
+      .update({ read_at: readAt })
+      .eq("id", notification.id)
+      .eq("recipient_id", user.id);
+    setMessages((previous) => previous.map((message) =>
+      message._notification?.id === notification.id
+        ? { ...message, _notification: { ...message._notification, read_at: readAt } }
+        : message
+    ));
   }, [user?.id]);
+
+  const handleNotificationAction = useCallback(async (notification: NotificationMessageData) => {
+    let route = getNotificationRoute(notification);
+    if (!route) return;
+    if (notification.cta_route === "/chat/[id]" && notification.entity_id) {
+      const { data: sourceMessage, error } = await supabase
+        .from("messages")
+        .select("chat_id")
+        .eq("id", notification.entity_id)
+        .maybeSingle();
+      if (error || !sourceMessage?.chat_id) {
+        showAlert("Conversation unavailable", "This message is no longer available.");
+        return;
+      }
+      route = {
+        pathname: "/chat/[id]",
+        params: { id: sourceMessage.chat_id, messageId: notification.entity_id },
+      };
+    }
+    markNotificationRead(notification);
+    router.push(route as any);
+  }, [markNotificationRead]);
+
+  const handleNotificationActorPress = useCallback((actorId: string, notification: NotificationMessageData) => {
+    if (!actorId) return;
+    markNotificationRead(notification);
+    router.push({ pathname: "/contact/[id]", params: { id: actorId } } as any);
+  }, [markNotificationRead]);
+
+  const handleNotificationFollowBack = useCallback(async (notification: NotificationMessageData) => {
+    const actorId = notification.actor_id ?? notification.actor?.id;
+    if (!user?.id || !actorId || actorId === user.id || notificationFollowBusyRef.current.has(actorId)) return;
+    notificationFollowBusyRef.current.add(actorId);
+    setNotificationFollowBusyIds((previous) => new Set(previous).add(actorId));
+    const setFollowingState = (isFollowing: boolean) => {
+      setMessages((previous) => previous.map((message) => {
+        if (message._notification?.actor_id !== actorId) return message;
+        return {
+          ...message,
+          _notification: { ...message._notification, is_following: isFollowing },
+        };
+      }));
+    };
+
+    setFollowingState(true);
+    try {
+      const { error } = await supabase.from("follows").upsert(
+        { follower_id: user.id, following_id: actorId },
+        { onConflict: "follower_id,following_id", ignoreDuplicates: true },
+      );
+      if (error) throw error;
+      markNotificationRead(notification);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      setFollowingState(false);
+      showAlert("Couldn't follow back", "Please check your connection and try again.");
+    } finally {
+      notificationFollowBusyRef.current.delete(actorId);
+      setNotificationFollowBusyIds((previous) => {
+        const next = new Set(previous);
+        next.delete(actorId);
+        return next;
+      });
+    }
+  }, [user?.id, markNotificationRead]);
 
   // Load phone-book name once we know who the other person is.
   useEffect(() => {
@@ -7534,6 +7647,7 @@ STRICT RULES:
     // AfuAI chat: suppress date separators and per-message timestamps entirely.
     const showDate = !isAfuAiDirectChat && shouldShowDate(index);
     const spacing = getMessageSpacing(index);
+    const notificationActorId = item._notification?.actor_id ?? item._notification?.actor?.id ?? null;
 
     return (
       <View style={{ marginTop: showDate ? 0 : spacing }}>
@@ -7544,7 +7658,17 @@ STRICT RULES:
             </View>
           </View>
         )}
-        {item._isLensCard ? (
+        {isNotificationsChat && item._notification ? (
+          <InAppNotificationCard
+            notification={item._notification}
+            sentAt={item.sent_at}
+            canOpenContent={!!getNotificationRoute(item._notification)}
+            followBusy={!!notificationActorId && notificationFollowBusyIds.has(notificationActorId)}
+            onPressActor={handleNotificationActorPress}
+            onFollowBack={handleNotificationFollowBack}
+            onContentAction={handleNotificationAction}
+          />
+        ) : item._isLensCard ? (
           <TouchableOpacity
             activeOpacity={1}
             delayLongPress={500}
@@ -7592,7 +7716,21 @@ STRICT RULES:
         )}
       </View>
     );
-  }, [listData, messages, user, colors, highlightedMsgId, scrollToMessage, advancedFeatures.mini_profile_popup, textSelectionMessageId, isNotificationsChat, handleNotificationAction]);
+  }, [
+    listData,
+    messages,
+    user,
+    colors,
+    highlightedMsgId,
+    scrollToMessage,
+    advancedFeatures.mini_profile_popup,
+    textSelectionMessageId,
+    isNotificationsChat,
+    handleNotificationAction,
+    handleNotificationActorPress,
+    handleNotificationFollowBack,
+    notificationFollowBusyIds,
+  ]);
 
   // Single source of truth for the bottom offset.
   // The floatingInputContainer is position:absolute so it cannot rely on
