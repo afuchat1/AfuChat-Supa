@@ -2721,8 +2721,12 @@ function ChatScreen() {
     const onShow = Keyboard.addListener(showEvent, (e) => {
       const h = e.endCoordinates.height;
       if (h > 100) {
-        emojiKeyboardHeightRef.current = h;
-        setEmojiKeyboardHeight(h);
+        // The panel adds a separate safe-area spacer, so keep its content
+        // height equal to the keyboard height minus that inset. The panel and
+        // native keyboard then share the same total height when switching.
+        const panelContentHeight = Math.max(100, h - safeBottomRef.current);
+        emojiKeyboardHeightRef.current = panelContentHeight;
+        setEmojiKeyboardHeight(panelContentHeight);
       }
       if (Platform.OS !== "ios") setKeyboardHeight(h);
       animateComposerBottom(
@@ -2996,7 +3000,6 @@ function ChatScreen() {
   const openEmojiStickerPicker = useCallback(() => {
     if (showEmojiStickerPickerRef.current) return;
     emojiPanelTranslateY.stopAnimation();
-    emojiPanelTranslateY.setValue(1);
     setEmojiPickerVisible(true);
     setShowAttachPanel(false);
     animateComposerBottom(emojiKeyboardHeightRef.current + safeBottomRef.current);
@@ -3006,7 +3009,6 @@ function ChatScreen() {
       easing: CHAT_FAST_EASING,
       useNativeDriver: true,
     }).start();
-    chatInputRef.current?.blur();
     Keyboard.dismiss();
   }, [animateComposerBottom, emojiPanelTranslateY, setEmojiPickerVisible]);
   const closeEmojiStickerPicker = useCallback((afterClose?: () => void) => {
@@ -8473,18 +8475,24 @@ STRICT RULES:
                       </>
                     ) : (
                       <View style={st.inputInnerRow}>
-                        <TouchableOpacity hitSlop={8} style={st.pillIcon} onPress={() => {
+                        <TouchableOpacity
+                          hitSlop={8}
+                          style={st.emojiToggleButton}
+                          accessibilityRole="button"
+                          accessibilityLabel={showEmojiStickerPicker ? "Show keyboard" : "Open emoji picker"}
+                          onPress={() => {
                           if (showEmojiStickerPicker) {
-                            animateComposerBottom(Math.max(
-                              emojiKeyboardHeightRef.current,
-                              safeBottomRef.current,
-                            ));
                             chatInputRef.current?.focus();
                           } else {
                             openEmojiStickerPicker();
                           }
-                        }}>
-                          <Ionicons name={showEmojiStickerPicker ? "keypad" : "happy"} size={23} color={colors.textMuted} />
+                        }}
+                        >
+                          <Ionicons
+                            name={showEmojiStickerPicker ? "keypad" : "happy"}
+                            size={22}
+                            color={showEmojiStickerPicker ? colors.accent : colors.textSecondary}
+                          />
                         </TouchableOpacity>
                         <TextInput
                           ref={chatInputRef}
@@ -8508,12 +8516,6 @@ STRICT RULES:
                             }
                           }}
                           onFocus={() => {
-                            if (showEmojiStickerPickerRef.current) {
-                              animateComposerBottom(Math.max(
-                                emojiKeyboardHeightRef.current,
-                                safeBottomRef.current,
-                              ));
-                            }
                             if (showAttachPanel) setShowAttachPanel(false);
                           }}
                           onSelectionChange={(e) => {
@@ -10683,6 +10685,12 @@ const st = StyleSheet.create({
     alignItems: "center",
     minHeight: 40,
     ...Platform.select({ web: { minHeight: 34 } }),
+  },
+  emojiToggleButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
   },
   pillIcon: { paddingHorizontal: 5 },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, paddingTop: 6, paddingBottom: 6, minHeight: 24, maxHeight: 120 },
