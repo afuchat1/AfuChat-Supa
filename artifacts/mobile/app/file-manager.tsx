@@ -29,14 +29,14 @@ import { isExpoGo } from "@/lib/expoEnvironment";
 
 type FileType = "image" | "video" | "audio" | "document";
 type Filter = "all" | "image" | "video" | "audio";
-type MediaLibraryModule = typeof import("expo-media-library");
+type MediaLibraryModule = typeof import("expo-media-library/legacy");
 
 let mediaLibraryModule: MediaLibraryModule | null = null;
 
 function getMediaLibrary(): MediaLibraryModule | null {
   if (Platform.OS === "web") return null;
   if (!mediaLibraryModule) {
-    mediaLibraryModule = require("expo-media-library") as MediaLibraryModule;
+    mediaLibraryModule = require("expo-media-library/legacy") as MediaLibraryModule;
   }
   return mediaLibraryModule;
 }

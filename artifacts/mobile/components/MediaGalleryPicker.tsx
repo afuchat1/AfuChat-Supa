@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
-import * as MediaLibrary from "expo-media-library";
+import * as MediaLibrary from "expo-media-library/legacy";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";

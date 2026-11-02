@@ -1,5 +1,6 @@
 - [AfuSearch results policy](afusearch-results-policy.md) — Use a flat mixed-content feed and one history/trending overlay; keep image search scoped to public AfuChat posts.
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
+- [Expo Media Library SDK 57](expo-media-library-sdk57.md) — Use `/legacy` for `getAssetsAsync`, `MediaType`, and `SortBy`; the package root targets the newer API.
 - [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
 - [AfuChat brand colors](afuchat-brand-colors.md) — Keep the original AfuChat palette; the primary brand blue is #1018D8.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
