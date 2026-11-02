@@ -340,7 +340,7 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
           )}
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
             <Text style={[styles.logo, { color: colors.text }]}>
-              Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
+              {"Afu"}<Text style={[styles.logoAccent, { color: BRAND }]}>{"Chat"}</Text>
             </Text>
           </Pressable>
           {!compact && (
@@ -387,8 +387,8 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
       </View>
 
       <View style={[styles.footer, { backgroundColor: colors.background }]}>
-           <Text style={[styles.footerLogo, { color: colors.text }]}>
-           Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
+        <Text style={[styles.footerLogo, { color: colors.text }]}>
+          {"Afu"}<Text style={[styles.logoAccent, { color: BRAND }]}>{"Chat"}</Text>
         </Text>
         <Text style={[styles.footerText, { color: colors.textMuted }]}>Connect · Discover · Create</Text>
         <View style={styles.footerLinks}>
@@ -473,6 +473,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1.8,
     marginBottom: 16,
     minWidth: 0,
+    flexShrink: 1,
     textAlign: "left",
   },
   titleCompact: { fontSize: 36, lineHeight: 43, letterSpacing: -1.2 },
@@ -483,6 +484,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     maxWidth: 720,
     minWidth: 0,
+    flexShrink: 1,
     textAlign: "left",
   },
   updated: {
@@ -491,6 +493,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     marginTop: 22,
     minWidth: 0,
+    flexShrink: 1,
     textAlign: "left",
   },
   content: {
@@ -513,6 +516,7 @@ const styles = StyleSheet.create({
   noticeText: {
     flex: 1,
     minWidth: 0,
+    flexShrink: 1,
     color: "#35516e",
     fontSize: 13,
     lineHeight: 20,
@@ -527,6 +531,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.35,
     marginBottom: 12,
     minWidth: 0,
+    flexShrink: 1,
     textAlign: "left",
   },
   paragraph: {
@@ -535,6 +540,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginBottom: 11,
     minWidth: 0,
+    flexShrink: 1,
     textAlign: "left",
   },
   emailLink: {
@@ -552,6 +558,7 @@ const styles = StyleSheet.create({
   bulletText: {
     flex: 1,
     minWidth: 0,
+    flexShrink: 1,
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
