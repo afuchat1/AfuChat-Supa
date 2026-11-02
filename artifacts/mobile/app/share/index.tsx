@@ -534,6 +534,7 @@ export default function ShareToAfuChatScreen() {
                 <View style={[styles.searchBar, { backgroundColor: colors.card }]}>
                   <Ionicons name="search" size={17} color={colors.textMuted} />
                   <TextInput
+                    appearance="embedded"
                     value={contactQuery}
                     onChangeText={setContactQuery}
                     placeholder="Search contacts"

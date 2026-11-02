@@ -244,6 +244,7 @@ export default function ContactsScreen() {
         <View style={[styles.searchBox, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search contacts"
             placeholderTextColor={colors.textMuted}
@@ -268,6 +269,7 @@ export default function ContactsScreen() {
           </View>
           <View style={[styles.addField, { backgroundColor: colors.inputBg }]}>
             <TextInput
+              appearance="embedded"
               style={[styles.addInput, { color: colors.text }]}
               placeholder="Search by handle or name"
               placeholderTextColor={colors.textMuted}

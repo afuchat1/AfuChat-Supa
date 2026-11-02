@@ -108,6 +108,7 @@ export default function BlockedUsersScreen() {
               <View style={[s.searchBar, { backgroundColor: "transparent" }]}>
                 <Ionicons name="search" size={16} color={colors.textMuted} />
                 <TextInput
+                  appearance="embedded"
                   style={[s.searchInput, { color: colors.text }]}
                   placeholder="Search blocked…"
                   placeholderTextColor={colors.textMuted}

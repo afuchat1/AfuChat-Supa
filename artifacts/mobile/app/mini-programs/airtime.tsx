@@ -93,6 +93,7 @@ export default function AirtimeScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="call" size={18} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={phone}
             onChangeText={setPhone}
@@ -120,6 +121,7 @@ export default function AirtimeScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Text style={[styles.inputPrefix, { color: colors.textMuted }]}>🪙</Text>
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={amount}
             onChangeText={setAmount}

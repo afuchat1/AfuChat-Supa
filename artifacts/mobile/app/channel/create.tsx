@@ -254,6 +254,7 @@ export default function CreateChannelScreen() {
         <View style={styles.nameInputWrap}>
           {step === 1 ? (
             <TextInput
+              appearance="embedded"
               style={[styles.nameInput, { color: colors.text, borderBottomColor: PURPLE }]}
               placeholder="Channel name"
               placeholderTextColor={colors.textMuted}
@@ -266,6 +267,7 @@ export default function CreateChannelScreen() {
           ) : (
             <>
               <TextInput
+                appearance="embedded"
                 style={[styles.handleInput, { color: colors.text, borderBottomColor: PURPLE }]}
                 placeholder={isPublic ? "Channel username" : "Username (optional)"}
                 placeholderTextColor={colors.textMuted}
@@ -299,6 +301,7 @@ export default function CreateChannelScreen() {
           <View style={[styles.descSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
             <TextInput
               ref={descRef}
+              appearance="embedded"
               style={[styles.descInput, { color: colors.text }]}
               placeholder="Description (optional)"
               placeholderTextColor={colors.textMuted}

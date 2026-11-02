@@ -531,6 +531,7 @@ export default function OnboardingScreen() {
             <View style={[st.field, { backgroundColor: colors.inputBg }]}>
               <Ionicons name="person" size={18} color={focusedField === "displayName" ? colors.accent : colors.textMuted} style={st.fieldIcon} />
               <TextInput
+                appearance="embedded"
                 style={[st.input, { color: colors.text }]}
                 placeholder="e.g. John Doe"
                 placeholderTextColor={colors.textMuted}
@@ -554,6 +555,7 @@ export default function OnboardingScreen() {
                 style={st.fieldIcon}
               />
               <TextInput
+                appearance="embedded"
                 style={[st.input, { color: colors.text }]}
                 placeholder="e.g. johndoe"
                 placeholderTextColor={colors.textMuted}
@@ -645,6 +647,7 @@ export default function OnboardingScreen() {
                 </View>
                 <View style={[st.phoneField, { backgroundColor: colors.inputBg, flex: 1 }]}>
                   <TextInput
+                    appearance="embedded"
                     style={[st.input, { color: colors.text }]}
                     placeholder="e.g. 772 123 456"
                     placeholderTextColor={colors.textMuted}
@@ -863,6 +866,7 @@ export default function OnboardingScreen() {
           <View style={[st.searchBox, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
+              appearance="embedded"
               style={[st.searchInput, { color: colors.text }]}
               placeholder="Search country..."
               placeholderTextColor={colors.textMuted}

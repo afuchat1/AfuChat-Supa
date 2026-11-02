@@ -7956,6 +7956,7 @@ STRICT RULES:
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
             ref={searchInputRef}
+            appearance="embedded"
             style={[st.searchInput, { color: colors.text }]}
             placeholder="Search messages…"
             placeholderTextColor={colors.textMuted}
@@ -9880,6 +9881,7 @@ STRICT RULES:
             <View style={[st.addMembersSearchWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Ionicons name="search" size={16} color={colors.textMuted} />
               <TextInput
+                appearance="embedded"
                 style={[st.addMembersSearchInput, { color: colors.text }]}
                 placeholder="Search by name or @handle"
                 placeholderTextColor={colors.textMuted}

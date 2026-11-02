@@ -69,6 +69,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
       <Ionicons name={icon} size={17} color={focused ? accent : colors.iconMuted} style={inp.icon} />
       <TextInput
         ref={inputRef}
+        appearance="embedded"
         style={inp.text}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
@@ -84,7 +85,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
   );
 }
 const inp = StyleSheet.create({
-  wrap: { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 18, height: 56, borderWidth: 0 },
+  wrap: { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 18, height: 56, borderWidth: StyleSheet.hairlineWidth },
   icon: { marginRight: 10 },
   text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 56, outlineStyle: "none" } as any,
 });

@@ -434,6 +434,7 @@ export default function CreateCompanyPageScreen() {
                 <View style={[styles.regSearchRow, { backgroundColor: isDark ? colors.background : "#f5f5f7", borderColor: colors.border }]}>
                   <Ionicons name="search" size={16} color={colors.textMuted} />
                   <TextInput
+                    appearance="embedded"
                     style={[styles.regSearchInput, { color: colors.text }]}
                     placeholder="Type registered company name…"
                     placeholderTextColor={colors.textMuted}

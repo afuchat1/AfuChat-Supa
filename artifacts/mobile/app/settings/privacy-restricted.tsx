@@ -97,6 +97,7 @@ export default function PrivacyRestrictedScreen() {
           <View style={s.searchBar}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
+              appearance="embedded"
               style={[s.searchInput, { color: colors.text }]}
               placeholder={t("restricted.search")}
               placeholderTextColor={colors.textMuted}

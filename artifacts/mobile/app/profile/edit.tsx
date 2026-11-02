@@ -960,6 +960,7 @@ export default function EditProfileScreen() {
           <View style={[styles.modalSearch, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
+              appearance="embedded"
               style={[styles.modalSearchInput, { color: colors.text }]}
               value={countrySearch}
               onChangeText={setCountrySearch}

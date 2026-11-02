@@ -597,6 +597,7 @@ function GifPanel({ onSendGif, onScrollDown, onScrollUp, onSelect }: {
         }]}>
           <Ionicons name="search" size={14} color={colors.textMuted as string} style={{ marginRight: 6 }} />
           <TextInput
+            appearance="embedded"
             value={query}
             onChangeText={onChangeQuery}
             placeholder="Search GIFs…"

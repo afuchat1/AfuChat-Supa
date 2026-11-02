@@ -97,6 +97,7 @@ export default function DataBundlesScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="call" size={18} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={phone}
             onChangeText={setPhone}

@@ -1688,6 +1688,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
              <Ionicons name="search" size={18} color={colors.textMuted} />
              <TextInput
                ref={searchInputRef}
+               appearance="embedded"
                value={search}
                onChangeText={setSearch}
                placeholder="Search chats"

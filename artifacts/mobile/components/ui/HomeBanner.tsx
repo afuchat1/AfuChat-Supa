@@ -316,6 +316,7 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
         <View style={[sh.searchRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[sh.searchInput, { color: colors.text }]}
             placeholder="Search contacts..."
             placeholderTextColor={colors.textMuted}

@@ -132,6 +132,7 @@ export default function HotelsScreen() {
                 <Text style={[styles.label, { color: colors.text }]}>Nights</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
                   <TextInput
+                    appearance="embedded"
                     style={[styles.input, { color: colors.text, textAlign: "center" }]}
                     value={nights}
                     onChangeText={setNights}
@@ -144,6 +145,7 @@ export default function HotelsScreen() {
                 <Text style={[styles.label, { color: colors.text }]}>Guests</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
                   <TextInput
+                    appearance="embedded"
                     style={[styles.input, { color: colors.text, textAlign: "center" }]}
                     value={guests}
                     onChangeText={setGuests}

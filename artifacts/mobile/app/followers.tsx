@@ -306,6 +306,7 @@ export default function FollowersScreen() {
               <View style={[styles.searchBar, { backgroundColor: colors.backgroundSecondary }]}>
                 <Ionicons name="search" size={16} color={colors.textMuted} />
                 <TextInput
+                  appearance="embedded"
                   style={[styles.searchInput, { color: colors.text }]}
                   placeholder="Search..."
                   placeholderTextColor={colors.textMuted}

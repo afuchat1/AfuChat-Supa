@@ -527,6 +527,7 @@ export default function CreatePostScreen() {
             <View style={[ss.searchPill, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Ionicons name="search" size={16} color={colors.textMuted} />
               <TextInput
+                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="Search languages…"
                 placeholderTextColor={colors.textMuted}
@@ -571,6 +572,7 @@ export default function CreatePostScreen() {
             <View style={[ss.searchPill, { backgroundColor: colors.inputBg, borderColor: colors.accent + "40" }]}>
               <Ionicons name="location" size={16} color={colors.accent} />
               <TextInput
+                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="City, venue, neighbourhood…"
                 placeholderTextColor={colors.textMuted}
@@ -614,6 +616,7 @@ export default function CreatePostScreen() {
             <View style={[ss.searchPill, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Ionicons name="at" size={16} color={colors.accent} />
               <TextInput
+                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="Search by name or handle…"
                 placeholderTextColor={colors.textMuted}

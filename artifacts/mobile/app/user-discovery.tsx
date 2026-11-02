@@ -769,6 +769,7 @@ export default function UserDiscoveryScreen() {
             />
             <TextInput
               ref={searchRef}
+              appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search by name, handle, or interests…"
               placeholderTextColor={colors.textMuted}

@@ -68,6 +68,7 @@ export default function TransferScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="person" size={18} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={recipient}
             onChangeText={setRecipient}
@@ -81,6 +82,7 @@ export default function TransferScreen() {
         <View style={[styles.amountWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Text style={styles.amountPrefix}>🪙</Text>
           <TextInput
+            appearance="embedded"
             style={[styles.amountInput, { color: colors.text }]}
             value={amount}
             onChangeText={setAmount}
@@ -94,6 +96,7 @@ export default function TransferScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="chatbubble" size={18} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={note}
             onChangeText={setNote}

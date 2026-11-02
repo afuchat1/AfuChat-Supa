@@ -216,6 +216,7 @@ export default function WalletScanPage() {
           <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <Ionicons name={currIcon} size={18} color={currColor} style={{ marginRight: 8 }} />
             <TextInput
+              appearance="embedded"
               style={[s.input, { color: colors.text, flex: 1 }]}
               placeholder="0"
               placeholderTextColor={colors.textMuted}
@@ -232,6 +233,7 @@ export default function WalletScanPage() {
           <Text style={[s.label, { color: colors.textMuted, marginTop: 16 }]}>NOTE (OPTIONAL)</Text>
           <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <TextInput
+              appearance="embedded"
               style={[s.input, { color: colors.text, flex: 1 }]}
               placeholder="Add a message…"
               placeholderTextColor={colors.textMuted}

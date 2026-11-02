@@ -91,6 +91,7 @@ export default function BillsScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="document-text" size={18} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={accountNumber}
             onChangeText={setAccountNumber}
@@ -103,6 +104,7 @@ export default function BillsScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Text style={styles.inputPrefix}>🪙</Text>
           <TextInput
+            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={amount}
             onChangeText={setAmount}

@@ -837,6 +837,7 @@ export default function ViewStoryScreen() {
             <>
               <View style={styles.commentInputWrap}>
                 <TextInput
+                  appearance="embedded"
                   style={styles.commentInput}
                   placeholder="Reply…"
                   placeholderTextColor="rgba(255,255,255,0.38)"

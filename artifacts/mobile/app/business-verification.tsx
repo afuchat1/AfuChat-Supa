@@ -617,6 +617,7 @@ export default function BusinessVerificationScreen() {
             <View style={[st.countrySearchBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <Ionicons name="search" size={17} color={colors.textMuted} />
               <TextInput
+                appearance="embedded"
                 style={[st.countrySearchInput, { color: colors.text }]}
                 placeholder="Search countries"
                 placeholderTextColor={colors.textMuted}

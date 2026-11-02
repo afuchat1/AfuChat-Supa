@@ -350,6 +350,7 @@ export default function SellerApplyScreen() {
             <View style={[st.prefixInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[st.prefix, { color: colors.textMuted }]}>@</Text>
               <TextInput
+                appearance="embedded"
                 style={[st.prefixText, { color: colors.text }]}
                 placeholder="yourbusiness"
                 placeholderTextColor={colors.textMuted}
@@ -363,6 +364,7 @@ export default function SellerApplyScreen() {
             <View style={[st.prefixInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[st.prefix, { color: colors.textMuted }]}>fb.com/</Text>
               <TextInput
+                appearance="embedded"
                 style={[st.prefixText, { color: colors.text }]}
                 placeholder="yourbusiness"
                 placeholderTextColor={colors.textMuted}
@@ -376,6 +378,7 @@ export default function SellerApplyScreen() {
             <View style={[st.prefixInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[st.prefix, { color: colors.textMuted }]}>@</Text>
               <TextInput
+                appearance="embedded"
                 style={[st.prefixText, { color: colors.text }]}
                 placeholder="yourbusiness"
                 placeholderTextColor={colors.textMuted}

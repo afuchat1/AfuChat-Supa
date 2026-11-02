@@ -134,6 +134,7 @@ export function FolderModal({ visible, initial, onSave, onDelete, onClose }: Pro
               >
                 <Text style={st.inputIcon}>{icon}</Text>
                 <TextInput
+                  appearance="embedded"
                   style={[st.input, { color: colors.text }]}
                   value={name}
                   onChangeText={setName}

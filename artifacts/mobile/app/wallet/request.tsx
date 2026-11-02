@@ -172,6 +172,7 @@ export default function MoneyRequestScreen() {
           <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <Ionicons name={currency === "acoin" ? "diamond" : "flash"} size={18} color={currColor} style={{ marginRight: 8 }} />
             <TextInput
+              appearance="embedded"
               style={[s.input, { color: colors.text }]}
               placeholder="0"
               placeholderTextColor={colors.textMuted}
@@ -188,6 +189,7 @@ export default function MoneyRequestScreen() {
           <Text style={[s.label, { color: colors.textMuted, marginTop: 14 }]}>REASON (OPTIONAL)</Text>
           <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <TextInput
+              appearance="embedded"
               style={[s.input, { color: colors.text }]}
               placeholder="e.g. Split bill, lunch, bet…"
               placeholderTextColor={colors.textMuted}

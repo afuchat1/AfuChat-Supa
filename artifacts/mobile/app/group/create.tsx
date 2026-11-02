@@ -196,6 +196,7 @@ export default function CreateGroupScreen() {
         </View>
         <View style={styles.nameInputWrap}>
           <TextInput
+            appearance="embedded"
             style={[styles.nameInput, { color: colors.text }]}
             placeholder="Group name"
             placeholderTextColor={colors.textMuted}
@@ -204,6 +205,7 @@ export default function CreateGroupScreen() {
             autoFocus
           />
           <TextInput
+            appearance="embedded"
             style={[styles.handleInput, { color: colors.text, borderBottomColor: colors.accent }]}
             placeholder="Public group username"
             placeholderTextColor={colors.textMuted}

@@ -168,6 +168,7 @@ export default function RegionPickerInput({ value, onChange, country, placeholde
             <Ionicons name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               ref={searchRef}
+              appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search by city name…"
               placeholderTextColor={colors.textMuted}

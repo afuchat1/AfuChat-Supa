@@ -449,6 +449,7 @@ export default function MatchConversationScreen() {
           <View style={[styles.inputPill, { backgroundColor: colors.inputBg, borderColor: colors.border, ...Platform.select({ web: { boxShadow: "0 2px 14px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.13, shadowRadius: 8, elevation: 4 } }) }]}>
             <TextInput
               ref={inputRef}
+              appearance="embedded"
               style={[styles.inputField, { color: colors.text }]}
               placeholder="Type a message…"
               placeholderTextColor={colors.textMuted}

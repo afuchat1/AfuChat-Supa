@@ -681,6 +681,7 @@ export default function GroupManageScreen() {
             <View style={[s.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="search" size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
               <TextInput
+                appearance="embedded"
                 style={[s.searchInput, { color: colors.text }]}
                 placeholder={`Search ${isChannel ? "subscribers" : "members"}…`}
                 placeholderTextColor={colors.textMuted}

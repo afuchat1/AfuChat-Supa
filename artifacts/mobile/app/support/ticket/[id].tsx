@@ -417,6 +417,7 @@ export default function TicketDetail() {
               },
             ]}>
               <TextInput
+                appearance="embedded"
                 style={[st.replyInput, { color: colors.text }]}
                 value={reply}
                 onChangeText={setReply}

@@ -223,6 +223,7 @@ export default function CompanyIndexScreen() {
         <View style={[styles.searchBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
+            appearance="embedded"
             style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search pages…"
             placeholderTextColor={colors.textMuted}

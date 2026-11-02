@@ -724,6 +724,7 @@ function PostChrome({
           <View style={styles.replyPill}>
             <TextInput
               ref={inputRef}
+              appearance="embedded"
               style={styles.replyInput}
               placeholder="Post your reply…"
               placeholderTextColor="rgba(255,255,255,0.38)"

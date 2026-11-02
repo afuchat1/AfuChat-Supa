@@ -422,6 +422,7 @@ export default function AppsScreen() {
           <View style={[styles.searchBox, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }]}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
+              appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
               placeholder={t("Search pages…")}
               placeholderTextColor={colors.textMuted}

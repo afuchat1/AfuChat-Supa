@@ -297,6 +297,7 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
           ]}>
             <Text style={[s.customCurrency, { color: colors.textMuted }]}>$</Text>
             <TextInput
+              appearance="embedded"
               style={[s.customInputText, { color: colors.text }]}
               value={customAmt}
               onChangeText={(t) => { setCustomAmt(t.replace(/[^0-9.]/g, "")); setError(null); }}
