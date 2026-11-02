@@ -417,6 +417,13 @@ export async function updateMusicTrack(track: AfuMusicTrack, input: MusicTrackIn
       .single();
     if (error) throw error;
 
+    if (audio) {
+      try {
+        await removeMusicTrackOffline(track);
+      } catch (cacheError) {
+        console.warn("[AfuMusic] Could not clear the outdated offline copy:", cacheError);
+      }
+    }
     if (audio && existing.storage_path) {
       await removeUploadedObject(MUSIC_BUCKET, existing.storage_path);
     }

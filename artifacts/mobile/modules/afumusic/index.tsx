@@ -123,7 +123,7 @@ function TrackArt({
       {track.coverUrl ? (
         <Image
           source={{ uri: track.coverUrl }}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           contentFit="cover"
           transition={120}
         />
@@ -563,47 +563,143 @@ export default function AfuMusicApp({
     }
   }, [acoinBalance, onOpenWallet, onPurchase, purchaseTrack, purchasing]);
 
+  const closeUpload = useCallback(() => {
+    setUploadOpen(false);
+    setEditingTrack(null);
+    setUploadTitle("");
+    setUploadGenre("Ambient");
+    setUploadMode("free");
+    setUploadPrice("20");
+    setUploadFile(null);
+    setCoverFile(null);
+  }, []);
+
+  const openCreateUpload = useCallback(() => {
+    setEditingTrack(null);
+    setUploadTitle("");
+    setUploadGenre("Ambient");
+    setUploadMode("free");
+    setUploadPrice("20");
+    setUploadFile(null);
+    setCoverFile(null);
+    setUploadOpen(true);
+  }, []);
+
+  const openEditUpload = useCallback((track: AfuMusicTrack) => {
+    setEditingTrack(track);
+    setUploadTitle(track.title);
+    setUploadGenre(track.genre || "Ambient");
+    setUploadMode(track.price > 0 ? "paid" : "free");
+    setUploadPrice(String(track.price || 20));
+    setUploadFile(null);
+    setCoverFile(null);
+    setUploadOpen(true);
+  }, []);
+
   const pickAudio = useCallback(async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: "audio/*",
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    if (!result.canceled) {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "audio/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled) return;
       const file = result.assets[0];
       setUploadFile(file);
       const titleFromFile = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
-      setUploadTitle(titleFromFile || file.name);
+      if (!editingTrack || !uploadTitle.trim()) setUploadTitle(titleFromFile || file.name);
+    } catch (error) {
+      showAlert("Could not choose audio", error);
+    }
+  }, [editingTrack, uploadTitle]);
+
+  const pickCover = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (!result.canceled) setCoverFile(result.assets[0]);
+    } catch (error) {
+      showAlert("Could not choose cover art", error);
     }
   }, []);
 
   const submitUpload = useCallback(async () => {
-    if (uploadMode === "paid" && !canMonetize) {
+    if (uploading) return;
+    if (!uploadTitle.trim() || (!editingTrack && !uploadFile)) {
+      showAlert(
+        editingTrack ? "Add a track title" : "Add a title and audio",
+        editingTrack
+          ? "Enter a title before saving your changes."
+          : "Choose the track you want to publish before continuing.",
+      );
+      return;
+    }
+
+    const price = uploadMode === "free" ? 0 : Number(uploadPrice);
+    if (uploadMode === "paid" && (!Number.isInteger(price) || price < 1 || price > 100000)) {
+      showAlert("Check the ACoin price", "Enter a whole-number price from 1 to 100,000 ACoin.");
+      return;
+    }
+    const keepingCurrentPrice = !!editingTrack && price === editingTrack.price;
+    if (price > 0 && !canMonetize && !keepingCurrentPrice) {
       showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to sell music.", [
         { text: "Not now", style: "cancel" },
         ...(onOpenPlans ? [{ text: "View plans", onPress: onOpenPlans }] : []),
       ]);
       return;
     }
-    if (uploading) return;
-    if (!uploadTitle.trim() || !uploadFile) {
-      showAlert("Add a title and audio", "Choose the track you want to publish before continuing.");
-      return;
-    }
+
     setUploading(true);
     try {
-      const payload = {
+      const payload: MusicTrackInput = {
         title: uploadTitle.trim(),
         genre: uploadGenre,
-        price: uploadMode === "free" ? 0 : Math.max(1, Math.floor(Number(uploadPrice) || 0)),
-        fileUri: uploadFile.uri,
-        fileName: uploadFile.name,
-        mimeType: uploadFile.mimeType,
-        fileSize: uploadFile.size,
+        price,
+        ...(uploadFile ? {
+          fileUri: uploadFile.uri,
+          fileName: uploadFile.name,
+          mimeType: uploadFile.mimeType ?? undefined,
+          fileSize: uploadFile.size ?? undefined,
+        } : {}),
+        ...(coverFile ? {
+          coverFileUri: coverFile.uri,
+          coverFileName: coverFile.fileName ?? undefined,
+          coverMimeType: coverFile.mimeType ?? undefined,
+          coverFileSize: coverFile.fileSize ?? undefined,
+        } : {}),
       };
-      if (!onUpload) throw new Error("AfuMusic publishing is unavailable.");
-      const result = await onUpload(payload);
-      if (result) {
+
+      if (editingTrack) {
+        if (!onUpdateUpload) throw new Error("Track editing is unavailable.");
+        const result = await onUpdateUpload(editingTrack, payload);
+        const savedTrack = {
+          ...result,
+          artist: result.artist || "You",
+          handle: result.handle || "@you",
+        };
+        setTracks((current) => current.map((track) => track.id === savedTrack.id ? savedTrack : track));
+        setStudioTracks((current) => current.map((track) => track.id === savedTrack.id ? savedTrack : track));
+        const hadOfflineCopy = cachedIds.includes(savedTrack.id);
+        if (uploadFile && hadOfflineCopy) {
+          setCachedIds((ids) => ids.filter((id) => id !== savedTrack.id));
+          setOfflineTracks((current) => current.filter((track) => track.id !== savedTrack.id));
+        }
+        closeUpload();
+        showAlert(
+          "Track updated",
+          `${savedTrack.title} was updated in your catalog.${uploadFile && hadOfflineCopy ? " Download the new audio again for offline listening." : ""}`,
+        );
+      } else {
+        if (!onUpload || !uploadFile) throw new Error("Choose an audio file before publishing.");
+        const result = await onUpload({
+          ...payload,
+          fileUri: uploadFile.uri,
+          fileName: uploadFile.name,
+        });
         const publishedTrack = {
           ...result,
           artist: result.artist || "You",
@@ -611,18 +707,30 @@ export default function AfuMusicApp({
         };
         setTracks((current) => [publishedTrack, ...current]);
         setStudioTracks((current) => [publishedTrack, ...current.filter((item) => item.id !== publishedTrack.id)]);
+        closeUpload();
+        showAlert("Published to AfuMusic", "Your track is ready for listeners.");
       }
-      setUploadOpen(false);
-      setUploadTitle("");
-      setUploadMode("free");
-      setUploadFile(null);
-      showAlert("Published to AfuMusic", "Your track is ready for listeners.");
-    } catch {
-      showAlert("Upload failed", "Your track was not published. Try again.");
+    } catch (error) {
+      showAlert(editingTrack ? "Could not update track" : "Upload failed", error);
     } finally {
       setUploading(false);
     }
-  }, [canMonetize, onOpenPlans, onUpload, uploadFile, uploadGenre, uploadMode, uploadPrice, uploadTitle, uploading]);
+  }, [
+    canMonetize,
+    cachedIds,
+    closeUpload,
+    coverFile,
+    editingTrack,
+    onOpenPlans,
+    onUpdateUpload,
+    onUpload,
+    uploadFile,
+    uploadGenre,
+    uploadMode,
+    uploadPrice,
+    uploadTitle,
+    uploading,
+  ]);
 
   const renderTrack = useCallback(({ item }: { item: AfuMusicTrack }) => (
     <TrackRow
@@ -634,9 +742,10 @@ export default function AfuMusicApp({
       onPlay={() => { void playTrack(item); }}
       onCache={() => handleCache(item)}
       canCache={Platform.OS !== "web"}
+      onEdit={() => openEditUpload(item)}
       onDelete={() => handleDeleteUpload(item)}
     />
-  ), [cachedIds, handleCache, handleDeleteUpload, openTrack, ownedIds, playTrack, section]);
+  ), [cachedIds, handleCache, handleDeleteUpload, openEditUpload, openTrack, ownedIds, playTrack, section]);
 
   const sectionTitle = section === "discover" ? "Discover" :
     section === "library" ? "Your library" :
@@ -707,7 +816,7 @@ export default function AfuMusicApp({
         </View>
         {section === "studio" ? (
           <Pressable
-            onPress={() => setUploadOpen(true)}
+            onPress={openCreateUpload}
             style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
           >
             <Ionicons name="add" size={19} color={PAPER} />
@@ -733,13 +842,13 @@ export default function AfuMusicApp({
           <Text style={[styles.loadingLabel, { color: colors.textMuted }]}>Loading your music</Text>
         </View>
       ) : loadError ? (
-        <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadTracks }} />
+        <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadCurrentSection }} />
       ) : filteredTracks.length === 0 ? (
         <EmptyState
           icon={section === "offline" ? "cloud-download-outline" : section === "studio" ? "mic-outline" : "albums-outline"}
           title={section === "offline" ? "Nothing saved offline" : section === "library" ? "Your library is waiting" : section === "studio" ? "Your studio is ready" : "No tracks found"}
           message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : section === "studio" ? "Tracks you publish will appear here. Choose an audio file to release your first track." : "Try another search or publish your first track."}
-          action={section === "studio" ? { label: "Publish a track", onPress: () => setUploadOpen(true) } : undefined}
+          action={section === "studio" ? { label: "Publish a track", onPress: openCreateUpload } : undefined}
         />
       ) : (
         <View style={styles.trackList}>
@@ -785,38 +894,69 @@ export default function AfuMusicApp({
         </View>
       </Modal>
 
-      <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => setUploadOpen(false)}>
+      <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => { if (!uploading) closeUpload(); }}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
           <View style={[styles.uploadSheet, { backgroundColor: colors.background }]}>
-            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={[styles.purchaseTitle, { color: colors.text }]}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
+            <ScrollView
+              style={styles.uploadFormScroll}
+              contentContainerStyle={styles.uploadFormContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={[styles.purchaseTitle, { color: colors.text }]}>{editingTrack ? "Edit track" : "Publish a track"}</Text></View><Pressable onPress={closeUpload} hitSlop={10} disabled={uploading} accessibilityLabel="Close track editor"><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Track title</Text>
-            <TextInput value={uploadTitle} onChangeText={setUploadTitle} placeholder="Give it a name" placeholderTextColor={colors.textMuted} style={[styles.formInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]} />
+            <TextInput value={uploadTitle} onChangeText={setUploadTitle} editable={!uploading} placeholder="Give it a name" placeholderTextColor={colors.textMuted} style={[styles.formInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]} />
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Genre</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
-              {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
+              {Array.from(new Set([...GENRES.slice(1), ...(editingTrack?.genre ? [editingTrack.genre] : [])])).map((item) => <Pressable key={item} disabled={uploading} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
             </ScrollView>
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Availability</Text>
             <View style={[styles.uploadModeRow, { borderColor: colors.border }]}>
-              <Pressable onPress={() => setUploadMode("free")} style={[styles.uploadModeOption, uploadMode === "free" && { backgroundColor: accent }]}>
+              <Pressable disabled={uploading} onPress={() => setUploadMode("free")} style={[styles.uploadModeOption, uploadMode === "free" && { backgroundColor: accent }]}>
                 <Text style={[styles.uploadModeTitle, { color: uploadMode === "free" ? PAPER : colors.text }]}>Free</Text>
                 <Text style={[styles.uploadModeHint, { color: uploadMode === "free" ? PAPER : colors.textMuted }]}>Anyone can listen</Text>
               </Pressable>
-              <Pressable onPress={() => setUploadMode("paid")} style={[styles.uploadModeOption, uploadMode === "paid" && { backgroundColor: accent }]}>
+              <Pressable disabled={uploading} onPress={() => setUploadMode("paid")} style={[styles.uploadModeOption, uploadMode === "paid" && { backgroundColor: accent }]}>
                 <Text style={[styles.uploadModeTitle, { color: uploadMode === "paid" ? PAPER : colors.text }]}>Paid</Text>
                 <Text style={[styles.uploadModeHint, { color: uploadMode === "paid" ? PAPER : colors.textMuted }]}>Unlock with ACoin</Text>
               </Pressable>
             </View>
             {uploadMode === "paid" ? <>
               <Text style={[styles.fieldLabel, { color: colors.text }]}>Price</Text>
-              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} editable={!uploading} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
               {!canMonetize ? <Text style={[styles.uploadEligibility, { color: colors.textMuted }]}>Paid uploads require an active Standard or Pro plan, or a verified badge.</Text> : null}
             </> : null}
-            <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
-              <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
-              <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "Ready to publish" : "MP3, M4A, or WAV"}</Text></View>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Cover art</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={coverFile ? "Change selected cover art" : "Choose cover art"}
+              disabled={uploading}
+              onPress={() => void pickCover()}
+              style={({ pressed }) => [styles.coverPicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}
+            >
+              <View style={[styles.coverPreview, { backgroundColor: colors.background }]}>
+                {coverFile?.uri || editingTrack?.coverUrl ? (
+                  <Image source={{ uri: coverFile?.uri || editingTrack?.coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                ) : (
+                  <Ionicons name="image-outline" size={21} color={colors.textMuted} />
+                )}
+              </View>
+              <View style={styles.filePickerCopy}>
+                <Text style={[styles.filePickerTitle, { color: colors.text }]} numberOfLines={1}>
+                  {coverFile?.fileName || (editingTrack?.coverUrl ? "Current cover art" : "Add cover art")}
+                </Text>
+                <Text style={[styles.filePickerSub, { color: colors.textMuted }]}>Optional · square JPEG, PNG or WebP</Text>
+              </View>
               <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
-            <Pressable onPress={() => void submitUpload()} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish {uploadMode === "free" ? "free track" : "paid track"}</Text></>}</Pressable>
+            <Text style={[styles.fieldLabel, { color: colors.text }]}>Audio file</Text>
+            <Pressable disabled={uploading} onPress={() => void pickAudio()} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
+              <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
+              <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : editingTrack ? "Replace audio (optional)" : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "New audio ready" : editingTrack ? "Current audio stays unless replaced" : "MP3, M4A, or WAV"}</Text></View>
+              <Ionicons name="chevron-forward" size={17} color={MUTED} />
+            </Pressable>
+            <Pressable onPress={() => void submitUpload()} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name={editingTrack ? "checkmark-circle-outline" : "arrow-up-circle-outline"} size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>{editingTrack ? "Save changes" : `Publish ${uploadMode === "free" ? "free track" : "paid track"}`}</Text></>}</Pressable>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -906,7 +1046,11 @@ const styles = StyleSheet.create({
   playerUnavailableText: { color: "#D0CADC", fontFamily: "Inter_500Medium", fontSize: 11, textAlign: "center", flex: 1 },
   playerNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 21 },
   playerNoteText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
-  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 21, paddingTop: 24, paddingBottom: 27 },
+  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 21, paddingTop: 24, paddingBottom: 27, maxHeight: "92%" },
+  uploadFormScroll: { flexShrink: 1 },
+  uploadFormContent: { paddingBottom: 4 },
+  coverPicker: { flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderStyle: "dashed", borderRadius: 15, padding: 10, marginTop: 2 },
+  coverPreview: { width: 56, height: 56, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
   formInput: { height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },

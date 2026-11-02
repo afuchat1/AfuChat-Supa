@@ -1,5 +1,5 @@
 import React from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
@@ -50,9 +50,11 @@ import {
   removeMusicTrack,
   removeMusicTrackOffline,
   searchMusicTracks,
+  updateMusicTrack,
 } from "@/lib/afuMusic";
 import { useAuth } from "@/context/AuthContext";
 import { isVerifiedCreator } from "@/lib/creatorEntitlements";
+import { safeRouter } from "@/lib/navUtils";
 
 const APP_IDS: FullAppId[] = [
   "afupay", "afumarket", "afugames", "afubusiness", "afusearch",
@@ -166,7 +168,6 @@ export default function FullAppRoute() {
 
 function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
   const { profile, subscription, refreshProfile } = useAuth();
-  const router = useRouter();
   const canMonetize = isVerifiedCreator(profile?.is_verified, subscription);
   return (
     <AfuMusicApp
@@ -185,9 +186,10 @@ function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
       onListOffline={listOfflineMusicTracks}
       onResolveAudio={getMusicPlaybackUri}
       onUpload={publishMusicTrack}
+      onUpdateUpload={updateMusicTrack}
       onDeleteUpload={removeMusicTrack}
-      onOpenWallet={() => router.push("/app/afupay")}
-      onOpenPlans={() => router.push("/premium")}
+      onOpenWallet={() => safeRouter.push("/app/afupay")}
+      onOpenPlans={() => safeRouter.push("/premium")}
       canMonetize={canMonetize}
     />
   );

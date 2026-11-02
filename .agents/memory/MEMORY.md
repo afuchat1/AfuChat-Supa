@@ -11,3 +11,4 @@
 - [Find People recommendations](find-people-recommendations.md) — Prefer unseen people on refresh, rank shared interests and mutual connections, and keep the layout free of suggestion labels/icons.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Use the shared floating nav where needed; AfuSearch omits its app-shell bottom bar.
 - [Android module compatibility](android-module-compatibility.md) — App modules must work on Android 14 and earlier across phone brands; verify device-specific crashes from reports.
+- [TypeScript check heap](typescript-check-heap.md) — Run full mobile typechecks with a 4 GB Node heap; the default heap can run out before diagnostics.
