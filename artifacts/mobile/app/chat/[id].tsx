@@ -2632,11 +2632,19 @@ function ChatScreen() {
   const [envelopeCount, setEnvelopeCount] = useState("1");
   const [showEmojiStickerPicker, setShowEmojiStickerPicker] = useState(false);
   const showEmojiStickerPickerRef = useRef(false);
-  const emojiPanelTranslateY = useRef(new Animated.Value(1)).current;
+  const [emojiPanelMounted, setEmojiPanelMounted] = useState(false);
+  const [chatInputFocused, setChatInputFocused] = useState(false);
+  const chatInputFocusedRef = useRef(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [miniProfileUserId, setMiniProfileUserId] = useState<string | null>(null);
   const [emojiKeyboardHeight, setEmojiKeyboardHeight] = useState(280);
   const emojiKeyboardHeightRef = useRef(280);
+  const [webKeyboardVisible, setWebKeyboardVisible] = useState(false);
+  const webKeyboardVisibleRef = useRef(false);
+  const webKeyboardHeightRef = useRef(0);
+  const webViewportHeightRef = useRef(0);
+  const webKeyboardHandoffRef = useRef(false);
+  const webKeyboardTranslateY = useRef(new Animated.Value(0)).current;
   const safeBottomRef = useRef(insets.bottom);
   safeBottomRef.current = insets.bottom;
   const keyboardOffsetAnim = useRef(new Animated.Value(insets.bottom)).current;
@@ -2732,20 +2740,22 @@ function ChatScreen() {
         emojiKeyboardHeightRef.current = panelContentHeight;
         setEmojiKeyboardHeight(panelContentHeight);
       }
-      if (Platform.OS !== "ios") setKeyboardHeight(h);
+      setKeyboardHeight(h);
       animateComposerBottom(
         Math.max(h, safeBottomRef.current),
         Platform.OS === "ios" ? (e.duration ?? CHAT_FAST_DURATION) : CHAT_FAST_DURATION,
       );
-      if (Platform.OS !== "ios" && showEmojiStickerPickerRef.current) {
-        setEmojiPickerVisible(false);
-      }
     });
     const onHide = Keyboard.addListener(hideEvent, (e) => {
       const nextBottom = showEmojiStickerPickerRef.current
         ? emojiKeyboardHeightRef.current + safeBottomRef.current
         : safeBottomRef.current;
       if (Platform.OS !== "ios") setKeyboardHeight(0);
+      if (Platform.OS !== "ios" && !showEmojiStickerPickerRef.current) {
+        setEmojiPanelMounted(false);
+        chatInputFocusedRef.current = false;
+        setChatInputFocused(false);
+      }
       animateComposerBottom(
         nextBottom,
         Platform.OS === "ios" ? (e?.duration ?? CHAT_FAST_DURATION) : CHAT_FAST_DURATION,
@@ -2754,11 +2764,17 @@ function ChatScreen() {
     const onIOSDidShow = Platform.OS === "ios"
       ? Keyboard.addListener("keyboardDidShow", (e) => {
           setKeyboardHeight(e.endCoordinates.height);
-          if (showEmojiStickerPickerRef.current) setEmojiPickerVisible(false);
         })
       : null;
     const onIOSDidHide = Platform.OS === "ios"
-      ? Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0))
+      ? Keyboard.addListener("keyboardDidHide", () => {
+          setKeyboardHeight(0);
+          if (!showEmojiStickerPickerRef.current) {
+            setEmojiPanelMounted(false);
+            chatInputFocusedRef.current = false;
+            setChatInputFocused(false);
+          }
+        })
       : null;
     return () => {
       onShow.remove();
@@ -2766,7 +2782,113 @@ function ChatScreen() {
       onIOSDidShow?.remove();
       onIOSDidHide?.remove();
     };
-  }, [animateComposerBottom, setEmojiPickerVisible]);
+  }, [animateComposerBottom]);
+
+  // React Native Web does not emit Keyboard events. Track the visual viewport
+  // so the emoji panel can remain under the browser keyboard and be revealed
+  // in place when that keyboard closes.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+
+    const viewport = window.visualViewport;
+    const getVisibleBottom = () =>
+      (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0);
+    webViewportHeightRef.current = Math.max(window.innerHeight, getVisibleBottom());
+
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const onViewportChange = () => {
+      const visibleBottom = getVisibleBottom();
+      const wasKeyboardVisible = webKeyboardHeightRef.current > 1;
+
+      if (!chatInputFocusedRef.current && !wasKeyboardVisible) {
+        webViewportHeightRef.current = Math.max(window.innerHeight, visibleBottom);
+      }
+
+      const measuredHeight = Math.max(
+        0,
+        Math.round(webViewportHeightRef.current - visibleBottom),
+      );
+      const nextHeight = measuredHeight > 1 ? measuredHeight : 0;
+      webKeyboardHeightRef.current = nextHeight;
+      webKeyboardTranslateY.setValue(nextHeight);
+
+      if (webKeyboardHandoffRef.current) {
+        const nextComposerBottom = Math.max(
+          safeBottomRef.current,
+          emojiKeyboardHeightRef.current + safeBottomRef.current - nextHeight,
+        );
+        composerBottomTargetRef.current = nextComposerBottom;
+        keyboardOffsetAnim.stopAnimation();
+        keyboardOffsetAnim.setValue(nextComposerBottom);
+      }
+
+      const isKeyboardVisible = nextHeight > 1;
+      if (webKeyboardVisibleRef.current !== isKeyboardVisible) {
+        webKeyboardVisibleRef.current = isKeyboardVisible;
+        setWebKeyboardVisible(isKeyboardVisible);
+      }
+
+      if (isKeyboardVisible) {
+        setEmojiPanelMounted(true);
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          const measuredKeyboardHeight = webKeyboardHeightRef.current;
+          if (measuredKeyboardHeight <= 1) return;
+          const panelContentHeight = Math.max(
+            100,
+            measuredKeyboardHeight - safeBottomRef.current,
+          );
+          if (Math.abs(emojiKeyboardHeightRef.current - panelContentHeight) > 1) {
+            emojiKeyboardHeightRef.current = panelContentHeight;
+            setEmojiKeyboardHeight(panelContentHeight);
+          }
+          if (webKeyboardHandoffRef.current) {
+            webKeyboardHandoffRef.current = false;
+            const targetBottom = showEmojiStickerPickerRef.current
+              ? emojiKeyboardHeightRef.current + safeBottomRef.current
+              : safeBottomRef.current;
+            composerBottomTargetRef.current = targetBottom;
+            keyboardOffsetAnim.stopAnimation();
+            keyboardOffsetAnim.setValue(targetBottom);
+          }
+        }, 100);
+      } else {
+        if (settleTimer) {
+          clearTimeout(settleTimer);
+          settleTimer = null;
+        }
+        if (wasKeyboardVisible && !showEmojiStickerPickerRef.current) {
+          setEmojiPanelMounted(false);
+          chatInputFocusedRef.current = false;
+          setChatInputFocused(false);
+        }
+        if (webKeyboardHandoffRef.current) {
+          webKeyboardHandoffRef.current = false;
+          const targetBottom = showEmojiStickerPickerRef.current
+            ? emojiKeyboardHeightRef.current + safeBottomRef.current
+            : safeBottomRef.current;
+          composerBottomTargetRef.current = targetBottom;
+          keyboardOffsetAnim.stopAnimation();
+          keyboardOffsetAnim.setValue(targetBottom);
+        }
+        if (!chatInputFocusedRef.current) {
+          webViewportHeightRef.current = Math.max(window.innerHeight, visibleBottom);
+        }
+      }
+    };
+
+    onViewportChange();
+    viewport?.addEventListener("resize", onViewportChange);
+    viewport?.addEventListener("scroll", onViewportChange);
+    window.addEventListener("resize", onViewportChange);
+
+    return () => {
+      if (settleTimer) clearTimeout(settleTimer);
+      viewport?.removeEventListener("resize", onViewportChange);
+      viewport?.removeEventListener("scroll", onViewportChange);
+      window.removeEventListener("resize", onViewportChange);
+    };
+  }, [keyboardOffsetAnim, webKeyboardTranslateY]);
   useEffect(() => {
     Animated.spring(chatSearchAnim, {
       toValue: searchActive ? 1 : 0,
@@ -3003,37 +3125,41 @@ function ChatScreen() {
   const chatInputRef = useRef<TextInput>(null);
   const openEmojiStickerPicker = useCallback(() => {
     if (showEmojiStickerPickerRef.current) return;
-    emojiPanelTranslateY.stopAnimation();
+    const switchingFromWebKeyboard =
+      Platform.OS === "web" && webKeyboardHeightRef.current > 1;
+    if (switchingFromWebKeyboard) {
+      const panelContentHeight = Math.max(
+        100,
+        webKeyboardHeightRef.current - safeBottomRef.current,
+      );
+      emojiKeyboardHeightRef.current = panelContentHeight;
+      setEmojiKeyboardHeight(panelContentHeight);
+    }
+    webKeyboardHandoffRef.current = switchingFromWebKeyboard;
+    setEmojiPanelMounted(true);
     setEmojiPickerVisible(true);
     setShowAttachPanel(false);
-    animateComposerBottom(emojiKeyboardHeightRef.current + safeBottomRef.current);
-    Animated.timing(emojiPanelTranslateY, {
-      toValue: 0,
-      duration: CHAT_FAST_DURATION,
-      easing: CHAT_FAST_EASING,
-      useNativeDriver: true,
-    }).start();
+    const panelHeight = emojiKeyboardHeightRef.current + safeBottomRef.current;
+    animateComposerBottom(
+      switchingFromWebKeyboard
+        ? Math.max(safeBottomRef.current, panelHeight - webKeyboardHeightRef.current)
+        : panelHeight,
+    );
+    chatInputRef.current?.blur();
     Keyboard.dismiss();
-  }, [animateComposerBottom, emojiPanelTranslateY, setEmojiPickerVisible]);
+  }, [animateComposerBottom, setEmojiPickerVisible]);
   const closeEmojiStickerPicker = useCallback((afterClose?: () => void) => {
     if (!showEmojiStickerPickerRef.current) {
       afterClose?.();
       return;
     }
-    showEmojiStickerPickerRef.current = false;
-    emojiPanelTranslateY.stopAnimation();
-    animateComposerBottom(safeBottomRef.current);
-    Animated.timing(emojiPanelTranslateY, {
-      toValue: 1,
-      duration: CHAT_FAST_DURATION,
-      easing: CHAT_FAST_EASING,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) return;
-      setShowEmojiStickerPicker(false);
-      afterClose?.();
-    });
-  }, [animateComposerBottom, emojiPanelTranslateY]);
+    setEmojiPickerVisible(false);
+    if (keyboardHeight <= 0 && webKeyboardHeightRef.current <= 1) {
+      setEmojiPanelMounted(false);
+      animateComposerBottom(safeBottomRef.current);
+    }
+    afterClose?.();
+  }, [animateComposerBottom, keyboardHeight, setEmojiPickerVisible]);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
   const selectionClearTimer = useRef<any>(null);
@@ -7818,7 +7944,14 @@ STRICT RULES:
   // so the input bar never intrudes into the gesture-navigation area on
   // devices where keyboardHeight does not already include that inset.
   const emojiPanelHeight = emojiKeyboardHeight + insets.bottom;
-  const effectiveBottom = showEmojiStickerPicker && !keyboardHeight
+  const emojiPanelVisible =
+    showEmojiStickerPicker ||
+    (Platform.OS === "web"
+      ? webKeyboardVisible
+      : chatInputFocused || keyboardHeight > 0);
+  const emojiPanelOccupiesBottom =
+    showEmojiStickerPicker && !(Platform.OS === "web" && webKeyboardVisible);
+  const effectiveBottom = emojiPanelOccupiesBottom && !keyboardHeight
     ? emojiPanelHeight
     : keyboardHeight > 0
       ? Math.max(keyboardHeight, insets.bottom)
@@ -8514,16 +8647,17 @@ STRICT RULES:
                           accessibilityRole="button"
                           accessibilityLabel={showEmojiStickerPicker ? "Show keyboard" : "Open emoji picker"}
                           onPress={() => {
-                          if (showEmojiStickerPicker) {
-                            if (Platform.OS === "web") {
-                              closeEmojiStickerPicker(() => chatInputRef.current?.focus());
-                            } else {
+                            if (showEmojiStickerPicker) {
+                              if (Platform.OS === "web") {
+                                webKeyboardHandoffRef.current = true;
+                              }
+                              setEmojiPickerVisible(false);
+                              setEmojiPanelMounted(true);
                               chatInputRef.current?.focus();
+                            } else {
+                              openEmojiStickerPicker();
                             }
-                          } else {
-                            openEmojiStickerPicker();
-                          }
-                        }}
+                          }}
                         >
                           <Ionicons
                             name={showEmojiStickerPicker ? "keypad" : "happy"}
@@ -8572,7 +8706,32 @@ STRICT RULES:
                             );
                           }}
                           onFocus={() => {
+                            const switchingFromEmoji = showEmojiStickerPickerRef.current;
+                            chatInputFocusedRef.current = true;
+                            setChatInputFocused(true);
+                            setEmojiPanelMounted(true);
+                            if (Platform.OS === "web" && switchingFromEmoji) {
+                              webKeyboardHandoffRef.current = true;
+                            }
+                            if (showEmojiStickerPickerRef.current) {
+                              setEmojiPickerVisible(false);
+                            }
+                            if (Platform.OS === "web") {
+                              const targetBottom = webKeyboardHandoffRef.current
+                                ? Math.max(
+                                    safeBottomRef.current,
+                                    emojiKeyboardHeightRef.current +
+                                      safeBottomRef.current -
+                                      webKeyboardHeightRef.current,
+                                  )
+                                : safeBottomRef.current;
+                              animateComposerBottom(targetBottom);
+                            }
                             if (showAttachPanel) setShowAttachPanel(false);
+                          }}
+                          onBlur={() => {
+                            chatInputFocusedRef.current = false;
+                            setChatInputFocused(false);
                           }}
                           onSelectionChange={(e) => {
                             const sel = e.nativeEvent.selection;
@@ -8685,22 +8844,19 @@ STRICT RULES:
 
       </Animated.View>
 
-      {/* The system keyboard naturally covers this bottom-anchored panel. Keep it
-          mounted until keyboardDidShow so switching back does not flash empty space. */}
-      {showEmojiStickerPicker && (
+      {/* Keep the picker mounted under the system keyboard so switching modes
+          reveals it in place instead of animating a second surface into view. */}
+      {emojiPanelMounted && (
         <Animated.View
+          pointerEvents={showEmojiStickerPicker ? "auto" : "none"}
           style={{
             position: "absolute",
             left: 0,
             right: 0,
             bottom: 0,
             height: emojiPanelHeight,
-            transform: [{
-              translateY: emojiPanelTranslateY.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, emojiPanelHeight],
-              }),
-            }],
+            opacity: emojiPanelVisible ? 1 : 0,
+            transform: [{ translateY: Platform.OS === "web" ? webKeyboardTranslateY : 0 }],
             backgroundColor: colors.surface,
             zIndex: 50,
           }}
