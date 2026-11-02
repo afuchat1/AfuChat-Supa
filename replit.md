@@ -81,7 +81,7 @@ pnpm run typecheck
 
 ## Important conventions
 
-- For anonymous Expo Go testing, use `expo start --go --tunnel` with `EXPO_OFFLINE`, `EXPO_TOKEN`, `EXPO_ACCESS_TOKEN`, `REPLIT_EXPO_SESSION_SECRET`, and `CI` unset. This avoids EAS/session login prompts and lets Expo print a scannable QR. In this workspace, `EXPO_OFFLINE=1` makes Expo fall back to a LAN URL instead of connecting the tunnel. Do not add the separate `--offline` CLI flag because Expo rejects it together with `--tunnel`.
+- For anonymous Expo Go testing, use `expo start --go --tunnel` with `EXPO_OFFLINE`, `EXPO_TOKEN`, `EXPO_ACCESS_TOKEN`, and `REPLIT_EXPO_SESSION_SECRET` unset. Pipe CLI output through a non-interactive stream so Expo proceeds anonymously. Keep `CI` unset because it breaks native bundle serving. In this workspace, `EXPO_OFFLINE=1` makes Expo fall back to a LAN URL instead of connecting the tunnel. Do not add the separate `--offline` CLI flag because Expo rejects it together with `--tunnel`.
 - Keep `NODE_OPTIONS=--max-old-space-size=4096` on the Expo Go workflow because this route graph exceeds Node's default heap during Metro startup.
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).
