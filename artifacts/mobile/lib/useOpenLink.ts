@@ -3,28 +3,16 @@ import { Linking } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Clipboard from "expo-clipboard";
 import { showAlert } from "@/lib/alert";
+import { openExternalLink } from "@/lib/openExternalLink";
 
-const WEB_SCHEMES = ["http://", "https://"];
+export { isWebUrl } from "@/lib/openExternalLink";
 
-export function isWebUrl(url: string) {
-  return WEB_SCHEMES.some((s) => url.startsWith(s));
-}
-
-// Default tap on a link: open web URLs in Chrome Custom Tabs and send
-// non-http links (mailto, tel, sms) to the OS handler.
+// Default tap: open web URLs in the in-app browser and send non-web schemes
+// (mailto, tel, sms, and app deep links) to their OS handlers.
 export function useOpenLink() {
   return useCallback((url: string) => {
     if (!url) return;
-    const trimmed = url.trim();
-
-    if (isWebUrl(trimmed)) {
-      WebBrowser.openBrowserAsync(trimmed, {
-        showTitle: true,
-        enableBarCollapsing: true,
-      }).catch(() => Linking.openURL(trimmed).catch(() => {}));
-    } else {
-      Linking.openURL(trimmed).catch(() => {});
-    }
+    void openExternalLink(url).catch(() => {});
   }, []);
 }
 

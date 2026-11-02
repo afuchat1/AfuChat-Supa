@@ -19,6 +19,7 @@ import Colors from "@/constants/colors";
 import Constants from "expo-constants";
 import { openAppReview } from "@/lib/appReview";
 import { useLanguage } from "@/context/LanguageContext";
+import { openExternalLink } from "@/lib/openExternalLink";
 
 const VERSION = Constants.expoConfig?.version ?? "2.2.5";
 const BUILD   = (Constants.expoConfig?.android as any)?.versionCode
@@ -88,7 +89,7 @@ const LINKS = [
   { icon: "shield-checkmark",label: "about.privacy",    onPress: () => router.push("/privacy") },
   { icon: "help-buoy",       label: "about.help_support",    onPress: () => router.push("/support" as any) },
   { icon: "star",            label: "about.rate_on_google_play", onPress: () => openAppReview().catch(() => {}) },
-  { icon: "globe",           label: "about.visit_website", onPress: () => Linking.openURL("https://afuchat.com").catch(() => {}) },
+  { icon: "globe",           label: "about.visit_website", onPress: () => openExternalLink("https://afuchat.com").catch(() => {}) },
   { icon: "mail",            label: "about.contact_us",        onPress: () => Linking.openURL("mailto:hello@afuchat.com").catch(() => {}) },
 ] as const;
 
@@ -222,7 +223,7 @@ export default function AboutScreen() {
         {/* GitHub */}
         <TouchableOpacity
           style={[s.githubCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => Linking.openURL(GITHUB_URL).catch(() => {})}
+          onPress={() => openExternalLink(GITHUB_URL).catch(() => {})}
           activeOpacity={0.82}
         >
           <View style={[s.githubIconBox, { backgroundColor: isDark ? "#ffffff14" : "#00000010" }]}>

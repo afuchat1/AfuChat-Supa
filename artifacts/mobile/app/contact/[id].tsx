@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -35,6 +34,7 @@ import { showToast } from "@/lib/toast";
 import * as Haptics from "@/lib/haptics";
 import { getPrestigeTier } from "@/lib/prestige";
 import { LinearGradient } from "@/components/ui/SafeGradient";
+import { openExternalLink } from "@/lib/openExternalLink";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -770,7 +770,7 @@ export default function ContactScreen() {
                 const url = /^https?:\/\//i.test(profile.website_url!)
                   ? profile.website_url!
                   : `https://${profile.website_url!}`;
-                Linking.openURL(url).catch(() => {});
+                openExternalLink(url).catch(() => {});
               }}
               activeOpacity={0.75}>
               <Ionicons name="link" size={11} color={accent} />

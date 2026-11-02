@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from "expo-camera";
 import { useTheme } from "@/hooks/useTheme";
+import { openExternalLink } from "@/lib/openExternalLink";
 import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
 import Colors from "@/constants/colors";
@@ -60,7 +61,7 @@ export default function AfuQRApp() {
     if (!result) return;
     const { data } = result;
     if (/^https?:\/\//i.test(data)) {
-      await Linking.openURL(data).catch(() => showAlert("Error", "Could not open URL."));
+      await openExternalLink(data).catch(() => showAlert("Error", "Could not open URL."));
     } else if (/^tel:/i.test(data)) {
       await Linking.openURL(data).catch(() => showAlert("Error", "Could not open phone."));
     } else if (/^mailto:/i.test(data)) {

@@ -16,7 +16,6 @@ import {
   FlatList,
   Image as RNImage,
   Keyboard,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -31,6 +30,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { openExternalLink } from "@/lib/openExternalLink";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
@@ -141,7 +141,7 @@ function LinkPreviewCard({ url, colors }: { url: string; colors: any }) {
     <TouchableOpacity
       activeOpacity={0.85}
       style={[st.linkCard, { backgroundColor: colors.card }]}
-      onPress={() => { Linking.openURL(url).catch(() => {}); }}
+      onPress={() => { openExternalLink(url).catch(() => {}); }}
     >
       <View style={[st.linkThumb, { backgroundColor: colors.backgroundSecondary }]}>
         {ogImage

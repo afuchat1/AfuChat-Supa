@@ -1,6 +1,7 @@
 import { Linking, Platform } from "react-native";
 import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import { supabase } from "@/lib/supabase";
+import { openExternalLink } from "@/lib/openExternalLink";
 import { isOnline } from "@/lib/offlineStore";
 import {
   getLocalPhoneContacts,
@@ -229,7 +230,7 @@ export async function sendWhatsAppInvite(normalizedPhone: string): Promise<void>
   } catch {}
 
   try {
-    await Linking.openURL(webUrl);
+    await openExternalLink(webUrl);
   } catch {
     // Keep the invite action quiet when WhatsApp is not installed.
   }
