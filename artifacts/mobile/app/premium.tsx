@@ -488,14 +488,19 @@ export default function PremiumScreen() {
   if (loading) {
     return (
       <View style={[s.flex, { backgroundColor: colors.background }]}>
-        <View style={[s.nav, { paddingTop: topInset + 8, backgroundColor: colors.background, borderBottomColor: sep }]}>
+        <View
+          style={[
+            s.nav,
+            { top: topInset + 8, backgroundColor: cardBg, borderColor: sep, shadowColor: colors.text },
+          ]}
+        >
           <GlassBackButton onPress={() => router.back()} style={s.backBtn} />
           <Text style={[s.navTitle, { color: colors.text }]}>Premium</Text>
           <View style={{ width: 40 }} />
         </View>
         <ScrollView
           style={s.flex}
-          contentContainerStyle={s.scrollContent}
+          contentContainerStyle={[s.scrollContent, { paddingTop: topInset + 72 }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.pageContent, isWide && s.pageContentWide]}>
@@ -519,7 +524,12 @@ export default function PremiumScreen() {
   return (
     <View style={[s.flex, { backgroundColor: colors.background }]}>
       {/* Nav */}
-      <View style={[s.nav, { paddingTop: topInset + 8, backgroundColor: colors.background, borderBottomColor: sep }]}>
+      <View
+        style={[
+          s.nav,
+          { top: topInset + 8, backgroundColor: cardBg, borderColor: sep, shadowColor: colors.text },
+        ]}
+      >
         <GlassBackButton onPress={() => router.back()} style={s.backBtn} />
         <Text style={[s.navTitle, { color: colors.text }]}>Premium</Text>
         <View style={{ width: 40 }} />
@@ -527,7 +537,7 @@ export default function PremiumScreen() {
 
       <ScrollView
         style={s.flex}
-        contentContainerStyle={s.scrollContent}
+        contentContainerStyle={[s.scrollContent, { paddingTop: topInset + 72 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.pageContent, isWide && s.pageContentWide]}>
@@ -788,13 +798,21 @@ const s = StyleSheet.create({
     maxWidth: 820,
   },
   nav: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    zIndex: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderRadius: 18,
+    zIndex: 20,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", letterSpacing: -0.3 },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
