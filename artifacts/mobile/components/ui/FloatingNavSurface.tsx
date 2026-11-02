@@ -7,6 +7,7 @@ import {
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
+  type ViewProps,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,12 +15,12 @@ import { useTheme } from "@/hooks/useTheme";
 import { floatingNavigationShadow, GLASS, glassTokens } from "@/constants/glass";
 import { T } from "@/constants/theme";
 
-type FloatingGlassSurfaceProps = {
+type FloatingGlassSurfaceProps = Omit<ViewProps, "children" | "style" | "onLayout"> & {
   children: React.ReactNode;
   fill?: boolean;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
-  onLayout?: (event: LayoutChangeEvent) => void;
+  onLayout?: ViewProps["onLayout"];
 };
 
 export function FloatingGlassSurface({
@@ -28,20 +29,22 @@ export function FloatingGlassSurface({
   style,
   contentStyle,
   onLayout,
+  ...viewProps
 }: FloatingGlassSurfaceProps) {
   const { colors, isDark } = useTheme();
   const glass = glassTokens(isDark);
 
   return (
     <View
+      {...viewProps}
       style={[
         styles.glassSurface,
+        style,
         {
           backgroundColor: colors.navigationSurface,
           borderColor: colors.navigationBorder,
           ...floatingNavigationShadow(isDark),
         },
-        style,
       ]}
     >
       <View style={fill ? styles.glassClip : styles.glassClipAuto}>

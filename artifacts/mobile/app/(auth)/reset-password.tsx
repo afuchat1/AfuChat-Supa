@@ -13,6 +13,8 @@ import {
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
+import AfuTextInput from "@/components/ui/AfuTextInput";
 import AuthContent from "@/components/ui/AuthContent";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
@@ -133,9 +135,10 @@ export default function ResetPasswordNative() {
 
         {step === "email" ? (
           <>
-            <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="mail" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
-              <TextInput
+              <AfuTextInput
+                appearance="embedded"
                 style={[s.input, { color: colors.text }]}
                 placeholder={t("you@example.com")}
                 placeholderTextColor={colors.textMuted}
@@ -148,7 +151,7 @@ export default function ResetPasswordNative() {
                 onSubmitEditing={sendCode}
                 returnKeyType="go"
               />
-            </View>
+            </FloatingGlassSurface>
             <TouchableOpacity
               style={[s.btn, { backgroundColor: accent, opacity: loading ? 0.6 : 1 }]}
               onPress={sendCode}
@@ -163,9 +166,10 @@ export default function ResetPasswordNative() {
         ) : (
           <>
             {/* OTP code */}
-            <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="keypad" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
-              <TextInput
+              <AfuTextInput
+                appearance="embedded"
                 style={[s.input, { color: colors.text }]}
                 placeholder={t("6-digit code from email")}
                 placeholderTextColor={colors.textMuted}
@@ -174,11 +178,12 @@ export default function ResetPasswordNative() {
                 keyboardType="number-pad"
                 autoFocus
               />
-            </View>
+            </FloatingGlassSurface>
             {/* New password */}
-            <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="lock-closed" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
-              <TextInput
+              <AfuTextInput
+                appearance="embedded"
                 style={[s.input, { color: colors.text }]}
                 placeholder={t("New password")}
                 placeholderTextColor={colors.textMuted}
@@ -189,11 +194,12 @@ export default function ResetPasswordNative() {
               <TouchableOpacity onPress={() => setShowPwd(p => !p)} style={{ padding: 4 }}>
                 <Ionicons name={showPwd ? "eye-off" : "eye"} size={17} color={colors.textMuted} />
               </TouchableOpacity>
-            </View>
+            </FloatingGlassSurface>
             {/* Confirm password */}
-            <View style={[s.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <FloatingGlassSurface fill={false} style={s.inputWrap} contentStyle={s.inputRow}>
               <Ionicons name="lock-closed" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
-              <TextInput
+              <AfuTextInput
+                appearance="embedded"
                 style={[s.input, { color: colors.text }]}
                 placeholder={t("Confirm new password")}
                 placeholderTextColor={colors.textMuted}
@@ -203,7 +209,7 @@ export default function ResetPasswordNative() {
                 onSubmitEditing={doReset}
                 returnKeyType="go"
               />
-            </View>
+            </FloatingGlassSurface>
 
             <TouchableOpacity
               style={[s.btn, { backgroundColor: accent, opacity: loading ? 0.6 : 1 }]}
@@ -237,8 +243,9 @@ const s = StyleSheet.create({
   sub: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22, marginBottom: 24 },
   errBox: { backgroundColor: "rgba(192,57,43,.12)", borderColor: "rgba(192,57,43,.3)", borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 14 },
   errTxt: { color: "#FF6B6B", fontSize: 13, fontFamily: "Inter_400Regular" },
-  inputWrap: { flexDirection: "row", alignItems: "center", borderWidth: 0.5, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, ...Platform.select({ web: { boxShadow: "0 3px 12px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.13, shadowRadius: 12, elevation: 8 } }) },
-  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", outlineStyle: "none" } as any,
+  inputWrap: { alignSelf: "stretch", minHeight: 46, marginBottom: 12 },
+  inputRow: { width: "100%", minHeight: 46, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 2, gap: 8 },
+  input: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, fontFamily: "Inter_400Regular", paddingHorizontal: 0, paddingVertical: 6, outlineStyle: "none" } as any,
   btn: { borderRadius: 999, paddingVertical: 14, alignItems: "center", marginTop: 4 },
   btnTxt: { fontSize: 15, fontFamily: "Inter_700Bold" },
 });

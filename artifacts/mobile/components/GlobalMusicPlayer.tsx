@@ -6,6 +6,7 @@ import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 
 let NativeAudio: typeof import("expo-av").Audio | null = null;
@@ -535,15 +536,26 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
               pointerEvents="box-none"
               style={[styles.floatingPlayer, { transform: floatingDrag.getTranslateTransform() }]}
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Open current song: ${activeMusic.track.title}`}
-                onPress={() => { setExpanded(true); setMinimized(false); }}
-                style={[styles.floatingButton, { backgroundColor: activeMusic.track.coverColor || "#19172F" }]}
+              <FloatingGlassSurface
+                fill
+                style={styles.floatingSurface}
+                contentStyle={styles.floatingSurfaceContent}
               >
-                <Ionicons name="musical-notes" size={23} color={activeMusic.track.accentColor || accent} />
-                <View style={[styles.floatingIndicator, { backgroundColor: accent }]} />
-              </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open current song: ${activeMusic.track.title}`}
+                  onPress={() => { setExpanded(true); setMinimized(false); }}
+                  style={styles.floatingButton}
+                >
+                  <Ionicons name="musical-notes" size={23} color={activeMusic.track.accentColor || accent} />
+                  <View
+                    style={[
+                      styles.floatingIndicator,
+                      { backgroundColor: accent, borderColor: colors.navigationSurface },
+                    ]}
+                  />
+                </Pressable>
+              </FloatingGlassSurface>
             </Animated.View>
           ) : null}
         </>
@@ -560,14 +572,21 @@ const styles = StyleSheet.create({
     zIndex: 1100,
     elevation: 16,
   },
-  floatingButton: {
+  floatingSurface: {
     width: 56,
     height: 56,
+  },
+  floatingSurfaceContent: {
+    flex: 1,
+    width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
+  },
+  floatingButton: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
   },
   floatingIndicator: {
     position: "absolute",
@@ -578,7 +597,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#1F95FF",
     borderWidth: 1,
-    borderColor: "#FFFFFF",
+    borderColor: "rgba(255,255,255,0.9)",
   },
   overlay: {
     position: "absolute",

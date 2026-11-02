@@ -36,6 +36,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
+import AfuTextInput from "@/components/ui/AfuTextInput";
 import { CHAT_FAST_DURATION, CHAT_FAST_EASING } from "@/lib/chatMotion";
 import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
@@ -8494,7 +8495,8 @@ STRICT RULES:
                             color={showEmojiStickerPicker ? colors.accent : colors.textSecondary}
                           />
                         </TouchableOpacity>
-                        <TextInput
+                        <AfuTextInput
+                          appearance="embedded"
                           ref={chatInputRef}
                           style={[st.input, { color: colors.text }]}
                           placeholder="Message"

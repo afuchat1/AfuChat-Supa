@@ -32,6 +32,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { openExternalLink } from "@/lib/openExternalLink";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
+import AfuTextInput from "@/components/ui/AfuTextInput";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 
@@ -1029,16 +1031,17 @@ export default function PostDetailScreen() {
               <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
 
               {/* Glass pill — text + secondary icons + send */}
-              <View style={[st.inputPill, {
-                backgroundColor: inputBg,
-                borderColor: isDark ? "rgba(255,255,255,0.13)" : "rgba(26,18,8,0.13)",
-              }]}>
-                <View style={st.inputPillInner}>
+              <FloatingGlassSurface
+                fill={false}
+                style={st.inputPill}
+                contentStyle={st.inputPillInner}
+              >
                   {recordState === "recording" ? (
                     <RecordingBar elapsed={recordElapsed} onStop={() => stopRecording()} accent={accent} />
                   ) : (
                     <>
-                      <TextInput
+                      <AfuTextInput
+                        appearance="embedded"
                         ref={inputRef}
                         style={[st.textInput, { color: inputTxt }]}
                         placeholder={recordState === "recorded" ? "Add a caption… (optional)" : "Add a comment…"}
@@ -1086,8 +1089,7 @@ export default function PostDetailScreen() {
                       )}
                     </>
                   )}
-                </View>
-              </View>
+              </FloatingGlassSurface>
 
               {/* Mic — standalone circle button, separated from the pill */}
               <TouchableOpacity
@@ -1211,15 +1213,9 @@ const st = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
   },
-  inputPill: {
-    flex: 1, borderRadius: 999, borderWidth: 0.5, overflow: "hidden",
-    ...Platform.select({
-      web: { boxShadow: "0 4px 20px rgba(0,0,0,0.14)" } as any,
-      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 12, elevation: 10 },
-    }),
-  },
-  inputPillInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 4, gap: 2 },
-  textInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, maxHeight: 100, paddingVertical: 4, paddingHorizontal: 4 },
+  inputPill: { flex: 1 },
+  inputPillInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 5, paddingVertical: 2, gap: 4 },
+  textInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 20, maxHeight: 120, paddingVertical: 6, paddingHorizontal: 0 },
   charCounter: { fontSize: 10, fontFamily: "Inter_500Medium" },
   iconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   sendBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginRight: 2 },
