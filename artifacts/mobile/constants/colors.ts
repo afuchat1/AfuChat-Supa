@@ -28,49 +28,49 @@ export const STATUS = {
 const light = {
   // ── Typography ──────────────────────────────────────────────────────────────
   text:              "#000000",
-  textSecondary:     "#5A5040",
-  textMuted:         "#8C7F6A",
+  textSecondary:     "#4F493F",
+  textMuted:         "#625B50",
 
-  // ── Backgrounds — flat UI: one universal BG, no card elevation ──────────────
-  background:        "#F5F0E8",   // page / screen
-  backgroundSecondary: "#F5F0E8", // same — no layering
-  backgroundTertiary:  "#F5F0E8", // same — no layering
-  surface:           "#F5F0E8",   // elevated surfaces
-  card:              "#F5F0E8",
+  // ── Backgrounds — warm canvas with clearly separated surfaces ───────────────
+  background:        "#F0EBE1",   // page / screen
+  backgroundSecondary: "#E8E1D5",
+  backgroundTertiary:  "#DED7CA",
+  surface:           "#FFFEFA",   // elevated surfaces
+  card:              "#FFFFFF",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "#DDD7C9",
-  separator:         "#DDD7C9",
+  border:            "#A79D8D",
+  separator:         "#B7AD9D",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
   tint:              BRAND,
-  tabIconDefault:    "#8C7F6A",
+  tabIconDefault:    "#625B50",
   tabIconSelected:   BRAND,
 
   // ── Icons ───────────────────────────────────────────────────────────────────
-  icon:              "#4A4035",
-  iconMuted:         "#8C7F6A",
+  icon:              "#3E392F",
+  iconMuted:         "#625B50",
 
   // ── Chat bubbles ────────────────────────────────────────────────────────────
   bubble:            BRAND,
   bubbleText:        "#FFFFFF",
-  bubbleIncoming:    "#EDE8DC",
+  bubbleIncoming:    "#E2DBCF",
   bubbleIncomingText:"#1A1208",
 
   // ── Form inputs ─────────────────────────────────────────────────────────────
-  inputBg:           "#EDE8DC",
+  inputBg:           "#FFFFFF",
 
   // ── Glass surface tokens (light equivalents — subtle shadows) ────────────────
-  glassBg:           "rgba(0,0,0,0.05)",
-  glassBgSubtle:     "rgba(0,0,0,0.03)",
+  glassBg:           "rgba(0,0,0,0.08)",
+  glassBgSubtle:     "rgba(0,0,0,0.05)",
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  header:            "#F5F0E8",
-  navigationSurface: "#F5F0E8",
-  navigationBorder:  "#DDD7C9",
+  header:            "#F0EBE1",
+  navigationSurface: "#FFFEFA",
+  navigationBorder:  "#A79D8D",
   navigationActive:  BRAND,
-  navigationInactive: "#8C7F6A",
+  navigationInactive: "#625B50",
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeBg:           STATUS.error,
@@ -79,7 +79,7 @@ const light = {
   // ── Presence ────────────────────────────────────────────────────────────────
   online:            BRAND,
   unread:            BRAND,
-  avatar:            "#DDD7C9",
+  avatar:            "#C7BEAF",
 
   // ── Semantic status (reflected from STATUS for component convenience) ────────
   success:           STATUS.success,
@@ -94,50 +94,50 @@ const light = {
 
 const dark = {
   // ── Typography ──────────────────────────────────────────────────────────────
-  text:              "#E8EAED",
-  textSecondary:     "#BDC1C6",
-  textMuted:         "#9AA0A6",
+  text:              "#F4F5F7",
+  textSecondary:     "#D8DCE1",
+  textMuted:         "#B8BDC5",
 
-  // ── Backgrounds — flat UI: one universal BG, no card elevation ──────────────
-  background:        "#202124",
-  backgroundSecondary: "#202124", // AfuSearch's shared dark surface
-  backgroundTertiary:  "#202124", // same — no layering
-  surface:           "#202124",
-  card:              "#202124",
+  // ── Backgrounds — layered charcoal surfaces with clear separation ───────────
+  background:        "#18191C",
+  backgroundSecondary: "#202226",
+  backgroundTertiary:  "#292B30",
+  surface:           "#25272C",
+  card:              "#2C2F34",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "#3C4043",
-  separator:         "rgba(255,255,255,0.08)",
+  border:            "#5C6068",
+  separator:         "rgba(255,255,255,0.18)",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
   tint:              BRAND,
-  tabIconDefault:    "#717171",
+  tabIconDefault:    "#B8BDC5",
   tabIconSelected:   BRAND,
 
   // ── Icons ───────────────────────────────────────────────────────────────────
-  icon:              "#BDC1C6",
-  iconMuted:         "#9AA0A6",
+  icon:              "#D8DCE1",
+  iconMuted:         "#B8BDC5",
 
   // ── Chat bubbles ────────────────────────────────────────────────────────────
   bubble:            BRAND,
   bubbleText:        "#FFFFFF",
-  bubbleIncoming:    "#303134",
-  bubbleIncomingText:"#E8EAED",
+  bubbleIncoming:    "#2B2E33",
+  bubbleIncomingText:"#F4F5F7",
 
   // ── Form inputs — glass style matching auth screens ──────────────────────────
-  inputBg:           "#303134",
+  inputBg:           "#2C2F34",
 
   // ── Glass surface tokens (match login / welcome glass aesthetic) ─────────────
-  glassBg:           "rgba(255,255,255,0.08)",
-  glassBgSubtle:     "rgba(255,255,255,0.05)",
+  glassBg:           "rgba(255,255,255,0.12)",
+  glassBgSubtle:     "rgba(255,255,255,0.08)",
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  header:            "#202124",
-  navigationSurface: "#202124",
-  navigationBorder:  "#3C4043",
+  header:            "#202226",
+  navigationSurface: "#24262B",
+  navigationBorder:  "#5C6068",
   navigationActive:  "#FFF8F0",
-  navigationInactive: "#B9BAC4",
+  navigationInactive: "#B8BDC5",
 
   // ── Badges ──────────────────────────────────────────────────────────────────
   badgeBg:           STATUS.error,
@@ -146,7 +146,7 @@ const dark = {
   // ── Presence ────────────────────────────────────────────────────────────────
   online:            BRAND,
   unread:            BRAND,
-  avatar:            "#303134",
+  avatar:            "#34373D",
 
   // ── Semantic status (reflected from STATUS for component convenience) ────────
   success:           STATUS.success,

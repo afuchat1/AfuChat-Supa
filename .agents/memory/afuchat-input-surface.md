@@ -7,7 +7,7 @@ All app text-input surfaces should share the compact rounded glass style of the 
 
 The full-screen post image viewer enforces a dark presentation; keep its reply input surface dark regardless of the app theme.
 
-In chat, keep the first line compact; grow only as text wraps, stop at three lines, and scroll additional text inside the field. Anchor the emoji and send controls to the composer’s bottom edge and keep the emoji picker aligned to the keyboard. Place reply context inside the same shell above the message row, without a separate border. The AI editor control shows only “AI,” with no word count or outline, and floats above the send button without taking input width. Hide the gift control once text is entered, but keep the attachment picker available so the entered text can be sent as an attachment caption.
+In chat, keep the first line compact; grow only as text wraps, stop at three lines, and scroll additional text inside the field. Anchor the emoji and send controls to the composer’s bottom edge and keep the emoji picker aligned to the keyboard. Place reply context inside the same shell above the message row, without a separate border. The AI editor is a visible, icon-only sparkles button floated above the send button with a clear gap; do not use an “AI” text label or outline, and do not let it take input width. The emoji/keypad toggle must switch between picker and keyboard while keeping the icon color unchanged in both states. Hide the gift control once text is entered, but keep the attachment picker available so the entered text can be sent as an attachment caption.
 
 **Why:** the user explicitly requested consistent compact input surfaces and a dark reply bar in the full-screen post image viewer, independent of theme.
 

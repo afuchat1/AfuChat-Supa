@@ -77,9 +77,9 @@ const INK = "#000000";
 const CORAL = "#1018D8";
 const COBALT = "#1018D8";
 const GOLD = "#D4A853";
-const CANVAS = "#F5F0E8";
+const CANVAS = "#F0EBE1";
 const PAPER = "#FFFFFF";
-const MUTED = "#8C7F6A";
+const MUTED = "#625B50";
 
 const GENRES = ["All", "Ambient", "Electronic", "R&B", "Acoustic", "Lo-fi"];
 
@@ -226,7 +226,7 @@ function TrackRow({
         )}
         {owned && canCache ? (
           <Pressable onPress={onCache} hitSlop={8} accessibilityLabel={cached ? "Available offline" : "Save offline"}>
-            <Ionicons name={cached ? "arrow-down-circle" : "arrow-down-circle-outline"} size={21} color={cached ? COBALT : MUTED} />
+            <Ionicons name={cached ? "arrow-down-circle" : "arrow-down-circle-outline"} size={21} color={cached ? COBALT : colors.textMuted} />
           </Pressable>
         ) : null}
         <Ionicons name="chevron-forward" size={17} color="#B2A79B" />
@@ -861,7 +861,7 @@ export default function AfuMusicApp({
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={[styles.purchaseSheet, { backgroundColor: colors.background }]}>
+          <View style={[styles.purchaseSheet, { backgroundColor: colors.surface }]}>
             {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={6} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
             <Text style={[styles.purchaseTitle, { color: colors.text }]}>{purchaseTrack?.title}</Text>
@@ -896,7 +896,7 @@ export default function AfuMusicApp({
 
       <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => { if (!uploading) closeUpload(); }}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
-          <View style={[styles.uploadSheet, { backgroundColor: colors.background }]}>
+          <View style={[styles.uploadSheet, { backgroundColor: colors.surface }]}>
             <ScrollView
               style={styles.uploadFormScroll}
               contentContainerStyle={styles.uploadFormContent}
@@ -923,7 +923,7 @@ export default function AfuMusicApp({
             </View>
             {uploadMode === "paid" ? <>
               <Text style={[styles.fieldLabel, { color: colors.text }]}>Price</Text>
-              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} editable={!uploading} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} editable={!uploading} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={[styles.acoinSuffix, { color: colors.textMuted }]}>ACoin</Text></View>
               {!canMonetize ? <Text style={[styles.uploadEligibility, { color: colors.textMuted }]}>Paid uploads require an active Standard or Pro plan, or a verified badge.</Text> : null}
             </> : null}
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Cover art</Text>
@@ -947,13 +947,13 @@ export default function AfuMusicApp({
                 </Text>
                 <Text style={[styles.filePickerSub, { color: colors.textMuted }]}>Optional · square JPEG, PNG or WebP</Text>
               </View>
-              <Ionicons name="chevron-forward" size={17} color={MUTED} />
+              <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
             </Pressable>
             <Text style={[styles.fieldLabel, { color: colors.text }]}>Audio file</Text>
             <Pressable disabled={uploading} onPress={() => void pickAudio()} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
               <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
               <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : editingTrack ? "Replace audio (optional)" : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "New audio ready" : editingTrack ? "Current audio stays unless replaced" : "MP3, M4A, or WAV"}</Text></View>
-              <Ionicons name="chevron-forward" size={17} color={MUTED} />
+              <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
             </Pressable>
             <Pressable onPress={() => void submitUpload()} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name={editingTrack ? "checkmark-circle-outline" : "arrow-up-circle-outline"} size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>{editingTrack ? "Save changes" : `Publish ${uploadMode === "free" ? "free track" : "paid track"}`}</Text></>}</Pressable>
             </ScrollView>

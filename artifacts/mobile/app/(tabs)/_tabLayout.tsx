@@ -322,6 +322,7 @@ export function CompactTabBar({
               {
                 bottom: PILL_BOTTOM + PILL_H + 12,
                 right: 24,
+                  backgroundColor: accentColor,
                 transform: [{ scale: createFabScale }],
               },
             ]}
@@ -330,11 +331,7 @@ export function CompactTabBar({
              accessibilityLabel={showCreateActions ? t("navigation.close_create_options") : t("navigation.create")}
             accessibilityState={{ expanded: showCreateActions }}
           >
-            <FloatingGlassSurface
-              pointerEvents="none"
-              style={StyleSheet.absoluteFill}
-            />
-            <Ionicons name={showCreateActions ? "close" : "add"} size={28} color={accentColor} />
+            <Ionicons name={showCreateActions ? "close" : "add"} size={28} color="#fff" />
           </TouchableOpacity>
         </>
       )}
@@ -353,16 +350,13 @@ export function CompactTabBar({
             {
               bottom: PILL_BOTTOM + PILL_H + 12,
               right: 24,
+              backgroundColor: accentColor,
               transform: [{ scale: composeFabScale }],
             },
           ]}
           activeOpacity={0.82}
         >
-          <FloatingGlassSurface
-            pointerEvents="none"
-            style={StyleSheet.absoluteFill}
-          />
-          <Ionicons name="create-outline" size={24} color={accentColor} />
+          <Ionicons name="create-outline" size={24} color="#fff" />
         </TouchableOpacity>
       )}
 
@@ -378,6 +372,11 @@ const pill = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
   },
   actionFab: {
     position: "absolute",

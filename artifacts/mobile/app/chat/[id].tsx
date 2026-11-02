@@ -8152,20 +8152,19 @@ STRICT RULES:
             <Animated.View
               style={[st.scrollFab, { opacity: scrollBtnOpacity, bottom: effectiveBottom + floatingInputHeight + 8, pointerEvents: showScrollBtn ? "auto" : "none" }]}
             >
-              <FloatingGlassSurface
-                fill={false}
-                style={st.scrollFabGlass}
-                contentStyle={st.scrollFabGlassContent}
+              <TouchableOpacity
+                onPress={scrollToBottom}
+                style={[st.scrollFabBtn, { backgroundColor: colors.accent }]}
+                activeOpacity={0.8}
+                accessibilityRole="button"
               >
-                <TouchableOpacity onPress={scrollToBottom} style={st.scrollFabBtn} activeOpacity={0.7}>
-                  <Ionicons name="chevron-down" size={22} color={colors.text} />
-                  {newMsgCount > 0 && (
-                    <View style={[st.scrollFabBadge, { backgroundColor: BRAND }]}>
-                      <Text style={st.scrollFabBadgeText}>{newMsgCount > 99 ? "99+" : newMsgCount}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </FloatingGlassSurface>
+                <Ionicons name="chevron-down" size={24} color="#fff" />
+                {newMsgCount > 0 && (
+                  <View style={[st.scrollFabBadge, { backgroundColor: colors.accent }]}>
+                    <Text style={st.scrollFabBadgeText}>{newMsgCount > 99 ? "99+" : newMsgCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             </Animated.View>
           </View>
         )}
@@ -8516,7 +8515,11 @@ STRICT RULES:
                           accessibilityLabel={showEmojiStickerPicker ? "Show keyboard" : "Open emoji picker"}
                           onPress={() => {
                           if (showEmojiStickerPicker) {
-                            chatInputRef.current?.focus();
+                            if (Platform.OS === "web") {
+                              closeEmojiStickerPicker(() => chatInputRef.current?.focus());
+                            } else {
+                              chatInputRef.current?.focus();
+                            }
                           } else {
                             openEmojiStickerPicker();
                           }
@@ -8525,7 +8528,7 @@ STRICT RULES:
                           <Ionicons
                             name={showEmojiStickerPicker ? "keypad" : "happy"}
                             size={22}
-                            color={showEmojiStickerPicker ? colors.accent : colors.textSecondary}
+                            color={colors.textSecondary}
                           />
                         </TouchableOpacity>
                         <AfuTextInput
@@ -8666,11 +8669,13 @@ STRICT RULES:
                   <TouchableOpacity
                     onPress={() => { Keyboard.dismiss(); setShowAiEditor(true); }}
                     hitSlop={8}
-                    style={st.aiAboveSendBtn}
+                    style={[st.aiAboveSendBtn, { backgroundColor: colors.accent }]}
                     accessibilityRole="button"
                     accessibilityLabel="Open AI message editor"
+                    accessibilityHint="Opens AI tools for the current draft"
+                    activeOpacity={0.75}
                   >
-                    <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.3 }}>AI</Text>
+                    <Ionicons name="sparkles" size={21} color="#fff" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -10380,17 +10385,20 @@ const st = StyleSheet.create({
     position: "absolute",
     right: 16,
     bottom: 8,
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
   },
-  scrollFabGlass: { width: "100%", height: "100%" },
-  scrollFabGlassContent: { flex: 1, alignItems: "center", justifyContent: "center" },
   scrollFabBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.24,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
   },
   scrollFabBadge: {
     position: "absolute",
@@ -10747,7 +10755,7 @@ const st = StyleSheet.create({
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, paddingTop: 6, paddingBottom: 6, minHeight: 24, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sendBtnCol: { alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
-  aiAboveSendBtn: { position: "absolute", right: 5, bottom: 44, zIndex: 5, paddingHorizontal: 8, paddingVertical: 0, alignItems: "center", justifyContent: "center" },
+  aiAboveSendBtn: { position: "absolute", right: 5, bottom: 54, width: 40, height: 40, borderRadius: 20, zIndex: 5, alignItems: "center", justifyContent: "center", elevation: 5, shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
   recHoldGlass: { minHeight: 44 },
   recWaveRow: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 8 },
   recCancelHint: { flexDirection: "row", alignItems: "center", gap: 2, paddingRight: 6 },

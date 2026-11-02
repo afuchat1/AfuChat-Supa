@@ -552,7 +552,7 @@ export function VideoCommentsSheet({
   inline?: boolean;
 }) {
   const { accent } = useAppAccent();
-  const { isDark } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   // Stable ref so the keyboard listeners (set up with [] deps) always read the
@@ -561,25 +561,25 @@ export function VideoCommentsSheet({
   useEffect(() => { insetsRef.current = insets; }, [insets]);
 
   // ── Theme tokens ─────────────────────────────────────────────────────────
-  const sheetBg      = isDark ? "#111115"                   : "#F5F0E8";
-  const handleClr    = isDark ? "rgba(255,255,255,0.2)"     : "rgba(0,0,0,0.18)";
-  const titleClr     = isDark ? "#fff"                      : "#1A1208";
-  const titleCntClr  = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
-  const sortTabTxt   = isDark ? "rgba(255,255,255,0.45)"    : "rgba(26,18,8,0.5)";
-  const closeBtnClr  = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.5)";
-  const separatorClr = isDark ? "rgba(255,255,255,0.1)"     : "rgba(26,18,8,0.1)";
-  const emptyIconClr = isDark ? "rgba(255,255,255,0.2)"     : "rgba(26,18,8,0.2)";
-  const emptyTxtClr  = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.5)";
-  const emptySubClr  = isDark ? "rgba(255,255,255,0.3)"     : "rgba(26,18,8,0.35)";
-  const replyToTxt   = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.55)";
-  const replyToIcon  = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
-  const inputBg      = isDark ? "rgba(255,255,255,0.08)"    : "#EDE8DC";
-  const inputTxt     = isDark ? "#fff"                      : "#1A1208";
-  const inputPH      = isDark ? "rgba(255,255,255,0.3)"     : "rgba(26,18,8,0.35)";
-  const attachIconCl = isDark ? "rgba(255,255,255,0.45)"    : "rgba(26,18,8,0.45)";
-  const sendDisabled = isDark ? "rgba(255,255,255,0.12)"    : "rgba(0,0,0,0.09)";
-  const borderTopClr = isDark ? "rgba(255,255,255,0.08)"    : "rgba(26,18,8,0.08)";
-  const imgRmvClr    = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
+  const sheetBg      = isDark ? "#111115" : colors.surface;
+  const handleClr    = isDark ? "rgba(255,255,255,0.34)" : colors.border;
+  const titleClr     = colors.text;
+  const titleCntClr  = colors.textSecondary;
+  const sortTabTxt   = colors.textSecondary;
+  const closeBtnClr  = colors.textSecondary;
+  const separatorClr = colors.separator;
+  const emptyIconClr = colors.textMuted;
+  const emptyTxtClr  = colors.textSecondary;
+  const emptySubClr  = colors.textMuted;
+  const replyToTxt   = colors.textSecondary;
+  const replyToIcon  = colors.textMuted;
+  const inputBg      = colors.inputBg;
+  const inputTxt     = colors.text;
+  const inputPH      = colors.textMuted;
+  const attachIconCl = colors.textSecondary;
+  const sendDisabled = isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.10)";
+  const borderTopClr = colors.separator;
+  const imgRmvClr    = colors.textSecondary;
 
   const sheetTranslateY = useRef(new Animated.Value(1000)).current;
   // Animated keyboard offset — drives ONLY the input bar (no driver restrictions: useNativeDriver: false)
