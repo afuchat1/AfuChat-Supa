@@ -8445,6 +8445,7 @@ STRICT RULES:
                 onClose={() => setInputSelection({ start: 0, end: 0 })}
               />
               {/* One shared glass bar contains the message field and its primary action. */}
+              <View style={st.inputComposerWrap}>
               <AfuInputSurface
                 variant="navigation"
                 cornerRadius={composerInputLines > 1 || (!!replyTo && !editingMessage) ? 24 : 999}
@@ -8587,28 +8588,24 @@ STRICT RULES:
                           blurOnSubmit={false}
                           onSubmitEditing={chatPrefs.enter_to_send ? () => sendMessage() : undefined}
                         />
-                        {!input.trim() && (
-                          <>
-                            {!chatInfo?.is_group && !chatInfo?.is_channel && !isAfuAiDirectChat && !isLocalNotes && (
-                              <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
-                                <Ionicons name="gift" size={22} color={colors.textMuted} />
-                              </TouchableOpacity>
-                            )}
-                            {(chatInfo?.is_group || chatInfo?.is_channel) && (
-                              <TouchableOpacity onPress={() => setShowRedEnvelope(true)} hitSlop={8} style={st.pillIcon}>
-                                <Text style={{ fontSize: 19 }}>🧧</Text>
-                              </TouchableOpacity>
-                            )}
-                            {!isAfuAiDirectChat && !isLocalNotes && (
-                              <TouchableOpacity onPress={() => {
-                                Keyboard.dismiss();
-                                closeEmojiStickerPicker(() => setShowAttachPanel((v) => !v));
-                              }} hitSlop={8} style={st.pillIcon}>
-                                {/* Bigger attach icon — easier to tap */}
-                                <Ionicons name={showAttachPanel ? "close" : "attach"} size={26} color={showAttachPanel ? colors.accent : colors.textMuted} style={showAttachPanel ? undefined : { transform: [{ rotate: "-45deg" }] }} />
-                              </TouchableOpacity>
-                            )}
-                          </>
+                        {!input.trim() && !chatInfo?.is_group && !chatInfo?.is_channel && !isAfuAiDirectChat && !isLocalNotes && (
+                          <TouchableOpacity onPress={() => setShowGiftPicker(true)} hitSlop={8} style={st.pillIcon}>
+                            <Ionicons name="gift" size={22} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        )}
+                        {!input.trim() && (chatInfo?.is_group || chatInfo?.is_channel) && (
+                          <TouchableOpacity onPress={() => setShowRedEnvelope(true)} hitSlop={8} style={st.pillIcon}>
+                            <Text style={{ fontSize: 19 }}>🧧</Text>
+                          </TouchableOpacity>
+                        )}
+                        {!isAfuAiDirectChat && !isLocalNotes && (
+                          <TouchableOpacity onPress={() => {
+                            Keyboard.dismiss();
+                            closeEmojiStickerPicker(() => setShowAttachPanel((v) => !v));
+                          }} hitSlop={8} style={st.pillIcon}>
+                            {/* Bigger attach icon — easier to tap */}
+                            <Ionicons name={showAttachPanel ? "close" : "attach"} size={26} color={showAttachPanel ? colors.accent : colors.textMuted} style={showAttachPanel ? undefined : { transform: [{ rotate: "-45deg" }] }} />
+                          </TouchableOpacity>
                         )}
                       </View>
                     )}
@@ -8623,16 +8620,6 @@ STRICT RULES:
                   )}
                   {(input.trim() || attachmentPreview || selectedImages.length > 0) && !isRecording ? (
                     <View style={st.sendBtnCol}>
-                      {input.trim().length > 50 && !editingMessage && !attachmentPreview && selectedImages.length === 0
-                        ? (
-                          <TouchableOpacity
-                            onPress={() => { Keyboard.dismiss(); setShowAiEditor(true); }}
-                            hitSlop={8}
-                            style={st.aiAboveSendBtn}
-                          >
-                            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.3 }}>AI</Text>
-                          </TouchableOpacity>
-                        ) : <View />}
                       <TouchableOpacity
                         onPress={editingMessage ? saveEditMessage : (attachmentPreview || selectedImages.length > 0) ? sendAttachment : () => sendMessage()}
                         disabled={sending}
@@ -8675,6 +8662,18 @@ STRICT RULES:
                   )}
                 </View>
               </AfuInputSurface>
+                {input.trim().length > 50 && composerInputLines > 1 && !editingMessage && !attachmentPreview && selectedImages.length === 0 && (
+                  <TouchableOpacity
+                    onPress={() => { Keyboard.dismiss(); setShowAiEditor(true); }}
+                    hitSlop={8}
+                    style={st.aiAboveSendBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open AI message editor"
+                  >
+                    <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.3 }}>AI</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </>
         )}
@@ -10723,6 +10722,7 @@ const st = StyleSheet.create({
     paddingTop: 4,
     ...Platform.select({ web: { paddingHorizontal: 8 } }),
   },
+  inputComposerWrap: { position: "relative", alignSelf: "stretch" },
   inputComposerSurface: { flex: 1, alignSelf: "stretch" },
   inputBarRow: {
     flexDirection: "row",
@@ -10746,8 +10746,8 @@ const st = StyleSheet.create({
   pillIcon: { height: 44, paddingHorizontal: 5, alignItems: "center", justifyContent: "center" },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, paddingTop: 6, paddingBottom: 6, minHeight: 24, maxHeight: 120 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  sendBtnCol: { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 4 },
-  aiAboveSendBtn: { paddingHorizontal: 8, paddingVertical: 6, alignItems: "center", justifyContent: "center" },
+  sendBtnCol: { alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
+  aiAboveSendBtn: { position: "absolute", right: 5, bottom: 44, zIndex: 5, paddingHorizontal: 8, paddingVertical: 0, alignItems: "center", justifyContent: "center" },
   recHoldGlass: { minHeight: 44 },
   recWaveRow: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 8 },
   recCancelHint: { flexDirection: "row", alignItems: "center", gap: 2, paddingRight: 6 },
