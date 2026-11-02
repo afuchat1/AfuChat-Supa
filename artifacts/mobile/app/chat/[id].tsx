@@ -2792,7 +2792,8 @@ function ChatScreen() {
 
     const viewport = window.visualViewport;
     const getVisibleBottom = () =>
-      (viewport?.height ?? window.innerHeight) + (viewport?.offsetTop ?? 0);
+      Math.round((viewport?.height ?? window.innerHeight) * (viewport?.scale ?? 1)) +
+      (viewport?.offsetTop ?? 0);
     webViewportHeightRef.current = Math.max(window.innerHeight, getVisibleBottom());
 
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -7947,7 +7948,7 @@ STRICT RULES:
   const emojiPanelVisible =
     showEmojiStickerPicker ||
     (Platform.OS === "web"
-      ? webKeyboardVisible
+      ? webKeyboardVisible && webKeyboardHandoffRef.current
       : chatInputFocused || keyboardHeight > 0);
   const emojiPanelOccupiesBottom =
     showEmojiStickerPicker && !(Platform.OS === "web" && webKeyboardVisible);
