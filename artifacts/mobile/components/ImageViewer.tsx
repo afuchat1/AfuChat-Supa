@@ -23,7 +23,6 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/hooks/useTheme";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lazy-load Reanimated + GestureHandler with a try-catch IIFE.
@@ -727,7 +726,7 @@ function PostChrome({
               appearance="embedded"
               style={styles.replyInput}
               placeholder="Post your reply…"
-              placeholderTextColor="rgba(255,255,255,0.38)"
+              placeholderTextColor="rgba(255,255,255,0.56)"
               value={replyText}
               onChangeText={setReplyText}
               multiline={false}
@@ -801,7 +800,6 @@ type ViewerProps = {
 };
 
 function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta }: ViewerProps) {
-  const { colors } = useTheme();
   const {
     useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS,
     default: AnimatedRN,
@@ -884,7 +882,7 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose} hardwareAccelerated>
       <StatusBar style="light" />
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.root, styles.viewerBackground]}>
         {/* Ambient blurred background */}
         <Image
           source={{ uri: images[index] }}
@@ -960,7 +958,6 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
 }
 
 function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }: ViewerProps) {
-  const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex]   = useState(initialIndex);
@@ -1007,7 +1004,7 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <StatusBar style="light" />
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View style={[styles.root, styles.viewerBackground]}>
         <Image
           source={{ uri: images[index] }}
           style={StyleSheet.absoluteFill}
@@ -1115,6 +1112,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  viewerBackground: { backgroundColor: "rgba(0,0,0,1)" },
 
   header: {
     position: "absolute",
@@ -1235,7 +1233,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    backgroundColor: "rgba(0,0,0,0.50)",
+    backgroundColor: "rgba(0,0,0,0.88)",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(255,255,255,0.1)",
   },
@@ -1275,10 +1273,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(24,27,32,0.96)",
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: "rgba(255,255,255,0.16)",
     paddingHorizontal: 14,
     paddingVertical: 8,
     minHeight: 38,

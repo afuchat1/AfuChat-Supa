@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -308,7 +309,7 @@ function HandleStatus({ status, colors, accent }: {
   colors: any; accent: string;
 }) {
   if (status === "idle" || status === "own") return null;
-  if (status === "checking") return <ActivityIndicator size="small" color={colors.textMuted} style={{ marginLeft: 8 }} />;
+  if (status === "checking") return <ActivityIndicator size="small" color={colors.textMuted} />;
   const map = {
     available:      { icon: "checkmark-circle", color: "#34C759", label: "Available" },
     owned:          { icon: "checkmark-circle", color: "#34C759", label: "You own this username" },
@@ -319,7 +320,7 @@ function HandleStatus({ status, colors, accent }: {
   const cfg = map[status as keyof typeof map];
   if (!cfg) return null;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
       <Text style={{ fontSize: 11, color: cfg.color, fontFamily: "Inter_500Medium" }}>{cfg.label}</Text>
     </View>
@@ -711,8 +712,9 @@ export default function EditProfileScreen() {
         {/* ── Identity ── */}
         <SectionCard title="IDENTITY" icon="person" colors={colors}>
           <FieldRow label="Name" colors={colors}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
               <TextInput
+                appearance="embedded"
                 style={[styles.fieldInput, { color: nameLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
                 value={displayName}
                 onChangeText={setDisplayName}
@@ -723,9 +725,9 @@ export default function EditProfileScreen() {
                 editable={nameLockedDays === 0}
               />
               {nameLockedDays > 0 && (
-                <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
+                <Ionicons name="lock-closed" size={15} color={colors.textMuted} />
               )}
-            </View>
+            </AfuInputSurface>
             {nameLockedDays > 0 && (
               <Text style={[styles.handleHint, { color: colors.textMuted }]}>
                 {`Can change in ${nameLockedDays} day${nameLockedDays !== 1 ? "s" : ""} · changes every ${NAME_COOLDOWN_DAYS} days`}
@@ -733,9 +735,10 @@ export default function EditProfileScreen() {
             )}
           </FieldRow>
           <FieldRow label="Handle" noBorder colors={colors}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
               <Text style={[styles.handleAt, { color: colors.textMuted }]}>@</Text>
               <TextInput
+                appearance="embedded"
                 style={[styles.fieldInput, { color: handleLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
                 value={handle}
                 onChangeText={setHandle}
@@ -747,10 +750,10 @@ export default function EditProfileScreen() {
                 editable={handleLockedDays === 0}
               />
               {handleLockedDays > 0
-                ? <Ionicons name="lock-closed" size={14} color={colors.textMuted} style={{ marginLeft: 6 }} />
+                ? <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
                 : <HandleStatus status={handleStatus} colors={colors} accent={accent} />
               }
-            </View>
+            </AfuInputSurface>
             {handleLockedDays > 0 && (
               <Text style={[styles.handleHint, { color: colors.textMuted }]}>
                 {`Can change in ${handleLockedDays} day${handleLockedDays !== 1 ? "s" : ""} · changes every ${HANDLE_COOLDOWN_DAYS} days`}
@@ -771,15 +774,22 @@ export default function EditProfileScreen() {
         {/* ── About ── */}
         <SectionCard title="ABOUT" icon="document-text" colors={colors}>
           <FieldRow label="Bio" colors={colors}>
-            <TextInput
-              style={[styles.fieldInput, styles.bioInput, { color: colors.text }]}
-              value={bio}
-              onChangeText={t => setBio(t.slice(0, 150))}
-              placeholder="Tell people about yourself…"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              textAlignVertical="top"
-            />
+            <AfuInputSurface
+              variant="input"
+              cornerRadius={16}
+              contentStyle={styles.bioInputShell}
+            >
+              <TextInput
+                appearance="embedded"
+                style={[styles.fieldInput, styles.bioInput, { color: colors.text, flex: 1 }]}
+                value={bio}
+                onChangeText={t => setBio(t.slice(0, 150))}
+                placeholder="Tell people about yourself…"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                textAlignVertical="top"
+              />
+            </AfuInputSurface>
             <View style={styles.bioFooter}>
               <TouchableOpacity
                 style={[styles.aiBioBtn, { backgroundColor: accent + "14", borderColor: accent + "30" }]}
@@ -811,28 +821,33 @@ export default function EditProfileScreen() {
             </View>
           </FieldRow>
           <FieldRow label="Website" noBorder colors={colors}>
-            <TextInput
-              style={[styles.fieldInput, { color: colors.text }]}
-              value={website}
-              onChangeText={setWebsite}
-              placeholder="https://your-website.com"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              keyboardType="url"
-              autoCorrect={false}
-            />
+            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
+              <TextInput
+                appearance="embedded"
+                style={[styles.fieldInput, { color: colors.text, flex: 1 }]}
+                value={website}
+                onChangeText={setWebsite}
+                placeholder="https://your-website.com"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                keyboardType="url"
+                autoCorrect={false}
+              />
+            </AfuInputSurface>
           </FieldRow>
         </SectionCard>
 
         {/* ── Location ── */}
         <SectionCard title="LOCATION" icon="location" colors={colors}>
           <FieldRow label="Country" noBorder colors={colors}>
-            <TouchableOpacity onPress={() => setShowCountryModal(true)} style={styles.pickerBtn}>
-              <Text style={[styles.pickerBtnText, { color: selectedCountry ? colors.text : colors.textMuted }]}>
-                {selectedCountry ? `${selectedCountry.flag}  ${selectedCountry.name}` : "Select country"}
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
+              <TouchableOpacity onPress={() => setShowCountryModal(true)} style={styles.pickerBtn}>
+                <Text style={[styles.pickerBtnText, { color: selectedCountry ? colors.text : colors.textMuted }]}>
+                  {selectedCountry ? `${selectedCountry.flag}  ${selectedCountry.name}` : "Select country"}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </AfuInputSurface>
           </FieldRow>
         </SectionCard>
 
@@ -1089,20 +1104,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 4,
   },
-  fieldLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 },
+  fieldLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
   fieldInput: { minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, textAlign: "left" },
-  handleAt: { fontSize: 15, fontFamily: "Inter_400Regular", marginRight: 2 },
+  profileInputShell: { minHeight: 46, gap: 8, paddingHorizontal: 12, paddingVertical: 0 },
+  handleAt: { fontSize: 15, fontFamily: "Inter_500Medium" },
   handleHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "left" },
 
   // Bio
-  bioInput: { minHeight: 72 },
+  bioInputShell: { minHeight: 96, alignItems: "stretch", paddingHorizontal: 12, paddingVertical: 9 },
+  bioInput: { minHeight: 78 },
   bioFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
   aiBioBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   aiBioBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   charCounter: { fontSize: 12, fontFamily: "Inter_400Regular" },
 
   // Picker button
-  pickerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  pickerBtn: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   pickerBtnText: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, textAlign: "left" },
 
   // Gender
