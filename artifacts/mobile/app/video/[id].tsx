@@ -51,7 +51,7 @@ import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { VideoView, useVideoPlayer } from "expo-video";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
-import * as MediaLibrary from "expo-media-library/legacy";
+import * as MediaLibrary from "expo-media-library";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { supabase } from "@/lib/supabase";
