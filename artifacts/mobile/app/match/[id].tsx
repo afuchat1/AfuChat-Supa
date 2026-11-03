@@ -489,7 +489,7 @@ export default function MatchConversationScreen() {
               {EMOJI_SECTIONS[activeEmojiSection].emojis.map((em) => (
                 <Pressable
                   key={em}
-                  style={({ pressed }) => [styles.emojiItem, pressed && { backgroundColor: colors.border + "44" }]}
+                  style={({ pressed }) => [styles.emojiItem, pressed && { backgroundColor: colors.backgroundTertiary + "44" }]}
                   onPress={() => insertEmoji(em)}
                 >
                   <Text style={styles.emojiItemText}>{em}</Text>

@@ -48,7 +48,7 @@ function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving, 
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
       </View>
       {saving ? <ActivityIndicator size="small" color={BRAND} /> : (
-        <Switch value={value} onValueChange={onToggle} trackColor={{ true: danger ? "#FF3B30" : BRAND, false: colors.border }} />
+        <Switch value={value} onValueChange={onToggle} trackColor={{ true: danger ? "#FF3B30" : BRAND, false: colors.backgroundTertiary }} />
       )}
     </View>
   );

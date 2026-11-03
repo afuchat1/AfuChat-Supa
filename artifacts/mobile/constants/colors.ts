@@ -39,8 +39,8 @@ const light = {
   card:              "#FFFFFF",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "#A79D8D",
-  separator:         "#B7AD9D",
+  border:            "transparent",
+  separator:         "transparent",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
@@ -68,7 +68,7 @@ const light = {
   // ── Navigation ──────────────────────────────────────────────────────────────
   header:            "#F0EBE1",
   navigationSurface: "#FFFEFA",
-  navigationBorder:  "#A79D8D",
+  navigationBorder:  "transparent",
   navigationActive:  BRAND,
   navigationInactive: "#625B50",
 
@@ -106,8 +106,8 @@ const dark = {
   card:              "#2C2F34",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
-  border:            "#5C6068",
-  separator:         "rgba(255,255,255,0.18)",
+  border:            "transparent",
+  separator:         "transparent",
 
   // ── Interactive ─────────────────────────────────────────────────────────────
   accent:            BRAND,
@@ -135,7 +135,7 @@ const dark = {
   // ── Navigation ──────────────────────────────────────────────────────────────
   header:            "#202226",
   navigationSurface: "#24262B",
-  navigationBorder:  "#5C6068",
+  navigationBorder:  "transparent",
   navigationActive:  "#FFF8F0",
   navigationInactive: "#B8BDC5",
 

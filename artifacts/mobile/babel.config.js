@@ -8,6 +8,7 @@ module.exports = function (api) {
   // avoids mixing the legacy plugin entry point with the Worklets runtime.
   const plugins = [
     "./babel-plugin-localized-text",
+    "./babel-plugin-borderless-styles",
     "react-native-worklets/plugin",
   ];
   if (isProd) {

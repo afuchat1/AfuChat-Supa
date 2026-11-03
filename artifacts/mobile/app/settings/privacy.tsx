@@ -181,7 +181,7 @@ export default function PrivacySettingsScreen() {
             <Switch
               value={adv.auto_reply_enabled}
               onValueChange={(v) => setFeature("auto_reply_enabled", v)}
-              trackColor={{ true: accent, false: colors.separator }}
+              trackColor={{ true: accent, false: colors.backgroundTertiary }}
               thumbColor="#fff"
             />
           </View>
@@ -199,7 +199,7 @@ export default function PrivacySettingsScreen() {
             <Switch
               value={adv.temp_chat_enabled}
               onValueChange={(v) => setFeature("temp_chat_enabled", v)}
-              trackColor={{ true: accent, false: colors.separator }}
+              trackColor={{ true: accent, false: colors.backgroundTertiary }}
               thumbColor="#fff"
             />
           </View>

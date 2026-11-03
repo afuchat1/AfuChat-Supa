@@ -415,7 +415,7 @@ export default function ChatSettingsScreen() {
                     }
                     updatePref("save_to_gallery", enabled);
                   }}
-                  trackColor={{ true: themeColor, false: colors.border }}
+                  trackColor={{ true: themeColor, false: colors.backgroundTertiary }}
                   thumbColor="#fff"
                 />
               </View>
@@ -529,7 +529,7 @@ function TogRow({
       <Switch
         value={value}
         onValueChange={onChange}
-        trackColor={{ true: themeColor, false: colors.border }}
+        trackColor={{ true: themeColor, false: colors.backgroundTertiary }}
         thumbColor="#fff"
       />
     </View>

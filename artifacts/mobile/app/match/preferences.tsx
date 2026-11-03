@@ -83,7 +83,7 @@ export default function MatchPreferencesScreen() {
               <Switch
                 value={prefs.show_in_match}
                 onValueChange={(v) => save({ show_in_match: v })}
-                trackColor={{ true: "#FF2D55", false: colors.border }}
+                trackColor={{ true: "#FF2D55", false: colors.backgroundTertiary }}
               />
             </View>
           </View>

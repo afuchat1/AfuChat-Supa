@@ -605,7 +605,7 @@ export default function SupportCenter() {
                 >
                   <View style={[
                     st.deviceToggleIcon,
-                    { backgroundColor: includeDeviceInfo ? BRAND + "18" : colors.border + "40" },
+                    { backgroundColor: includeDeviceInfo ? BRAND + "18" : colors.backgroundTertiary + "40" },
                   ]}>
                     <Ionicons
                       name="phone-portrait"

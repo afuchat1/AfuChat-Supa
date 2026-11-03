@@ -50,7 +50,7 @@ function ToggleRow({ icon, iconColor, label, description, value, onToggle, savin
       {saving ? (
         <ActivityIndicator size="small" color={accent} />
       ) : (
-        <Switch value={value} onValueChange={onToggle} trackColor={{ true: accent, false: colors.border }} thumbColor="#fff" />
+        <Switch value={value} onValueChange={onToggle} trackColor={{ true: accent, false: colors.backgroundTertiary }} thumbColor="#fff" />
       )}
     </View>
   );

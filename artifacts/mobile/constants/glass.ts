@@ -26,10 +26,10 @@ export const GLASS = {
 
   // ── Border (hairline specular edge) ───────────────────────────────────────
   border: {
-    dark:         "rgba(255,255,255, 0.12)",
-    darkSubtle:   "rgba(255,255,255, 0.07)",
-    light:        "rgba(0,0,0,       0.07)",
-    lightSubtle:  "rgba(0,0,0,       0.04)",
+    dark:         "transparent",
+    darkSubtle:   "transparent",
+    light:        "transparent",
+    lightSubtle:  "transparent",
   },
 
   // ── Specular highlight gradient (top-edge shine) ──────────────────────────

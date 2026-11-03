@@ -327,7 +327,7 @@ export default function ShopManage() {
                 <Switch
                   value={!!shop?.pin_to_profile}
                   onValueChange={togglePinToProfile}
-                  trackColor={{ false: colors.border, true: colors.accent + "80" }}
+                  trackColor={{ false: colors.backgroundTertiary, true: colors.accent + "80" }}
                   thumbColor={shop?.pin_to_profile ? colors.accent : colors.textMuted}
                 />
               </View>
@@ -755,7 +755,7 @@ export default function ShopManage() {
 
             <View style={[styles.stockRow, { backgroundColor: colors.backgroundTertiary, borderRadius: 12, padding: 14 }]}>
               <Text style={[styles.formLabel, { color: colors.text }]}>Unlimited Stock</Text>
-              <Switch value={editingProduct?.is_unlimited_stock ?? false} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_unlimited_stock: v }))} trackColor={{ false: colors.border, true: colors.accent }} thumbColor="#fff" />
+              <Switch value={editingProduct?.is_unlimited_stock ?? false} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_unlimited_stock: v }))} trackColor={{ false: colors.backgroundTertiary, true: colors.accent }} thumbColor="#fff" />
             </View>
 
             {!editingProduct?.is_unlimited_stock && (
@@ -774,7 +774,7 @@ export default function ShopManage() {
 
             <View style={[styles.stockRow, { backgroundColor: colors.backgroundTertiary, borderRadius: 12, padding: 14 }]}>
               <Text style={[styles.formLabel, { color: colors.text }]}>Available for Sale</Text>
-              <Switch value={editingProduct?.is_available ?? true} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_available: v }))} trackColor={{ false: colors.border, true: colors.accent }} thumbColor="#fff" />
+              <Switch value={editingProduct?.is_available ?? true} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_available: v }))} trackColor={{ false: colors.backgroundTertiary, true: colors.accent }} thumbColor="#fff" />
             </View>
 
             <View style={styles.modalBtns}>

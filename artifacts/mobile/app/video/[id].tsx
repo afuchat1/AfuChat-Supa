@@ -311,7 +311,7 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
         <Switch
           value={autoScroll}
           onValueChange={() => { onToggleAutoScroll(); }}
-          trackColor={{ false: colors.border, true: colors.accent }}
+          trackColor={{ false: colors.backgroundTertiary, true: colors.accent }}
           thumbColor={colors.text}
           style={cmStyles.toggle}
         />

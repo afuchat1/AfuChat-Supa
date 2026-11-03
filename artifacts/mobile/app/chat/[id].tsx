@@ -9722,7 +9722,7 @@ STRICT RULES:
               key={code}
               style={{
                 flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12,
-                borderBottomColor: colors.border + "40",
+                borderBottomColor: "transparent",
               }}
               onPress={() => handleTranslateToLang(code)}
               disabled={translatingLang}
