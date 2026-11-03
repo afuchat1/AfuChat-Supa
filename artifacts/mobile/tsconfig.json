@@ -4,6 +4,7 @@
     "baseUrl": ".",
     "strict": true,
     "ignoreDeprecations": "6.0",
+    "customConditions": ["react-native", "react-native-legacy-deep-imports"],
     "paths": {
       "@/*": [
         "./*"

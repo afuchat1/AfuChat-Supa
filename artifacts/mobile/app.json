@@ -93,7 +93,11 @@
       ],
       [
         "expo-router",
-        {}
+        {
+          "asyncRoutes": {
+            "web": false
+          }
+        }
       ],
       [
         "expo-share-intent",

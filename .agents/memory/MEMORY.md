@@ -1,6 +1,6 @@
 - [AfuSearch results policy](afusearch-results-policy.md) — Use a flat mixed-content feed and one history/trending overlay; keep image search scoped to public AfuChat posts.
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
-- [Expo Media Library SDK 57](expo-media-library-sdk57.md) — Use `/legacy` for `getAssetsAsync`, `MediaType`, and `SortBy`; the package root targets the newer API.
+- [Expo Media Library legacy API](expo-media-library-legacy-api.md) — Use `/legacy` for `getAssetsAsync`, `MediaType`, and `SortBy`; the package root targets the newer API.
 - [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
 - [AfuChat contrast and FABs](afuchat-brand-colors.md) — Preserve the brand blue; use higher-contrast theme surfaces and white icons on app-accent FABs.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
@@ -15,3 +15,5 @@
 - [App-wide input and floating surfaces](afuchat-input-surface.md) — Keep all input bars compact, single-shell glass surfaces; share the same architecture for floating controls.
 - [AfuChat durable user data](afu-durable-user-data.md) — Keep durable user data out of OS-clearable cache storage; use persistent app storage or the server.
 - [Expo Router navigation hooks](expo-router-navigation-hooks.md) — In SDK 57, import navigation hooks from Expo Router to share its bundled navigation context.
+- [Expo Router SDK 58 web routes](expo-router-sdk58-web-routes.md) — Keep web route loading synchronous until the static preview can safely load async route chunks.
+- [React Native strict API migration](rn-strict-api-migration.md) — SDK 58 temporarily uses documented legacy types; migrate refs before React Native removes the opt-out.
