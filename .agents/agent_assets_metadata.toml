@@ -201,3 +201,17 @@ mtime_ms = 1793696959840
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:6a0f6013-c263-434b-beb4-6ae290860064/d9a9ac9b-926f-4ef3-bf75-5919fbb57f75/91458cd0-6c94-46b7-af00-4604218d14af"
 storage_version_token = "1793696991203814"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "87OgB-z-vQEWQNrqrSntB"
+uri = "file://generated-artifacts/expo-go-tunnel-qr.png"
+type = "image"
+title = "Fresh Expo Go tunnel QR"
+description = "Scan this new QR after dismissing the failed load. The Expo manifest and Android bundle both responded successfully."
+logical_id = "941f807b-bd19-4486-a607-bed869299a01"
+content_hash = "sha256:d0fd91578f066d0db0a1544499014d5573d023c1853a72808c5c0112f1f94067"
+size = 4339
+mtime_ms = 1793697320300
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:6a0f6013-c263-434b-beb4-6ae290860064/941f807b-bd19-4486-a607-bed869299a01/c07ef5e3-2b56-4bbc-95bd-dbc82500e992"
+storage_version_token = "1793697335067989"
+content_type = "image/png"
