@@ -85,8 +85,8 @@ function Checkbox({ checked, onToggle, accent, children }: { checked: boolean; o
   return (
     <TouchableOpacity style={cb.row} onPress={onToggle} activeOpacity={0.7}>
       <View style={[cb.box, {
-        borderColor: checked ? accent : colors.border,
-        backgroundColor: checked ? accent : "transparent",
+        borderColor: checked ? accent : colors.iconMuted,
+        backgroundColor: checked ? accent : colors.surface,
       }]}>
         {checked && <Ionicons name="checkmark" size={12} color="#fff" />}
       </View>
@@ -96,7 +96,7 @@ function Checkbox({ checked, onToggle, accent, children }: { checked: boolean; o
 }
 const cb = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  box: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
+  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, alignItems: "center", justifyContent: "center", marginTop: 1, flexShrink: 0 },
 });
 
 // ─── Glass modal wrapper ───────────────────────────────────────────────────────

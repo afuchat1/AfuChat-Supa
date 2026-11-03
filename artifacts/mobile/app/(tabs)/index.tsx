@@ -22,6 +22,7 @@ import {
 import { TextInput } from "@/components/ui/AfuTextInput";
 
 import AfuLogo from "@/components/ui/AfuLogo";
+import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import Image from "@/components/ui/OptimizedImage";
 const SafeFlashList: any = Platform.OS === "web"
   ? FlatList
@@ -1751,8 +1752,10 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
             </Text>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>Afu</Text>
-              <Text style={[styles.headerTitle, { color: colors.accent }]}>Chat</Text>
+              <AfuChatWordmark
+                style={[styles.headerTitle, { color: colors.text }]}
+                accentColor={colors.accent}
+              />
             </View>
           )}
         </View>

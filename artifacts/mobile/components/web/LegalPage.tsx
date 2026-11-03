@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
+import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 
 type LegalPageKind = "terms" | "privacy" | "account-deletion" | "child-safety";
 
@@ -339,9 +340,10 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
             </Pressable>
           )}
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
-            <Text style={[styles.logo, { color: colors.text }]}>
-              {"Afu"}<Text style={[styles.logoAccent, { color: BRAND }]}>{"Chat"}</Text>
-            </Text>
+            <AfuChatWordmark
+              style={[styles.logo, { color: colors.text }]}
+              accentColor={BRAND}
+            />
           </Pressable>
           {!compact && (
             <View style={styles.navLinks}>
@@ -387,9 +389,10 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
       </View>
 
       <View style={[styles.footer, { backgroundColor: colors.background }]}>
-        <Text style={[styles.footerLogo, { color: colors.text }]}>
-          {"Afu"}<Text style={[styles.logoAccent, { color: BRAND }]}>{"Chat"}</Text>
-        </Text>
+        <AfuChatWordmark
+          style={[styles.footerLogo, { color: colors.text }]}
+          accentColor={BRAND}
+        />
         <Text style={[styles.footerText, { color: colors.textMuted }]}>Connect · Discover · Create</Text>
         <View style={styles.footerLinks}>
           <Pressable onPress={() => navigateTo("/terms")} accessibilityRole="link">
@@ -443,7 +446,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logo: { color: "#fff", fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.8 },
-  logoAccent: {},
   navLinks: { flexDirection: "row", alignItems: "center", gap: 26 },
   navLink: { color: "rgba(255,255,255,0.68)", fontSize: 13, fontFamily: "Inter_500Medium" },
   hero: { paddingHorizontal: 28, paddingBottom: 58 },

@@ -25,6 +25,7 @@ import { LOGO_BLACK_B64 } from "@/lib/logoAssets";
 import { LOGO_WHITE_BOLD_B64 } from "@/lib/logoWhiteBold";
 import Colors from "@/constants/colors";
 import { THEME_MODE_KEY } from "@/context/ThemeContext";
+import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 
 const { width } = Dimensions.get("window");
 const LOGO_SIZE = Math.min(width * 0.32, 130);
@@ -96,9 +97,10 @@ export function SplashScreenView({ ready, onDone }: Props) {
       </Animated.View>
 
       <View style={styles.wordmarkRow}>
-        <Text style={[styles.wordmark, { color: wordmarkColor }]}>
-          Afu<Text style={{ color: palette.accent }}>Chat</Text>
-        </Text>
+        <AfuChatWordmark
+          style={[styles.wordmark, { color: wordmarkColor }]}
+          accentColor={palette.accent}
+        />
       </View>
 
       <View style={styles.taglineWrap}>

@@ -17,6 +17,7 @@ import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { AfuLogo } from "@/components/ui/AfuLogo";
+import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import Colors from "@/constants/colors";
 import { openAppReview } from "@/lib/appReview";
 import { requestNativeWidgetPin } from "@/lib/nativeShareShortcuts";
@@ -342,8 +343,10 @@ export default function SettingsScreen() {
         <View style={s.footer}>
           <View style={s.footerBrand}>
             <AfuLogo size={24} />
-            <Text style={[s.footerAfu,  { color: colors.textMuted }]}>Afu</Text>
-            <Text style={[s.footerChat, { color: BRAND }]}>Chat</Text>
+            <AfuChatWordmark
+              style={[s.footerAfu, { color: colors.textMuted }]}
+              accentColor={BRAND}
+            />
           </View>
           <Text style={[s.footerTagline, { color: colors.textMuted }]}>
             {t("settings.footer_tagline")}
@@ -428,6 +431,5 @@ const s = StyleSheet.create({
   footer: { alignItems: "center", paddingTop: 16, paddingBottom: 8, gap: 4 },
   footerBrand: { flexDirection: "row", alignItems: "center", gap: 4 },
   footerAfu:  { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
-  footerChat: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
   footerTagline: { fontSize: 11, fontFamily: "Inter_400Regular", letterSpacing: 0.3 },
 });

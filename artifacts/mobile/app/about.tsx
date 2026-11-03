@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { AfuLogo } from "@/components/ui/AfuLogo";
+import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import { DonateSheet } from "@/components/DonateSheet";
 import Colors from "@/constants/colors";
 import Constants from "expo-constants";
@@ -128,8 +129,10 @@ export default function AboutScreen() {
           <AfuLogo size={88} />
 
           <View style={s.wordmark}>
-            <Text style={[s.wordAfu,  { color: colors.text }]}>Afu</Text>
-            <Text style={[s.wordChat, { color: ACCENT }]}>Chat</Text>
+            <AfuChatWordmark
+              style={[s.wordAfu, { color: colors.text }]}
+              accentColor={ACCENT}
+            />
           </View>
 
           <View style={[s.versionBadge, { backgroundColor: ACCENT + "18", borderColor: ACCENT + "40" }]}>
@@ -260,8 +263,10 @@ export default function AboutScreen() {
         <View style={s.footer}>
           <View style={s.footerLogo}>
             <AfuLogo size={20} />
-            <Text style={[s.wordAfu,  { color: colors.textMuted, fontSize: 14 }]}>Afu</Text>
-            <Text style={[s.wordChat, { color: ACCENT, fontSize: 14 }]}>Chat</Text>
+            <AfuChatWordmark
+              style={[s.wordAfu, { color: colors.textMuted, fontSize: 14 }]}
+              accentColor={ACCENT}
+            />
           </View>
           <Text style={[s.copyright, { color: colors.textMuted }]}>
             © {new Date().getFullYear()} AfuChat Technologies Limited
@@ -288,7 +293,6 @@ const s = StyleSheet.create({
   },
   wordmark: { flexDirection: "row", alignItems: "baseline" },
   wordAfu:  { fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
-  wordChat: { fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   versionBadge: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4 },
   versionText:  { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 },
   tagline:     { fontSize: 14, fontFamily: "Inter_400Regular", letterSpacing: 1 },

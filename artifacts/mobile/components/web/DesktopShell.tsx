@@ -14,6 +14,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { safeRouter } from "@/lib/navUtils";
 import { Avatar } from "@/components/ui/Avatar";
+import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import { ChatsListPanel } from "@/app/(tabs)/index";
 
 const DESKTOP_BREAKPOINT = 980;
@@ -99,9 +100,10 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
               <Ionicons name="chatbubble-ellipses" size={22} color="#fff" />
             </View>
             {isNavExpanded && (
-              <Text style={[styles.brandName, { color: colors.text }]}>
-                Afu<Text style={{ color: colors.accent }}>Chat</Text>
-              </Text>
+              <AfuChatWordmark
+                style={[styles.brandName, { color: colors.text }]}
+                accentColor={colors.accent}
+              />
             )}
           </View>
           <Pressable
