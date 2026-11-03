@@ -9021,6 +9021,8 @@ STRICT RULES:
                 {
                   label: "Photos (up to 6)",
                   icon: "images" as const,
+                  color: Colors.attachmentActions.photos,
+                  testID: "chat-attachment-photos",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -9043,11 +9045,15 @@ STRICT RULES:
                 {
                   label: "Camera",
                   icon: "camera" as const,
+                  color: Colors.attachmentActions.camera,
+                  testID: "chat-attachment-camera",
                   onPress: () => { closeAttachmentPickerPanel(); pickFromCamera(); },
                 },
                 {
                   label: "Audio File",
                   icon: "musical-notes" as const,
+                  color: Colors.attachmentActions.audio,
+                  testID: "chat-attachment-audio",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     try {
@@ -9062,6 +9068,8 @@ STRICT RULES:
                 {
                   label: "Document",
                   icon: "document-text" as const,
+                  color: Colors.attachmentActions.document,
+                  testID: "chat-attachment-document",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     try {
@@ -9076,6 +9084,8 @@ STRICT RULES:
                 {
                   label: "Wallet",
                   icon: "wallet" as const,
+                  color: Colors.attachmentActions.wallet,
+                  testID: "chat-attachment-wallet",
                   onPress: () => {
                     if (!chatInfo?.other_id || chatInfo.is_group || chatInfo.is_channel) {
                       showAlert("Wallet", "Payments are available only in direct chats.");
@@ -9092,7 +9102,18 @@ STRICT RULES:
               ];
                 return (
                   <View style={{ flex: 1, backgroundColor: colors.surface }}>
-                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 16 }}>
+                    <View
+                      style={{
+                        flex: 1,
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        alignContent: "center",
+                        justifyContent: "center",
+                        paddingHorizontal: 12,
+                        paddingTop: 8,
+                        paddingBottom: Math.max(insets.bottom, 8),
+                      }}
+                    >
                       {NATIVE_PICKS.map((pick) => (
                         <TouchableOpacity
                           key={pick.label}
@@ -9100,15 +9121,17 @@ STRICT RULES:
                           onPress={pick.onPress}
                           accessibilityRole="button"
                           accessibilityLabel={pick.label}
+                          testID={pick.testID}
                           style={{
-                            flex: 1,
-                            minWidth: 48,
-                            height: 76,
+                            width: "33.3333%",
+                            minHeight: 72,
+                            maxHeight: 96,
+                            aspectRatio: 1.2,
                             alignItems: "center",
                             justifyContent: "center",
                           }}
                         >
-                          <NativeAttachmentIcon name={pick.icon} color={colors.accent} />
+                          <NativeAttachmentIcon name={pick.icon} color={pick.color} />
                         </TouchableOpacity>
                       ))}
                     </View>

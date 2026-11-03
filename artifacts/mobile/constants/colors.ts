@@ -159,12 +159,21 @@ const dark = {
   infoSubtle:        STATUS.infoSubtle,
 } as const;
 
+const attachmentActions = {
+  photos: "#DB2777",
+  camera: "#F97316",
+  audio: "#0891B2",
+  document: "#16A34A",
+  wallet: "#7C3AED",
+} as const;
+
 export default {
   // ── Raw brand palette ───────────────────────────────────────────────────────
   brand:      BRAND,
   brandDark:  BRAND_DARK,
   blue:       BRAND_BLUE,
   gold:       GOLD,
+  attachmentActions,
 
   // ── Status (theme-independent) ──────────────────────────────────────────────
   status:     STATUS,
