@@ -15,8 +15,8 @@
  * The listener only delivers messages to the in-app event bus.
  */
 
-import { InteractionManager } from "react-native";
 import { useCallback, useEffect, useRef } from "react";
+import { runAfterIdle } from "@/lib/runAfterIdle";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { emitIncomingMessage, IncomingMessage } from "@/lib/globalMessageEvents";
@@ -111,7 +111,7 @@ export function GlobalInboxListener() {
       }, delay);
     };
 
-    const interactionTask = InteractionManager.runAfterInteractions(() => {
+    const idleTask = runAfterIdle(() => {
       // Let the initial route and its primary data requests settle before
       // opening another realtime channel on release Android builds.
       scheduleConnect(2000);
@@ -133,7 +133,7 @@ export function GlobalInboxListener() {
 
     return () => {
       destroyed = true;
-      interactionTask.cancel();
+      idleTask.cancel();
       connectivityCleanup();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (currentChannel) supabase.removeChannel(currentChannel).catch(() => {});

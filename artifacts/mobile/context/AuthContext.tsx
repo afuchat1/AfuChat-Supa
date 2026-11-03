@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { AppState, InteractionManager } from "react-native";
+import { AppState } from "react-native";
+import { runAfterIdle } from "@/lib/runAfterIdle";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -622,7 +623,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       offlineSyncTimer = setTimeout(() => {
         offlineSyncTimer = null;
         if (!isCurrentBootstrap()) return;
-        offlineSyncTask = InteractionManager.runAfterInteractions(() => {
+        offlineSyncTask = runAfterIdle(() => {
           if (isCurrentBootstrap()) startOfflineSync();
         });
       }, 5000);
@@ -968,7 +969,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isOnline()) supabase.rpc("update_last_seen").then(null, () => {});
     };
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const interactionTask = InteractionManager.runAfterInteractions(() => {
+    const idleTask = runAfterIdle(() => {
       timer = setTimeout(updateLastSeen, 1200);
     });
     const sub = AppState.addEventListener("change", (state) => {
@@ -979,7 +980,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     const interval = setInterval(updateLastSeen, 60_000);
     return () => {
-      interactionTask.cancel();
+      idleTask.cancel();
       if (timer) clearTimeout(timer);
       sub.remove();
       clearInterval(interval);

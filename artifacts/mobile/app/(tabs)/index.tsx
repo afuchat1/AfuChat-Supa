@@ -7,7 +7,6 @@ import {
   Animated,
   Easing,
   FlatList,
-  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { runAfterIdle } from "@/lib/runAfterIdle";
 import { TextInput } from "@/components/ui/AfuTextInput";
 
 import AfuLogo from "@/components/ui/AfuLogo";
@@ -1002,7 +1002,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     // Persisting and image decoding are deliberately moved
     // off the navigation path. The list is useful as soon as setChats() runs;
     // these tasks can wait until the current gesture/transition is finished.
-    InteractionManager.runAfterInteractions(() => {
+    runAfterIdle(() => {
       prefetchListImages(finalItems, { avatarFields: ["avatar_url", "other_avatar"] });
       invalidateConversationsPreload();
       const regularIds = [...regularItems.map((c) => c.id), ...(notesItem ? [notesItem.id] : [])];

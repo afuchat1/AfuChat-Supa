@@ -22,7 +22,8 @@ let screensEnabled = false;
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { AppState, BackHandler, I18nManager, InteractionManager, Linking, LogBox, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { runAfterIdle } from "@/lib/runAfterIdle";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router, Stack, usePathname, useRootNavigationState } from "expo-router";
 import { setCurrentPage, resolvePageInfo } from "@/lib/pageTracker";
@@ -612,7 +613,7 @@ export default function RootLayout() {
     // until the first screen has had time to settle.
     let purgeTimer: ReturnType<typeof setTimeout> | null = null;
     let storageTimer: ReturnType<typeof setTimeout> | null = null;
-    const interactionTask = InteractionManager.runAfterInteractions(() => {
+    const idleTask = runAfterIdle(() => {
       // Keep maintenance out of the first route's data and interaction window.
       storageTimer = setTimeout(() => {
         if (AppState.currentState !== "active") return;
@@ -636,7 +637,7 @@ export default function RootLayout() {
     });
 
     return () => {
-      interactionTask.cancel();
+      idleTask.cancel();
       if (storageTimer) clearTimeout(storageTimer);
       if (purgeTimer) clearTimeout(purgeTimer);
     };

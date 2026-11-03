@@ -7,8 +7,8 @@ import {
   View,
   useWindowDimensions,
   Platform,
-  StatusBar,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -61,7 +61,7 @@ export function AvatarViewer({ visible, uri, name, onClose }: Props) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <Pressable style={[styles.backdrop, { backgroundColor: colors.background }]} onPress={onClose}>
         <Pressable
           style={[styles.closeBtn, { top: insets.top + 12 }]}

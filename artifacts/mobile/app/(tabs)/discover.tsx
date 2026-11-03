@@ -6,7 +6,6 @@ import {
   Easing,
   FlatList,
   Image as RNImage,
-  InteractionManager,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -21,6 +20,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { runAfterIdle } from "@/lib/runAfterIdle";
 // PagerView gives true native 1:1 finger-tracking on Android/iOS.
 const _PagerView: any = (() => {
   try { return require("react-native-pager-view").default; } catch { return null; }
@@ -667,7 +667,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
     if (!preferredLang || !item.content?.trim()) { setDisplayContent(item.content); setIsTranslated(false); return; }
     if (item.language_code && item.language_code === preferredLang) return;
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = runAfterIdle(() => {
       if (cancelled) return;
       translateUserContent(item.content, preferredLang).then((result) => {
         if (!cancelled && result && result !== item.content) {
@@ -1759,7 +1759,7 @@ export default function DiscoverScreen() {
         // Enrichment is deliberately deferred until the first interactions
         // have been handled. The post rows can paint without warming every
         // profile/image cache up front.
-        InteractionManager.runAfterInteractions(() => {
+        runAfterIdle(() => {
           for (const p of data) {
             const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
             if (p.author_id && profile?.handle) setHandleId(profile.handle, p.author_id);
@@ -2115,7 +2115,7 @@ export default function DiscoverScreen() {
       // Diversify: no same-author back-to-back, no 3 same post-types in a row
       const diversified = diversifyFeed(sampled.map((p) => ({ ...p, postType: p.post_type })));
 
-      InteractionManager.runAfterInteractions(() => {
+      runAfterIdle(() => {
         prefetchAvatars(diversified.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
         prefetchThumbnails(diversified.slice(0, 6).map((p) => (p as any).image_url));
         // Mark these posts as seen so they get demoted on the next refresh.

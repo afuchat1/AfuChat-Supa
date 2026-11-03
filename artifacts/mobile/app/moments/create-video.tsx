@@ -28,7 +28,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -36,6 +35,7 @@ import {
   useWindowDimensions,
   Modal,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
@@ -1110,7 +1110,7 @@ function EditPhase({
 
   return (
     <KeyboardAvoidingView style={[es.root, { backgroundColor: colors.background }]} behavior="padding">
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* ── Top bar ── */}
       <View style={[es.topBar, { paddingTop: insets.top + 6 }]}>
@@ -2110,7 +2110,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* ── 3-step stepper ── */}
       <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 32 }}>

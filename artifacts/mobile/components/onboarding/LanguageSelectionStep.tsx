@@ -5,11 +5,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  StatusBar,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import Svg, {
   Circle,
   ClipPath,
@@ -137,7 +137,7 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <OnboardingBackdrop />
 
       <View style={styles.headerPositioner}>

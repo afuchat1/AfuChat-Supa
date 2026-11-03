@@ -7,13 +7,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { TextInput } from "@/components/ui/AfuTextInput";
 
 import { router } from "expo-router";
@@ -599,7 +599,7 @@ export default function SignInScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, overflow: "hidden" }}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* ── Background orbs ── */}
       <View style={[StyleSheet.absoluteFill, { pointerEvents: "none" }]}>

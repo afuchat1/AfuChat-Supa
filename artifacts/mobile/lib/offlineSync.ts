@@ -1,4 +1,4 @@
-import { InteractionManager } from "react-native";
+import { runAfterIdle } from "./runAfterIdle";
 import { supabase } from "./supabase";
 import {
   getPendingMessages,
@@ -212,7 +212,7 @@ export async function preloadConversationMessages(
   // after current interactions and keep it small so a large chat list cannot
   // monopolise the JS/native bridge or saturate the network.
   await new Promise<void>((resolve) => {
-    InteractionManager.runAfterInteractions(() => resolve());
+    runAfterIdle(resolve);
   });
   for (const chatId of chatIds.slice(0, 5)) {
     if (!isOnline()) break;

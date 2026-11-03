@@ -30,7 +30,6 @@ import {
   Pressable,
   ScrollView,
   Share,
-  StatusBar,
   StyleSheet,
   Switch,
   Text,
@@ -40,6 +39,7 @@ import {
   ViewToken,
   useWindowDimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
@@ -1908,7 +1908,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   if (loading) {
     return (
       <View style={[mStyles.root, { paddingBottom: tabOffset, backgroundColor: colors.background }]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <StatusBar style="light" />
         <ShortsFeedSkeleton dark={isDark} />
         {/* Render the real header on top so navigation chrome is visible during load */}
         <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
@@ -1940,7 +1940,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
   return (
     <View style={[mStyles.root, { paddingBottom: tabOffset, backgroundColor: colors.background }]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar style="light" />
 
       {/* Fixed header */}
       <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>

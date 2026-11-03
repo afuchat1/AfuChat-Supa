@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { InteractionManager } from "react-native";
+import { runAfterIdle } from "@/lib/runAfterIdle";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getLocalConversations, type LocalConversation } from "@/lib/storage/localConversations";
@@ -69,7 +69,7 @@ export default function NativeShareShortcutSync() {
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const interaction = InteractionManager.runAfterInteractions(() => {
+    const idleTask = runAfterIdle(() => {
       timer = setTimeout(() => {
         void (async () => {
           try {
@@ -106,7 +106,7 @@ export default function NativeShareShortcutSync() {
 
     return () => {
       cancelled = true;
-      interaction.cancel();
+      idleTask.cancel();
       if (timer) clearTimeout(timer);
     };
   }, [user?.id]);

@@ -5,13 +5,13 @@ import {
   Image as RNImage,
   PanResponder,
   Platform,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import Image from "@/components/ui/OptimizedImage";
 import AfuLogo from "@/components/ui/AfuLogo";
 
@@ -328,7 +328,7 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
+      <StatusBar style={isDark ? "light" : "dark"} />
       <Animated.View
         style={[
           s.pageTrack,
