@@ -111,6 +111,7 @@ import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import { translateUserContent, detectMessageLanguage } from "@/lib/translate";
 import { BUNDLED_UI_LANGUAGES, LANG_LABELS } from "@/lib/i18n";
+import { AFUCHAT_BRAND_NAME } from "@/lib/brandName";
 import { useLanguage } from "@/context/LanguageContext";
 import { useChatPreferences, CHAT_THEME_COLORS, BUBBLE_RADIUS } from "@/context/ChatPreferencesContext";
 import { useAdvancedFeatures } from "@/context/AdvancedFeaturesContext";
@@ -7783,7 +7784,7 @@ STRICT RULES:
   const headerTitle = chatInfo?.is_group || chatInfo?.is_channel
     ? chatInfo.name || "Group"
     : isNotificationsChat
-      ? "AfuChat Updates"
+      ? `${AFUCHAT_BRAND_NAME} Updates`
     : isSelfChat
       ? "My Notes"
       : (phonebookName || chatInfo?.other_name || "Chat");

@@ -18,6 +18,8 @@ const sourceRoots = ["app", "components", "context", "lib"].map((dir) =>
 );
 const catalogPath = path.join(mobileRoot, "lib", "uiTranslations.ts");
 const registrySource = fs.readFileSync(catalogPath, "utf8");
+const chatScreenSource = fs.readFileSync(path.join(mobileRoot, "app", "chat", "[id].tsx"), "utf8");
+const contentTranslationSource = fs.readFileSync(path.join(mobileRoot, "lib", "translate.ts"), "utf8");
 const semanticStart = "const SEMANTIC_UI_TABLES";
 const semanticEnd = "const REGISTERED_UI_TEXTS";
 const supportedLanguages = [
@@ -134,6 +136,12 @@ const placeholderPattern = /\{\{(\w+)\}\}/g;
 function placeholders(value) {
   return [...value.matchAll(placeholderPattern)].map((match) => match[1]).sort();
 }
+function brandMentions(value) {
+  const withoutProductUrls = value
+    .replace(/\b(?:https?:\/\/)?(?:www\.)?github\.com\/afuchat\b/gi, "")
+    .replace(/\b(?:[a-z0-9-]+\.)*afuchat\.com\b/gi, "");
+  return [...withoutProductUrls.matchAll(/\bAfuChat\b/gi)].map((match) => match[0]);
+}
 const placeholderIssues = [];
 const brandIssues = [];
 const englishValues = new Map();
@@ -153,17 +161,30 @@ for (const section of sections.filter((item) => item.language !== "en")) {
     if (expected.join("|") !== actual.join("|")) {
       placeholderIssues.push(`${section.language}:${match[1]} expected [${expected.join(", ")}] got [${actual.join(", ")}]`);
     }
-    if (section.language === "lg") {
-      const source = englishValues.get(match[1]) ?? "";
-      const translated = unescapeCatalogValue(match[2]);
-      const expectedBrandCount = (source.match(/\bAfuChat\b/gi) ?? []).length;
-      const exactBrandCount = (translated.match(/\bAfuChat\b/g) ?? []).length;
-      const anyBrandCount = (translated.match(/\bAfuChat\b/gi) ?? []).length;
-      if (expectedBrandCount !== exactBrandCount || anyBrandCount !== exactBrandCount) {
-        brandIssues.push(`lg:${match[1]} must preserve AfuChat exactly`);
-      }
+    const source = englishValues.get(match[1]) ?? "";
+    const translated = unescapeCatalogValue(match[2]);
+    const sourceBrands = brandMentions(source);
+    const translatedBrands = brandMentions(translated);
+    const exactBrandCount = translatedBrands.filter((brand) => brand === "AfuChat").length;
+    if (
+      translatedBrands.length !== exactBrandCount ||
+      (sourceBrands.length > 0 && sourceBrands.length !== exactBrandCount)
+    ) {
+      brandIssues.push(`${section.language}:${match[1]} must preserve AfuChat exactly`);
     }
   }
+}
+if (!chatScreenSource.includes("`${AFUCHAT_BRAND_NAME} Updates`")) {
+  brandIssues.push("chat notification header must use the canonical AfuChat brand name");
+}
+if (!registrySource.includes("normalizeAfuChatBrandName(")) {
+  brandIssues.push("all bundled UI translations must normalize the AfuChat brand name");
+}
+if (
+  !contentTranslationSource.includes("protectAfuChatBrand(") ||
+  !contentTranslationSource.includes(".restore(translated)")
+) {
+  brandIssues.push("translated user content must protect and restore the AfuChat brand name");
 }
 const literalBacklog = collectLiteralBacklog(files);
 
