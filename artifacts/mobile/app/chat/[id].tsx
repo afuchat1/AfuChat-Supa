@@ -540,18 +540,18 @@ function NativeAttachmentIcon({
 }) {
   return (
     <View
-      accessible
-      accessibilityRole="image"
       style={{
-        width: 42,
-        height: 42,
-        borderRadius: 13,
+        width: 56,
+        height: 56,
+        borderRadius: 19,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: color,
+        backgroundColor: `${color}18`,
+        borderWidth: 1,
+        borderColor: `${color}32`,
       }}
     >
-      <Ionicons name={name} size={22} color="#FFFFFF" />
+      <Ionicons name={name} size={27} color={color} />
     </View>
   );
 }
@@ -2635,6 +2635,7 @@ function ChatScreen() {
   const [envelopeCount, setEnvelopeCount] = useState("1");
   const [showEmojiStickerPicker, setShowEmojiStickerPicker] = useState(false);
   const showEmojiStickerPickerRef = useRef(false);
+  const showAttachPanelRef = useRef(false);
   const [emojiPanelMounted, setEmojiPanelMounted] = useState(false);
   const [chatInputFocused, setChatInputFocused] = useState(false);
   const chatInputFocusedRef = useRef(false);
@@ -2750,11 +2751,12 @@ function ChatScreen() {
       );
     });
     const onHide = Keyboard.addListener(hideEvent, (e) => {
-      const nextBottom = showEmojiStickerPickerRef.current
+      const hasBottomPanelOpen = showEmojiStickerPickerRef.current || showAttachPanelRef.current;
+      const nextBottom = hasBottomPanelOpen
         ? emojiKeyboardHeightRef.current + safeBottomRef.current
         : safeBottomRef.current;
       if (Platform.OS !== "ios") setKeyboardHeight(0);
-      if (Platform.OS !== "ios" && !showEmojiStickerPickerRef.current) {
+      if (Platform.OS !== "ios" && !hasBottomPanelOpen) {
         setEmojiPanelMounted(false);
         chatInputFocusedRef.current = false;
         setChatInputFocused(false);
@@ -2772,7 +2774,7 @@ function ChatScreen() {
     const onIOSDidHide = Platform.OS === "ios"
       ? Keyboard.addListener("keyboardDidHide", () => {
           setKeyboardHeight(0);
-          if (!showEmojiStickerPickerRef.current) {
+          if (!showEmojiStickerPickerRef.current && !showAttachPanelRef.current) {
             setEmojiPanelMounted(false);
             chatInputFocusedRef.current = false;
             setChatInputFocused(false);
@@ -2848,7 +2850,7 @@ function ChatScreen() {
           }
           if (webKeyboardHandoffRef.current) {
             webKeyboardHandoffRef.current = false;
-            const targetBottom = showEmojiStickerPickerRef.current
+            const targetBottom = showEmojiStickerPickerRef.current || showAttachPanelRef.current
               ? emojiKeyboardHeightRef.current + safeBottomRef.current
               : safeBottomRef.current;
             composerBottomTargetRef.current = targetBottom;
@@ -2861,14 +2863,18 @@ function ChatScreen() {
           clearTimeout(settleTimer);
           settleTimer = null;
         }
-        if (wasKeyboardVisible && !showEmojiStickerPickerRef.current) {
+        if (
+          wasKeyboardVisible &&
+          !showEmojiStickerPickerRef.current &&
+          !showAttachPanelRef.current
+        ) {
           setEmojiPanelMounted(false);
           chatInputFocusedRef.current = false;
           setChatInputFocused(false);
         }
         if (webKeyboardHandoffRef.current) {
           webKeyboardHandoffRef.current = false;
-          const targetBottom = showEmojiStickerPickerRef.current
+          const targetBottom = showEmojiStickerPickerRef.current || showAttachPanelRef.current
             ? emojiKeyboardHeightRef.current + safeBottomRef.current
             : safeBottomRef.current;
           composerBottomTargetRef.current = targetBottom;
@@ -3057,6 +3063,10 @@ function ChatScreen() {
     }), [onRecStart, onRecCancel, onRecLock, onRecSend]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showAttachPanel, setShowAttachPanel] = useState(false);
+  const setAttachmentPanelVisible = useCallback((visible: boolean) => {
+    showAttachPanelRef.current = visible;
+    setShowAttachPanel(visible);
+  }, []);
   const [attachTab, setAttachTab] = useState<"Gallery" | "Wallet" | "Poll" | "Contact">("Gallery");
   const [contactList, setContactList] = useState<{ id: string; name: string; phone: string; initials: string }[]>([]);
   const [contactSearch, setContactSearch] = useState("");
@@ -3142,7 +3152,7 @@ function ChatScreen() {
     webKeyboardHandoffRef.current = switchingFromWebKeyboard;
     setEmojiPanelMounted(true);
     setEmojiPickerVisible(true);
-    setShowAttachPanel(false);
+    setAttachmentPanelVisible(false);
     const panelHeight = emojiKeyboardHeightRef.current + safeBottomRef.current;
     animateComposerBottom(
       switchingFromWebKeyboard
@@ -3151,7 +3161,32 @@ function ChatScreen() {
     );
     chatInputRef.current?.blur();
     Keyboard.dismiss();
-  }, [animateComposerBottom, setEmojiPickerVisible]);
+  }, [animateComposerBottom, setAttachmentPanelVisible, setEmojiPickerVisible]);
+  const openAttachmentPickerPanel = useCallback(() => {
+    if (showAttachPanelRef.current) return;
+    const switchingFromWebKeyboard =
+      Platform.OS === "web" && webKeyboardHeightRef.current > 1;
+    if (switchingFromWebKeyboard) {
+      const panelContentHeight = Math.max(
+        100,
+        webKeyboardHeightRef.current - safeBottomRef.current,
+      );
+      emojiKeyboardHeightRef.current = panelContentHeight;
+      setEmojiKeyboardHeight(panelContentHeight);
+    }
+    webKeyboardHandoffRef.current = switchingFromWebKeyboard;
+    setEmojiPickerVisible(false);
+    setAttachmentPanelVisible(true);
+    setEmojiPanelMounted(true);
+    const panelHeight = emojiKeyboardHeightRef.current + safeBottomRef.current;
+    animateComposerBottom(
+      switchingFromWebKeyboard
+        ? Math.max(safeBottomRef.current, panelHeight - webKeyboardHeightRef.current)
+        : panelHeight,
+    );
+    chatInputRef.current?.blur();
+    Keyboard.dismiss();
+  }, [animateComposerBottom, setAttachmentPanelVisible, setEmojiPickerVisible]);
   const closeEmojiStickerPicker = useCallback((afterClose?: () => void) => {
     if (!showEmojiStickerPickerRef.current) {
       afterClose?.();
@@ -3164,6 +3199,14 @@ function ChatScreen() {
     }
     afterClose?.();
   }, [animateComposerBottom, keyboardHeight, setEmojiPickerVisible]);
+  const closeAttachmentPickerPanel = useCallback(() => {
+    if (!showAttachPanelRef.current) return;
+    setAttachmentPanelVisible(false);
+    if (keyboardHeight <= 0 && webKeyboardHeightRef.current <= 1) {
+      setEmojiPanelMounted(false);
+      animateComposerBottom(safeBottomRef.current);
+    }
+  }, [animateComposerBottom, keyboardHeight, setAttachmentPanelVisible]);
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
   const selectionClearTimer = useRef<any>(null);
@@ -6192,7 +6235,7 @@ STRICT RULES:
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setWalletAmount("");
       setWalletNote("");
-      setShowAttachPanel(false);
+      closeAttachmentPickerPanel();
       showAlert("Sent!", `${amt.toLocaleString()} ${coinLabel} sent to ${recipient.display_name}.`);
     } catch {
       showAlert("Error", "Payment failed. Please try again.");
@@ -7948,13 +7991,14 @@ STRICT RULES:
   // so the input bar never intrudes into the gesture-navigation area on
   // devices where keyboardHeight does not already include that inset.
   const emojiPanelHeight = emojiKeyboardHeight + insets.bottom;
+  const bottomPickerOpen = showEmojiStickerPicker || showAttachPanel;
   const emojiPanelVisible =
-    showEmojiStickerPicker ||
+    bottomPickerOpen ||
     (Platform.OS === "web"
       ? webKeyboardVisible && webKeyboardHandoffRef.current
       : chatInputFocused || keyboardHeight > 0);
   const emojiPanelOccupiesBottom =
-    showEmojiStickerPicker && !(Platform.OS === "web" && webKeyboardVisible);
+    bottomPickerOpen && !(Platform.OS === "web" && webKeyboardVisible);
   const effectiveBottom = emojiPanelOccupiesBottom && !keyboardHeight
     ? emojiPanelHeight
     : keyboardHeight > 0
@@ -8664,6 +8708,7 @@ STRICT RULES:
                                 webKeyboardHandoffRef.current = true;
                               }
                               setEmojiPickerVisible(false);
+                              setAttachmentPanelVisible(false);
                               setEmojiPanelMounted(true);
                               chatInputRef.current?.focus();
                             } else {
@@ -8723,11 +8768,12 @@ STRICT RULES:
                             );
                           }}
                           onFocus={() => {
-                            const switchingFromEmoji = showEmojiStickerPickerRef.current;
+                            const switchingFromPicker =
+                              showEmojiStickerPickerRef.current || showAttachPanelRef.current;
                             chatInputFocusedRef.current = true;
                             setChatInputFocused(true);
                             setEmojiPanelMounted(true);
-                            if (Platform.OS === "web" && switchingFromEmoji) {
+                            if (Platform.OS === "web" && switchingFromPicker) {
                               webKeyboardHandoffRef.current = true;
                             }
                             if (showEmojiStickerPickerRef.current) {
@@ -8744,7 +8790,9 @@ STRICT RULES:
                                 : safeBottomRef.current;
                               animateComposerBottom(targetBottom);
                             }
-                            if (showAttachPanel) setShowAttachPanel(false);
+                            if (showAttachPanelRef.current) {
+                              setAttachmentPanelVisible(false);
+                            }
                           }}
                           onBlur={() => {
                             chatInputFocusedRef.current = false;
@@ -8778,10 +8826,22 @@ STRICT RULES:
                           </TouchableOpacity>
                         )}
                         {!isAfuAiDirectChat && !isLocalNotes && (
-                          <TouchableOpacity onPress={() => {
-                            Keyboard.dismiss();
-                            closeEmojiStickerPicker(() => setShowAttachPanel((v) => !v));
-                          }} hitSlop={8} style={st.pillIcon}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (showAttachPanel) {
+                                if (Platform.OS === "web") webKeyboardHandoffRef.current = true;
+                                setAttachmentPanelVisible(false);
+                                setEmojiPanelMounted(true);
+                                chatInputRef.current?.focus();
+                              } else {
+                                openAttachmentPickerPanel();
+                              }
+                            }}
+                            hitSlop={8}
+                            style={st.pillIcon}
+                            accessibilityRole="button"
+                            accessibilityLabel={showAttachPanel ? "Show keyboard" : "Open attachments"}
+                          >
                             {/* Bigger attach icon — easier to tap */}
                             <Ionicons name={showAttachPanel ? "close" : "attach"} size={26} color={showAttachPanel ? colors.accent : colors.textMuted} style={showAttachPanel ? undefined : { transform: [{ rotate: "-45deg" }] }} />
                           </TouchableOpacity>
@@ -8873,7 +8933,7 @@ STRICT RULES:
             right: 0,
             bottom: 0,
             height: emojiPanelHeight,
-            opacity: emojiPanelVisible ? 1 : 0,
+            opacity: emojiPanelVisible && !showAttachPanel ? 1 : 0,
             transform: [{ translateY: Platform.OS === "web" ? webKeyboardTranslateY : 0 }],
             backgroundColor: colors.surface,
             zIndex: 50,
@@ -8932,22 +8992,37 @@ STRICT RULES:
         </Animated.View>
       )}
 
-      {/* ── Attachment actions — separate surface above the composer ─────── */}
-      {showAttachPanel && (
+      {/* ── Attachment actions share the keyboard replacement surface ──── */}
+      {emojiPanelMounted && (
+        <Animated.View
+          pointerEvents={showAttachPanel ? "auto" : "none"}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: emojiPanelHeight,
+            opacity: showAttachPanel ? 1 : 0,
+            transform: [{ translateY: Platform.OS === "web" ? webKeyboardTranslateY : 0 }],
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            overflow: "hidden",
+            zIndex: 50,
+          }}
+        >
+        {showAttachPanel && (
         (() => {
-          const contentH = attachTab === "Gallery" ? 126 : 330;
-
           const isDM = !!chatInfo && !chatInfo.is_group && !chatInfo.is_channel;
           const renderContent = () => {
             if (attachTab === "Gallery") {
-              // Native: clean picker cards — opens the device's native gallery/file picker
+              // These icon actions open the device's native pickers.
               const NATIVE_PICKS = [
                 {
                   label: "Photos (up to 6)",
                   icon: "images" as const,
-                  color: "#007AFF",
                   onPress: async () => {
-                    setShowAttachPanel(false);
+                    closeAttachmentPickerPanel();
                     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (!perm.granted) return;
                     const res = await ImagePicker.launchImageLibraryAsync({
@@ -8968,15 +9043,13 @@ STRICT RULES:
                 {
                   label: "Camera",
                   icon: "camera" as const,
-                  color: "#FF3B30",
-                  onPress: () => { setShowAttachPanel(false); pickFromCamera(); },
+                  onPress: () => { closeAttachmentPickerPanel(); pickFromCamera(); },
                 },
                 {
                   label: "Audio File",
                   icon: "musical-notes" as const,
-                  color: "#30D158",
                   onPress: async () => {
-                    setShowAttachPanel(false);
+                    closeAttachmentPickerPanel();
                     try {
                       const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
                       if (!res.canceled && res.assets?.[0]) {
@@ -8989,9 +9062,8 @@ STRICT RULES:
                 {
                   label: "Document",
                   icon: "document-text" as const,
-                  color: "#5E5CE6",
                   onPress: async () => {
-                    setShowAttachPanel(false);
+                    closeAttachmentPickerPanel();
                     try {
                       const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
                       if (!res.canceled && res.assets?.[0]) {
@@ -9004,13 +9076,12 @@ STRICT RULES:
                 {
                   label: "Wallet",
                   icon: "wallet" as const,
-                  color: "#34C759",
                   onPress: () => {
                     if (!chatInfo?.other_id || chatInfo.is_group || chatInfo.is_channel) {
                       showAlert("Wallet", "Payments are available only in direct chats.");
                       return;
                     }
-                    setShowAttachPanel(false);
+                    closeAttachmentPickerPanel();
                     Keyboard.dismiss();
                     openApp("afupay", {
                       initialRecipientId: chatInfo.other_id,
@@ -9021,49 +9092,23 @@ STRICT RULES:
               ];
                 return (
                   <View style={{ flex: 1, backgroundColor: colors.surface }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 11, paddingBottom: 7 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: BRAND }} />
-                        <Text style={{ color: colors.text, fontSize: 12, fontFamily: "Inter_700Bold", letterSpacing: 0.5 }}>
-                          ATTACHMENTS
-                        </Text>
-                      </View>
-                      <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }}>
-                        Choose an option
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, flexDirection: "row", alignItems: "stretch", gap: 7, paddingHorizontal: 10, paddingBottom: 10 }}>
+                    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 16 }}>
                       {NATIVE_PICKS.map((pick) => (
                         <TouchableOpacity
                           key={pick.label}
                           activeOpacity={0.78}
                           onPress={pick.onPress}
+                          accessibilityRole="button"
+                          accessibilityLabel={pick.label}
                           style={{
                             flex: 1,
-                            minWidth: 0,
+                            minWidth: 48,
+                            height: 76,
                             alignItems: "center",
                             justifyContent: "center",
-                            paddingHorizontal: 2,
-                            borderRadius: 14,
-                            backgroundColor: isDark ? `${pick.color}20` : `${pick.color}12`,
-                            borderWidth: 1,
-                            borderColor: isDark ? `${pick.color}70` : `${pick.color}45`,
                           }}
                         >
-                          <View style={{ marginBottom: 5 }}>
-                            <NativeAttachmentIcon name={pick.icon} color={pick.color} />
-                          </View>
-                          <Text
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            minimumFontScale={0.75}
-                            style={{ color: colors.text, fontSize: 10.5, lineHeight: 13, fontFamily: "Inter_600SemiBold", textAlign: "center" }}
-                          >
-                            {pick.label === "Photos (up to 6)" ? "Photos" : pick.label}
-                          </Text>
-                          {pick.label === "Photos (up to 6)" && (
-                            <Text style={{ color: colors.textMuted, fontSize: 8.5, lineHeight: 11, fontFamily: "Inter_400Regular" }}>Up to 6</Text>
-                          )}
+                          <NativeAttachmentIcon name={pick.icon} color={colors.accent} />
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -9145,7 +9190,7 @@ STRICT RULES:
                               body: `👤 ${item.name}${item.phone ? `\n${item.phone}` : ""}`,
                               attachmentType: "contact",
                             });
-                            setShowAttachPanel(false);
+                            closeAttachmentPickerPanel();
                           } catch { showAlert("Error", "Could not send contact."); }
                           setContactSending(null);
                         }}
@@ -9300,44 +9345,16 @@ STRICT RULES:
           };
 
           return (
-            <View style={[StyleSheet.absoluteFill, { pointerEvents: "box-none" }]}>
-              <TouchableOpacity
-                style={StyleSheet.absoluteFill}
-                activeOpacity={1}
-                onPress={() => setShowAttachPanel(false)}
-              />
-               <View style={{
-                position: "absolute",
-                  // This is intentionally an independent card. Keep clear
-                  // space between it and the input so attachment actions do
-                  // not look like part of the text field.
-                 left: 12,
-                 right: 12,
-                 bottom: effectiveBottom + floatingInputHeight + 10,
-                 maxHeight: 400,
-                 backgroundColor: colors.inputBg,
-                 borderRadius: 22,
-                 borderWidth: 0.5,
-                 borderColor: isDark ? "rgba(255,255,255,0.22)" : colors.border,
-                 overflow: "hidden",
-                 ...Platform.select({
-                   web: { boxShadow: `0 5px 12px rgba(0,0,0,${isDark ? 0.24 : 0.12})` } as any,
-                   default: {
-                     shadowColor: "#000",
-                     shadowOpacity: isDark ? 0.24 : 0.12,
-                     shadowRadius: 12,
-                     shadowOffset: { width: 0, height: 5 },
-                     elevation: 8,
-                   },
-                 }),
-              }}>
-                <View style={{ height: contentH, overflow: "hidden" }}>
-                  {renderContent()}
-                </View>
-              </View>
+            <View style={{ height: emojiKeyboardHeight, backgroundColor: colors.surface, overflow: "hidden" }}>
+              {renderContent()}
             </View>
           );
         })()
+      )}
+          {insets.bottom > 0 && (
+            <View style={{ height: insets.bottom, backgroundColor: colors.surface }} />
+          )}
+        </Animated.View>
       )}
 
       <MiniProfilePopup
