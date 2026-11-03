@@ -42,7 +42,7 @@ function catalogSections(catalog) {
   const end = catalog.indexOf(semanticEnd);
   const semanticSource = catalog.slice(start, end < 0 ? catalog.length : end);
   const sections = [];
-  const sectionPattern = /^\s{2}(en|sw|fr|es|ar|zh|am|rw): \{([\s\S]*?)^\s{2}\},/gm;
+  const sectionPattern = /^\s{2}(en|sw|fr|es|ar|zh|am|rw|lg): \{([\s\S]*?)^\s{2}\},/gm;
   for (const match of semanticSource.matchAll(sectionPattern)) {
     sections.push({ language: match[1], body: match[2] });
   }
@@ -135,6 +135,7 @@ function placeholders(value) {
   return [...value.matchAll(placeholderPattern)].map((match) => match[1]).sort();
 }
 const placeholderIssues = [];
+const brandIssues = [];
 const englishValues = new Map();
 const catalogEntryPattern = /"([^"]+)":\s*"((?:\\.|[^"\\])*)"/g;
 function unescapeCatalogValue(value) {
@@ -151,6 +152,16 @@ for (const section of sections.filter((item) => item.language !== "en")) {
     const actual = placeholders(unescapeCatalogValue(match[2]));
     if (expected.join("|") !== actual.join("|")) {
       placeholderIssues.push(`${section.language}:${match[1]} expected [${expected.join(", ")}] got [${actual.join(", ")}]`);
+    }
+    if (section.language === "lg") {
+      const source = englishValues.get(match[1]) ?? "";
+      const translated = unescapeCatalogValue(match[2]);
+      const expectedBrandCount = (source.match(/\bAfuChat\b/gi) ?? []).length;
+      const exactBrandCount = (translated.match(/\bAfuChat\b/g) ?? []).length;
+      const anyBrandCount = (translated.match(/\bAfuChat\b/gi) ?? []).length;
+      if (expectedBrandCount !== exactBrandCount || anyBrandCount !== exactBrandCount) {
+        brandIssues.push(`lg:${match[1]} must preserve AfuChat exactly`);
+      }
     }
   }
 }
@@ -199,6 +210,11 @@ if (placeholderIssues.length) {
   placeholderIssues.forEach((issue) => console.error(`  - ${issue}`));
 }
 
+if (brandIssues.length) {
+  console.error("\nAfuChat brand-name mismatches:");
+  brandIssues.forEach((issue) => console.error(`  - ${issue}`));
+}
+
 if (literalBacklog.length) {
   console.log("\nRemaining literal UI copy (migration backlog, not a failure):");
   literalBacklog.slice(0, 25).forEach((finding) => console.log(`  - ${finding}`));
@@ -212,6 +228,7 @@ if (
   Object.keys(emptyTranslations).length ||
   Object.keys(extraByLanguage).length ||
   placeholderIssues.length ||
+  brandIssues.length ||
   Object.values(missingByLanguage).some((keys) => keys.length) ||
   (strictLiterals && literalBacklog.length)
 ) {

@@ -12,6 +12,7 @@ import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 
 type AfuTextInputProps = TextInputProps & {
   appearance?: "floating" | "embedded";
+  embeddedPaddingVertical?: number;
 };
 
 const OUTER_STYLE_KEYS = new Set([
@@ -75,6 +76,7 @@ const AfuTextInput = forwardRef<NativeTextInput, AfuTextInputProps>(
   function AfuTextInput(
     {
       appearance = "floating",
+      embeddedPaddingVertical,
       style,
       multiline = false,
       placeholderTextColor,
@@ -115,7 +117,7 @@ const AfuTextInput = forwardRef<NativeTextInput, AfuTextInputProps>(
               lineHeight: (flattened.lineHeight as number | undefined) ?? 20,
               minWidth: 0,
               paddingHorizontal: 0,
-              paddingVertical: multiline ? 6 : 0,
+              paddingVertical: embeddedPaddingVertical ?? (multiline ? 6 : 0),
               backgroundColor: "transparent",
               borderWidth: 0,
               outlineStyle: "none" as any,

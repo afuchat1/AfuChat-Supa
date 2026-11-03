@@ -2496,7 +2496,9 @@ function ChatScreen() {
   }, [messages.length]);
   const [input, setInput] = useState("");
   const [composerInputLines, setComposerInputLines] = useState(1);
-  const composerInputHeight = 32 + (composerInputLines - 1) * 20;
+  const composerLineHeight = 20;
+  const composerVerticalPadding = 4;
+  const composerInputHeight = 44 + (composerInputLines - 1) * composerLineHeight;
   // Show skeleton immediately on open; setLoading(false) is called once messages are ready.
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -8668,6 +8670,7 @@ STRICT RULES:
                         </TouchableOpacity>
                         <AfuTextInput
                           appearance="embedded"
+                          embeddedPaddingVertical={composerVerticalPadding}
                           ref={chatInputRef}
                           style={[
                             st.input,
@@ -8677,6 +8680,7 @@ STRICT RULES:
                               minHeight: composerInputHeight,
                               maxHeight: composerInputHeight,
                               textAlignVertical: composerInputLines > 1 ? "top" : "center",
+                              includeFontPadding: false,
                             },
                           ]}
                           placeholder="Message"
@@ -8699,8 +8703,11 @@ STRICT RULES:
                             }
                           }}
                           onContentSizeChange={(event) => {
-                            const contentHeight = event.nativeEvent.contentSize.height;
-                            const measuredLines = Math.ceil(Math.max(0, contentHeight - 12) / 20);
+                            const contentHeight = Math.max(
+                              0,
+                              event.nativeEvent.contentSize.height - composerVerticalPadding * 2,
+                            );
+                            const measuredLines = Math.round(contentHeight / composerLineHeight);
                             const nextLines = Math.max(1, Math.min(3, measuredLines));
                             setComposerInputLines((current) =>
                               current === nextLines ? current : nextLines,
@@ -10893,7 +10900,7 @@ const st = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 5,
-    paddingVertical: 2,
+    paddingVertical: 0,
     gap: 4,
   },
   inputInnerRow: {
@@ -10909,7 +10916,7 @@ const st = StyleSheet.create({
     justifyContent: "center",
   },
   pillIcon: { height: 44, paddingHorizontal: 5, alignItems: "center", justifyContent: "center" },
-  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, paddingTop: 6, paddingBottom: 6, minHeight: 24, maxHeight: 120 },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 20, outlineStyle: "none" as any, minHeight: 44, maxHeight: 84 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sendBtnCol: { alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
   aiEditorIcon: { width: 44, height: 36, marginBottom: 4, alignItems: "center", justifyContent: "center" },

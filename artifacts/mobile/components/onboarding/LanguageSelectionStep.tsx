@@ -30,7 +30,7 @@ import OnboardingBackdrop, { ONBOARDING_THEME } from "@/components/onboarding/On
 
 const FLAGS: Record<string, string> = {
   en: "🇬🇧", zh: "🇨🇳", es: "🇪🇸", fr: "🇫🇷", ar: "🇸🇦", sw: "🇰🇪",
-  am: "🇪🇹", rw: "🇷🇼",
+  am: "🇪🇹", rw: "🇷🇼", lg: "🇺🇬",
 };
 
 const LANGUAGES = BUNDLED_UI_LANGUAGES

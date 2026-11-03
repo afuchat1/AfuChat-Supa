@@ -21,7 +21,7 @@ const FLAG: Record<string, string> = {
   ar: "🇸🇦", hi: "🇮🇳", pt: "🇧🇷", ru: "🇷🇺",
   ja: "🇯🇵", de: "🇩🇪", sw: "🇰🇪", ko: "🇰🇷",
   it: "🇮🇹", tr: "🇹🇷",
-  am: "🇪🇹", rw: "🇷🇼",
+  am: "🇪🇹", rw: "🇷🇼", lg: "🇺🇬",
 };
 
 const LANG_LIST = BUNDLED_UI_LANGUAGES.map((code) => ({
