@@ -25,6 +25,11 @@ function normalizeLanguage(value: string | null | undefined): string | null {
     amharic: "am",
     "አማርኛ": "am",
     kinyarwanda: "rw",
+    lg: "lg",
+    lug: "lg",
+    luganda: "lg",
+    ganda: "lg",
+    oluganda: "lg",
   };
   return aliases[normalized] ?? normalized.split("-")[0];
 }
