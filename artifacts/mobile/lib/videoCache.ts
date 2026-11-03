@@ -2,15 +2,14 @@ import * as FileSystem from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDB } from "./storage/db";
 import { storage } from "./storage/mmkv";
-import { isCellular } from "./networkQuality";
 
 // ─── Video Stores ───────────────────────────────────────────────────────────────
 // Watched videos are kept in documentDirectory so the user can use them
-// offline. Prefetches use cacheDirectory instead and may be removed by the OS.
+// offline. Feed prefetching is disabled so videos are not written to OS cache.
 //
 // RULES:
 //   • Watched videos have a TTL and bounded size/count
-//   • Prefetches are disposable and are never part of the offline registry
+//   • No videos are prefetched into OS-clearable cache storage
 //   • getCachedVideoUri() returns local path instantly if already on device
 //   • markVideoWatched() is idempotent — calling it twice does nothing extra
 //
@@ -23,9 +22,6 @@ import { isCellular } from "./networkQuality";
 // Permanent watched-video store — bounded and user-visible in storage settings.
 // FileSystem.documentDirectory is always a non-null string on Android.
 const VIDEO_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_videos/";
-// Prefetches are disposable. Keeping them outside documentDirectory prevents
-// scrolling through a feed from permanently consuming user storage.
-const PREFETCH_DIR = (FileSystem.cacheDirectory ?? VIDEO_DIR) + "afuchat_video_prefetch/";
 
 const MAX_VIDEO_CACHE_BYTES = 512 * 1024 * 1024;
 const MAX_VIDEO_CACHE_ENTRIES = 50;
@@ -51,7 +47,6 @@ export type OfflineVideoEntry = {
 // ─── In-memory maps ────────────────────────────────────────────────────────────
 
 const memoryMap = new Map<string, string>();      // url → local path
-const inProgress = new Map<string, Promise<string | null>>();
 const saveInProgress = new Set<string>();
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -233,40 +228,9 @@ export async function getCachedVideoUri(url: string): Promise<string | null> {
   return null;
 }
 
-/**
- * Pre-fetch a video to local storage (e.g. for the next video in the feed).
- * Returns immediately if already on device — no duplicate download.
- * On cellular connections this is skipped entirely — videos stream instead
- * of being downloaded, saving significant mobile data.
- */
-export function cacheVideo(url: string): Promise<string | null> {
-  if (!url) return Promise.resolve(null);
-  // Never pre-download on cellular — stream only to protect mobile data
-  if (isCellular()) return Promise.resolve(null);
-  if (memoryMap.has(url)) return Promise.resolve(memoryMap.get(url)!);
-  if (inProgress.has(url)) return inProgress.get(url)!;
-
-  const task = (async (): Promise<string | null> => {
-    try {
-      await ensureDir(PREFETCH_DIR);
-      const localPath = PREFETCH_DIR + urlToFilename(url);
-      const existing = await FileSystem.getInfoAsync(localPath);
-      if (existing.exists && (existing as any).size > 0) {
-        memoryMap.set(url, localPath);
-        return localPath;
-      }
-      const result = await FileSystem.downloadAsync(url, localPath);
-      const check = await FileSystem.getInfoAsync(result.uri);
-      if (check.exists && (check as any).size > 0) {
-        memoryMap.set(url, result.uri);
-        return result.uri;
-      }
-    } catch {}
-    return null;
-  })().finally(() => inProgress.delete(url));
-
-  inProgress.set(url, task);
-  return task;
+/** Video prefetch is intentionally disabled; feed videos stream when played. */
+export function cacheVideo(_url: string): Promise<string | null> {
+  return Promise.resolve(null);
 }
 
 // ─── Watch → Permanent Store ───────────────────────────────────────────────────
@@ -320,46 +284,12 @@ export async function markVideoWatched(
       return;
     }
 
-    // Not yet on device — if a download is in progress, reuse it
-    let fileUri = localPath;
-    let fileSize = 0;
-
-    const prefetchedPath = memoryMap.get(url);
-    if (prefetchedPath && prefetchedPath !== localPath) {
-      try {
-        await FileSystem.copyAsync({ from: prefetchedPath, to: localPath });
-        const info = await FileSystem.getInfoAsync(localPath);
-        fileSize = (info as any).size ?? 0;
-      } catch {}
-    } else if (inProgress.has(url)) {
-      const result = await inProgress.get(url)!;
-      if (result) {
-        // Copy from wherever it landed to our permanent path (if different)
-        if (result !== localPath) {
-          try {
-            await FileSystem.copyAsync({ from: result, to: localPath });
-            const info = await FileSystem.getInfoAsync(localPath);
-            fileSize = (info as any).size ?? 0;
-          } catch {
-            fileUri = result;
-            const info = await FileSystem.getInfoAsync(result);
-            fileSize = (info as any).size ?? 0;
-          }
-        } else {
-          const info = await FileSystem.getInfoAsync(result);
-          fileSize = (info as any).size ?? 0;
-        }
-      }
-    }
-
-    if (fileSize === 0) {
-      // Download fresh directly to permanent location
-      const result = await FileSystem.downloadAsync(url, localPath);
-      const info = await FileSystem.getInfoAsync(result.uri);
-      if (!info.exists || (info as any).size === 0) return;
-      fileUri = result.uri;
-      fileSize = (info as any).size ?? 0;
-    }
+    // Not yet on device — download directly to durable app storage.
+    const result = await FileSystem.downloadAsync(url, localPath);
+    const info = await FileSystem.getInfoAsync(result.uri);
+    if (!info.exists || (info as any).size === 0) return;
+    const fileUri = result.uri;
+    const fileSize = (info as any).size ?? 0;
 
     memoryMap.set(url, fileUri);
     await dbSaveEntry({
@@ -433,8 +363,6 @@ export async function clearAllOfflineVideos(): Promise<void> {
   await dbDeleteAll();
   memoryMap.clear();
   await FileSystem.deleteAsync(VIDEO_DIR, { idempotent: true }).catch(() => {});
-  // Also clear any in-progress downloads
-  inProgress.clear();
   // No-op for any entry whose file doesn't exist
   for (const e of entries) {
     await FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {});

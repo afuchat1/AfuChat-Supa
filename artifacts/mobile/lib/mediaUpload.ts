@@ -20,6 +20,25 @@ import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 import * as FileSystem from "expo-file-system/legacy";
 import { FileSystemUploadType } from "expo-file-system/legacy";
 
+function getUploadStagingDirectory(): string | null {
+  return FileSystem.documentDirectory
+    ? `${FileSystem.documentDirectory}afuchat_upload_staging/`
+    : null;
+}
+
+async function ensureUploadStagingDirectory(directory: string): Promise<void> {
+  const info = await FileSystem.getInfoAsync(directory);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  }
+}
+
+export async function cleanupPreparedMediaForUpload(fileUri: string): Promise<void> {
+  const directory = getUploadStagingDirectory();
+  if (!directory || !fileUri.startsWith(directory)) return;
+  await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+}
+
 function getUploadsBase(): string {
   return `${supabaseUrl}/functions/v1/uploads`;
 }
@@ -105,18 +124,19 @@ export async function prepareMediaForUpload(
     return fileUri;
   }
 
-  const cacheDirectory = FileSystem.cacheDirectory;
-  if (!cacheDirectory) {
-    throw new Error("Temporary storage is unavailable. Please try again.");
+  const stagingDirectory = getUploadStagingDirectory();
+  if (!stagingDirectory) {
+    throw new Error("Persistent device storage is unavailable. Please try again.");
   }
+  await ensureUploadStagingDirectory(stagingDirectory);
 
   const normalizedExt = extension.replace(/[^a-z0-9]/gi, "").toLowerCase() || "bin";
-  const existingInfo = fileUri.startsWith(cacheDirectory)
+  const existingInfo = fileUri.startsWith(stagingDirectory)
     ? await FileSystem.getInfoAsync(fileUri).catch(() => ({ exists: false }))
     : null;
   if (existingInfo?.exists) return fileUri;
 
-  const destination = `${cacheDirectory}story_source_${Date.now()}_${Math.random()
+  const destination = `${stagingDirectory}story_source_${Date.now()}_${Math.random()
     .toString(36)
     .slice(2, 8)}.${normalizedExt}`;
   try {
@@ -293,6 +313,14 @@ export async function uploadToStorage(
   fileUri: string,
   contentType?: string,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
+  let tempPath: string | null = null;
+  const cleanupTemp = () => {
+    if (!tempPath) return;
+    const path = tempPath;
+    tempPath = null;
+    FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
+  };
+
   try {
     let resolvedMime = contentType;
     if (!resolvedMime && fileUri.startsWith("data:")) {
@@ -330,17 +358,16 @@ export async function uploadToStorage(
     // This is the critical path for video uploads: avoids loading the entire
     // file into JS memory (which would OOM on 50-100 MB videos).
     //
-    // Android quirk: on some devices the camera cache directory may not exist
+    // Android quirk: on some devices the camera temp directory may not exist
     // when ExponentFileSystem tries to open the source file, causing
     // "java.io.IOException: Directory for '...' doesn't exist".
-    // Fix: copy the file to a known-accessible cacheDirectory temp path first.
+    // Copy user media to app-owned persistent staging before streaming it.
     let uploadUri = fileUri;
-    let tempPath: string | null = null;
     try {
-      // Copy to a stable cacheDirectory path so FileSystem.uploadAsync has a
-      // guaranteed-readable source (avoids volatile camera/temp dirs).
-      if (FileSystem.cacheDirectory) {
-        tempPath = `${FileSystem.cacheDirectory}upload_tmp_${Date.now()}.${ext}`;
+      const stagingDirectory = getUploadStagingDirectory();
+      if (stagingDirectory) {
+        await ensureUploadStagingDirectory(stagingDirectory);
+        tempPath = `${stagingDirectory}upload_tmp_${Date.now()}.${ext}`;
         await FileSystem.copyAsync({ from: fileUri, to: tempPath });
         uploadUri = tempPath;
       }
@@ -358,12 +385,6 @@ export async function uploadToStorage(
       }
       // uploadUri stays as the original fileUri
     }
-
-    const cleanupTemp = () => {
-      if (tempPath) {
-        FileSystem.deleteAsync(tempPath!, { idempotent: true }).catch(() => {});
-      }
-    };
 
     // 1. Try presigned PUT — bytes stream directly from disk to R2.
     const sign = await getSignedUpload(realBucket, filePath, mime);
@@ -440,6 +461,7 @@ export async function uploadToStorage(
       };
     }
   } catch (e: any) {
+    cleanupTemp();
     return { publicUrl: null, error: e?.message || "Upload failed" };
   }
 }

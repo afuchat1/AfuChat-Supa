@@ -37,7 +37,7 @@ import {
   Modal,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";

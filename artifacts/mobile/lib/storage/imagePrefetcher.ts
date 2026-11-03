@@ -8,7 +8,7 @@
  * Rules:
  *  • Max 4 concurrent prefetches (avoids choking the network for real requests)
  *  • Duplicate enqueues for the same URL are de-duplicated
- *  • Avatars have higher priority than thumbnails
+  *  • Avatars have higher priority than thumbnails
  */
 
 import { Image as ExpoImage } from "expo-image";
@@ -40,9 +40,8 @@ function _drain() {
   while (_active < MAX_CONCURRENT && _queue.length > 0) {
     const item = _queue.shift()!;
     _active++;
-    // Let expo-image use its native disk cache and decoder. This keeps
-    // prefetching aligned with the component that will render the image.
-    ExpoImage.prefetch(item.url, "memory-disk")
+    // Keep image prefetches in memory only; re-download them when needed.
+    ExpoImage.prefetch(item.url, "memory")
       .catch(() => {})
       .finally(() => {
         _active--;

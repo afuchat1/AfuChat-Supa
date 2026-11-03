@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
-import { Image } from "expo-image";
+import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";

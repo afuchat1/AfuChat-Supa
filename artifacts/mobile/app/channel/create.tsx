@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
-import { Image } from "expo-image";
+import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";

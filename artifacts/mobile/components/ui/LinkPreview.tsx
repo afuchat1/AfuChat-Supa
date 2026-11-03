@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -157,7 +157,7 @@ function ProfilePreviewCard({
             source={{ uri: card.avatar_url }}
             style={st.avatar}
             contentFit="cover"
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
           />
         ) : (
           <View style={[st.avatarPlaceholder, { backgroundColor: accent + "30" }]}>
@@ -254,7 +254,7 @@ function UrlPreviewCard({
             source={{ uri: ogImage }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
           />
         ) : (
           /* favicon via Google CDN — always returns a 16×16+ icon */
@@ -262,7 +262,7 @@ function UrlPreviewCard({
             source={{ uri: faviconUrl(card.hostname) }}
             style={st.faviconImg}
             contentFit="contain"
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
           />
         )}
       </View>
@@ -275,7 +275,7 @@ function UrlPreviewCard({
             source={{ uri: faviconUrl(card.hostname) }}
             style={st.faviconInline}
             contentFit="contain"
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
           />
           <Text style={[st.urlHost, { color: mutedColor }]} numberOfLines={1}>
             {card.hostname}

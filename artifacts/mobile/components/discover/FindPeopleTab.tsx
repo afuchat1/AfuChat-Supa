@@ -16,7 +16,7 @@ import type {
   NativeSyntheticEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { navigateToKnownProfile } from "@/lib/navigateToProfile";
@@ -76,7 +76,7 @@ function isOnline(lastSeen: string | null) {
 
 function Avatar({ person, accent, size = 70 }: { person: Person; accent: string; size?: number }) {
   return person.avatar_url ? (
-    <ExpoImage source={{ uri: person.avatar_url }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} contentFit="cover" cachePolicy="memory-disk" />
+    <ExpoImage source={{ uri: person.avatar_url }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} contentFit="cover" cachePolicy="memory" />
   ) : (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: accent + "20" }]}>
       <Text style={[styles.initial, { color: accent, fontSize: size * 0.3 }]}>
@@ -673,7 +673,7 @@ export default function FindPeopleTab() {
                           source={{ uri: person.banner_url }}
                           style={StyleSheet.absoluteFill}
                           contentFit="cover"
-                          cachePolicy="memory-disk"
+                          cachePolicy="memory"
                         />
                       ) : (
                         <View style={[styles.bannerFallback, { backgroundColor: accent + "18" }]}>
@@ -742,7 +742,7 @@ export default function FindPeopleTab() {
                                   source={{ uri: mutual.avatar_url }}
                                   style={styles.mutualAvatarImage}
                                   contentFit="cover"
-                                  cachePolicy="memory-disk"
+                                  cachePolicy="memory"
                                 />
                               ) : (
                                 <View style={[styles.mutualAvatarFallback, { backgroundColor: colors.inputBg }]}>

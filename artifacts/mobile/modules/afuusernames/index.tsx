@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { SmartSheet } from "@/components/ui/SmartSheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";

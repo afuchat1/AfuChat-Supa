@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Image } from "expo-image";
+import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { timeAgo as fmtRel } from "@/lib/timeAgo";
 import Colors from "@/constants/colors";
@@ -78,7 +78,7 @@ export const ShareCard = React.forwardRef<View, ShareCardProps>(function ShareCa
               source={{ uri: avatarSrc }}
               style={{ width: 46, height: 46, borderRadius: 23 }}
               contentFit="cover"
-              cachePolicy="memory-disk"
+              cachePolicy="memory"
             />
           ) : (
             <View style={[s.avatarFallback, { backgroundColor: accent + "28" }]}>

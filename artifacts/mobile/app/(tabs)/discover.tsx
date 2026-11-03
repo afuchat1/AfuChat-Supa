@@ -29,7 +29,7 @@ const _PagerView: any = (() => {
 // be wrapped, not just the scroll handler passed to a plain FlatList.
 const AnimatedFlatList: any = Animated.createAnimatedComponent(FlatList);
 import { TabSwipeContext } from "@/context/TabSwipeContext";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { showAlert } from "@/lib/alert";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
 import { router, useNavigation, useFocusEffect } from "expo-router";
@@ -2955,7 +2955,7 @@ export default function DiscoverScreen() {
                                   source={{ uri: track.coverUrl }}
                                   style={StyleSheet.absoluteFill}
                                   contentFit="cover"
-                                  cachePolicy="memory-disk"
+                                  cachePolicy="memory"
                                 />
                               ) : (
                                 <Ionicons name="musical-notes" size={20} color={track.accentColor || colors.accent} />

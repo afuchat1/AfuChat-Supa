@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { usePathname } from "expo-router";
 import { safeRouter } from "@/lib/navUtils";
 import type { RealtimeChannel, Session } from "@supabase/supabase-js";

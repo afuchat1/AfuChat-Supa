@@ -14,7 +14,7 @@ export type OptimizedImageProps = Omit<
    */
   resizeMode?: ResizeMode;
   contentFit?: ImageProps["contentFit"];
-  cachePolicy?: ImageProps["cachePolicy"];
+  cachePolicy?: "memory";
 };
 
 const CONTENT_FIT: Record<ResizeMode, NonNullable<ImageProps["contentFit"]>> = {
@@ -35,15 +35,14 @@ function getRecyclingKey(source: ImageProps["source"]): string | undefined {
 /**
  * Memory-safe image primitive for all remote and local media previews.
  *
- * expo-image uses native image pipelines with memory/disk caching and
- * downsampling. `recyclingKey` also prevents a recycled list cell from
+ * expo-image uses an in-memory image cache and downsampling. `recyclingKey` also prevents a recycled list cell from
  * briefly showing the previous image while a new URI is loading.
  */
 export function OptimizedImage({
   source,
   resizeMode = "cover",
   contentFit,
-  cachePolicy = "memory-disk",
+  cachePolicy = "memory",
   transition = 0,
   allowDownscaling = true,
   recyclingKey,

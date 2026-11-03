@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";

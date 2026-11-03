@@ -13,3 +13,5 @@
 - [Android module compatibility](android-module-compatibility.md) — App modules must work on Android 14 and earlier across phone brands; verify device-specific crashes from reports.
 - [TypeScript check heap](typescript-check-heap.md) — Run full mobile typechecks with a 4 GB Node heap; the default heap can run out before diagnostics.
 - [App-wide input and floating surfaces](afuchat-input-surface.md) — Keep all input bars compact, single-shell glass surfaces; share the same architecture for floating controls.
+- [AfuChat durable user data](afu-durable-user-data.md) — Keep durable user data out of OS-clearable cache storage; use persistent app storage or the server.
+- [Expo Router navigation hooks](expo-router-navigation-hooks.md) — In SDK 57, import navigation hooks from Expo Router to share its bundled navigation context.

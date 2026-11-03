@@ -18,7 +18,7 @@ import {
   Platform,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
@@ -203,7 +203,7 @@ function UserAvatar({
           source={{ uri }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           contentFit="cover"
-          cachePolicy="memory-disk"
+          cachePolicy="memory"
         />
       ) : (
         <View

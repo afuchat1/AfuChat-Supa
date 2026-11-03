@@ -41,7 +41,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
@@ -1788,6 +1788,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     }
 
     setDownloading(true); showToast("Saving to device…", 30000);
+    let stagedDownloadPath: string | null = null;
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== "granted") {
@@ -1796,13 +1797,19 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         return;
       }
       const url = await resolveDownloadUrl();
-      const dest = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
-      const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
+      const documentDirectory = FileSystem.documentDirectory;
+      if (!documentDirectory) throw new Error("Persistent device storage is unavailable.");
+      stagedDownloadPath = `${documentDirectory}afuchat_dl_${item.id}.mp4`;
+      const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, stagedDownloadPath);
       if (!uri || (dlStatus !== undefined && (dlStatus < 200 || dlStatus >= 400))) throw new Error(`HTTP ${dlStatus}`);
       await MediaLibrary.createAssetAsync(uri);
-      await FileSystem.deleteAsync(uri, { idempotent: true });
+      await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+      stagedDownloadPath = null;
       setDownloading(false); showToast("Saved to your device");
     } catch (err) {
+      if (stagedDownloadPath) {
+        await FileSystem.deleteAsync(stagedDownloadPath, { idempotent: true }).catch(() => {});
+      }
       setDownloading(false); setDownloadToast(null);
       console.error("[download]", err);
       showAlert("Download failed", "Could not save the video. If the issue persists, check the Status page under Settings → Help & About.");

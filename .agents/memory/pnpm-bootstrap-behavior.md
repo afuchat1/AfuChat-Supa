@@ -7,6 +7,6 @@ When the workspace-pinned pnpm version differs from the installed global pnpm, i
 
 For workspace dependency changes, use Corepack's project-pinned pnpm shim in a temporary directory and prepend that directory to `PATH`; verify the reported version matches the root `packageManager` first. A direct symlink to the Corepack executable is not a working pnpm shim. Preview workflows can avoid bootstrap loops by invoking already-installed project binaries directly.
 
-**Why:** A global/pinned mismatch caused recursive bootstrap, while Corepack's generated shim ran the workspace's pinned version and allowed the Expo dependencies to be aligned safely.
+**Why:** A global/pinned mismatch caused recursive bootstrap. A failed Expo install also left package metadata updated while installed modules still resolved stale Expo CLI 55; a frozen install with pinned pnpm restored the SDK 57 workspace.
 
-**How to apply:** Before retrying a pnpm failure, inspect for leftover processes. Use installed Expo/Node binaries in preview workflows and Corepack's generated shim for package changes; don't invoke the mismatched global pnpm.
+**How to apply:** Before retrying a pnpm failure, inspect for leftover processes. Use installed Expo/Node binaries in preview workflows and Corepack's generated shim for package changes; after a failed Expo install, run the pinned frozen install before restarting Expo.

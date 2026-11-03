@@ -33,7 +33,7 @@ const STORY_REPLY_W = Math.round(_SW * 0.50);
 const STORY_REPLY_H = Math.round(STORY_REPLY_W * 0.65);
 
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -45,7 +45,7 @@ import * as Haptics from "@/lib/haptics";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import * as DocumentPicker from "expo-document-picker";
 import * as Contacts from "expo-contacts";
 import * as FileSystem from "expo-file-system";
@@ -1741,7 +1741,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                         source={{ uri: url }}
                         style={groupedImageUrls.length === 1 ? st.attachImage : st.imageGroupTile}
                         contentFit="cover"
-                        cachePolicy="memory-disk"
+                        cachePolicy="memory"
                         transition={0}
                       />
                     ))}
@@ -1751,7 +1751,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                     source={{ uri: attachUri || msg.attachment_url! }}
                     style={st.attachImage}
                     contentFit="cover"
-                    cachePolicy="memory-disk"
+                    cachePolicy="memory"
                     transition={0}
                     autoplay={msg.attachment_type !== "gif" || chatPrefsLocal.autoplay_gifs}
                   />

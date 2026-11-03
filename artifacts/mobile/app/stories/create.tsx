@@ -30,7 +30,11 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
-import { prepareMediaForUpload, uploadToStorage } from "@/lib/mediaUpload";
+import {
+  cleanupPreparedMediaForUpload,
+  prepareMediaForUpload,
+  uploadToStorage,
+} from "@/lib/mediaUpload";
 import { consumeStoryMediaDraft } from "@/lib/storyMediaDraft";
 import { useTheme } from "@/hooks/useTheme";
 import * as FileSystem from "expo-file-system/legacy";
@@ -61,6 +65,11 @@ export default function CreateStoryScreen() {
   const params = useLocalSearchParams<{ mediaUri?: string; mediaType?: string }>();
   const mediaDraft = consumeStoryMediaDraft();
   const [mediaUri, setMediaUri] = useState<string | null>(params.mediaUri ?? mediaDraft?.uri ?? null);
+  useEffect(() => {
+    return () => {
+      if (mediaUri) void cleanupPreparedMediaForUpload(mediaUri);
+    };
+  }, [mediaUri]);
   const [mediaType, setMediaType] = useState<"image" | "video">(
     params.mediaType === "video" ? "video" : mediaDraft?.mediaType === "video" ? "video" : "image"
   );
@@ -136,10 +145,9 @@ export default function CreateStoryScreen() {
     const _userId = user.id;
 
     // ── Stable file copy (native) ──────────────────────────────────────────
-    // Camera and gallery URIs on Android (file://, content://, or bare paths)
-    // point to volatile temp locations that are wiped when the screen unmounts.
-    // Copy to a stable cacheDirectory file NOW — before dismissing — so the
-    // background upload always has a readable source.
+    // Picker URIs can point to volatile temp locations. Copy user media into
+    // persistent app storage before publishing so OS cache cleanup cannot
+    // remove the source while the upload is running.
     // We skip data: and blob: (already in-memory) and web (no FileSystem).
     //
     // IMPORTANT: In Expo Go on Android the ImagePicker writes temp files to the
@@ -155,23 +163,25 @@ export default function CreateStoryScreen() {
       Platform.OS !== "web" &&
       !mediaUri.startsWith("data:") &&
       !mediaUri.startsWith("blob:");
-    if (isNativeFileUri && FileSystem.cacheDirectory) {
+    const stagingDirectory = FileSystem.documentDirectory
+      ? `${FileSystem.documentDirectory}afuchat_upload_staging/`
+      : null;
+    if (isNativeFileUri && stagingDirectory) {
       try {
-        if (mediaUri.startsWith(FileSystem.cacheDirectory)) {
+        if (mediaUri.startsWith(stagingDirectory)) {
           const existing = await FileSystem.getInfoAsync(mediaUri);
           if (existing.exists) {
             _mediaUri = mediaUri;
           } else {
-            throw new Error("Cached story media is no longer available.");
+            throw new Error("Saved story media is no longer available.");
           }
         } else {
           const rawExt =
             mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || (_mediaType === "video" ? "mp4" : "jpg");
-          // Content URIs can contain query strings or non-path characters.
-          // Sanitize the extension before using it as a native cache filename.
+          await FileSystem.makeDirectoryAsync(stagingDirectory, { intermediates: true });
           const safeExt = rawExt.replace(/[^a-z0-9]/gi, "").slice(0, 8) || (_mediaType === "video" ? "mp4" : "jpg");
           const uniqueSuffix = Math.random().toString(36).slice(2, 10);
-          const stablePath = `${FileSystem.cacheDirectory}story_src_${Date.now()}_${uniqueSuffix}.${safeExt}`;
+          const stablePath = `${stagingDirectory}story_src_${Date.now()}_${uniqueSuffix}.${safeExt}`;
           await FileSystem.copyAsync({ from: mediaUri, to: stablePath });
           _mediaUri = stablePath;
         }
@@ -249,6 +259,7 @@ export default function CreateStoryScreen() {
 
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
       await recordDailyUsage("stories_create");
+      await cleanupPreparedMediaForUpload(_mediaUri);
       finishStoryUpload();
 
       if (router.canDismiss()) {

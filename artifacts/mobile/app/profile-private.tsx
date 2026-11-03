@@ -21,7 +21,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -92,7 +92,7 @@ export function ProfilePrivateView({
             source={{ uri: avatarUrl }}
             style={styles.avatar}
             contentFit="cover"
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
           />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>

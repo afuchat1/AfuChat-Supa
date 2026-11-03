@@ -9,7 +9,7 @@ type Props = Omit<ImageProps, "source"> & {
 /**
  * Persistent remote image — instant, offline-first.
  *
- * expo-image owns the complete loading pipeline: native memory/disk caching,
+ * expo-image owns the complete loading pipeline: in-memory caching,
  * bitmap downsampling, and recycled-cell cleanup. Keeping one cache owner
  * avoids a second FileSystem/SQLite download path and duplicate bitmaps.
  */
@@ -25,7 +25,7 @@ export function CachedImage({ uri, cacheType = "thumb", ...props }: Props) {
     <ExpoImage
       {...props}
       source={{ uri }}
-      cachePolicy="memory-disk"
+      cachePolicy="memory"
       transition={0}
       allowDownscaling
       recyclingKey={uri}

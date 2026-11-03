@@ -25,7 +25,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Image as ExpoImage } from "expo-image";
+import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useHorizontalScrollLock } from "@/context/TabSwipeContext";
@@ -196,7 +196,7 @@ function UserCard({
             source={{ uri: user.avatar_url }}
             style={styles.avatarImg}
             contentFit="cover"
-            cachePolicy="memory-disk"
+            cachePolicy="memory"
           />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
