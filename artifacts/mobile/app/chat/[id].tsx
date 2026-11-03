@@ -8626,7 +8626,15 @@ STRICT RULES:
                     </TouchableOpacity>
                   </View>
                 )}
-                <View style={[st.inputBarRow, !(replyTo && !editingMessage) ? { flex: 1 } : undefined]}>
+                <View
+                  style={[
+                    st.inputComposerMainRow,
+                    replyTo && !editingMessage
+                      ? st.inputComposerMainRowWithReply
+                      : { flex: 1 },
+                  ]}
+                >
+                <View style={[st.inputBarRow, { flex: 1 }]}>
                     {isRecording && !recLocked ? (
                       <>
                         <TouchableOpacity onPress={cancelVoiceRecording} hitSlop={12} style={st.recTrashBtn}>
@@ -8844,6 +8852,7 @@ STRICT RULES:
                       )}
                     </View>
                   )}
+                </View>
                 </View>
               </AfuInputSurface>
               </View>
@@ -10904,6 +10913,8 @@ const st = StyleSheet.create({
     paddingVertical: 0,
     gap: 4,
   },
+  inputComposerMainRow: { flexDirection: "row", alignItems: "flex-end" },
+  inputComposerMainRowWithReply: { alignSelf: "stretch" },
   inputInnerRow: {
     flex: 1,
     flexDirection: "row",
