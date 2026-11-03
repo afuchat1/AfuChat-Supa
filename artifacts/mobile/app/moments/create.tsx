@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -111,7 +112,7 @@ export default function CreatePostScreen() {
   const { preferredLang }  = useLanguage();
   const insets             = useSafeAreaInsets();
   const params             = useLocalSearchParams<{ prefill?: string; imageUrl?: string; imageUrls?: string }>();
-  const inputRef           = useRef<TextInput>(null);
+  const inputRef           = useRef<TextInputInstance>(null);
   const postBtnScale       = useRef(new Animated.Value(1)).current;
 
   // ── state ──────────────────────────────────────────────────────────────────

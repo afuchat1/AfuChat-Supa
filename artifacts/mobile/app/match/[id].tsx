@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { FlatListInstance, TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -100,8 +101,8 @@ export default function MatchConversationScreen() {
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const otherUserId = match ? (match.user1_id === user?.id ? match.user2_id : match.user1_id) : null;
 
-  const flatRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
+  const flatRef = useRef<FlatListInstance>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -336,7 +337,7 @@ export default function MatchConversationScreen() {
             <TouchableOpacity onPress={loadEarlierMessages} disabled={loadingEarlier} style={{ paddingVertical: 12, alignItems: "center" as const }}>
               {loadingEarlier ? <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" /> : <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>Load earlier messages</Text>}
             </TouchableOpacity>
-          ) : null}
+          ) : undefined}
           renderItem={({ item }) => {
             const isMine = item.sender_id === user?.id;
             const msgReactions = reactions[item.id] ?? [];

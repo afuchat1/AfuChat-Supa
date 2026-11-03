@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -308,7 +309,7 @@ export default function SignInScreen() {
   const [forgotVisible, setForgotVisible] = useState(false);
   const [verifyVisible, setVerifyVisible] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
-  const pwdRef = useRef<TextInput>(null);
+  const pwdRef = useRef<TextInputInstance>(null);
   const isSubmittingRef = useRef(false);
   const nativeAutoSignInRef = useRef(false);
 

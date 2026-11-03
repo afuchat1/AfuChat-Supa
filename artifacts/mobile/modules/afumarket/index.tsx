@@ -509,7 +509,7 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
             <View style={{ flexDirection: "row", flexWrap: "wrap", padding: 4 }}>
               {[1,2].map(i => <MarketplaceCardSkeleton key={i} />)}
             </View>
-          ) : null
+          ) : undefined
         }
       />
     </View>

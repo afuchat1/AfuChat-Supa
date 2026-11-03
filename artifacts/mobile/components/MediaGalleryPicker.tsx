@@ -288,7 +288,7 @@ export default function MediaGalleryPicker({
             ListFooterComponent={
               loading ? (
                 <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const isSelected = selected.has(item.id);

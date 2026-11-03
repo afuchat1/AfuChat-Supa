@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import * as ImagePicker from "expo-image-picker";
@@ -476,8 +477,8 @@ export function SearchScreen({
 
   const scrollPB = insets.bottom + (hasAppBottomNav ? 90 : 16);
 
-  const inputRef    = useRef<TextInput>(null);
-  const overlayInputRef = useRef<TextInput>(null);
+  const inputRef    = useRef<TextInputInstance>(null);
+  const overlayInputRef = useRef<TextInputInstance>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
   const suggestionRequestRef = useRef(0);

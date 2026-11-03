@@ -31,8 +31,10 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
+  type FlatListInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -708,8 +710,8 @@ export function VideoCommentsSheet({
   const mentionQueryRef = useRef<string | null>(null);
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const listRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatListInstance>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const sendScale = useRef(new Animated.Value(1)).current;
   const repliesLoadSeqRef = useRef(0);
   const repliesReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

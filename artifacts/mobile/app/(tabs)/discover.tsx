@@ -17,9 +17,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ViewToken,
   useWindowDimensions,
 } from "react-native";
+import type { FlatListInstance, ListViewToken } from "react-native";
+import type PagerViewInstance from "react-native-pager-view";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 // PagerView gives true native 1:1 finger-tracking on Android/iOS.
 const _PagerView: any = (() => {
@@ -1298,9 +1299,9 @@ export default function DiscoverScreen() {
   const throwbackExhaustedRef = useRef(false);
   const midOffsetRef = useRef(0);
   const midExhaustedRef = useRef(false);
-  const flatListRef = useRef<any>(null);
+  const flatListRef = useRef<FlatListInstance>(null);
   const recordedViewsRef = useRef<Set<string>>(new Set());
-  const pagerRef = useRef<any>(null);
+  const pagerRef = useRef<PagerViewInstance>(null);
   const discoverPillX = useRef(new Animated.Value(0)).current;
   const discoverPillW = useRef(new Animated.Value(0)).current;
   const discoverTabLayoutsRef = useRef<Record<number, { x: number; width: number }>>({});
@@ -1416,8 +1417,8 @@ export default function DiscoverScreen() {
 
   // ────────────────────────────────────────────────────────────────────────
   const viewabilityConfig = useRef({ minimumViewTime: 800, itemVisiblePercentThreshold: 50 }).current;
-  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {});
-  onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {});
+  onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
     if (!user) return;
     for (const vi of viewableItems) {
       if (vi.item?._kind && vi.item._kind !== "post") continue;
@@ -1450,7 +1451,7 @@ export default function DiscoverScreen() {
       trackEvent("view_post", { post_id: postId, author_id: authorId ?? "", post_type: postType ?? "text" });
     }
   };
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
     onViewableItemsChangedRef.current({ viewableItems });
   }).current;
 

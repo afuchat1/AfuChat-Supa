@@ -22,6 +22,7 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
+  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
@@ -111,7 +112,7 @@ function MobileSheet({ visible, onClose, children, backgroundColor, maxHeight = 
   const [isFull, setIsFull] = useState(false);
   const isFullRef = useRef(false);
   const scrollYRef = useRef(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   // ── Snap helpers (in refs so PanResponder always calls the latest) ────────
   const snapToFullRef = useRef<() => void>(() => {});

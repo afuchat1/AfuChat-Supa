@@ -17,9 +17,13 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  type FlatListInstance,
+  type ScrollViewInstance,
 } from "react-native";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
+import type PagerViewInstance from "react-native-pager-view";
 
 import AfuLogo from "@/components/ui/AfuLogo";
 import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
@@ -565,7 +569,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchAnim = useRef(new Animated.Value(0)).current;
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<TextInputInstance>(null);
   const [tabFilter, setTabFilter] = useState<ChatTabKey>("all");
   const [typingChatIds, setTypingChatIds] = useState<Record<string, boolean>>({});
   const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -617,8 +621,9 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [editingFolder, setEditingFolder]     = useState<ChatFolder | null>(null);
   const [pageIdx, setPageIdx]           = useState(0);
-  const pagerRef        = useRef<any>(null);
-  const folderScrollRef = useRef<ScrollView>(null);
+  const pagerViewRef    = useRef<PagerViewInstance>(null);
+  const pagerListRef    = useRef<FlatListInstance>(null);
+  const folderScrollRef = useRef<ScrollViewInstance>(null);
   const tabLayoutsRef   = useRef<Record<number, { x: number; width: number }>>({});
   const folderPillX     = useRef(new Animated.Value(6)).current;
   const folderPillW     = useRef(new Animated.Value(52)).current;
@@ -1832,7 +1837,9 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                     onPress={() => {
                       setPageIdx(idx);
                       if (hasFolders) {
-                        _PagerView ? pagerRef.current?.setPage(idx) : pagerRef.current?.scrollToIndex({ index: idx, animated: true });
+                        _PagerView
+                          ? pagerViewRef.current?.setPage(idx)
+                          : pagerListRef.current?.scrollToIndex({ index: idx, animated: true });
                       }
                     }}
                     onLongPress={() => {
@@ -1867,7 +1874,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           _PagerView ? (
             /* Native PagerView — true 1:1 finger tracking, content visible while swiping */
             <_PagerView
-              ref={pagerRef}
+              ref={pagerViewRef}
               style={{ flex: 1 }}
               initialPage={0}
               onPageScroll={handlePageScroll}
@@ -1939,7 +1946,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           ) : (
             /* Web / PagerView-unavailable fallback — horizontal FlatList pager */
             <FlatList
-              ref={pagerRef}
+              ref={pagerListRef}
               data={pages}
               keyExtractor={(p) => ("filter" in p ? p.id : "all")}
               horizontal
@@ -2101,8 +2108,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           setPageIdx(newIdx);
           if (newIdx < updated.length + 1) {
             _PagerView
-              ? pagerRef.current?.setPage(newIdx)
-              : pagerRef.current?.scrollToIndex({ index: newIdx, animated: false });
+              ? pagerViewRef.current?.setPage(newIdx)
+              : pagerListRef.current?.scrollToIndex({ index: newIdx, animated: false });
           }
           setShowFolderModal(false);
           setEditingFolder(null);

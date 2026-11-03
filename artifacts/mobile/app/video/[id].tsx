@@ -36,9 +36,9 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ViewToken,
   useWindowDimensions,
 } from "react-native";
+import type { FlatListInstance, ListViewToken } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as Clipboard from "expo-clipboard";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
@@ -1160,7 +1160,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     }, [])
   );
 
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<FlatListInstance>(null);
   const cursorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(hasMore);
@@ -1634,21 +1634,21 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   // ── FlatList config ────────────────────────────────────────────────────────
 
   // Stable ref — never changes identity so FlatList never re-wires the handler
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-      const idx = viewableItems[0].index;
-      setActiveIndex(idx);
-      activeIndexRef.current = idx;
-      // Mark this video (and its neighbors) as seen so it gets demoted next session
-      const seenBatch: string[] = [];
-      for (const vt of viewableItems) {
-        if (vt.item?.id) seenBatch.push(vt.item.id);
-      }
-      if (seenBatch.length > 0) markVideosSeen(seenBatch).catch(() => {});
-      // Preload more when 3 from end
-      if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
-        fetchVideos(videoTabRef.current, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
-      }
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+    const idx = viewableItems[0]?.index;
+    if (idx == null) return;
+
+    setActiveIndex(idx);
+    activeIndexRef.current = idx;
+    // Mark this video (and its neighbors) as seen so it gets demoted next session
+    const seenBatch: string[] = [];
+    for (const vt of viewableItems) {
+      if (vt.item?.id) seenBatch.push(vt.item.id);
+    }
+    if (seenBatch.length > 0) markVideosSeen(seenBatch).catch(() => {});
+    // Preload more when 3 from end
+    if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
+      fetchVideos(videoTabRef.current, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
     }
   }).current;
 
@@ -2019,7 +2019,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             <View style={{ width: SCREEN_W, height: listHeight, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
               <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
             </View>
-          ) : null}
+          ) : undefined}
         />
       )}
 

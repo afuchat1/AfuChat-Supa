@@ -24,6 +24,7 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
+  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
@@ -75,7 +76,7 @@ export function SmartSheet({
   const isFullRef = useRef(false);
 
   const scrollYRef = useRef(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   // ─── Snap functions (stored in refs so PanResponder can always call the latest) ─
 

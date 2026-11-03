@@ -21,8 +21,10 @@ import {
   Pressable,
   TouchableOpacity,
   View,
+  type FlatListInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 
 // Cap screen width so attachment bubbles don't fill an entire desktop monitor.
@@ -1287,7 +1289,7 @@ function LensContextCard({ msg, onSuggestionTap }: {
 }
 
 function AutoSelectMessageText({ value, style }: { value: string; style?: any }) {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const selection = { start: 0, end: value.length };
 
   useEffect(() => {
@@ -2591,7 +2593,7 @@ function ChatScreen() {
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchCursor, setSearchCursor] = useState(0);
-  const searchInputRef = useRef<any>(null);
+  const searchInputRef = useRef<TextInputInstance>(null);
   const chatSearchAnim = useRef(new Animated.Value(0)).current;
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editHistoryMsg, setEditHistoryMsg] = useState<Message | null>(null);
@@ -3149,8 +3151,8 @@ function ChatScreen() {
 
   const [translateMsg, setTranslateMsg] = useState<Message | null>(null);
   const [translatingLang, setTranslatingLang] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
-  const chatInputRef = useRef<TextInput>(null);
+  const flatListRef = useRef<FlatListInstance>(null);
+  const chatInputRef = useRef<TextInputInstance>(null);
   const openEmojiStickerPicker = useCallback(() => {
     if (showEmojiStickerPickerRef.current) return;
     const switchingFromWebKeyboard =
@@ -4155,7 +4157,7 @@ function ChatScreen() {
         preloadIncomingMessageSound();
       }
     };
-    syncPresence(AppState.currentState);
+    syncPresence(AppState.currentState ?? "active");
     const appStateSubscription = AppState.addEventListener("change", syncPresence);
     const heartbeat = setInterval(() => {
       if (AppState.currentState === "active" && isScreenFocusedRef.current) {
@@ -8389,7 +8391,7 @@ STRICT RULES:
                       <ChatBubbleSkeleton align="right" width={140} />
                       <ChatBubbleSkeleton align="left" width={200} />
                     </View>
-                  : null
+                  : undefined
               }
             />
             <Animated.View

@@ -154,7 +154,7 @@ export default function PhoneContactsScreen() {
         <FlatList
           data={[]}
           keyExtractor={() => ""}
-          renderItem={null}
+          renderItem={() => null}
           ListHeaderComponent={
             <>
               {/* ── On AfuChat section ── */}

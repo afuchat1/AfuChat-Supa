@@ -442,7 +442,7 @@ export default function DeviceSecurityScreen() {
                   <Ionicons name="log-out" size={18} color="#FF3B30" />
                   <Text style={styles.revokeAllText}>Sign Out All Other Devices</Text>
                 </TouchableOpacity>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => (
               <View style={[styles.deviceCard, {

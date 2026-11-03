@@ -125,7 +125,7 @@ export default function PrivacyRestrictedScreen() {
           ListHeaderComponent={
             filtered.length > 0 ? (
               <Text style={[s.listHeader, { color: colors.textMuted }]}>{t("restricted.accounts")}</Text>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item, index }) => {
             const isLast = index === filtered.length - 1;

@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
+  type ScrollViewInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
@@ -59,7 +60,7 @@ export default function ProductDetailScreen() {
   const [buying, setBuying] = useState(false);
   const [deliveryNote, setDeliveryNote] = useState("");
   const [orderDone, setOrderDone] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const imgH = width * 0.78;
   const balance = profile?.acoin ?? 0;

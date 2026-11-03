@@ -1,6 +1,7 @@
 import React, { forwardRef, useMemo } from "react";
 import {
   Text as NativeText,
+  type TextInstance,
   type TextProps,
 } from "react-native";
 import { useLanguage } from "@/context/LanguageContext";
@@ -37,7 +38,7 @@ type LocalizedTextProps = TextProps & {
   __afuchatTranslateAllText?: boolean;
 };
 
-const LocalizedText = forwardRef<NativeText, LocalizedTextProps>(function LocalizedText(
+const LocalizedText = forwardRef<TextInstance, LocalizedTextProps>(function LocalizedText(
   {
     children,
     __afuchatStaticText: _staticText = false,

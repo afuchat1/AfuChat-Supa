@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { FlatListInstance, TextInputInstance } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CHAT_FAST_DURATION } from "@/lib/chatMotion";
@@ -106,7 +107,7 @@ export default function NewChatScreen() {
   const [channels, setChannels] = useState<ChannelItem[]>([]);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     getAllPhonebookNames().then(setPhonebookNames).catch(() => {});
@@ -575,7 +576,7 @@ export default function NewChatScreen() {
                   <Text style={[styles.emptyTitle, { color: colors.text }]}>{"No contacts yet"}</Text>
                   <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{"Follow people to start chatting with them"}</Text>
                 </View>
-              ) : null
+              ) : undefined
             }
             ListFooterComponent={
               phoneNotAfu.length > 0 ? (

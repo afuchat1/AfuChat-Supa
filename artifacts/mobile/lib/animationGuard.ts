@@ -82,7 +82,7 @@ let pruneTimer: ReturnType<typeof setInterval> | null = null;
 let _cancelAnimFn: ((v: SharedValue<unknown>) => void) | null = null;
 
 let initialized = false;
-let previousState: AppStateStatus = AppState.currentState;
+let previousState: string = AppState.currentState ?? "active";
 
 // ── Diagnostics (dev / crash-reporter) ───────────────────────────────────────
 
@@ -247,7 +247,7 @@ export function initAnimationGuard(): void {
   if (initialized) return;
   initialized = true;
 
-  previousState = AppState.currentState;
+  previousState = AppState.currentState ?? "active";
   appStateListener = AppState.addEventListener("change", handleAppStateChange);
 
   // iOS: subscribe to OS memory-pressure events.

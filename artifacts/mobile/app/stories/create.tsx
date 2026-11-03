@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -84,7 +85,7 @@ export default function CreateStoryScreen() {
   const [tintColor, setTintColor] = useState<string | null>(null);
 
   const shareScale = useRef(new Animated.Value(1)).current;
-  const captionRef = useRef<TextInput>(null);
+  const captionRef = useRef<TextInputInstance>(null);
   const previewRadius = 24;
   const previewMargin = 8;
   const previewW = screenW - previewMargin * 2;

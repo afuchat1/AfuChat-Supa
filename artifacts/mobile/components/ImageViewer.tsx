@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -365,7 +366,7 @@ function SimpleZoomSlide({ uri, width, height, onSwipeLeft, onSwipeRight, onScal
     return Math.max(-max, Math.min(max, val));
   }
 
-  function pinchDist(t: any[]) {
+  function pinchDist(t: readonly { pageX: number; pageY: number }[]) {
     const dx = t[0].pageX - t[1].pageX, dy = t[0].pageY - t[1].pageY;
     return Math.sqrt(dx * dx + dy * dy) || 1;
   }
@@ -570,7 +571,7 @@ function PostChrome({
   const [following, setFollowing]   = useState(!!meta.isFollowing);
   const [replyText, setReplyText]   = useState("");
   const [sending, setSending]       = useState(false);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const heartScale = useRef(new Animated.Value(1)).current;
   const kbOffset   = useRef(new Animated.Value(0)).current;
 

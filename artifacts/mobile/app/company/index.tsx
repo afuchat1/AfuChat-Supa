@@ -328,8 +328,8 @@ export default function CompanyIndexScreen() {
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </TouchableOpacity>
-              ) : null
-            ) : null
+              ) : undefined
+            ) : undefined
           }
           ListEmptyComponent={
             <View style={styles.empty}>

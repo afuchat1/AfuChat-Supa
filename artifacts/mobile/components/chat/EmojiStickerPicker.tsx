@@ -20,6 +20,8 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  type FlatListInstance,
+  type ScrollViewInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
@@ -121,8 +123,8 @@ function EmojiScrollPanel({ onEmojiSelected, onScrollDown, onScrollUp, onSelect 
   const [historyItems,   setHistoryItems]   = useState<string[]>([]);
   const [activeCat,      setActiveCat]      = useState(0);
 
-  const listRef       = useRef<FlatList>(null);
-  const catBarRef     = useRef<ScrollView>(null);
+  const listRef       = useRef<FlatListInstance>(null);
+  const catBarRef     = useRef<ScrollViewInstance>(null);
   const activeCatRef  = useRef(0);
   const isScrollingTo = useRef(false);
   const lastScrollY   = useRef(0);
@@ -342,8 +344,8 @@ function StickerScrollPanel({ onSendSticker, onScrollDown, onScrollUp, onSelect 
   const [historyItems, setHistoryItems] = useState<string[]>([]);
   const [activeCat,    setActiveCat]    = useState(0);
 
-  const listRef       = useRef<FlatList>(null);
-  const catBarRef     = useRef<ScrollView>(null);
+  const listRef       = useRef<FlatListInstance>(null);
+  const catBarRef     = useRef<ScrollViewInstance>(null);
   const activeCatRef  = useRef(0);
   const isScrollingTo = useRef(false);
   const lastScrollY   = useRef(0);

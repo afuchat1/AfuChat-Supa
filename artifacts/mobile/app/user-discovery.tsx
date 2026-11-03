@@ -18,6 +18,7 @@ import {
   Platform,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -276,7 +277,7 @@ export default function UserDiscoveryScreen() {
   const nearbyError = locationError || nearbyLoadError;
 
   const channelRef = useRef<any>(null);
-  const searchRef = useRef<TextInput>(null);
+  const searchRef = useRef<TextInputInstance>(null);
   const tabIndicator = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

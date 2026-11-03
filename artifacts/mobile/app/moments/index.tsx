@@ -292,7 +292,7 @@ export default function MomentsScreen() {
             <TouchableOpacity onPress={() => setStoriesLimit(l => l + 50)} style={{ paddingVertical: 16, alignItems: "center" as const }}>
             <Text style={{ color: colors.accent, fontSize: 14 }}>Load more moments</Text>
             </TouchableOpacity>
-          ) : null}
+          ) : undefined}
         />
       )}
     </View>

@@ -307,7 +307,7 @@ export default function StoreStorefront() {
                   </View>
                 ))}
               </View>
-            ) : null
+            ) : undefined
           }
         />
       )}

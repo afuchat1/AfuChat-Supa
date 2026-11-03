@@ -341,7 +341,7 @@ export default function FollowersScreen() {
               >
                 {loadingMore ? <ActivityIndicator size="small" color={colors.accent} /> : <Text style={{ color: colors.accent, fontSize: 14 }}>Load more</Text>}
               </TouchableOpacity>
-            ) : null}
+            ) : undefined}
             contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
             ItemSeparatorComponent={() => (
               <View style={[styles.separator, { backgroundColor: colors.border, marginLeft: 76 }]} />

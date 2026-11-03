@@ -10,6 +10,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ScrollViewInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
@@ -102,7 +103,7 @@ export default function OrderDetailScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const [order, setOrder] = useState<ShopOrder | null>(null);
   const [messages, setMessages] = useState<OrderMessage[]>([]);

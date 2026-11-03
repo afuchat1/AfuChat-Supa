@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -47,7 +48,7 @@ export default function CreateArticleScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
-  const bodyRef = useRef<TextInput>(null);
+  const bodyRef = useRef<TextInputInstance>(null);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");

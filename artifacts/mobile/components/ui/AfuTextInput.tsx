@@ -2,6 +2,7 @@ import React, { forwardRef } from "react";
 import {
   StyleSheet,
   TextInput as NativeTextInput,
+  type TextInputInstance,
   type StyleProp,
   type TextInputProps,
   type TextStyle,
@@ -72,7 +73,7 @@ function splitStyle(style: StyleProp<TextStyle>) {
   return { flattened, outer, text };
 }
 
-const AfuTextInput = forwardRef<NativeTextInput, AfuTextInputProps>(
+const AfuTextInput = forwardRef<TextInputInstance, AfuTextInputProps>(
   function AfuTextInput(
     {
       appearance = "floating",

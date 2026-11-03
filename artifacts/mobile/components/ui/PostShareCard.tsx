@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type ViewInstance,
 } from "react-native";
 import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
@@ -47,7 +48,7 @@ interface ShareCardProps {
   avatarSrc: string | null;
 }
 
-export const ShareCard = React.forwardRef<View, ShareCardProps>(function ShareCard(
+export const ShareCard = React.forwardRef<ViewInstance, ShareCardProps>(function ShareCard(
   { post, avatarSrc },
   ref,
 ) {
@@ -284,7 +285,7 @@ export function PostShareCaptureModal({
   visible: boolean;
   onClose: () => void;
 }) {
-  const cardRef = useRef<View>(null);
+  const cardRef = useRef<ViewInstance>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
+  type ScrollViewInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
@@ -145,7 +146,7 @@ export default function OnboardingScreen() {
 
   // ── Pager — native horizontal ScrollView with pagingEnabled ──────────────────
   // Uses React Native's built-in paging (no Reanimated transform arrays needed).
-  const pagerRef = useRef<ScrollView | null>(null);
+  const pagerRef = useRef<ScrollViewInstance>(null);
 
   // Scroll to the current step whenever it changes
   useEffect(() => {

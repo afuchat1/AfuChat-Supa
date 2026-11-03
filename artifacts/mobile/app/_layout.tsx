@@ -452,8 +452,8 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
     if (!navigationReady) return;
     let cancelled = false;
 
-    const processUrl = async (url: string | null) => {
-      const action = await handleIncomingUrl(url);
+    const processUrl = async (url: string | null | undefined) => {
+      const action = await handleIncomingUrl(url ?? null);
       if (cancelled || !action) return;
 
       const isChatDestination = action.type === "navigate" && action.path === "/chat/[id]";

@@ -26,6 +26,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { FlatListInstance, TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -314,8 +315,8 @@ export default function PostDetailScreen() {
   const sendScale = useRef(new Animated.Value(1)).current;
 
   // ── Refs ─────────────────────────────────────────────────────────────────────
-  const listRef = useRef<FlatList>(null);
-  const inputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatListInstance>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const { images: viewerImages, index: viewerIndex, visible: viewerOpen, meta: viewerMeta, openViewer, closeViewer } = useImageViewer();
 
   // ── Keyboard listener ────────────────────────────────────────────────────────
@@ -915,7 +916,7 @@ export default function PostDetailScreen() {
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          ListHeaderComponent={listHeader}
+          ListHeaderComponent={listHeader ?? undefined}
           ListEmptyComponent={
             commentsLoading ? (
               <CommentSkeleton isDark={isDark} />

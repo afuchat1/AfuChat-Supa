@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
@@ -32,7 +33,7 @@ export default function RegionPickerInput({ value, onChange, country, placeholde
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountry = useRef("");
-  const searchRef = useRef<TextInput>(null);
+  const searchRef = useRef<TextInputInstance>(null);
 
   // Fetch all cities whenever country changes
   useEffect(() => {

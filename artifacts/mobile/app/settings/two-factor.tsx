@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -158,8 +159,8 @@ export default function TwoFactorScreen() {
   const [recoveryError, setRecoveryError] = useState("");
   const [showDisableGate, setShowDisableGate] = useState(false);
 
-  const verifyRef = useRef<TextInput>(null);
-  const otpRef    = useRef<TextInput>(null);
+  const verifyRef = useRef<TextInputInstance>(null);
+  const otpRef    = useRef<TextInputInstance>(null);
 
   // Pulse for "not saved" warning during enroll
   const pulseAnim = useRef(new Animated.Value(1)).current;

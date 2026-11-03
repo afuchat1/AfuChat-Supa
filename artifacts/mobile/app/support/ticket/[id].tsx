@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type FlatListInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
@@ -100,7 +101,7 @@ export default function TicketDetail() {
   const BRAND = colors.accent;
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const listRef = useRef<FlatList>(null);
+  const listRef = useRef<FlatListInstance>(null);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -297,7 +298,7 @@ export default function TicketDetail() {
               </Text>
             </View>
           }
-          ListFooterComponent={showAiTyping ? <AiTypingIndicator colors={colors} /> : null}
+          ListFooterComponent={showAiTyping ? <AiTypingIndicator colors={colors} /> : undefined}
           ListEmptyComponent={
             <View style={st.emptyMsgs}>
               <Ionicons name="chatbubble" size={36} color={colors.textMuted} />

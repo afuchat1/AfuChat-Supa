@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
+import type { TextInputInstance } from "react-native";
 import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,7 +50,7 @@ export default function CreateChannelScreen() {
   const [creating, setCreating] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
-  const descRef = useRef<TextInput>(null);
+  const descRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     if (!isPublic) {

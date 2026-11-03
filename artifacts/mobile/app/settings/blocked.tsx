@@ -140,12 +140,12 @@ export default function BlockedUsersScreen() {
                 <View style={{ alignItems: "center", paddingTop: 32 }}>
                   <Text style={{ color: colors.textMuted, fontSize: 14 }}>{t("blocked.no_results", { query: search })}</Text>
                 </View>
-              ) : null
+              ) : undefined
             }
             ListHeaderComponent={
               filtered.length > 0 ? (
                 <Text style={[s.listHeader, { color: colors.textMuted }]}>{t("blocked.accounts")}</Text>
-              ) : null
+              ) : undefined
             }
             renderItem={({ item, index }) => {
               const isLast = index === filtered.length - 1;
