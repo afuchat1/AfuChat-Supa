@@ -1,7 +1,8 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { supabase } from "@/lib/supabase";
+import { getActiveChatId } from "@/lib/chatVisited";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
@@ -127,16 +128,47 @@ async function markNotificationRead(response: PushResponse, userId: string) {
     .eq("recipient_id", userId);
 }
 
-async function sendSuggestedReply(response: PushResponse, userId: string, text: string) {
+async function sendSuggestedReply(
+  response: PushResponse,
+  userId: string,
+  text: string,
+  userName: string,
+  userAvatar: string | null,
+) {
   const { chatId, messageId } = getTarget(response);
   if (!chatId) return;
-  await supabase.from("messages").insert({
-    chat_id: chatId,
-    sender_id: userId,
-    encrypted_content: text,
-    ...(messageId ? { reply_to_message_id: messageId } : {}),
-  });
+  const { data: sentMessage, error: sendError } = await supabase
+    .from("messages")
+    .insert({
+      chat_id: chatId,
+      sender_id: userId,
+      encrypted_content: text,
+      ...(messageId ? { reply_to_message_id: messageId } : {}),
+    })
+    .select("id")
+    .single();
+  if (sendError) throw sendError;
   await markRead(response, userId);
+
+  if (sentMessage?.id) {
+    const { data: members, error: membersError } = await supabase
+      .from("chat_members")
+      .select("user_id")
+      .eq("chat_id", chatId);
+    if (membersError) {
+      if (__DEV__) console.warn("[push] could not load quick-reply recipients", membersError.message);
+    } else {
+      await notifyChatRecipients({
+        recipientIds: (members ?? []).map((member) => member.user_id),
+        senderId: userId,
+        senderName: userName,
+        senderAvatarUrl: userAvatar,
+        body: text,
+        chatId,
+        messageId: sentMessage.id,
+      });
+    }
+  }
 }
 
 async function muteChat(response: PushResponse, userId: string) {
@@ -190,7 +222,7 @@ export async function handleNotificationResponse(
   }
   if (response.actionIdentifier === PUSH_ACTION_REPLY) {
     const text = response.userText?.trim();
-    if (text) await sendSuggestedReply(response, userId, text);
+    if (text) await sendSuggestedReply(response, userId, text, userName, userAvatar);
     return;
   }
   if (response.actionIdentifier === PUSH_ACTION_MUTE) {
@@ -253,12 +285,21 @@ export function configurePushNotifications() {
       });
   }
   notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data ?? {};
+      const categoryId = data.categoryId ?? data.category_id;
+      const chatId = data.chatId ?? data.chat_id;
+      const isOpenMessageChat = AppState.currentState === "active" &&
+        typeof chatId === "string" &&
+        chatId === getActiveChatId() &&
+        (categoryId == null || categoryId === PUSH_CATEGORY_MESSAGE);
+      return {
+        shouldShowBanner: !isOpenMessageChat,
+        shouldShowList: !isOpenMessageChat,
+        shouldPlaySound: !isOpenMessageChat,
+        shouldSetBadge: !isOpenMessageChat,
+      };
+    },
   });
   const categories = [
     notifications.setNotificationCategoryAsync(PUSH_CATEGORY_MESSAGE, [
@@ -332,6 +373,56 @@ export function clearLastNotificationResponse() {
 
 export function getNotificationTarget(response: PushResponse) {
   return getTarget(response);
+}
+
+export async function dismissChatNotifications(chatId: string) {
+  const notifications = getNotifications();
+  if (!notifications || !chatId) return;
+  try {
+    const presented = await notifications.getPresentedNotificationsAsync();
+    const identifiers = presented
+      .filter((notification) => {
+        const data = notification.request.content.data ?? {};
+        const notificationChatId = data.chatId ?? data.chat_id;
+        const categoryId = data.categoryId ?? data.category_id;
+        return notificationChatId === chatId &&
+          (categoryId == null || categoryId === PUSH_CATEGORY_MESSAGE);
+      })
+      .map((notification) => notification.request.identifier)
+      .filter((identifier): identifier is string => Boolean(identifier));
+    await Promise.all(identifiers.map((identifier) => notifications.dismissNotificationAsync(identifier)));
+  } catch (error) {
+    if (__DEV__) console.warn("[push] could not clear chat notifications", error);
+  }
+}
+
+export async function syncActiveChatNotificationPresence(
+  userId: string,
+  chatId: string,
+  isActive: boolean,
+) {
+  if (!userId || !chatId) return;
+  try {
+    if (isActive) {
+      const now = new Date();
+      const { error } = await supabase.from("active_chat_notification_presence").upsert({
+        user_id: userId,
+        chat_id: chatId,
+        updated_at: now.toISOString(),
+        expires_at: new Date(now.getTime() + 60_000).toISOString(),
+      }, { onConflict: "user_id" });
+      if (error && __DEV__) console.warn("[push] active-chat presence update failed", error.message);
+      return;
+    }
+    const { error } = await supabase
+      .from("active_chat_notification_presence")
+      .delete()
+      .eq("user_id", userId)
+      .eq("chat_id", chatId);
+    if (error && __DEV__) console.warn("[push] active-chat presence clear failed", error.message);
+  } catch (error) {
+    if (__DEV__) console.warn("[push] active-chat presence sync failed", error);
+  }
 }
 
 export type NotifyChatRecipientsParams = {

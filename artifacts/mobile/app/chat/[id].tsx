@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Animated,
   FlatList,
   Image as RNImage,
@@ -32,6 +33,7 @@ const STORY_REPLY_W = Math.round(_SW * 0.50);
 const STORY_REPLY_H = Math.round(STORY_REPLY_W * 0.65);
 
 import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -122,7 +124,15 @@ import { subscribeToChat, broadcastToUserInbox } from "@/lib/globalMessageEvents
 import { askAi, aiSuggestReply, transcribeAudio, getEdgeFnBase, edgeHeaders, aiTransformTone, aiFixText, aiEmojifyText } from "@/lib/aiHelper";
 import { buildNavigationContext, ACTION_ROUTES_GUIDE, detectVoiceNavCommand, pickNavConfirmation } from "@/lib/platformKnowledge";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
-import { notifyChatRecipients } from "@/lib/pushNotifications";
+import {
+  dismissChatNotifications,
+  notifyChatRecipients,
+  syncActiveChatNotificationPresence,
+} from "@/lib/pushNotifications";
+import {
+  playIncomingMessageSound,
+  preloadIncomingMessageSound,
+} from "@/lib/chatNotificationSound";
 import { clearAIUnread } from "@/lib/aiChatStore";
 import { GIPHY_API_KEY } from "@/lib/env";
 import { BlurView } from "expo-blur";
@@ -2327,6 +2337,10 @@ function ChatLockGate({ children }: { children: React.ReactNode }) {
 
 function ChatScreen() {
 
+  const isScreenFocused = useIsFocused();
+  const isScreenFocusedRef = useRef(isScreenFocused);
+  isScreenFocusedRef.current = isScreenFocused;
+
   const {
     id,
     contactId,
@@ -3568,8 +3582,10 @@ function ChatScreen() {
         setHasMore(data.length >= 50);
       }
       if (chatId) {
-        markChatVisited(chatId);
-        setActiveChatId(chatId);
+        if (isScreenFocusedRef.current) {
+          markChatVisited(chatId);
+          setActiveChatId(chatId);
+        }
       }
 
       // ── Background: enrich with reactions + delivery status ──────────────────
@@ -4114,6 +4130,48 @@ function ChatScreen() {
 
   useEffect(() => {
     const activeChatId = isDraft ? realChatId : id;
+    if (!isScreenFocused || !activeChatId) {
+      clearActiveChatId();
+      return;
+    }
+    markChatVisited(activeChatId);
+    setActiveChatId(activeChatId);
+    void dismissChatNotifications(activeChatId);
+    if (!isLocalNotesId(activeChatId) && AppState.currentState === "active") {
+      preloadIncomingMessageSound();
+    }
+  }, [id, isDraft, realChatId, isScreenFocused]);
+
+  useEffect(() => {
+    const activeChatId = isDraft ? realChatId : id;
+    const userId = user?.id;
+    if (!isScreenFocused || !activeChatId || !userId || isLocalNotesId(activeChatId)) return;
+
+    const syncPresence = (state: string) => {
+      const active = state === "active" && isScreenFocusedRef.current;
+      void syncActiveChatNotificationPresence(userId, activeChatId, active);
+      if (active) {
+        void dismissChatNotifications(activeChatId);
+        preloadIncomingMessageSound();
+      }
+    };
+    syncPresence(AppState.currentState);
+    const appStateSubscription = AppState.addEventListener("change", syncPresence);
+    const heartbeat = setInterval(() => {
+      if (AppState.currentState === "active" && isScreenFocusedRef.current) {
+        void syncActiveChatNotificationPresence(userId, activeChatId, true);
+      }
+    }, 20_000);
+
+    return () => {
+      clearInterval(heartbeat);
+      appStateSubscription.remove();
+      void syncActiveChatNotificationPresence(userId, activeChatId, false);
+    };
+  }, [id, isDraft, realChatId, user?.id, isScreenFocused]);
+
+  useEffect(() => {
+    const activeChatId = isDraft ? realChatId : id;
     if (!activeChatId) return;
     if (paginationChatIdRef.current !== activeChatId) {
       paginationChatIdRef.current = activeChatId;
@@ -4128,8 +4186,10 @@ function ChatScreen() {
     // Set this synchronously, before any async load. ChatsScreen may refresh
     // while this screen is opening; the RPC then excludes this chat's unread
     // rows instead of racing the loader and briefly restoring the badge.
-    markChatVisited(activeChatId);
-    setActiveChatId(activeChatId);
+    if (isScreenFocusedRef.current) {
+      markChatVisited(activeChatId);
+      setActiveChatId(activeChatId);
+    }
     loadChatInfo(loadToken);
     loadMessages(loadToken);
 
@@ -4144,6 +4204,7 @@ function ChatScreen() {
     // We render the message immediately and deduplicate when Postgres fires.
     const unsubFastPath = subscribeToChat(activeChatId, (gMsg) => {
       if (!isCurrentSubscription() || !user || gMsg.sender_id === user.id) return;
+      playIncomingMessageSound(activeChatId, gMsg.id);
       const cachedSender = getProfileCache(gMsg.sender_id);
       const senderSnap = mergeSenderSnapshot(
         normalizeSenderSnapshot(cachedSender),
@@ -4198,6 +4259,7 @@ function ChatScreen() {
             const msgLower = (newMsg.encrypted_content as string).toLowerCase();
             if (blocked.length > 0 && blocked.some((b: string) => msgLower.includes(b))) return;
           }
+          playIncomingMessageSound(activeChatId, newMsg.id);
 
           // Cache-first: show the message instantly with cached sender data;
           // only fire a Supabase round-trip when we haven't seen this sender before.

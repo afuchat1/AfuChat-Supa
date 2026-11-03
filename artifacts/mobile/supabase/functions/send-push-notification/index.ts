@@ -132,6 +132,29 @@ Deno.serve(async (request) => {
       return json({ error: "One or more recipients are not members of this chat" }, 403);
     }
   }
+  // Suppress message pushes while a recipient is actively viewing this chat.
+  // Keep current push delivery working if presence lookup fails or its schema
+  // has not been migrated yet.
+  if (categoryId === "message" && chatId) {
+    const now = Date.now();
+    const { data: activePresence, error: presenceError } = await admin
+      .from("active_chat_notification_presence")
+      .select("user_id")
+      .eq("chat_id", chatId)
+      .gt("expires_at", new Date(now).toISOString())
+      .lte("expires_at", new Date(now + 65_000).toISOString())
+      .in("user_id", [...authorizedRecipientIds]);
+    if (presenceError) {
+      console.error("[send-push] active-chat presence lookup failed:", presenceError.message);
+    } else {
+      for (const presence of activePresence ?? []) {
+        authorizedRecipientIds.delete(presence.user_id);
+      }
+    }
+    if (authorizedRecipientIds.size === 0) {
+      return json({ ok: true, sent: 0, attempted: 0, suppressed: "chat-active" });
+    }
+  }
   const { data: devices, error: deviceError } = await admin
     .from("push_devices")
     .select("id, token")
@@ -183,7 +206,6 @@ Deno.serve(async (request) => {
               // Expo Notifications reads categoryId from the FCM data
               // payload and applies the registered Reply/Mark as read/Open
               // actions to the system notification.
-              click_action: "open",
             },
           },
         },

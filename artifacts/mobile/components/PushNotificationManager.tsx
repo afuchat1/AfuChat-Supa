@@ -6,6 +6,7 @@ import {
   addNotificationResponseListener,
   clearLastNotificationResponse,
   configurePushNotifications,
+  dismissChatNotifications,
   getLastNotificationResponse,
   getNotificationTarget,
   handleNotificationResponse,
@@ -39,7 +40,10 @@ export default function PushNotificationManager() {
         if (shouldOpen) {
           if (response.actionIdentifier === PUSH_ACTION_ACCEPT_CALL && target.callId) {
             safeRouter.push({ pathname: "/call/[id]", params: { id: target.callId } } as any);
+          } else if (target.callId) {
+            safeRouter.push({ pathname: "/call/[id]", params: { id: target.callId } } as any);
           } else if (target.chatId) {
+            void dismissChatNotifications(target.chatId);
             safeRouter.push({
               pathname: "/chat/[id]",
               params: {
