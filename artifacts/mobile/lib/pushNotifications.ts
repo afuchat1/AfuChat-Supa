@@ -3,6 +3,7 @@ import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { supabase } from "@/lib/supabase";
 import { getActiveChatId } from "@/lib/chatVisited";
+import { isExpoGo } from "@/lib/expoEnvironment";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
@@ -340,6 +341,8 @@ export function configurePushNotifications() {
 }
 
 export async function registerPushToken(): Promise<string | null> {
+  // Expo Go on Android no longer exposes remote push token registration.
+  if (isExpoGo()) return null;
   const notifications = getNotifications();
   if (!notifications || Platform.OS === "web" || !Device.isDevice) return null;
   configurePushNotifications();
@@ -401,7 +404,8 @@ export async function syncActiveChatNotificationPresence(
   chatId: string,
   isActive: boolean,
 ) {
-  if (!userId || !chatId) return;
+  // Presence only suppresses remote pushes, which are unavailable in Expo Go.
+  if (!userId || !chatId || isExpoGo()) return;
   try {
     if (isActive) {
       const now = new Date();

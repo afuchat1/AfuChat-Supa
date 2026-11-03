@@ -112,6 +112,9 @@ function detectRtc(): RtcBridge | null {
           TurboModuleRegistry.getEnforcing("WebRTCModule");
       } catch {}
     }
+    // Never evaluate the JS package when its native module is absent. In Expo
+    // Go the package throws at module-evaluation time before callers can use it.
+    if (!NativeModules.WebRTCModule) return null;
     const webrtc = require("react-native-webrtc");
     if (!webrtc?.RTCPeerConnection || !webrtc?.mediaDevices?.getUserMedia) {
       return null;
