@@ -19,7 +19,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import type { FlatListInstance, ListViewToken } from "react-native";
+import type { FlatListInstance, ListViewToken, TouchableOpacityInstance } from "react-native";
 import type PagerViewInstance from "react-native-pager-view";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 // PagerView gives true native 1:1 finger-tracking on Android/iOS.
@@ -1278,7 +1278,7 @@ export default function DiscoverScreen() {
     });
   }, [showSnack]);
 
-  const fabRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const fabRef = useRef<TouchableOpacityInstance>(null);
 
   const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });
   const tabCacheTimestamp = useRef<Record<"for_you" | "following", number>>({ for_you: 0, following: 0 });

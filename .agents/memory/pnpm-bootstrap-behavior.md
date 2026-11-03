@@ -9,4 +9,4 @@ For workspace dependency changes, use Corepack's generated project-pinned pnpm s
 
 **Why:** A global/pinned mismatch caused recursive bootstrap, and stale installed Expo packages made a valid SDK subpath appear missing. A frozen install with pinned pnpm restored the lockfile's SDK packages without changing the lockfile.
 
-**How to apply:** Before retrying a pnpm failure, inspect for leftover processes. Use installed Expo/Node binaries in preview workflows and Corepack's generated shim for package changes; after a reset or failed Expo install, run the pinned frozen install and verify `expo install --check` before restarting Expo.
+**How to apply:** Before retrying a pnpm failure, inspect for leftover processes. Use installed Expo/Node binaries in preview workflows and Corepack's generated shim for package changes; after a reset or failed Expo install, run the pinned frozen install and verify `expo install --check` before restarting Expo. If the shim is unavailable and global pnpm aborts during self-install, `npm_config_manage_package_manager_versions=false` allowed a frozen install and typecheck here; verify the lockfile remains unchanged.
