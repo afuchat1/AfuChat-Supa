@@ -1118,6 +1118,30 @@ export default function DiscoverScreen() {
   const { user, profile } = useAuth();
   const { playMusic } = useGlobalMusicPlayer();
   const [discoverMusic, setDiscoverMusic] = useState<AfuMusicTrack[]>([]);
+  const discoverMusicPlaybackCacheRef = useRef(new Map<string, {
+    uri?: string;
+    fetchedAt: number;
+    pending?: Promise<string | null>;
+  }>());
+  const resolveDiscoverMusicUri = useCallback((track: AfuMusicTrack) => {
+    const cache = discoverMusicPlaybackCacheRef.current;
+    const cached = cache.get(track.id);
+    if (cached?.uri && Date.now() - cached.fetchedAt < 2 * 60 * 1000) return Promise.resolve(cached.uri);
+    if (cached?.pending) return cached.pending;
+
+    const pending = getMusicPlaybackUri(track).then((uri) => {
+      if (discoverMusicPlaybackCacheRef.current === cache) {
+        if (uri) cache.set(track.id, { uri, fetchedAt: Date.now() });
+        else cache.delete(track.id);
+      }
+      return uri;
+    }).catch((error) => {
+      if (discoverMusicPlaybackCacheRef.current === cache) cache.delete(track.id);
+      throw error;
+    });
+    cache.set(track.id, { fetchedAt: Date.now(), pending });
+    return pending;
+  }, []);
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompactHeader = screenWidth < 600;
@@ -1172,10 +1196,20 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    discoverMusicPlaybackCacheRef.current = new Map();
     if (!user) { setDiscoverMusic([]); return; }
-    listMusicTracks().then((tracks) => { if (!cancelled) setDiscoverMusic(tracks.slice(0, 8)); }).catch(() => { if (!cancelled) setDiscoverMusic([]); });
+    listMusicTracks().then((tracks) => {
+      if (cancelled) return;
+      const visibleTracks = tracks.slice(0, 8);
+      setDiscoverMusic(visibleTracks);
+      void Promise.all(
+        visibleTracks
+          .filter((track) => track.price === 0 || track.isOwned)
+          .map((track) => resolveDiscoverMusicUri(track).catch(() => null)),
+      );
+    }).catch(() => { if (!cancelled) setDiscoverMusic([]); });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, resolveDiscoverMusicUri]);
 
   const filteredPosts = useMemo(() => {
     const seen = new Set<string>();
@@ -2902,25 +2936,34 @@ export default function DiscoverScreen() {
                         <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 14 }}>Music on AfuChat</Text>
                         <TouchableOpacity onPress={() => router.push("/app/afumusic" as any)}><Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Explore all</Text></TouchableOpacity>
                       </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 12 }}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}>
                         {discoverMusic.map((track) => (
                           <TouchableOpacity key={track.id} onPress={async () => {
                             if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
                             try {
-                              const uri = await getMusicPlaybackUri(track);
+                              const uri = await resolveDiscoverMusicUri(track);
                               if (uri) {
                                 const playableQueue = discoverMusic.filter((item) => item.isOwned || item.price === 0);
                                 playMusic(track, uri, playableQueue, getMusicPlaybackUri);
                               }
                             }
                             catch { router.push("/app/afumusic" as any); }
-                          }} activeOpacity={0.75} style={{ width: 104 }}>
-                            <View style={{ width: 104, height: 104, backgroundColor: track.coverColor || "#19172F", alignItems: "center", justifyContent: "center", marginBottom: 7 }}>
-                              <Ionicons name="musical-notes" size={24} color={track.accentColor || colors.accent} />
+                          }} activeOpacity={0.75} style={{ width: 88 }}>
+                            <View style={{ width: 88, height: 88, backgroundColor: track.coverColor || "#19172F", alignItems: "center", justifyContent: "center", marginBottom: 7, overflow: "hidden" }}>
+                              {track.coverUrl ? (
+                                <ExpoImage
+                                  source={{ uri: track.coverUrl }}
+                                  style={StyleSheet.absoluteFill}
+                                  contentFit="cover"
+                                  cachePolicy="memory-disk"
+                                />
+                              ) : (
+                                <Ionicons name="musical-notes" size={20} color={track.accentColor || colors.accent} />
+                              )}
                               <View style={{ position: "absolute", right: 5, bottom: 5, backgroundColor: "#000B", paddingHorizontal: 5, paddingVertical: 3 }}><Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" }}>{track.price > 0 && !track.isOwned ? track.price + " AC" : track.price > 0 ? "Owned" : "Free"}</Text></View>
                             </View>
-                            <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{track.title}</Text>
-                            <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }}>{track.artist}</Text>
+                            <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>{track.title}</Text>
+                            <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 10, marginTop: 2 }}>{track.artist}</Text>
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
