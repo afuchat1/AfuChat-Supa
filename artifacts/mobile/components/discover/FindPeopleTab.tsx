@@ -614,7 +614,7 @@ export default function FindPeopleTab() {
           {[0, 1].map((row) => (
             <View key={row} style={styles.gridRow}>
               {[0, 1].map((column) => (
-                <View key={column} style={[styles.card, { width: cardWidth, backgroundColor: colors.surface }]}>
+                <View key={column} style={[styles.card, { width: cardWidth, backgroundColor: colors.surface, borderColor: colors.border }]}>
                   <Skeleton width="100%" height={bannerHeight} borderRadius={0} />
                   <View style={styles.skeletonBody}>
                     <Skeleton width={66} height={66} borderRadius={33} />
@@ -665,7 +665,7 @@ export default function FindPeopleTab() {
                 return (
                   <View
                     key={person.id}
-                    style={[styles.card, { width: cardWidth, backgroundColor: colors.surface }]}
+                    style={[styles.card, { width: cardWidth, backgroundColor: colors.surface, borderColor: colors.border }]}
                   >
                     <View style={[styles.banner, { height: bannerHeight, backgroundColor: colors.inputBg }]}>
                       {person.banner_url ? (
@@ -819,7 +819,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   grid: { gap: 10, paddingHorizontal: 12, paddingBottom: 8 },
   gridRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  card: { overflow: "hidden", borderRadius: 16, paddingBottom: 12 },
+  card: { overflow: "hidden", borderWidth: 1, borderRadius: 16, paddingBottom: 12 },
   banner: { width: "100%", alignItems: "center", justifyContent: "center" },
   bannerFallback: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   dismissButton: { position: "absolute", top: 8, right: 8, width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.62)" },
