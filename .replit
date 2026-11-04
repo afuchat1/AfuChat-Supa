@@ -70,7 +70,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=\"${EXPO_TOKEN:?EXPO_TOKEN secret is required}\" npx --yes eas-cli@latest build --platform android --profile preview --non-interactive --no-wait"
+args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=\"${EXPO_TOKEN:?EXPO_TOKEN secret is required}\" npx --yes eas-cli@latest build --platform android --profile preview --non-interactive"
 
 [[workflows.workflow]]
 name = "Start application"
