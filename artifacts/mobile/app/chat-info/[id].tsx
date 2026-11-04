@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,6 +19,7 @@ import * as Clipboard from "expo-clipboard";
 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { useCall } from "@/context/CallContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -27,6 +28,8 @@ import * as Haptics from "@/lib/haptics";
 import { showAlert } from "@/lib/alert";
 import { showToast } from "@/lib/toast";
 import { generateGroupInviteLink } from "@/lib/groupInvite";
+import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
+import { isLocalNotesId } from "@/lib/storage/localNotes";
 import QRCode from "@/components/ui/QRCode";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -223,8 +226,10 @@ export default function ChatInfoScreen() {
 
   const { colors, accent, isDark } = useTheme();
   const { user } = useAuth();
+  const { status: callStatus, startCall } = useCall();
   const insets = useSafeAreaInsets();
   const BRAND = accent ?? Colors.brand;
+  const callStartingRef = useRef(false);
 
   // ── Core state ──────────────────────────────────────────────────────────────
   const [meta,          setMeta]         = useState<ChatMeta | null>(null);
@@ -257,6 +262,12 @@ export default function ChatInfoScreen() {
   const avatarUri = meta
     ? (isGroup || isChannel ? meta.avatar_url : meta.other_avatar)
     : (avatarParam ?? null);
+  const canCall = isDM &&
+    !!otherId &&
+    otherId !== user?.id &&
+    otherId !== AFUAI_BOT_ID &&
+    !isLocalNotesId(id) &&
+    displayName.trim().toLowerCase() !== "notifications";
 
   // Tab definitions by type
   const TABS = isChannel
@@ -452,9 +463,23 @@ export default function ChatInfoScreen() {
     router.back();
   }
 
-  const showCallsComingSoon = useCallback(() => {
-    showAlert("Calls", "Coming soon");
-  }, []);
+  const handleStartCall = useCallback(async () => {
+    if (!otherId || !user?.id || callStartingRef.current) return;
+    callStartingRef.current = true;
+    try {
+      const callId = await startCall({
+        calleeId: otherId,
+        calleeName: meta?.other_name ?? displayName,
+        calleeAvatar: meta?.other_avatar ?? avatarUri,
+        chatId: id,
+      });
+      router.push({ pathname: "/call/[id]", params: { id: callId } } as any);
+    } catch {
+      // CallContext reports actionable errors, including unavailable runtimes.
+    } finally {
+      callStartingRef.current = false;
+    }
+  }, [otherId, user?.id, startCall, meta?.other_name, meta?.other_avatar, displayName, avatarUri, id]);
 
   // ── Subtitle ─────────────────────────────────────────────────────────────────
 
@@ -501,14 +526,16 @@ export default function ChatInfoScreen() {
       { icon: "exit",             label: "Leave",    action: handleLeaveGroup },
     ];
     // DM
-    return [
+    const dmActions = [
       { icon: "chatbubble",       label: "Message",  action: openChat },
       { icon: isMuted ? "notifications" : "notifications-off", label: isMuted ? "Unmute" : "Mute",
         action: () => { if (isMuted) handleUnmute(); else setShowMutePicker(v => !v); } },
-      { icon: "call",             label: "Call",     action: showCallsComingSoon },
-      { icon: "videocam",         label: "Video",    action: showCallsComingSoon },
     ];
-  }, [isChannel, isChannelOwner, isGroup, isMuted, showCallsComingSoon, handleLeaveGroup]);
+    if (canCall && callStatus === "idle") {
+      dmActions.push({ icon: "call", label: "Call", action: handleStartCall });
+    }
+    return dmActions;
+  }, [isChannel, isChannelOwner, isGroup, isMuted, canCall, callStatus, handleStartCall, handleLeaveGroup]);
 
   // ── List data (members or posts for FlatList) ────────────────────────────────
 

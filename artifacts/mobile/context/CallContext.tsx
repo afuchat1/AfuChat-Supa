@@ -143,9 +143,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         myAvatar: profileRef.current?.avatar_url ?? null,
       });
       return callId;
-    } catch {
-      showToast("Could not start the call", { type: "error" });
-      throw new Error("Could not start the call");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start the call";
+      showToast(message, { type: "error" });
+      throw error instanceof Error ? error : new Error(message);
     }
   }, []);
 
@@ -160,9 +161,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         myAvatar: profileRef.current?.avatar_url ?? null,
       });
       setIncomingNotice(null);
-    } catch {
-      showToast("Could not connect the call", { type: "error" });
-      throw new Error("Could not connect the call");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not connect the call";
+      showToast(message, { type: "error" });
+      throw error instanceof Error ? error : new Error(message);
     }
   }, [incomingNotice]);
 

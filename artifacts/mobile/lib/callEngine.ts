@@ -394,7 +394,15 @@ export async function startCall(params: {
   chatId: string | null;
 }) {
   if (status !== "idle") throw new Error("A call is already in progress");
-  if (!detectRtc()) throw new Error("Calls are unavailable in this app build");
+  if (!detectRtc()) {
+    if (Platform.OS === "web") {
+      throw new Error("Voice calls need a secure browser connection and microphone access.");
+    }
+    if (isExpoGo()) {
+      throw new Error("Voice calls need the installed AfuChat app; Expo Go does not include WebRTC.");
+    }
+    throw new Error("Voice calls are unavailable in this AfuChat build. Update the app and try again.");
+  }
   const bridge = detectRtc() as RtcBridge;
   info = {
     callId: params.callId,
@@ -447,7 +455,15 @@ export async function acceptCall(notice: IncomingCallNotice, params: {
 }) {
   if (status !== "incoming_ringing" || !info) return;
   const bridge = detectRtc();
-  if (!bridge) throw new Error("Calls are unavailable in this app build");
+  if (!bridge) {
+    if (Platform.OS === "web") {
+      throw new Error("Voice calls need a secure browser connection and microphone access.");
+    }
+    if (isExpoGo()) {
+      throw new Error("Voice calls need the installed AfuChat app; Expo Go does not include WebRTC.");
+    }
+    throw new Error("Voice calls are unavailable in this AfuChat build. Update the app and try again.");
+  }
   try {
     localStream = await bridge.mediaDevices.getUserMedia({ audio: true, video: false });
     setNativeSpeakerphone(false);
