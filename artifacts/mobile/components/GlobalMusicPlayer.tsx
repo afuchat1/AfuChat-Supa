@@ -2,19 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 import type { AfuMusicTrack } from "@/modules/afumusic";
-
-let NativeAudio: typeof import("expo-av").Audio | null = null;
-if (Platform.OS !== "web" && !isExpoGo()) {
-  try { NativeAudio = require("expo-av").Audio; } catch {}
-}
-type AVPlaybackStatus = import("expo-av").AVPlaybackStatus;
-type NativeSound = import("expo-av/build/Audio/Sound").Sound;
+import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
+import type { AudioStatus } from "expo-audio";
 
 type AudioUriResolver = (track: AfuMusicTrack) => Promise<string | null>;
 type ActiveMusic = {
@@ -128,7 +122,7 @@ function MusicTransport({
   advancing: boolean;
 }) {
   const { colors, accent } = useTheme();
-  const soundRef = useRef<NativeSound | null>(null);
+  const audioPlayer = useAudioPlayer(Platform.OS === "web" ? null : { uri }, { updateInterval: 250 });
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const mountedRef = useRef(true);
   const seekWidth = useRef(1);
@@ -139,6 +133,7 @@ function MusicTransport({
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    let nativeSubscription: { remove: () => void } | null = null;
     mountedRef.current = true;
     setReady(false);
     setPlaying(false);
@@ -147,16 +142,16 @@ function MusicTransport({
     setFailed(false);
     let webAudio: HTMLAudioElement | null = null;
 
-    const onNativeStatus = (status: AVPlaybackStatus) => {
+    const onNativeStatus = (status: AudioStatus) => {
       if (!mountedRef.current) return;
       if (!status.isLoaded) {
         if (status.error) setFailed(true);
         return;
       }
       setReady(true);
-      setPlaying(status.isPlaying);
-      setPosition(status.positionMillis ?? 0);
-      setDuration(status.durationMillis ?? 0);
+      setPlaying(status.playing);
+      setPosition(status.currentTime * 1000);
+      setDuration(status.duration * 1000);
       if (status.didJustFinish) {
         setPlaying(false);
         onNext?.();
@@ -191,23 +186,15 @@ function MusicTransport({
           return;
         }
 
-        if (!NativeAudio) {
-          if (mountedRef.current) setFailed(true);
-          return;
-        }
-        await NativeAudio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          staysActiveInBackground: false,
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+          interruptionMode: "duckOthers",
+          shouldPlayInBackground: false,
         });
-        const { sound } = await NativeAudio.Sound.createAsync(
-          { uri },
-          { shouldPlay: true, progressUpdateIntervalMillis: 250 },
-          onNativeStatus,
-        );
-        if (mountedRef.current) soundRef.current = sound;
-        else await sound.unloadAsync().catch(() => {});
+        if (!mountedRef.current) return;
+        nativeSubscription = audioPlayer.addListener("playbackStatusUpdate", onNativeStatus);
+        audioPlayer.play();
       } catch {
         if (mountedRef.current) setFailed(true);
       }
@@ -216,7 +203,7 @@ function MusicTransport({
     void load();
     const unsubscribeFocus = audioFocus.subscribe(() => {
       webAudioRef.current?.pause();
-      void soundRef.current?.pauseAsync().catch(() => {});
+      if (Platform.OS !== "web") audioPlayer.pause();
       if (mountedRef.current) setPlaying(false);
     });
 
@@ -229,11 +216,10 @@ function MusicTransport({
         webAudio.load();
       }
       webAudioRef.current = null;
-      const sound = soundRef.current;
-      soundRef.current = null;
-      void sound?.unloadAsync().catch(() => {});
+      nativeSubscription?.remove();
+      if (Platform.OS !== "web") audioPlayer.pause();
     };
-  }, [onNext, uri]);
+  }, [audioPlayer, onNext, uri]);
 
   const togglePlayback = useCallback(async () => {
     if (!ready) return;
@@ -246,16 +232,16 @@ function MusicTransport({
         else audio.pause();
         return;
       }
-      const sound = soundRef.current;
-      if (!sound) return;
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded && status.didJustFinish) await sound.setPositionAsync(0);
-      if (playing) await sound.pauseAsync();
-      else await sound.playAsync();
+      if (!audioPlayer.isLoaded) return;
+      if (audioPlayer.currentTime >= audioPlayer.duration && audioPlayer.duration > 0) {
+        await audioPlayer.seekTo(0);
+      }
+      if (playing) audioPlayer.pause();
+      else audioPlayer.play();
     } catch {
       setFailed(true);
     }
-  }, [playing, ready]);
+  }, [audioPlayer, playing, ready]);
 
   const seekTo = useCallback(async (milliseconds: number) => {
     const target = Math.max(0, Math.min(duration, milliseconds));
@@ -263,11 +249,11 @@ function MusicTransport({
       if (Platform.OS === "web") {
         if (webAudioRef.current) webAudioRef.current.currentTime = target / 1000;
       } else {
-        await soundRef.current?.setPositionAsync(target);
+        await audioPlayer.seekTo(target / 1000);
       }
       setPosition(target);
     } catch {}
-  }, [duration]);
+  }, [audioPlayer, duration]);
 
   const progress = duration > 0 ? Math.min(1, position / duration) : 0;
 

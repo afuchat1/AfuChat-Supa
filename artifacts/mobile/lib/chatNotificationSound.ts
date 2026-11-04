@@ -1,50 +1,26 @@
 import { AppState, Platform } from "react-native";
 import { getActiveChatId } from "@/lib/chatVisited";
-import { isExpoGo } from "@/lib/expoEnvironment";
+import { createAudioPlayer, setAudioModeAsync } from "expo-audio";
+import type { AudioPlayer } from "expo-audio";
 
-type ChatSound = import("expo-av/build/Audio/Sound").Sound;
-type ExpoAudio = typeof import("expo-av").Audio;
-
-let audioModule: ExpoAudio | null = null;
-let loadedSound: ChatSound | null = null;
-let loadingSound: Promise<ChatSound | null> | null = null;
+let loadedSound: AudioPlayer | null = null;
 const soundedMessages = new Map<string, number>();
 const SOUND_SOURCE = require("../assets/sounds/incoming-message.wav");
 
-function getAudioModule(): ExpoAudio | null {
-  if (Platform.OS === "web" || isExpoGo()) return null;
-  if (audioModule) return audioModule;
+function getSound(): AudioPlayer | null {
+  if (Platform.OS === "web") return null;
+  if (loadedSound) return loadedSound;
   try {
-    audioModule = require("expo-av").Audio;
+    loadedSound = createAudioPlayer(SOUND_SOURCE, { updateInterval: 250 });
+    loadedSound.volume = 0.22;
   } catch {
     return null;
   }
-  return audioModule;
-}
-
-async function getSound(): Promise<ChatSound | null> {
-  if (loadedSound) return loadedSound;
-  if (loadingSound) return loadingSound;
-  const audio = getAudioModule();
-  if (!audio) return null;
-
-  loadingSound = audio.Sound.createAsync(SOUND_SOURCE, {
-    shouldPlay: false,
-    volume: 0.22,
-  })
-    .then(({ sound }) => {
-      loadedSound = sound as ChatSound;
-      return loadedSound;
-    })
-    .catch(() => null)
-    .finally(() => {
-      loadingSound = null;
-    });
-  return loadingSound;
+  return loadedSound;
 }
 
 export function preloadIncomingMessageSound() {
-  void getSound();
+  getSound();
 }
 
 export function playIncomingMessageSound(chatId: string, messageId: string) {
@@ -67,7 +43,7 @@ export function playIncomingMessageSound(chatId: string, messageId: string) {
   soundedMessages.set(dedupeKey, now);
 
   void (async () => {
-    const sound = await getSound();
+    const sound = getSound();
     if (
       !sound ||
       AppState.currentState !== "active" ||
@@ -75,7 +51,13 @@ export function playIncomingMessageSound(chatId: string, messageId: string) {
     ) {
       return;
     }
-    await sound.replayAsync();
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      interruptionMode: "mixWithOthers",
+    });
+    await sound.seekTo(0);
+    sound.play();
   })().catch((error) => {
     if (__DEV__) console.warn("[chat] incoming-message sound failed", error);
   });

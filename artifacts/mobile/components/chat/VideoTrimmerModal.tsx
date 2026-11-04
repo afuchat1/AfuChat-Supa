@@ -13,23 +13,8 @@ import {
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
-// Type-only — stripped at compile time, never triggers native module load
-import type { AVPlaybackStatus } from "expo-av";
-
-// expo-av: lazy-load on native only.
-// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
-// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
-// so that check always returns null and silently disables all audio.
-import { Platform as _AvPlatform } from "react-native";
-import { isExpoGo } from "@/lib/expoEnvironment";
-const _AV = (() => {
-  if (_AvPlatform.OS === "web" || isExpoGo()) return null;
-  try { return require("expo-av"); } catch { return null; }
-})();
+import { VideoView, useVideoPlayer } from "expo-video";
 const _VT = (() => { try { return require("expo-video-thumbnails"); } catch { return null; } })();
-
-const VideoComp   = _AV?.Video    ?? null;
-const ResizeModeContain = _AV?.ResizeMode?.CONTAIN ?? "contain";
 
 const { width: SW } = Dimensions.get("window");
 const THUMB_COUNT = 10;
@@ -61,7 +46,10 @@ interface Props {
 export default function VideoTrimmerModal({
   visible, uri, mimeType, onConfirm, onCancel, colors, accent,
 }: Props) {
-  const videoRef = useRef<any>(null);
+  const player = useVideoPlayer(uri ? { uri } : null, (videoPlayer) => {
+    videoPlayer.loop = false;
+    videoPlayer.timeUpdateEventInterval = 0.1;
+  });
   const [duration, setDuration] = useState(0);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
@@ -89,6 +77,51 @@ export default function VideoTrimmerModal({
     }
   }, [visible, uri]);
 
+  useEffect(() => {
+    if (!visible || !uri) {
+      player.pause();
+      return;
+    }
+
+    let loaded = false;
+    const markLoaded = () => {
+      if (loaded) return;
+      const nextDuration = player.duration;
+      if (!Number.isFinite(nextDuration) || nextDuration <= 0) return;
+      loaded = true;
+      setDuration(nextDuration);
+      durRef.current = nextDuration;
+      trimEndRef.current = nextDuration;
+      setTrimEnd(nextDuration);
+      setVideoLoaded(true);
+      void generateThumbs(nextDuration);
+    };
+    const sourceSubscription = player.addListener("sourceLoad", markLoaded);
+    const statusSubscription = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay") markLoaded();
+    });
+    const timeSubscription = player.addListener("timeUpdate", ({ currentTime }) => {
+      setCurrentPos(currentTime);
+      setIsPlaying(player.playing);
+      if (player.playing && currentTime >= trimEndRef.current - 0.2) {
+        player.pause();
+        player.currentTime = trimStartRef.current;
+      }
+    });
+    const playingSubscription = player.addListener("playingChange", ({ isPlaying: nextPlaying }) => {
+      setIsPlaying(nextPlaying);
+    });
+    if (player.status === "readyToPlay") markLoaded();
+
+    return () => {
+      sourceSubscription.remove();
+      statusSubscription.remove();
+      timeSubscription.remove();
+      playingSubscription.remove();
+      player.pause();
+    };
+  }, [player, uri, visible]);
+
   async function generateThumbs(dur: number) {
     if (!uri || dur <= 0) return;
     setThumbsLoading(true);
@@ -109,39 +142,16 @@ export default function VideoTrimmerModal({
     setThumbsLoading(false);
   }
 
-  function onPlaybackStatusUpdate(status: AVPlaybackStatus) {
-    if (!status.isLoaded) return;
-    setCurrentPos((status.positionMillis ?? 0) / 1000);
-    setIsPlaying(status.isPlaying ?? false);
-    if (status.didJustFinish || (status.positionMillis ?? 0) / 1000 >= trimEndRef.current - 0.2) {
-      videoRef.current?.pauseAsync().catch(() => {});
-      videoRef.current?.setPositionAsync(trimStartRef.current * 1000).catch(() => {});
-    }
-  }
-
-  function onLoad(status: AVPlaybackStatus) {
-    if (!status.isLoaded) return;
-    const dur = (status.durationMillis ?? 0) / 1000;
-    if (dur > 0) {
-      setDuration(dur);
-      durRef.current = dur;
-      setTrimEnd(dur);
-      trimEndRef.current = dur;
-      setVideoLoaded(true);
-      generateThumbs(dur);
-    }
-  }
-
   async function togglePlay() {
     if (!videoLoaded) return;
     if (isPlaying) {
-      await videoRef.current?.pauseAsync().catch(() => {});
+      player.pause();
     } else {
       const pos = currentPos;
       if (pos < trimStartRef.current || pos >= trimEndRef.current - 0.2) {
-        await videoRef.current?.setPositionAsync(trimStartRef.current * 1000).catch(() => {});
+        player.currentTime = trimStartRef.current;
       }
-      await videoRef.current?.playAsync().catch(() => {});
+      player.play();
     }
   }
 
@@ -158,7 +168,7 @@ export default function VideoTrimmerModal({
         setTrimStart(t);
       },
       onPanResponderRelease: () => {
-        videoRef.current?.setPositionAsync(trimStartRef.current * 1000).catch(() => {});
+        player.currentTime = trimStartRef.current;
       },
     })
   ).current;
@@ -176,7 +186,7 @@ export default function VideoTrimmerModal({
         setTrimEnd(t);
       },
       onPanResponderRelease: () => {
-        videoRef.current?.setPositionAsync(trimEndRef.current * 1000 - 500).catch(() => {});
+        player.currentTime = trimEndRef.current - 0.5;
       },
     })
   ).current;
@@ -200,21 +210,7 @@ export default function VideoTrimmerModal({
 
         {/* Video preview */}
         <View style={[s.videoWrap, { backgroundColor: colors.backgroundSecondary }]}>
-          {VideoComp ? (
-            <VideoComp
-              ref={videoRef}
-              source={{ uri }}
-              style={s.video}
-              resizeMode={ResizeModeContain}
-              onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-              onLoad={onLoad}
-              progressUpdateIntervalMillis={100}
-            />
-          ) : (
-            <View style={[s.video, { alignItems: "center", justifyContent: "center" }]}>
-              <ActivityIndicator color="#fff" />
-            </View>
-          )}
+          <VideoView player={player} style={s.video} contentFit="contain" nativeControls={false} />
           {!videoLoaded && (
             <View style={s.videoLoadOverlay}>
               <ActivityIndicator color={accent} size="large" />

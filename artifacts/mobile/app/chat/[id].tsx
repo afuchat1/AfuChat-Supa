@@ -51,17 +51,13 @@ import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import * as DocumentPicker from "expo-document-picker";
 import * as Contacts from "expo-contacts";
 import * as FileSystem from "expo-file-system";
-// expo-av: lazy-load on native only.
-// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
-// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
-// so that check always returns null and silently disables all audio.
-let Audio: typeof import("expo-av").Audio | null = null;
-type AudioRecording = import("expo-av/build/Audio/Recording").Recording;
-import { Platform as _Platform } from "react-native";
-import { isExpoGo } from "@/lib/expoEnvironment";
-if (_Platform.OS !== "web" && !isExpoGo()) {
-  try { Audio = require("expo-av").Audio; } catch {}
-}
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from "expo-audio";
+import type { AudioRecorder } from "expo-audio";
 import VideoPreview from "@/components/ui/VideoPreview";
 import VideoTrimmerModal from "@/components/chat/VideoTrimmerModal";
 import * as Speech from "expo-speech";
@@ -2977,7 +2973,7 @@ function ChatScreen() {
   const [recordingTenths, setRecordingTenths] = useState(0);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [recAmplitudes, setRecAmplitudes] = useState<number[]>([]);
-  const recorderRef = useRef<AudioRecording | null>(null);
+  const recorderRef = useRef<AudioRecorder | null>(null);
   const webMediaRecorderRef = useRef<MediaRecorder | null>(null);
   const webChunksRef = useRef<Blob[]>([]);
   const webStreamRef = useRef<MediaStream | null>(null);
@@ -2990,6 +2986,18 @@ function ChatScreen() {
   const recAmpHistoryRef = useRef<number[]>([]);
   const webAnalyserRef = useRef<any>(null);
   const webAudioCtxRef = useRef<any>(null);
+  const audioRecorder = useAudioRecorder(
+    { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true },
+    () => {
+      const status = recorderRef.current?.getStatus();
+      if (!status?.isRecording) return;
+      const db = status.metering ?? -60;
+      const amp = Math.min(1, Math.max(0, (db + 60) / 60));
+      recAmpHistoryRef.current = [...recAmpHistoryRef.current.slice(-19), amp];
+      setRecAmplitudes([...recAmpHistoryRef.current]);
+    },
+  );
+  recorderRef.current = audioRecorder;
   const recLockedSV = useSharedValue(false);
   const recCancelledSV = useSharedValue(false);
   const recStartedSV = useSharedValue(false);
@@ -3931,10 +3939,10 @@ function ChatScreen() {
       // Native cleanup
       if (recordingActiveRef.current) {
         recordingActiveRef.current = false;
-        recorderRef.current?.stopAndUnloadAsync().catch(() => {});
+        recorderRef.current?.stop().catch(() => {});
         recorderRef.current = null;
         // Restore audio session so the next playback attempt doesn't find it stuck.
-        Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+        setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       }
     };
   }, []);
@@ -6995,8 +7003,8 @@ STRICT RULES:
     // continue underneath it, so the send control never appears late.
     setIsRecording(true);
     setRecLocked(true);
-    // Guard: Audio is null on web (lazy import) — delegate to web recorder path.
-    if (!Audio) { startVoiceRecordingWeb(); return; }
+    // Use the browser recorder on web; Expo Audio handles native recording.
+    if (Platform.OS === "web") { startVoiceRecordingWeb(); return; }
     const safetyTimer = setTimeout(() => {
       if (!recStartedSV.value && recPressActiveSV.value) {
         recPressActiveSV.value = false;
@@ -7008,7 +7016,7 @@ STRICT RULES:
       }
     }, 5000);
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
         clearTimeout(safetyTimer);
         recPressActiveSV.value = false;
@@ -7019,38 +7027,25 @@ STRICT RULES:
       // object.  Skipping this setAudioModeAsync call is what causes
       // "Could not start recording" on both iOS and Android — the OS rejects
       // the session because it is still configured for playback.
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
-      // Use the single-step createAsync API (matches post/[id] and VideoCommentsSheet).
-      // The old new Recording() + prepareToRecordAsync + startAsync sequence is
-      // more fragile and has been deprecated in newer expo-av builds.
-      // isMeteringEnabled exposes status.metering (dBFS) for the live waveform.
-      const { recording: _rec } = await Audio.Recording.createAsync({
-        ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-        isMeteringEnabled: true,
-      });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      const _rec = audioRecorder;
       recorderRef.current = _rec;
       recordingStartingRef.current = false;
       // Seed history with silence so bars render immediately at min height
       recAmpHistoryRef.current = new Array(20).fill(0);
       setRecAmplitudes([...recAmpHistoryRef.current]);
-      _rec.setOnRecordingStatusUpdate((status) => {
-        if (!status.isRecording) return;
-        // dBFS: roughly −160 (silence) → 0 (peak). Normalise to 0–1.
-        const db = (status as any).metering ?? -60;
-        const amp = Math.min(1, Math.max(0, (db + 60) / 60));
-        recAmpHistoryRef.current = [...recAmpHistoryRef.current.slice(-19), amp];
-        setRecAmplitudes([...recAmpHistoryRef.current]);
-      });
       recordingActiveRef.current = true;
       recStartedSV.value = true;
       clearTimeout(safetyTimer);
 
       if (!recPressActiveSV.value && !recLockedSV.value) {
         try {
-          await recorderRef.current?.stopAndUnloadAsync();
+          await recorderRef.current?.stop();
           recorderRef.current = null;
         } catch (_) {}
         recordingActiveRef.current = false;
@@ -7212,11 +7207,11 @@ STRICT RULES:
         webStreamRef.current.getTracks().forEach((t) => t.stop());
         webStreamRef.current = null;
       }
-      try { await recorderRef.current?.stopAndUnloadAsync(); } catch (_) {}
+      try { await recorderRef.current?.stop(); } catch (_) {}
       recorderRef.current = null;
       recordingActiveRef.current = false;
     recordingStartingRef.current = false;
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       return;
     }
 
@@ -7314,15 +7309,16 @@ STRICT RULES:
       return; // never fall through to native path
     }
 
-    // ── Native path (expo-av → m4a → upload) ────────────────────────────────
+    // ── Native path (Expo Audio → m4a → upload) ────────────────────────────
     try {
       let uri: string | null = null;
-      await recorderRef.current?.stopAndUnloadAsync();
-      uri = recorderRef.current?.getURI() ?? null;
+      const recorder = recorderRef.current;
+      await recorder?.stop();
+      uri = recorder?.uri ?? null;
       recorderRef.current = null;
       // Restore audio session to playback mode so sound effects and video
       // audio work normally after the voice message is sent.
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       recordingActiveRef.current = false;
 
       if (!uri || !user) return;
@@ -7403,7 +7399,7 @@ STRICT RULES:
       console.warn("[Voice] Error:", err?.message || err);
       recorderRef.current = null;
       recordingActiveRef.current = false;
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       setSending(false);
       showAlert("Error", "Failed to send voice message.");
     }
@@ -7443,13 +7439,14 @@ STRICT RULES:
       }
       // Native cleanup
       try {
-        const cancelUri = recorderRef.current?.getURI();
-        await recorderRef.current?.stopAndUnloadAsync();
+        const recorder = recorderRef.current;
+        await recorder?.stop();
+        const cancelUri = recorder?.uri;
         if (cancelUri) FileSystem.deleteAsync(cancelUri, { idempotent: true }).catch(() => {});
       } catch (_) {}
       recorderRef.current = null;
       // Restore audio session to playback mode after cancellation.
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       recordingActiveRef.current = false;
       recordingStartingRef.current = false;
     }

@@ -40,18 +40,14 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
-// expo-av: lazy-load on native only.
-// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
-// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
-// so that check always returns null and silently disables all audio.
-let Audio: typeof import("expo-av").Audio | null = null;
-type AudioSound = import("expo-av/build/Audio/Sound").Sound;
-type AudioRecording = import("expo-av/build/Audio/Recording").Recording;
-import { Platform as _AvPlatform } from "react-native";
-import { isExpoGo } from "@/lib/expoEnvironment";
-if (_AvPlatform.OS !== "web" && !isExpoGo()) {
-  try { Audio = require("expo-av").Audio; } catch {}
-}
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioRecorder,
+} from "expo-audio";
+import type { AudioStatus, AudioRecorder } from "expo-audio";
 import * as ImagePicker from "expo-image-picker";
 
 import { supabase } from "@/lib/supabase";
@@ -239,7 +235,7 @@ function VoicePlayer({
 }: {
   uri: string; durationSecs: number; accent: string; isDark?: boolean;
 }) {
-  const [sound, setSound] = useState<AudioSound | null>(null);
+  const sound = useAudioPlayer({ uri }, { updateInterval: 150 });
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(Math.max(1000, durationSecs * 1000));
@@ -248,37 +244,26 @@ function VoicePlayer({
   const progress = durationMs > 0 ? positionMs / durationMs : 0;
 
   useEffect(() => {
-    let mounted = true;
-    async function loadVoice() {
-      try {
-        if (!Audio || !Audio.Sound) return;
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false }).catch(() => {});
-        const { sound: s } = await Audio.Sound.createAsync({ uri }, { shouldPlay: false });
-        if (!mounted) { s.unloadAsync().catch(() => {}); return; }
-        s.setOnPlaybackStatusUpdate((st) => {
-          if (!st.isLoaded) return;
-          setPositionMs(st.positionMillis);
-          if (st.durationMillis) setDurationMs(st.durationMillis);
-          if (st.didJustFinish) {
-            setPlaying(false);
-            setPositionMs(0);
-            s.setPositionAsync(0).catch(() => {});
-          }
-        });
-        setSound(s);
-      } catch {}
-    }
-    loadVoice();
+    const subscription = sound.addListener("playbackStatusUpdate", (status: AudioStatus) => {
+      if (!status.isLoaded) return;
+      setPositionMs(status.currentTime * 1000);
+      if (status.duration > 0) setDurationMs(status.duration * 1000);
+      if (status.didJustFinish) {
+        setPlaying(false);
+        setPositionMs(0);
+        void sound.seekTo(0).catch(() => {});
+      }
+    });
     return () => {
-      mounted = false;
-      setSound((prev) => { prev?.unloadAsync().catch(() => {}); return null; });
+      subscription.remove();
+      sound.pause();
     };
-  }, [uri]);
+  }, [sound]);
 
   useEffect(() => {
-    if (!sound) return;
     const unsubscribe = audioFocus.subscribe(() => {
-      sound.stopAsync().catch(() => {});
+      sound.pause();
+      void sound.seekTo(0).catch(() => {});
       setPlaying(false);
       setPositionMs(0);
     });
@@ -288,15 +273,13 @@ function VoicePlayer({
   }, [sound]);
 
   async function togglePlay() {
-    if (!sound) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (playing) {
-      await sound.pauseAsync();
+      sound.pause();
       setPlaying(false);
     } else {
-      if (!Audio) return;
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false }).then(() => {}, () => {});
-      await sound.playAsync();
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false, interruptionMode: "doNotMix" });
+      sound.play();
       setPlaying(true);
     }
   }
@@ -306,7 +289,7 @@ function VoicePlayer({
     const ratio = Math.max(0, Math.min(1, x / containerWidth.current));
     const seekMs = ratio * durationMs;
     setPositionMs(seekMs);
-    sound.setPositionAsync(seekMs).catch(() => {});
+    sound.seekTo(seekMs / 1000).catch(() => {});
   }
 
   const displayTime = positionMs > 100 ? formatSecs(Math.floor(positionMs / 1000)) : formatSecs(Math.ceil(durationMs / 1000));
@@ -688,11 +671,12 @@ export function VideoCommentsSheet({
   const [kbHeight, setKbHeight] = useState(0);
 
   const [recordState, setRecordState] = useState<RecordState>("idle");
-  const [recordingObj, setRecordingObj] = useState<AudioRecording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [recordingObj, setRecordingObj] = useState<AudioRecorder | null>(null);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [recordElapsed, setRecordElapsed] = useState(0);
-  const recordingRef = useRef<AudioRecording | null>(null);
+  const recordingRef = useRef<AudioRecorder | null>(null);
   const recordingSessionRef = useRef(0);
   const stoppingRecordingRef = useRef(false);
   const recordElapsedRef = useRef(0);
@@ -732,7 +716,7 @@ export function VideoCommentsSheet({
     const activeRecording = recordingRef.current;
     recordingRef.current = null;
     if (activeRecording && !stoppingRecordingRef.current) {
-      activeRecording.stopAndUnloadAsync().catch(() => {});
+      activeRecording.stop().catch(() => {});
     }
     setRecordingObj(null);
     setRecordState("idle");
@@ -740,7 +724,7 @@ export function VideoCommentsSheet({
     setRecordedDuration(0);
     setRecordElapsed(0);
     recordElapsedRef.current = 0;
-    Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
   }, [visible]);
 
   useEffect(() => () => {
@@ -752,9 +736,9 @@ export function VideoCommentsSheet({
     const activeRecording = recordingRef.current;
     recordingRef.current = null;
     if (activeRecording && !stoppingRecordingRef.current) {
-      activeRecording.stopAndUnloadAsync().catch(() => {});
+      activeRecording.stop().catch(() => {});
     }
-    Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -945,11 +929,11 @@ export function VideoCommentsSheet({
     const activeRecording = recordingRef.current ?? recordingObj;
     recordingRef.current = null;
     if (activeRecording && !stoppingRecordingRef.current) {
-      activeRecording.stopAndUnloadAsync().catch(() => {});
+      activeRecording.stop().catch(() => {});
       // Restore audio session so playback (voice messages, video) works normally.
       // Without this reset, iOS stays in .playAndRecord category and routes
       // subsequent audio through the earpiece at near-zero volume.
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
     }
     setRecordingObj(null);
     setRecordState("idle");
@@ -960,7 +944,7 @@ export function VideoCommentsSheet({
   }
 
   async function startRecording() {
-    if (!Audio) {
+    if (Platform.OS === "web") {
       showCommentSheetAlert("Not supported", "Audio recording is not available in this environment.");
       return;
     }
@@ -970,7 +954,7 @@ export function VideoCommentsSheet({
     setShowEmojiPanel(false);
     Keyboard.dismiss();
     try {
-      const permission = await Audio.requestPermissionsAsync();
+      const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         const buttons = permission.canAskAgain === false
           ? [
@@ -991,20 +975,24 @@ export function VideoCommentsSheet({
 
       audioFocus.claimRecording();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
       if (session !== recordingSessionRef.current || !visibleRef.current) {
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
         return;
       }
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      ).catch(() => Audio!.Recording.createAsync(Audio!.RecordingOptionsPresets.LOW_QUALITY));
+      try {
+        await audioRecorder.prepareToRecordAsync();
+      } catch {
+        await audioRecorder.prepareToRecordAsync(RecordingPresets.LOW_QUALITY);
+      }
+      audioRecorder.record();
+      const recording = audioRecorder;
       if (session !== recordingSessionRef.current || !visibleRef.current) {
-        await recording.stopAndUnloadAsync().catch(() => {});
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+        await recording.stop().catch(() => {});
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
         return;
       }
       recordingRef.current = recording;
@@ -1026,9 +1014,9 @@ export function VideoCommentsSheet({
         setRecordElapsed(0);
         recordElapsedRef.current = 0;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: false,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: false,
       }).catch(() => {});
       if (session === recordingSessionRef.current && visibleRef.current) {
         showCommentSheetAlert("Could not start recording", e?.message || "Check microphone access and try again.");
@@ -1038,7 +1026,7 @@ export function VideoCommentsSheet({
     }
   }
 
-  async function stopRecording(rec?: AudioRecording | null, elapsed?: number) {
+  async function stopRecording(rec?: AudioRecorder | null, elapsed?: number) {
     const activeRec = rec ?? recordingRef.current ?? recordingObj;
     if (!activeRec) {
       stopTimer();
@@ -1046,7 +1034,7 @@ export function VideoCommentsSheet({
       setRecordState("idle");
       setRecordElapsed(0);
       recordElapsedRef.current = 0;
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       return;
     }
     if (stoppingRecordingRef.current) return;
@@ -1054,10 +1042,10 @@ export function VideoCommentsSheet({
     const session = recordingSessionRef.current;
     stopTimer();
     try {
-      const status = await activeRec.getStatusAsync();
-      await activeRec.stopAndUnloadAsync();
-      const uri = activeRec.getURI();
-      const durationMs = (status as any).durationMillis as number | undefined;
+      const status = activeRec.getStatus();
+      await activeRec.stop();
+      const uri = activeRec.uri;
+      const durationMs = status.durationMillis;
       const durationS = durationMs ? Math.ceil(durationMs / 1000) : (elapsed ?? recordElapsed);
       if (recordingRef.current === activeRec) recordingRef.current = null;
       if (session === recordingSessionRef.current && visibleRef.current && uri && durationS > 0) {
@@ -1081,7 +1069,7 @@ export function VideoCommentsSheet({
       }
     } finally {
       if (recordingRef.current === activeRec) recordingRef.current = null;
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       stoppingRecordingRef.current = false;
     }
   }

@@ -314,8 +314,8 @@ export async function clearTempCache(): Promise<void> {
 export const TEMP_CACHE_DIR = getTempDir();
 
 /**
- * One-time startup sweep: delete orphaned expo-av recording files from the
- * root of cacheDirectory. expo-av writes voice recordings as
+ * One-time startup sweep: delete orphaned audio recording files from the
+ * root of cacheDirectory. Expo Audio writes voice recordings as
  * "Recording-<UUID>.m4a" (or "AV/" prefixed on some SDK versions) directly
  * in cacheDirectory, not inside our afuchat_temp/ subdirectory, so
  * cleanupTempCache() never sees them.

@@ -9,18 +9,9 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
-// expo-av: lazy-load on native only.
-// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
-// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
-// so that check always returns null and silently disables all audio.
-let Audio: typeof import("expo-av").Audio | null = null;
-if (Platform.OS !== "web" && !isExpoGo()) {
-  try { Audio = require("expo-av").Audio; } catch {}
-}
-type AVPlaybackStatus = import("expo-av").AVPlaybackStatus;
-type AudioSound = import("expo-av/build/Audio/Sound").Sound;
+import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
+import type { AudioStatus } from "expo-audio";
 
 interface AudioPlayerProps {
   uri: string;
@@ -122,7 +113,7 @@ function AudioPlayerActive({
   backgroundColor,
   onError,
 }: AudioPlayerProps & { playerId: string }) {
-  const soundRef = useRef<AudioSound | null>(null);
+  const audioPlayer = useAudioPlayer(Platform.OS === "web" ? null : { uri }, { updateInterval: 80 });
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const mountedRef = useRef(true);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -139,11 +130,10 @@ function AudioPlayerActive({
     mountedRef.current = true;
     const unsubscribe = audioFocus.subscribe(() => {
       // Stop immediately when the microphone takes audio focus. Unmounting
-      // alone is not enough because expo-av cleanup is asynchronous.
-      const sound = soundRef.current;
-      if (!sound) return;
-      sound.stopAsync().catch(() => {});
-      soundRef.current = null;
+      // alone is not enough because the native player's cleanup is asynchronous.
+      if (Platform.OS === "web") return;
+      audioPlayer.pause();
+      void audioPlayer.seekTo(0).catch(() => {});
       if (mountedRef.current) {
         setIsPlaying(false);
         setPositionMs(0);
@@ -154,11 +144,12 @@ function AudioPlayerActive({
       mountedRef.current = false;
       unsubscribe();
     };
-  }, [playerId]);
+  }, [audioPlayer, playerId]);
 
   useEffect(() => {
     let mounted = true;
     let webAudio: HTMLAudioElement | null = null;
+    let statusSubscription: { remove: () => void } | null = null;
 
     async function loadAudio() {
       try {
@@ -191,38 +182,34 @@ function AudioPlayerActive({
           return;
         }
 
-        if (!Audio) { if (mounted) { setHasError(true); onError?.(); } return; }
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: false,
-          staysActiveInBackground: false,
+        await setAudioModeAsync({
+          allowsRecording: false,
+          playsInSilentMode: true,
+          interruptionMode: "doNotMix",
+          shouldPlayInBackground: false,
         }).then(() => {}, () => {});
 
-        const { sound } = await Audio.Sound.createAsync(
-          { uri },
-          { shouldPlay: true, progressUpdateIntervalMillis: 80 },
-          (status: AVPlaybackStatus) => {
-            if (!mounted) return;
-            if (status.isLoaded) {
-              setIsLoaded(true);
-              setIsPlaying(status.isPlaying);
-              setPositionMs(status.positionMillis ?? 0);
-              setDurationMs(status.durationMillis ?? 0);
-              if (status.didJustFinish) {
-                 if (!finishedRef.current) {
-                   finishedRef.current = true;
-                   setIsPlaying(false);
-                   setPositionMs(status.durationMillis ?? status.positionMillis ?? 0);
-                   voicePlaybackCoordinator.finished(playerId);
-                 }
-              }
+        statusSubscription = audioPlayer.addListener("playbackStatusUpdate", (status: AudioStatus) => {
+          if (!mounted) return;
+          if (!status.isLoaded) {
+            if (status.error) {
+              setHasError(true);
+              onError?.();
             }
+            return;
           }
-        );
-
-        if (mounted) soundRef.current = sound;
-        else sound.unloadAsync().catch(() => {});
+          setIsLoaded(true);
+          setIsPlaying(status.playing);
+          setPositionMs(status.currentTime * 1000);
+          setDurationMs(status.duration * 1000);
+          if (status.didJustFinish && !finishedRef.current) {
+            finishedRef.current = true;
+            setIsPlaying(false);
+            setPositionMs(status.duration * 1000);
+            voicePlaybackCoordinator.finished(playerId);
+          }
+        });
+        if (mounted) audioPlayer.play();
       } catch {
         // Audio load failed — notify parent so it can reset to idle (tap-to-retry).
         if (mounted) { setHasError(true); onError?.(); }
@@ -238,9 +225,10 @@ function AudioPlayerActive({
         webAudio.src = "";
         webAudioRef.current = null;
       }
-      soundRef.current?.unloadAsync().catch(() => {});
+      statusSubscription?.remove();
+      if (Platform.OS !== "web") audioPlayer.pause();
     };
-  }, [uri]);
+  }, [audioPlayer, uri]);
 
   const togglePlay = useCallback(async () => {
     if (!isLoaded) return;
@@ -255,18 +243,17 @@ function AudioPlayerActive({
         else audio.pause();
         return;
       }
-      if (!soundRef.current) return;
       if (isPlaying) {
-        await soundRef.current.pauseAsync();
+        audioPlayer.pause();
       } else {
         if (positionMs >= durationMs && durationMs > 0) {
-          await soundRef.current.setPositionAsync(0);
+          await audioPlayer.seekTo(0);
           finishedRef.current = false;
         }
-        await soundRef.current.playAsync();
+        audioPlayer.play();
       }
     } catch {}
-  }, [isPlaying, positionMs, durationMs, isLoaded]);
+  }, [audioPlayer, isPlaying, positionMs, durationMs, isLoaded]);
 
   const cycleSpeed = useCallback(async () => {
     if (!isLoaded) return;
@@ -278,10 +265,9 @@ function AudioPlayerActive({
         if (webAudioRef.current) webAudioRef.current.playbackRate = next;
         return;
       }
-      if (!soundRef.current) return;
-      await soundRef.current.setRateAsync(next, true);
+      audioPlayer.setPlaybackRate(next, "medium");
     } catch {}
-  }, [speed, isLoaded]);
+  }, [audioPlayer, speed, isLoaded]);
 
   const seekFromTouch = useCallback(
     async (e: GestureResponderEvent) => {
@@ -293,11 +279,10 @@ function AudioPlayerActive({
           if (webAudioRef.current) webAudioRef.current.currentTime = ratio * durationMs / 1000;
           return;
         }
-        if (!soundRef.current) return;
-        await soundRef.current.setPositionAsync(ratio * durationMs);
+        await audioPlayer.seekTo(ratio * durationMs / 1000);
       } catch {}
     },
-    [isLoaded, durationMs]
+    [audioPlayer, isLoaded, durationMs]
   );
 
   const onTrackLayout = useCallback((e: LayoutChangeEvent) => {

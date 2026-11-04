@@ -52,6 +52,13 @@ import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { showAlert } from "@/lib/alert";
 import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from "expo-audio";
+import type { AudioRecorder } from "expo-audio";
+import {
   VideoReplyItem,
   CommentSkeleton,
   RecordingBar,
@@ -62,19 +69,6 @@ import {
   MAX_VOICE_SECS,
   type Reply,
 } from "@/components/ui/VideoCommentsSheet";
-
-// ─── Audio lazy import (safe on web + Expo Go SDK 55) ─────────────────────────
-// expo-av: lazy-load on native only.
-// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
-// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
-// so that check always returns null and silently disables all audio.
-let Audio: typeof import("expo-av").Audio | null = null;
-type AudioRecording = import("expo-av/build/Audio/Recording").Recording;
-import { Platform as _AvPlatform } from "react-native";
-import { isExpoGo } from "@/lib/expoEnvironment";
-if (_AvPlatform.OS !== "web" && !isExpoGo()) {
-  try { Audio = require("expo-av").Audio; } catch {}
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -264,6 +258,7 @@ type RecordState = "idle" | "recording" | "recorded";
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function PostDetailScreen() {
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const { id, org } = useLocalSearchParams<{ id: string; org?: string }>();
   const { colors, isDark } = useTheme();
   const { accent } = useAppAccent();
@@ -304,7 +299,7 @@ export default function PostDetailScreen() {
 
   // ── Recording state ──────────────────────────────────────────────────────────
   const [recordState, setRecordState] = useState<RecordState>("idle");
-  const [recordingObj, setRecordingObj] = useState<AudioRecording | null>(null);
+  const [recordingObj, setRecordingObj] = useState<AudioRecorder | null>(null);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [recordElapsed, setRecordElapsed] = useState(0);
@@ -624,22 +619,22 @@ export default function PostDetailScreen() {
   function discardRecording() {
     stopTimer();
     if (recordingObj) {
-      recordingObj.stopAndUnloadAsync().catch(() => {});
+      recordingObj.stop().catch(() => {});
       setRecordingObj(null);
       // Restore audio session so playback (voice messages, video) works normally.
       // Without this reset, iOS stays in .playAndRecord category and routes
       // subsequent audio through the earpiece at near-zero volume.
-      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
     }
     setRecordState("idle"); setRecordedUri(null); setRecordedDuration(0); setRecordElapsed(0);
   }
 
   async function startRecording() {
-    if (!Audio) { showAlert("Not supported", "Audio recording is not available here."); return; }
+    if (Platform.OS === "web") { showAlert("Not supported", "Audio recording is not available here."); return; }
     audioFocus.claimRecording();
     let granted = false;
     try {
-      const result = await Audio.requestPermissionsAsync();
+      const result = await requestRecordingPermissionsAsync();
       granted = result.granted;
     } catch {
       showAlert("Microphone access needed", "Please enable microphone access in Settings.");
@@ -648,15 +643,16 @@ export default function PostDetailScreen() {
     if (!granted) { showAlert("Microphone access needed", "Please enable microphone access in Settings."); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecordingObj(recording);
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setRecordingObj(audioRecorder);
       setRecordElapsed(0);
       setRecordState("recording");
       timerRef.current = setInterval(async () => {
         setRecordElapsed((prev) => {
           const next = prev + 1;
-          if (next >= MAX_VOICE_SECS) stopRecording(recording, next);
+          if (next >= MAX_VOICE_SECS) stopRecording(audioRecorder, next);
           return next;
         });
       }, 1000);
@@ -665,15 +661,15 @@ export default function PostDetailScreen() {
     }
   }
 
-  async function stopRecording(rec?: AudioRecording | null, elapsed?: number) {
+  async function stopRecording(rec?: AudioRecorder | null, elapsed?: number) {
     stopTimer();
     const activeRec = rec ?? recordingObj;
     if (!activeRec) { setRecordState("idle"); return; }
     try {
-      const status = await activeRec.getStatusAsync();
-      await activeRec.stopAndUnloadAsync();
-      const uri = activeRec.getURI();
-      const durationMs = (status as any).durationMillis as number | undefined;
+      const status = activeRec.getStatus();
+      await activeRec.stop();
+      const uri = activeRec.uri;
+      const durationMs = status.durationMillis;
       const durationS = durationMs ? Math.ceil(durationMs / 1000) : (elapsed ?? recordElapsed);
       setRecordingObj(null);
       if (uri && durationS > 0) {
@@ -684,7 +680,7 @@ export default function PostDetailScreen() {
         setRecordState("idle"); setRecordElapsed(0);
       }
     } catch { setRecordState("idle"); setRecordElapsed(0); }
-    Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
+    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
   }
 
   async function pickImage() {

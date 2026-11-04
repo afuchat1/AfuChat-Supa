@@ -6,7 +6,6 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "expo-av",
           "react-native-webrtc"
         ]
       }
@@ -75,8 +74,9 @@
     "@shopify/flash-list": "2.3.2",
     "@supabase/supabase-js": "^2.118.0",
     "@types/qrcode": "^1.5.6",
+    "expo-asset": "~58.0.20",
+    "expo-audio": "~58.0.11",
     "expo-auth-session": "~58.0.17",
-    "expo-av": "~16.0.8",
     "expo-build-properties": "~58.0.12",
     "expo-camera": "~58.0.14",
     "expo-clipboard": "~58.0.4",

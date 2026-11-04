@@ -194,9 +194,12 @@
         }
       ],
       [
-        "expo-av",
+        "expo-audio",
         {
-          "microphonePermission": "AfuChat uses the microphone to record voice messages."
+          "microphonePermission": "AfuChat uses the microphone to record voice messages.",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ],
       [
