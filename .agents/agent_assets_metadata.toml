@@ -151,13 +151,13 @@ id = "2gLzWKfPUAUHRyYxNKyQ5"
 uri = "file://generated-artifacts/afuchat-expo-go-qr.png"
 type = "image"
 title = "AfuChat Expo Go QR"
-description = "Scan this QR in Expo Go to open the running Android preview."
+description = "Scan this code with Expo Go. The Android manifest and JavaScript bundle both returned HTTP 200. This QR is tied to the current tunnel session."
 logical_id = "94ba286e-9e04-4698-b32e-eeca3b54ff07"
-content_hash = "sha256:40fe8793824f76bd2f72b8399de3635f42200303f6a7a49beea224db883dbcb6"
-size = 8042
-mtime_ms = 1793719479760
-storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:40b02a20-8ac9-4082-b295-6ec44ab48630/94ba286e-9e04-4698-b32e-eeca3b54ff07/2521f34d-254f-49fb-8231-52cc8901b4c6"
-storage_version_token = "1793719488188057"
+content_hash = "sha256:4821092307c74018979c8fe8edb82a5bfc320298c6a18880b7c878f0917d816c"
+size = 4788
+mtime_ms = 1793810073242
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:9dd36129-0b54-4d30-b9e7-b26a6160da7d/94ba286e-9e04-4698-b32e-eeca3b54ff07/8adfa2ee-7e9c-4e56-9933-9a6731b7f9bf"
+storage_version_token = "1793810079216400"
 content_type = "image/png"
 
 [[outputs]]
