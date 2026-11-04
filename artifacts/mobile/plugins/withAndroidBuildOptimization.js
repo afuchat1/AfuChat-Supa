@@ -151,6 +151,10 @@ function withReleaseOptimizations(config) {
     // Enable R8 for release DEX optimization, shrinking, and obfuscation to
     // meet the upcoming Google Play optimization threshold. Keep resource
     // shrinking off separately; it is not required for DEX optimization.
+    // SDK 58's AGP 9 template opts out of these new defaults until the
+    // React Native/Expo Android plugins support them.
+    ensureProperty("android.builtInKotlin", "false");
+    ensureProperty("android.newDsl", "false");
     ensureProperty("android.enableMinifyInReleaseBuilds", "true");
     ensureProperty("android.enableShrinkResourcesInReleaseBuilds", "false");
     return config;
