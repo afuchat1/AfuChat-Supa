@@ -17,4 +17,4 @@
 - [AfuChat durable user data](afu-durable-user-data.md) — Keep durable user data out of OS-clearable cache storage; use persistent app storage or the server.
 - [Expo Router navigation hooks](expo-router-navigation-hooks.md) — In SDK 57, import navigation hooks from Expo Router to share its bundled navigation context.
 - [Expo Router SDK 58 web routes](expo-router-sdk58-web-routes.md) — Keep web route loading synchronous until the static preview can safely load async route chunks.
-- [React Native strict API migration](rn-strict-api-migration.md) — SDK 58 temporarily uses documented legacy types; migrate refs before React Native removes the opt-out.
+- [React Native strict API migration](rn-strict-api-migration.md) — Keep SDK 58 on React Native's strict instance types; run the mobile typecheck after API changes.
