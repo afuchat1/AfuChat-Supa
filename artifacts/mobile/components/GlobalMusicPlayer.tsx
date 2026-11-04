@@ -7,7 +7,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 import type { AfuMusicTrack } from "@/modules/afumusic";
-import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
 import type { AudioStatus } from "expo-audio";
 
 type AudioUriResolver = (track: AfuMusicTrack) => Promise<string | null>;
@@ -104,15 +103,7 @@ function SlidingTrackTitle({ title, color }: { title: string; color: string }) {
   );
 }
 
-function MusicTransport({
-  uri,
-  expanded,
-  onNext,
-  onPrevious,
-  hasNext,
-  hasPrevious,
-  advancing,
-}: {
+type MusicTransportProps = {
   uri: string;
   expanded: boolean;
   onNext?: () => void;
@@ -120,9 +111,59 @@ function MusicTransport({
   hasNext: boolean;
   hasPrevious: boolean;
   advancing: boolean;
-}) {
+};
+
+type ExpoAudioModule = typeof import("expo-audio");
+
+/**
+ * expo-audio resolves its native ExpoAudio module at module evaluation time.
+ * Load it only when music is actually played, so an unavailable audio module
+ * in an older/incompatible Android binary cannot prevent the app from booting.
+ */
+function MusicTransport(props: MusicTransportProps) {
   const { colors, accent } = useTheme();
-  const audioPlayer = useAudioPlayer(Platform.OS === "web" ? null : { uri }, { updateInterval: 250 });
+  const [audioModule, setAudioModule] = useState<ExpoAudioModule | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setAudioModule(require("expo-audio") as ExpoAudioModule);
+    } catch (error) {
+      setLoadFailed(true);
+      if (__DEV__) console.warn("[AfuMusic] Audio module unavailable", error);
+    }
+  }, []);
+
+  if (!audioModule) {
+    return (
+      <View
+        style={[
+          styles.transportLoading,
+          props.expanded && styles.expandedTransportLoading,
+        ]}
+      >
+        {loadFailed
+          ? <Ionicons name="alert-circle-outline" size={18} color={colors.textMuted} />
+          : <ActivityIndicator size="small" color={accent} />}
+      </View>
+    );
+  }
+
+  return <LoadedMusicTransport {...props} audioModule={audioModule} />;
+}
+
+function LoadedMusicTransport({
+  uri,
+  expanded,
+  onNext,
+  onPrevious,
+  hasNext,
+  hasPrevious,
+  advancing,
+  audioModule,
+}: MusicTransportProps & { audioModule: ExpoAudioModule }) {
+  const { colors, accent } = useTheme();
+  const audioPlayer = audioModule.useAudioPlayer(Platform.OS === "web" ? null : { uri }, { updateInterval: 250 });
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const mountedRef = useRef(true);
   const seekWidth = useRef(1);
@@ -186,7 +227,7 @@ function MusicTransport({
           return;
         }
 
-        await setAudioModeAsync({
+        await audioModule.setAudioModeAsync({
           allowsRecording: false,
           playsInSilentMode: true,
           interruptionMode: "duckOthers",
@@ -219,7 +260,7 @@ function MusicTransport({
       nativeSubscription?.remove();
       if (Platform.OS !== "web") audioPlayer.pause();
     };
-  }, [audioPlayer, onNext, uri]);
+  }, [audioModule, audioPlayer, onNext, uri]);
 
   const togglePlayback = useCallback(async () => {
     if (!ready) return;
@@ -627,6 +668,8 @@ const styles = StyleSheet.create({
   hiddenControlSlot: { width: 0, height: 0, opacity: 0, overflow: "hidden" },
   compactTransport: { width: 110, flex: 0, justifyContent: "center" },
   expandedTransport: { width: "100%", gap: 13 },
+  transportLoading: { width: 110, minHeight: 38, alignItems: "center", justifyContent: "center" },
+  expandedTransportLoading: { width: "100%", minHeight: 38 },
   transportControls: { minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   expandedTransportControls: { gap: 22 },
   mainPlayButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },

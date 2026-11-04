@@ -371,7 +371,11 @@ export async function getLastNotificationResponse() {
 }
 
 export function clearLastNotificationResponse() {
-  getNotifications()?.clearLastNotificationResponse?.();
+  try {
+    getNotifications()?.clearLastNotificationResponse?.();
+  } catch (error) {
+    if (__DEV__) console.warn("[push] could not clear last response", error);
+  }
 }
 
 export function getNotificationTarget(response: PushResponse) {

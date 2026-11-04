@@ -22,7 +22,7 @@ let screensEnabled = false;
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router, Stack, usePathname, useRootNavigationState } from "expo-router";
@@ -645,8 +645,9 @@ export default function RootLayout() {
 
 
   return (
-    <ShareIntentProvider options={{ scheme: "afuchat" }}>
-      <ErrorBoundary>
+    <ErrorBoundary FallbackComponent={BootstrapErrorFallback}>
+      <ShareIntentProvider options={{ scheme: "afuchat" }}>
+        <ErrorBoundary>
         <GestureHandlerRootView style={styles.root}>
           {/* JS splash overlay — visible until fonts load, then fades out */}
           {!splashDone && Platform.OS !== "web" && (
@@ -700,8 +701,49 @@ export default function RootLayout() {
             </ThemeProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
-      </ErrorBoundary>
-    </ShareIntentProvider>
+        </ErrorBoundary>
+      </ShareIntentProvider>
+    </ErrorBoundary>
+  );
+}
+
+function BootstrapErrorFallback({
+  error,
+  resetError,
+}: {
+  error: Error;
+  resetError: () => void;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: "#F5F0E8",
+      }}
+    >
+      <Text style={{ color: "#171717", fontSize: 20, fontWeight: "700" }}>
+        AfuChat couldn’t finish starting
+      </Text>
+      <Text style={{ color: "#555", marginTop: 10 }}>
+        {__DEV__ ? error.message : "Restart the app and try again."}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={resetError}
+        style={{
+          alignSelf: "flex-start",
+          marginTop: 20,
+          paddingHorizontal: 18,
+          paddingVertical: 12,
+          borderRadius: 12,
+          backgroundColor: "#1018D8",
+        }}
+      >
+        <Text style={{ color: "#fff", fontWeight: "600" }}>Try again</Text>
+      </Pressable>
+    </View>
   );
 }
 

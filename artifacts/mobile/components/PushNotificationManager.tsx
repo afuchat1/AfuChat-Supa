@@ -21,7 +21,11 @@ export default function PushNotificationManager() {
 
   useEffect(() => {
     if (Platform.OS === "web" || !user?.id || session?.user?.id !== user.id) return;
-    configurePushNotifications();
+    try {
+      configurePushNotifications();
+    } catch (error) {
+      if (__DEV__) console.warn("[push] notification setup failed", error);
+    }
     let active = true;
     const handleResponse = async (response: any) => {
       if (!active) return;
@@ -58,6 +62,8 @@ export default function PushNotificationManager() {
             } as any);
           }
         }
+      } catch (error) {
+        if (__DEV__) console.warn("[push] response handling failed", error);
       } finally {
         clearLastNotificationResponse();
       }
