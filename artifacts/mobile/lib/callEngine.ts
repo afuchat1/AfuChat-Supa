@@ -46,6 +46,20 @@ type RtcBridge = {
   RTCIceCandidate: any;
   mediaDevices: { getUserMedia: (constraints: any) => Promise<any> };
 };
+type CallSessionStatus =
+  | "initiated"
+  | "ringing"
+  | "active"
+  | "ended"
+  | "missed"
+  | "declined"
+  | "busy"
+  | "failed";
+type TurnIceServer = {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+};
 
 let rtc: RtcBridge | null | undefined;
 let status: CallStatus = "idle";
@@ -151,14 +165,34 @@ function subscribe(channel: any): Promise<void> {
   });
 }
 
-async function sendToUser(userId: string, event: string, payload: Record<string, unknown>) {
-  const channel = supabase.channel(`user-call:${userId}`);
-  try {
-    await subscribe(channel);
-    await channel.send({ type: "broadcast", event, payload });
-  } finally {
-    void supabase.removeChannel(channel);
+async function updateCallStatus(callId: string, next: CallSessionStatus) {
+  const update: Record<string, unknown> = { status: next };
+  if (next === "active") update.answered_at = new Date().toISOString();
+  if (["ended", "missed", "declined", "busy", "failed"].includes(next)) {
+    update.ended_at = new Date().toISOString();
   }
+  const { data, error } = await supabase
+    .from("calls")
+    .update(update)
+    .eq("id", callId)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) throw new Error(error?.message || "Could not update call status");
+}
+
+async function getTurnIceServers(callId: string): Promise<TurnIceServer[]> {
+  const { data, error } = await supabase.functions.invoke("call-turn-credentials", {
+    body: { callId },
+  });
+  const servers = data?.iceServers;
+  const hasTurn = Array.isArray(servers) && servers.some((server: TurnIceServer) => {
+    const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+    return urls.some((url) => typeof url === "string" && url.toLowerCase().startsWith("turn"));
+  });
+  if (error || !hasTurn) {
+    throw new Error("Secure call relay is unavailable. Please try again later.");
+  }
+  return servers as TurnIceServer[];
 }
 
 async function sendSignal(event: string, payload: Record<string, unknown>) {
@@ -204,18 +238,20 @@ function removeSignalChannel() {
   signalChannel = null;
 }
 
-async function finishCall(sendEnd: boolean) {
+async function finishCall(sendEnd: boolean, finalStatus?: CallSessionStatus) {
   const oldInfo = info;
   if (sendEnd && oldInfo) {
     await sendSignal("end", { callId: oldInfo.callId });
-    await sendToUser(
-      oldInfo.isCaller ? oldInfo.calleeId : oldInfo.callerId,
-      "cancel",
-      { callId: oldInfo.callId },
-    ).catch(() => {});
   }
   stopPeer();
   removeSignalChannel();
+  if (oldInfo && finalStatus) {
+    try {
+      await updateCallStatus(oldInfo.callId, finalStatus);
+    } catch (error) {
+      if (__DEV__) console.warn("[calls] status update failed", error);
+    }
+  }
   info = null;
   setStatus("ended");
   setTimeout(() => {
@@ -223,12 +259,13 @@ async function finishCall(sendEnd: boolean) {
   }, 350);
 }
 
-function configurePeer(callId: string, isCaller: boolean) {
+function configurePeer(callId: string, isCaller: boolean, iceServers: TurnIceServer[]) {
   const bridge = detectRtc();
   if (!bridge) throw new Error("Voice calls require a native build or WebRTC-enabled browser");
 
   peer = new bridge.RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    iceServers,
+    iceTransportPolicy: "all",
   });
   localStream?.getTracks?.().forEach((track: any) => peer.addTrack(track, localStream));
   peer.onicecandidate = (event: any) => {
@@ -246,8 +283,8 @@ function configurePeer(callId: string, isCaller: boolean) {
         info = info ? { ...info, answeredAt: info.answeredAt ?? Date.now() } : info;
         setStatus("active");
       }
-    } else if (state === "failed" || state === "closed") {
-      void finishCall(false);
+    } else if (state === "failed") {
+      void finishCall(false, "failed");
     }
   };
   peer.onconnectionstatechange = () => {
@@ -281,7 +318,7 @@ function configureSignalChannel(callId: string, isCaller: boolean) {
   const bridge = detectRtc();
   if (!bridge) throw new Error("WebRTC unavailable");
   signalChannel = supabase
-    .channel(`call:${callId}`, { config: { broadcast: { self: false } } })
+    .channel(`call:${callId}`, { config: { private: true, broadcast: { self: false } } })
     .on("broadcast", { event: "ready" }, async ({ payload }: any) => {
       if (!isCaller || !peer) return;
       setStatus("connecting");
@@ -316,52 +353,109 @@ function configureSignalChannel(callId: string, isCaller: boolean) {
     .on("broadcast", { event: "end" }, () => void finishCall(false));
 }
 
+function handleCallRow(row: any, userId: string) {
+  const callId = typeof row?.id === "string" ? row.id : "";
+  const callerId = typeof row?.caller_id === "string" ? row.caller_id : "";
+  const calleeId = typeof row?.callee_id === "string" ? row.callee_id : "";
+  const chatId = typeof row?.chat_id === "string" ? row.chat_id : "";
+  if (!callId || !callerId || !calleeId || !chatId || callerId === calleeId) return;
+
+  if (calleeId === userId && row.status === "ringing") {
+    if (status !== "idle") {
+      void updateCallStatus(callId, "busy").catch(() => {});
+      return;
+    }
+    if (info?.callId === callId) return;
+
+    const callerName = "AfuChat user";
+    const notice: IncomingCallNotice = {
+      callId,
+      callerId,
+      callerName,
+      callerAvatar: null,
+      chatId,
+    };
+    const startedAt = typeof row.started_at === "string"
+      ? Date.parse(row.started_at)
+      : Date.now();
+    info = {
+      callId,
+      callerId,
+      calleeId,
+      callerName,
+      callerAvatar: null,
+      calleeName: "",
+      calleeAvatar: null,
+      chatId,
+      startedAt: Number.isFinite(startedAt) ? startedAt : Date.now(),
+      answeredAt: null,
+      isCaller: false,
+    };
+    setStatus("incoming_ringing");
+    emit({ type: "incoming", notice });
+
+    void (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", callerId)
+        .maybeSingle();
+      if (!data || !isCurrentIncomingCall(callId)) return;
+      const enrichedName = data.display_name || callerName;
+      const enrichedAvatar = data.avatar_url || null;
+      info = { ...info, callerName: enrichedName, callerAvatar: enrichedAvatar };
+      setStatus("incoming_ringing");
+      emit({
+        type: "incoming",
+        notice: { ...notice, callerName: enrichedName, callerAvatar: enrichedAvatar },
+      });
+    })().catch(() => {});
+    return;
+  }
+
+  if (
+    row.id !== info?.callId ||
+    !["ended", "missed", "declined", "busy", "failed"].includes(row.status)
+  ) {
+    return;
+  }
+  if (status === "incoming_ringing") {
+    info = null;
+    stopPeer();
+    removeSignalChannel();
+    setStatus("ended");
+    setTimeout(() => {
+      if (status === "ended") setStatus("idle");
+    }, 350);
+  } else {
+    void finishCall(false);
+  }
+}
+
+function isCurrentIncomingCall(callId: string) {
+  return status === "incoming_ringing" && info?.callId === callId;
+}
+
 export async function initCallEngine(userId: string): Promise<() => void> {
   currentUserId = userId;
   if (inboxChannel) void supabase.removeChannel(inboxChannel);
   inboxChannel = supabase
-    .channel(`user-call:${userId}`, { config: { broadcast: { self: false } } })
-    .on("broadcast", { event: "invite" }, ({ payload }: any) => {
-      if (!payload?.callId || !payload?.callerId) return;
-      if (status !== "idle") {
-        void sendToUser(payload.callerId, "busy", { callId: payload.callId });
-        return;
-      }
-      info = {
-        callId: payload.callId,
-        callerId: payload.callerId,
-        calleeId: userId,
-        callerName: payload.callerName ?? "AfuChat user",
-        callerAvatar: payload.callerAvatar ?? null,
-        calleeName: payload.calleeName ?? "",
-        calleeAvatar: payload.calleeAvatar ?? null,
-        chatId: payload.chatId ?? null,
-        startedAt: Date.now(),
-        answeredAt: null,
-        isCaller: false,
-      };
-      setStatus("incoming_ringing");
-      emit({
-        type: "incoming",
-        notice: {
-          callId: payload.callId,
-          callerId: payload.callerId,
-          callerName: payload.callerName ?? "AfuChat user",
-          callerAvatar: payload.callerAvatar ?? null,
-          chatId: payload.chatId ?? null,
-        },
-      });
-    })
-    .on("broadcast", { event: "cancel" }, ({ payload }: any) => {
-      if (payload?.callId !== info?.callId) return;
-      if (status === "incoming_ringing") {
-        info = null;
-        setStatus("idle");
-      }
-    })
-    .on("broadcast", { event: "busy" }, ({ payload }: any) => {
-      if (payload?.callId === info?.callId) void finishCall(false);
-    });
+    .channel(`calls:${userId}`, { config: { private: true } })
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "calls", filter: `callee_id=eq.${userId}` },
+      ({ new: row }: any) => handleCallRow(row, userId),
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "calls", filter: `callee_id=eq.${userId}` },
+      ({ new: row }: any) => handleCallRow(row, userId),
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "calls", filter: `caller_id=eq.${userId}` },
+      ({ new: row }: any) => handleCallRow(row, userId),
+    );
   try {
     await subscribe(inboxChannel);
   } catch {}
@@ -384,7 +478,6 @@ export function addCallEngineListener(listener: Listener) {
 }
 
 export async function startCall(params: {
-  callId: string;
   calleeId: string;
   calleeName: string;
   calleeAvatar: string | null;
@@ -392,8 +485,9 @@ export async function startCall(params: {
   myName: string;
   myAvatar: string | null;
   chatId: string | null;
-}) {
+}): Promise<string> {
   if (status !== "idle") throw new Error("A call is already in progress");
+  if (!params.chatId) throw new Error("Calls can only be started from a direct chat.");
   if (!detectRtc()) {
     if (Platform.OS === "web") {
       throw new Error("Voice calls need a secure browser connection and microphone access.");
@@ -404,46 +498,67 @@ export async function startCall(params: {
     throw new Error("Voice calls are unavailable in this AfuChat build. Update the app and try again.");
   }
   const bridge = detectRtc() as RtcBridge;
-  info = {
-    callId: params.callId,
-    callerId: params.myId,
-    calleeId: params.calleeId,
-    callerName: params.myName,
-    callerAvatar: params.myAvatar,
-    calleeName: params.calleeName,
-    calleeAvatar: params.calleeAvatar,
-    chatId: params.chatId,
-    startedAt: Date.now(),
-    answeredAt: null,
-    isCaller: true,
-  };
+  let callId: string | null = null;
   try {
     localStream = await bridge.mediaDevices.getUserMedia({ audio: true, video: false });
     setNativeSpeakerphone(false);
-    configurePeer(params.callId, true);
-    configureSignalChannel(params.callId, true);
-    await subscribe(signalChannel);
-    setStatus("outgoing_ringing");
-    ringTimer = setTimeout(() => void finishCall(true), 30000);
-    await sendToUser(params.calleeId, "invite", {
-      callId: params.callId,
+    const { data: call, error: insertError } = await supabase
+      .from("calls")
+      .insert({
+        room_id: params.chatId,
+        caller_id: params.myId,
+        callee_id: params.calleeId,
+        call_type: "voice",
+        status: "initiated",
+        chat_id: params.chatId,
+      })
+      .select("id, started_at")
+      .single();
+    if (insertError || !call?.id) {
+      throw new Error(insertError?.message || "Could not create the call session");
+    }
+    const createdCallId = String(call.id);
+    callId = createdCallId;
+    const startedAt = call.started_at ? Date.parse(call.started_at) : Date.now();
+    info = {
+      callId: createdCallId,
       callerId: params.myId,
+      calleeId: params.calleeId,
       callerName: params.myName,
       callerAvatar: params.myAvatar,
       calleeName: params.calleeName,
       calleeAvatar: params.calleeAvatar,
       chatId: params.chatId,
-    });
+      startedAt: Number.isFinite(startedAt) ? startedAt : Date.now(),
+      answeredAt: null,
+      isCaller: true,
+    };
+    const iceServers = await getTurnIceServers(createdCallId);
+    configurePeer(createdCallId, true, iceServers);
+    configureSignalChannel(createdCallId, true);
+    await subscribe(signalChannel);
+    setStatus("outgoing_ringing");
+    ringTimer = setTimeout(() => void finishCall(true, "missed"), 30000);
+    const { data: ringingCall, error: ringError } = await supabase
+      .from("calls")
+      .update({ status: "ringing" })
+      .eq("id", createdCallId)
+      .select("id")
+      .maybeSingle();
+    if (ringError || !ringingCall) {
+      throw new Error(ringError?.message || "Could not ring the recipient");
+    }
     void notifyCallRecipient({
       recipientId: params.calleeId,
       senderId: params.myId,
       callerName: params.myName,
       callerAvatar: params.myAvatar,
-      callId: params.callId,
+      callId: createdCallId,
       chatId: params.chatId,
     });
+    return createdCallId;
   } catch (error) {
-    await finishCall(false);
+    await finishCall(false, callId ? "failed" : undefined);
     throw error;
   }
 }
@@ -465,11 +580,38 @@ export async function acceptCall(notice: IncomingCallNotice, params: {
     throw new Error("Voice calls are unavailable in this AfuChat build. Update the app and try again.");
   }
   try {
+    const { data: call, error: callError } = await supabase
+      .from("calls")
+      .select("id, caller_id, callee_id, chat_id, status, started_at, answered_at")
+      .eq("id", notice.callId)
+      .maybeSingle();
+    if (
+      callError ||
+      !call ||
+      call.callee_id !== params.myId ||
+      call.caller_id !== notice.callerId ||
+      call.status !== "ringing" ||
+      !call.chat_id
+    ) {
+      throw new Error("This call is no longer available.");
+    }
+    info = {
+      ...info,
+      callId: call.id,
+      callerId: call.caller_id,
+      calleeId: call.callee_id,
+      chatId: call.chat_id,
+      startedAt: call.started_at ? Date.parse(call.started_at) : info.startedAt,
+      answeredAt: call.answered_at ? Date.parse(call.answered_at) : null,
+      isCaller: false,
+    };
+    const iceServers = await getTurnIceServers(notice.callId);
     localStream = await bridge.mediaDevices.getUserMedia({ audio: true, video: false });
     setNativeSpeakerphone(false);
-    configurePeer(notice.callId, false);
+    configurePeer(notice.callId, false, iceServers);
     configureSignalChannel(notice.callId, false);
     await subscribe(signalChannel);
+    await updateCallStatus(notice.callId, "active");
     setStatus("connecting");
     await sendSignal("ready", {
       callId: notice.callId,
@@ -478,13 +620,13 @@ export async function acceptCall(notice: IncomingCallNotice, params: {
       userAvatar: params.myAvatar,
     });
   } catch (error) {
-    await finishCall(false);
+    await finishCall(false, "failed");
     throw error;
   }
 }
 
 export function declineCall(notice: IncomingCallNotice) {
-  void sendToUser(notice.callerId, "cancel", { callId: notice.callId });
+  void updateCallStatus(notice.callId, "declined").catch(() => {});
   info = null;
   stopPeer();
   removeSignalChannel();
@@ -522,7 +664,7 @@ export async function handleCallNotificationAction(
 }
 
 export async function endCall() {
-  await finishCall(true);
+  await finishCall(true, "ended");
 }
 
 export function toggleMute(): boolean {

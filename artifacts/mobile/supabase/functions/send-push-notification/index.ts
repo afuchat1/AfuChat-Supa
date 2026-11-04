@@ -88,6 +88,7 @@ Deno.serve(async (request) => {
   }
   const chatId = typeof body?.chatId === "string" ? body.chatId.trim() : "";
   const messageId = typeof body?.messageId === "string" ? body.messageId.trim() : "";
+  let authorizedCallRecipientId: string | null = null;
   if (categoryId === "message") {
     if (!chatId || !messageId) return json({ error: "A chat and message are required" }, 400);
 
@@ -104,18 +105,36 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (messageError || !ownMessage) return json({ error: "Message is not owned by the authenticated user" }, 403);
   } else if (categoryId === "call") {
-    if (typeof body?.callId !== "string" || !body.callId.trim()) {
+    const callId = typeof body?.callId === "string" ? body.callId.trim() : "";
+    if (!callId || !chatId) {
       return json({ error: "A call ID is required" }, 400);
     }
-    if (chatId) {
-      const { data: membership, error: membershipError } = await adminlessMembershipCheck(auth, chatId, authenticatedUserId);
-      if (membershipError || !membership) return json({ error: "Not authorized for this call chat" }, 403);
+    const { data: call, error: callError } = await auth
+      .from("calls")
+      .select("id, caller_id, callee_id, chat_id, status")
+      .eq("id", callId)
+      .maybeSingle();
+    if (
+      callError ||
+      !call ||
+      call.caller_id !== authenticatedUserId ||
+      call.chat_id !== chatId ||
+      call.status !== "ringing"
+    ) {
+      return json({ error: "Not authorized to notify this call recipient" }, 403);
     }
+    authorizedCallRecipientId = call.callee_id;
   }
 
   const recipientIds = Array.isArray(body?.recipientUserIds)
     ? [...new Set(body.recipientUserIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))]
     : [];
+  if (
+    categoryId === "call" &&
+    (recipientIds.length !== 1 || recipientIds[0] !== authorizedCallRecipientId)
+  ) {
+    return json({ error: "A call notification may only target its callee" }, 403);
+  }
   if (!recipientIds.length) return json({ ok: true, sent: 0 });
 
   const admin = createClient(url, serviceRoleKey);

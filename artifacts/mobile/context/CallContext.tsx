@@ -131,18 +131,13 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }): Promise<string> => {
     const u = userRef.current;
     if (!u) throw new Error("Not signed in");
-    const callId = typeof globalThis.crypto?.randomUUID === "function"
-      ? globalThis.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     try {
-      await engineStart({
+      return await engineStart({
         ...params,
-        callId,
         myId: u.id,
         myName: profileRef.current?.display_name ?? "AfuChat user",
         myAvatar: profileRef.current?.avatar_url ?? null,
       });
-      return callId;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not start the call";
       showToast(message, { type: "error" });
