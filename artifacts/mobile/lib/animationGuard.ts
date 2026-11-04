@@ -10,9 +10,8 @@
  * causing an OutOfMemoryError FATAL EXCEPTION on the next vsync tick.
  *
  * ── Solution ─────────────────────────────────────────────────────────────────
- * 1. WeakRef registry — every animated value the app creates is registered here.
- *    Using WeakRef means registration NEVER prevents GC; dead refs are pruned on
- *    the next sweep so the registry never leaks memory itself.
+ * 1. Explicit registry — animated values are held only while their owning
+ *    component is mounted. The hooks unregister them on unmount.
  *
  * 2. AppState listener — when the app transitions to `inactive` or `background`
  *    (home-button press, incoming call, screen-off) every registered animation
@@ -20,10 +19,6 @@
  *
  * 3. iOS MemoryWarning — if the OS sends a low-memory signal, we cancel
  *    immediately without waiting for a background transition.
- *
- * 4. Periodic dead-ref pruning — while the app is active, sweep dead WeakRefs
- *    every PRUNE_INTERVAL_MS so the registry stays small even when components
- *    mount/unmount at high frequency (e.g. scrolling feeds).
  *
  * 5. Three value types supported:
  *    • Reanimated SharedValue  (react-native-reanimated v4+)
@@ -63,20 +58,16 @@ export type GuardedValue =
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-/** Dead-ref GC sweep interval while the app is foregrounded (ms). */
-const PRUNE_INTERVAL_MS = 30_000;
-
 const DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
 const TAG = "[AnimationGuard]";
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
-/** WeakRef registry — never holds strong references to animated values. */
-const registry = new Set<WeakRef<GuardedValue>>();
+/** Mounted animation values; hook cleanups remove entries deterministically. */
+const registry = new Set<GuardedValue>();
 
 let appStateListener: NativeEventSubscription | null = null;
 let memWarningListener: NativeEventSubscription | null = null;
-let pruneTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Lazily loaded cancelAnimation from Reanimated — avoids import at module eval time. */
 let _cancelAnimFn: ((v: SharedValue<unknown>) => void) | null = null;
@@ -140,23 +131,14 @@ function getCancelAnimation(): ((v: SharedValue<unknown>) => void) | null {
 
 /**
  * Cancel every registered animation. Runs in O(n) where n = registry size.
- * Dead WeakRefs found during the sweep are pruned immediately.
  * All cancellations are wrapped in try/catch — a buggy value can never abort
  * the sweep and leave other animations running.
  */
 function cancelAll(reason: string): void {
   const cancelAnim = getCancelAnimation();
-  const dead: Array<WeakRef<GuardedValue>> = [];
   let cancelled = 0;
 
-  for (const ref of registry) {
-    const value = ref.deref();
-
-    if (value === undefined) {
-      dead.push(ref);
-      continue;
-    }
-
+  for (const value of registry) {
     try {
       if (isSharedValue(value) && cancelAnim) {
         cancelAnim(value as SharedValue<unknown>);
@@ -173,49 +155,16 @@ function cancelAll(reason: string): void {
     }
   }
 
-  // Batch-delete dead refs found during this sweep
-  for (const ref of dead) {
-    registry.delete(ref);
-  }
-
   _totalCancelled += cancelled;
   _sweepCount++;
 
   if (DEV) {
     console.log(
       `${TAG} sweep[${_sweepCount}] reason="${reason}" ` +
-      `cancelled=${cancelled} pruned=${dead.length} ` +
+      `cancelled=${cancelled} ` +
       `remaining=${registry.size} totalCancelled=${_totalCancelled}`
     );
   }
-}
-
-// ── Dead-ref pruning ──────────────────────────────────────────────────────────
-
-function pruneDeadRefs(): void {
-  let pruned = 0;
-  for (const ref of registry) {
-    if (ref.deref() === undefined) {
-      registry.delete(ref);
-      pruned++;
-    }
-  }
-  if (DEV && pruned > 0) {
-    console.log(`${TAG} prune: removed ${pruned} dead refs, ${registry.size} active`);
-  }
-}
-
-// ── Prune timer ───────────────────────────────────────────────────────────────
-
-function startPruneTimer(): void {
-  if (pruneTimer !== null) return;
-  pruneTimer = setInterval(pruneDeadRefs, PRUNE_INTERVAL_MS);
-}
-
-function stopPruneTimer(): void {
-  if (pruneTimer === null) return;
-  clearInterval(pruneTimer);
-  pruneTimer = null;
 }
 
 // ── AppState handler ──────────────────────────────────────────────────────────
@@ -228,9 +177,6 @@ function handleAppStateChange(next: AppStateStatus): void {
   if (wasActive && goingBack) {
     _lastBgAt = Date.now();
     cancelAll(`appState:${next}`);
-    stopPruneTimer();
-  } else if (comingFront) {
-    startPruneTimer();
   }
 
   previousState = next;
@@ -265,14 +211,10 @@ export function initAnimationGuard(): void {
     }
   }
 
-  if (AppState.currentState === "active") {
-    startPruneTimer();
-  }
-
   if (DEV) {
     console.log(
       `${TAG} initialized — platform=${Platform.OS} ` +
-      `appState=${AppState.currentState} pruneInterval=${PRUNE_INTERVAL_MS}ms`
+      `appState=${AppState.currentState}`
     );
   }
 }
@@ -280,10 +222,8 @@ export function initAnimationGuard(): void {
 /**
  * Register a single animated value with the guard.
  *
- * Uses WeakRef — registration does NOT prevent GC.
- * Returns an unregister function for explicit cleanup on unmount (also done
- * automatically via WeakRef GC on the next prune sweep, but explicit cleanup
- * keeps the registry smaller and is preferred).
+ * Holds a value until its owner calls the returned cleanup function. Hooks
+ * register that cleanup with their unmount effect.
  *
  * @param value  An Animated.Value, Reanimated SharedValue, or CompositeAnimation
  * @returns      Cleanup function — call on component unmount
@@ -293,15 +233,14 @@ export function registerAnimation(value: GuardedValue): () => void {
 
   // Deduplicate: if this exact object is already registered, return its cleanup.
   for (const existing of registry) {
-    if (existing.deref() === value) {
+    if (existing === value) {
       return () => registry.delete(existing);
     }
   }
 
-  const ref = new WeakRef(value);
-  registry.add(ref);
+  registry.add(value);
 
-  return () => registry.delete(ref);
+  return () => registry.delete(value);
 }
 
 /**
