@@ -211,7 +211,7 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "afuchat-2",
+    "owner": "amkaweesi1",
     "web": {
       "bundler": "metro",
       "output": "static",
