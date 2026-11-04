@@ -33,8 +33,15 @@ import re
 
 path = pathlib.Path(sys.argv[1])
 txt = path.read_text()
+# Kotlin and Java express catch parameters in different orders.
+is_kotlin = path.suffix == ".kt"
+catch_clause = "catch (__wt: Throwable)" if is_kotlin else "catch (Throwable __wt)"
 
-if 'catch (Throwable __wt)' in txt:
+if is_kotlin and "catch (Throwable __wt)" in txt:
+    txt = txt.replace("catch (Throwable __wt)", catch_clause)
+    path.write_text(txt)
+    print("[postinstall] Corrected Kotlin WorkletsModule catch syntax:", path)
+elif catch_clause in txt:
     print("[postinstall] WorkletsModule already patched:", path)
 else:
     def replace_load(match):
@@ -44,7 +51,7 @@ else:
             f"{indent}try\n"
             f"{indent}{{\n"
             f"{indent}    {call.lstrip()}\n"
-            f"{indent}}} catch (Throwable __wt) {{\n"
+            f"{indent}}} {catch_clause} {{\n"
             f'{indent}    android.util.Log.e("WorkletsModule", '
             f'"libworklets.so failed to load - Reanimated will be disabled: " + __wt)\n'
             f"{indent}}}"
@@ -80,7 +87,9 @@ done
 
 WORKLETS_PATCHED=0
 for WORKLETS_FILE in "${WORKLETS_FILES[@]}"; do
-  if grep -q 'catch (Throwable __wt)' "$WORKLETS_FILE" 2>/dev/null; then
+  if [[ "$WORKLETS_FILE" == *.kt ]] && grep -q 'catch (__wt: Throwable)' "$WORKLETS_FILE" 2>/dev/null; then
+    WORKLETS_PATCHED=1
+  elif [[ "$WORKLETS_FILE" == *.java ]] && grep -q 'catch (Throwable __wt)' "$WORKLETS_FILE" 2>/dev/null; then
     WORKLETS_PATCHED=1
   fi
 done
