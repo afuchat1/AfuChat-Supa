@@ -44,10 +44,6 @@ args = "EAS AAB Build"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "EAS Development APK Build"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "EAS Preview Build"
 
 [[workflows.workflow]]
@@ -95,17 +91,6 @@ outputType = "console"
 task = "shell.exec"
 args = "cd artifacts/mobile && unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN REPLIT_EXPO_SESSION_SECRET CI; EXPO_PUBLIC_IS_EXPO_GO=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel ngrok --port 8000 </dev/null"
 waitForPort = 8000
-
-[[workflows.workflow]]
-name = "EAS Development APK Build"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/mobile && EAS_NO_VCS=1 EXPO_TOKEN=\"${EXPO_TOKEN:?EXPO_TOKEN secret is required}\" npx --yes eas-cli@latest build --platform android --profile development --non-interactive --no-wait"
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [[ports]]
 localPort = 3000
