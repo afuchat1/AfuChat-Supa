@@ -170,7 +170,7 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "minSdkVersion": 24,
-            "kotlinVersion": "2.1.21",
+            "kotlinVersion": "2.2.10",
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": false
           }

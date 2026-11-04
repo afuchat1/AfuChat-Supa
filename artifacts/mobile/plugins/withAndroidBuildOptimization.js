@@ -14,10 +14,11 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-const AGP_VERSION = "8.10.1";
-// AGP 8.10.1 requires Gradle 8.13 or newer.
-const GRADLE_VERSION = "8.13";
-const AGP_MARKER = "// AfuChat Android Gradle Plugin 8.10 optimization";
+const AGP_VERSION = "9.2.0";
+const KOTLIN_VERSION = "2.2.10";
+// AGP 9.2 requires Gradle 9.4.1.
+const GRADLE_VERSION = "9.4.1";
+const AGP_MARKER = "// AfuChat Android Gradle Plugin 9.2 optimization";
 
 function updateAgpDeclaration(contents) {
   if (contents.includes(AGP_MARKER)) return contents;
@@ -51,15 +52,56 @@ function updateAgpDeclaration(contents) {
   return `${AGP_MARKER}\n${updated}`;
 }
 
+function updateVersionCatalog(contents) {
+  let inVersionsSection = false;
+
+  return contents
+    .split("\n")
+    .map((line) => {
+      const section = line.match(/^\s*\[([^\]]+)\]/);
+      if (section) {
+        inVersionsSection = section[1] === "versions";
+        return line;
+      }
+
+      if (!inVersionsSection) return line;
+
+      const version = line.match(
+        /^(\s*)(agp|androidGradlePlugin|kotlin)(\s*=\s*)(["'])([^"']*)(["'])(\s*(?:#.*)?)$/,
+      );
+      if (!version) return line;
+
+      const value = version[2] === "kotlin" ? KOTLIN_VERSION : AGP_VERSION;
+      return `${version[1]}${version[2]}${version[3]}${version[4]}${value}${version[6]}${version[7]}`;
+    })
+    .join("\n");
+}
+
 function withAgp(config) {
   config = withProjectBuildGradle(config, (config) => {
     config.modResults.contents = updateAgpDeclaration(config.modResults.contents);
     return config;
   });
-  return withSettingsGradle(config, (config) => {
+  config = withSettingsGradle(config, (config) => {
     config.modResults.contents = updateAgpDeclaration(config.modResults.contents);
     return config;
   });
+  return withDangerousMod(config, [
+    "android",
+    (config) => {
+      const catalogPath = path.join(
+        config.modRequest.platformProjectRoot,
+        "gradle",
+        "libs.versions.toml",
+      );
+      if (!fs.existsSync(catalogPath)) return config;
+
+      const contents = fs.readFileSync(catalogPath, "utf8");
+      const updated = updateVersionCatalog(contents);
+      if (updated !== contents) fs.writeFileSync(catalogPath, updated);
+      return config;
+    },
+  ]);
 }
 
 function withGradleWrapper(config) {

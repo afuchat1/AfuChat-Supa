@@ -229,3 +229,17 @@ mtime_ms = 1793721959397
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:8b0f6701-459f-4a46-b9ca-16336a885a29/58cc0b3e-630b-45be-9f44-5f1ca35ea9d6/9da6f1fa-703d-44c8-9da3-7be37e28c77b"
 storage_version_token = "1793764026556417"
 content_type = "image/png"
+
+[[outputs]]
+id = "kLJV1YYNoUKnERRNttrZJ"
+uri = "file://artifacts/mobile/dist/afuchat-expogo-qr.png"
+type = "image"
+title = "AfuChat Expo Go QR"
+description = "Scan this fresh QR in Expo Go. It opens the verified running tunnel; available while the Expo Go workflow stays running."
+logical_id = "a3133f24-199e-4a29-abe7-683867294413"
+content_hash = "sha256:0be5f5abfb758050d143959042d855b8bdde2f8ea63404ceea6a2013c104c622"
+size = 4541
+mtime_ms = 1793785517730
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7e9bf0b1-3e9e-42c4-8287-716b8c1c06ab/a3133f24-199e-4a29-abe7-683867294413/cefb0e96-cfba-4d54-b445-211c1384ed31"
+storage_version_token = "1793785541175820"
+content_type = "image/png"
