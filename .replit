@@ -81,7 +81,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && unset EXPO_OFFLINE; EXPO_PUBLIC_IS_EXPO_GO=1 CI=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel ngrok --port 8000 --clear"
+args = "cd artifacts/mobile && unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN REPLIT_EXPO_SESSION_SECRET CI; EXPO_PUBLIC_IS_EXPO_GO=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel ngrok --port 8000 </dev/null"
 waitForPort = 8000
 
 [[ports]]
