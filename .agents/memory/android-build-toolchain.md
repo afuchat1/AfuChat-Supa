@@ -7,4 +7,4 @@ Expo Continuous Native Generation can resolve Android build plugin versions from
 
 **Why:** An Android cloud build failed during configuration because its resolved Android Gradle Plugin required a newer Gradle wrapper than the app's custom config plugin generated.
 
-**How to apply:** When Expo or React Native changes, align the Android Gradle Plugin, Gradle wrapper, and Kotlin plugin in the app build-properties, generated version catalog, and conventional Gradle declarations.
+**How to apply:** Let the active Expo SDK template own AGP and Gradle versions. Use `expo-build-properties` only for documented overrides; do not rewrite generated version catalogs or wrappers. If a custom toolchain is explicitly required, align every version source and verify with a native build.

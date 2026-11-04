@@ -7,7 +7,7 @@
 | R8 enabled | **Yes** (release DEX optimization, code shrinking, and obfuscation) |
 | Resource shrinking | **No** (`enableShrinkResourcesInReleaseBuilds: false`) |
 | Android code minification | **Yes** (`enableMinifyInReleaseBuilds: true`) |
-| Android Gradle Plugin | **8.10.1** (forced by the CNG config plugin) |
+| Android Gradle Plugin | Expo SDK 58 generated version catalog (not overridden) |
 | Mapping file | Generated automatically on every release build |
 | Config mechanism | Expo config plugin (`plugins/withProguardRules.js`) |
 
@@ -16,10 +16,11 @@
 ## Release shrinker status
 
 R8 is enabled in Android release builds to meet Google Play's upcoming DEX
-optimization requirement. The app config and `withAndroidBuildOptimization`
-plugin both set `enableMinifyInReleaseBuilds` to `true`; the plugin also selects
-the optimized Android ProGuard template. Resource shrinking remains disabled
-because it is a separate optimization and is not required for DEX coverage:
+optimization requirement. The supported `expo-build-properties` config plugin
+sets `enableMinifyInReleaseBuilds` to `true`. Expo SDK 58's generated Android
+template uses the optimized Android ProGuard template. Resource shrinking
+remains disabled because it is a separate optimization and is not required for
+DEX coverage:
 
 ```json
 {
@@ -136,7 +137,7 @@ injected into `android/app/proguard-rules.pro` at prebuild time by the
 
 ### Why custom rules are needed
 
-Expo SDK 55 and most React Native libraries ship their own
+Expo SDK 58 and most React Native libraries ship their own
 `consumer-rules.pro` / `proguard.txt` files.  The rules below are needed
 because:
 

@@ -5,19 +5,9 @@ import * as SplashScreen from "expo-splash-screen";
 
 // Keep the native splash visible until we explicitly hide it
 SplashScreen.preventAutoHideAsync().catch(() => {});
-import { enableScreens } from "react-native-screens";
 import { initCrashReporter, setCrashReporterUserId, setCrashNotificationHandler } from "@/lib/crashReporter";
 import { showAlert } from "@/lib/alert";
 initCrashReporter();
-let screensEnabled = false;
-
-// enableScreens() is intentionally moved out of module-evaluation scope.
-// Calling it synchronously at the top level (before any React component mounts)
-// made it run before the Android activity was fully initialized on some devices,
-// causing a native crash with no JS stack trace. Calling it once inside a
-// useEffect (or the component body) is safe and still early enough for
-// react-native-screens to intercept all route-level screen creation.
-// See: https://github.com/software-mansion/react-native-screens/issues/2086
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
@@ -537,18 +527,6 @@ export default function RootLayout() {
     }, 5000);
     return () => clearTimeout(timeout);
   }, [splashDone]);
-
-  // Enable react-native-screens optimisation. Called here (inside a component,
-  // not at module-eval time) so the Android activity is guaranteed to be fully
-  // initialized before the native call runs. Module-eval is too early on some
-  // Android devices and causes a native crash before any JS error handler exists.
-  useEffect(() => {
-    if (screensEnabled) return;
-    try {
-      enableScreens(true);
-      screensEnabled = true;
-    } catch {}
-  }, []);
 
   // Run deep-link route verification once in dev mode to catch any routes
   // that might accidentally fall through to [handle].tsx.

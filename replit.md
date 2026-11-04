@@ -55,7 +55,7 @@ artifacts/mobile/
   modules/      Native mini-app modules
   web/          Legacy public web surface retained during the Expo web migration
   supabase/     Existing Supabase migrations and Edge Function source
-  scripts/      postinstall.sh — patches native modules for New Arch
+  scripts/      build and maintenance scripts
 ```
 
 The `supabase/` directory is part of the existing backend. Do not modify its migrations or Edge Functions during app-only work.
