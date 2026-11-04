@@ -20,3 +20,4 @@
 - [Expo Router navigation hooks](expo-router-navigation-hooks.md) — In SDK 57, import navigation hooks from Expo Router to share its bundled navigation context.
 - [Expo Router SDK 58 web routes](expo-router-sdk58-web-routes.md) — Keep web route loading synchronous until the static preview can safely load async route chunks.
 - [React Native strict API migration](rn-strict-api-migration.md) — Keep SDK 58 on React Native's strict instance types; run the mobile typecheck after API changes.
+- [AfuChat production-branch workflow](afuchat-production-branch-workflow.md) — For urgent AfuChat fixes, work directly on the production branch instead of creating a feature branch.

@@ -20,19 +20,7 @@ import { setCurrentPage, resolvePageInfo } from "@/lib/pageTracker";
 import { StatusBar, setStatusBarHidden, setStatusBarStyle } from "expo-status-bar";
 import * as Font from "expo-font";
 import { useTheme } from "@/hooks/useTheme";
-import {
-  initUserIdCache,
-} from "@/lib/offlineStore";
 import { refreshAllPermissions } from "@/lib/permissionsManager";
-
-// ── Boot-time UID cache warm-up ──────────────────────────────────────────────
-// If MMKV fell back to an in-memory store (JNI init failure on some Android
-// devices), the cached user ID won't survive a process kill.  Reading the
-// AsyncStorage backup here — before AuthProvider mounts — pre-populates the
-// synchronous MMKV / in-memory mirror so getCachedUserId() can return the
-// correct value on the very first render.  This prevents the safety-timer in
-// index.tsx from routing a legitimately-logged-in user to the welcome screen.
-initUserIdCache().catch(() => {});
 
 import { handleIncomingUrl } from "@/lib/deepLinkHandler";
 import { verifyDeepLinks } from "@/lib/deepLinkVerifier";

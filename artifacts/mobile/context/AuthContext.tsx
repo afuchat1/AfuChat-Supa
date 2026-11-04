@@ -17,6 +17,7 @@ import {
   clearAccountCache,
   getCachedProfile,
   getCachedProfileSync,
+  initUserIdCache,
   isOnline,
   onConnectivityChange,
   setCachedUserId,
@@ -607,13 +608,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const bootstrapGeneration = ++authGenerationRef.current;
     const isCurrentBootstrap = () => authGenerationRef.current === bootstrapGeneration;
 
-    // ── FAST PATH: synchronous MMKV identity check ──────────────────────────
-    // MMKV is synchronous and survives all app restarts (online or offline).
-    // If the user has ever logged in on this device, their ID is in MMKV.
-    // We release the splash IMMEDIATELY with a synthetic user so index.tsx
-    // routes straight to chats — the user NEVER sees the welcome/onboarding
-    // screen even when the network is down or getSession() is slow.
-    // getSession() still runs below and silently upgrades to a real session.
+    // Restore the durable UID backup before reading the synchronous identity
+    // cache. Start this alongside Supabase session restoration so storage I/O
+    // does not delay a valid session.
+    const userIdCacheReady = initUserIdCache().catch(() => {});
+    let sessionResolved = false;
     let offlineSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let offlineSyncTask: { cancel?: () => void } | null = null;
     const scheduleOfflineSync = () => {
@@ -629,23 +628,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }, 5000);
     };
 
-    const fastCachedId = getCachedUserId();
-    if (fastCachedId) {
+    void userIdCacheReady.then(() => {
+      if (!isCurrentBootstrap() || sessionResolved) return;
+      const fastCachedId = getCachedUserId();
+      if (!fastCachedId) return;
+
       const fastProfile = getCachedProfileSync();
-      if (isCurrentBootstrap()) {
-        if (fastProfile) setProfile(fastProfile as Profile);
-        setUser({
-          id: fastCachedId,
-          email: (fastProfile as any)?.email ?? "",
-          app_metadata: {},
-          user_metadata: {},
-          aud: "authenticated",
-          created_at: "",
-        } as User);
-        setLoading(false); // ← index.tsx sees this synchronously, routes to chats
-      }
+      if (fastProfile) setProfile(fastProfile as Profile);
+      setUser({
+        id: fastCachedId,
+        email: (fastProfile as any)?.email ?? "",
+        app_metadata: {},
+        user_metadata: {},
+        aud: "authenticated",
+        created_at: "",
+      } as User);
+      setLoading(false);
       scheduleOfflineSync();
-    }
+    });
 
     // Safety-net: if getSession() ever hangs indefinitely on native (no reject,
     // just silence), release the splash after 3.5 s so the user is never locked out.
@@ -659,6 +659,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession()
       .then(async ({ data: { session } }) => {
         if (!isCurrentBootstrap()) return;
+        sessionResolved = true;
         if (session?.user) {
           setSession(session);
           setUser(session.user);
@@ -693,6 +694,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .catch(() => {});
           scheduleOfflineSync();
         } else {
+          // Do not decide that there is no offline identity until the durable
+          // backup has had a chance to warm the synchronous cache.
+          await userIdCacheReady;
+          if (!isCurrentBootstrap()) return;
+
           // No live session — try to stay "soft logged in" from local storage.
           //
           // HARDENED: SecureStore (tokens) is more durable than MMKV (userId cache).
@@ -819,6 +825,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Suppress all state mutations during a switch or link operation.
       // The switch function manages state directly; we don't want a race.
       if (isSwitchingRef.current || isLinkingRef.current) return;
+      if (newSession?.user) sessionResolved = true;
       const eventGeneration = authGenerationRef.current;
 
       // TOKEN_REFRESHED: patch tokens in-place, don't re-fetch the profile.

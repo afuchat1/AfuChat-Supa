@@ -345,9 +345,8 @@ let _uidMirror: string | null = null;
 
 /**
  * Pre-populate the synchronous user-ID cache from the AsyncStorage backup.
- * Call this once, as early as possible in the app startup (before AuthProvider
- * mounts), so getCachedUserId() can return the correct value synchronously even
- * when MMKV is using an in-memory fallback store.
+ * Call this before the auth bootstrap reads getCachedUserId(), so the
+ * synchronous cache includes the durable backup when MMKV uses memory storage.
  *
  * Safe to call multiple times — exits immediately if the cache is already warm.
  */
