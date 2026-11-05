@@ -1,5 +1,4 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { showToast } from "@/lib/toast";
 import {
@@ -85,19 +84,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const refreshAvailability = () => {
-      if (!disposed) setIsAvailable(getWebRTCAvailable());
-    };
-    // Android can finish registering the native module just after the first
-    // React effect. A transient false result must not disable calling for the
-    // entire session.
-    refreshAvailability();
-    const retryTimers = [250, 1000, 2500].map((delay) =>
-      setTimeout(refreshAvailability, delay),
-    );
-    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") setTimeout(refreshAvailability, 100);
-    });
+    // Report whether this build can support calls without touching the native
+    // WebRTC module. Loading it here can abort the whole Android process in
+    // release builds before the user reaches the call feature.
+    setIsAvailable(getWebRTCAvailable());
 
     const removeListener = addCallEngineListener((event) => {
       if (disposed) return;
@@ -117,8 +107,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const cleanupPromise = initCallEngine(user.id);
     return () => {
       disposed = true;
-      retryTimers.forEach(clearTimeout);
-      appStateSubscription.remove();
       removeListener();
       cleanupPromise.then((cleanup) => cleanup()).catch(() => {});
     };

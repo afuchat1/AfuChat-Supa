@@ -146,7 +146,15 @@ function detectRtc(): RtcBridge | null {
 }
 
 export function getWebRTCAvailable(): boolean {
-  return !!detectRtc();
+  // This is a build-capability check only. Looking up WebRTCModule here loads
+  // libjingle_peerconnection_so on Android, so do not do that from the root
+  // CallProvider during app startup. detectRtc() remains lazy until a call
+  // starts or is accepted.
+  if (Platform.OS === "web") {
+    const g = globalThis as any;
+    return Boolean(g.RTCPeerConnection && g.navigator?.mediaDevices?.getUserMedia);
+  }
+  return !isExpoGo();
 }
 
 function subscribe(channel: any): Promise<void> {

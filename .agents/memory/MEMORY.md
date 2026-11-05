@@ -12,7 +12,7 @@
 - [Find People recommendations](find-people-recommendations.md) — Prefer unseen people on refresh, rank shared interests and mutual connections, and keep the layout free of suggestion labels/icons.
 - [Floating navigation behavior](floating-navigation-behavior.md) — Use the shared floating nav where needed; AfuSearch omits its app-shell bottom bar.
 - [Android module compatibility](android-module-compatibility.md) — Support Android 14 and earlier; verify Expo autolinking before manually registering native ReactPackages.
-- [Android AfuMusic launch triage](android-afumusic-launch-triage.md) — The user reports physical Android startup crashes associated with AfuMusic player controls; verify media setup and SDK-aligned versions.
+- [Android startup crash triage](android-afumusic-launch-triage.md) — Diagnose device launch failures from native traces; check WebRTC JNI/R8 rules and avoid eager startup loading.
 - [Android build toolchain](android-build-toolchain.md) — Keep AGP, Gradle, and Kotlin aligned across Expo-generated build files and version catalogs.
 - [Android startup safety](android-startup-safety.md) — Keep offline identity non-authoritative, startup reporting privacy-safe, and Android list safeguards scoped to affected screens.
 - [TypeScript check heap](typescript-check-heap.md) — Run full mobile typechecks with a 4 GB Node heap; the default heap can run out before diagnostics.
