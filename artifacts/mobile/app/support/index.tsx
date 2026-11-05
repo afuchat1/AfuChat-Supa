@@ -320,7 +320,7 @@ export default function SupportCenter() {
               {CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[st.catCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  style={[st.catCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
                   onPress={() => { setCategory(cat.id); setTab("new"); }}
                   activeOpacity={0.72}
                 >
@@ -361,7 +361,7 @@ export default function SupportCenter() {
             {FAQ_ITEMS.map((item, i) => (
               <TouchableOpacity
                 key={i}
-                style={[st.faqCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                style={[st.faqCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
                 onPress={() => setExpandedFaq(expandedFaq === i ? null : i)}
                 activeOpacity={0.8}
               >
@@ -384,7 +384,7 @@ export default function SupportCenter() {
           </View>
 
           {/* Email contact */}
-          <View style={[st.emailCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[st.emailCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
             <View style={[st.emailIcon, { backgroundColor: BRAND + "14" }]}>
               <Ionicons name="mail" size={18} color={BRAND} />
             </View>
@@ -413,7 +413,7 @@ export default function SupportCenter() {
               <Animated.View
                 style={[
                   st.successCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  { backgroundColor: colors.cardSurface, borderColor: colors.border },
                   { transform: [{ scale: successAnim }] },
                 ]}
               >
@@ -738,7 +738,7 @@ export default function SupportCenter() {
                     style={[
                       st.ticketCard,
                       {
-                        backgroundColor: colors.surface,
+                        backgroundColor: colors.cardSurface,
                         borderColor: isOpen ? cfg.color + "40" : colors.border,
                         borderWidth: isOpen ? 1 : 0.5,
                       },

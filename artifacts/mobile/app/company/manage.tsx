@@ -561,7 +561,7 @@ export default function ManageCompanyPageScreen() {
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.verifyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              style={[styles.verifyCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
               onPress={openVerifyModal}
               activeOpacity={0.8}
             >

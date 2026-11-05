@@ -119,7 +119,7 @@ export default function CompanyIndexScreen() {
     const isOwned = item.admin_id === user?.id;
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[styles.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
         onPress={() => router.push(`/company/${item.slug}` as any)}
         activeOpacity={0.88}
       >

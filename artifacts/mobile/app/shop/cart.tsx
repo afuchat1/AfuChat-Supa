@@ -232,7 +232,7 @@ export default function CartScreen() {
               );
             })}
 
-            <View style={[styles.noteCard, { backgroundColor: colors.surface }]}>
+            <View style={[styles.noteCard, { backgroundColor: colors.cardSurface }]}>
               <Text style={[styles.noteLabel, { color: colors.text }]}>Delivery Note</Text>
               <TextInput
                 style={[styles.noteInput, { color: colors.text, borderColor: colors.border }]}

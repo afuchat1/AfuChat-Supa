@@ -190,7 +190,7 @@ export default function MomentsScreen() {
   const renderItem = useCallback(
     ({ item }: { item: StoryUser }) => (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.surface }]}
+        style={[styles.card, { backgroundColor: colors.cardSurface }]}
         onPress={() =>
           router.push({
             pathname: "/stories/view",

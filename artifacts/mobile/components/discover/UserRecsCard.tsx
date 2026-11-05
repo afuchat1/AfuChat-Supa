@@ -126,7 +126,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface }]}>
+      <View style={[styles.container, { backgroundColor: colors.cardSurface }]}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Skeleton width={16} height={16} borderRadius={8} />
@@ -135,7 +135,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.list}>
           {[0, 1, 2].map((i) => (
-            <View key={i} style={[styles.card, { backgroundColor: colors.surface }]}>
+            <View key={i} style={[styles.card, { backgroundColor: colors.cardSurface }]}>
               <Skeleton width={52} height={52} borderRadius={26} />
               <Skeleton width={82} height={13} borderRadius={6} style={{ marginTop: 6 }} />
               <Skeleton width={62} height={10} borderRadius={5} />
@@ -169,7 +169,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
         {users.map((u) => (
           <TouchableOpacity
             key={u.id}
-            style={[styles.card, { backgroundColor: colors.surface }]}
+            style={[styles.card, { backgroundColor: colors.cardSurface }]}
             onPress={() => navigateToProfile(u.handle, true).catch(() => {})}
             activeOpacity={0.88}
           >

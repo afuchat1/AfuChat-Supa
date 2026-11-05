@@ -169,7 +169,7 @@ export default function PhoneContactsScreen() {
                   {onAfuChat.map((item) => (
                     <View
                       key={`${item.id}:${item.phone_number}`}
-                      style={[styles.card, { backgroundColor: colors.surface }]}
+                      style={[styles.card, { backgroundColor: colors.cardSurface }]}
                     >
                       <TouchableOpacity
                         style={styles.contactMain}
@@ -238,7 +238,7 @@ export default function PhoneContactsScreen() {
                   {notOnAfuChat.map((item) => (
                     <View
                       key={item.key}
-                      style={[styles.card, { backgroundColor: colors.surface }]}
+                      style={[styles.card, { backgroundColor: colors.cardSurface }]}
                     >
                       <View style={[styles.avatarPlaceholder, { backgroundColor: colors.backgroundSecondary }]}>
                         <Ionicons name="person" size={22} color={colors.textMuted} />

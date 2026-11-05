@@ -37,7 +37,7 @@ export function GlassMenuSection({ title, children, style }: GlassMenuSectionPro
           }),
         ]}
       >
-        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           {children}
         </View>
       </View>

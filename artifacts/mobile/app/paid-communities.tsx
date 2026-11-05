@@ -154,7 +154,7 @@ export default function PaidCommunitiesScreen() {
   }
 
   const renderCommunityCard = ({ item }: { item: Community }) => (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
       <View style={styles.cardHeader}>
         <View style={styles.cardEmojiWrap}>
           <Text style={styles.cardEmoji}>{item.emoji}</Text>

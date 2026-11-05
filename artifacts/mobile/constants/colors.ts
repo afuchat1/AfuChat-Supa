@@ -37,6 +37,7 @@ const light = {
   backgroundTertiary:  "#DED7CA",
   surface:           "#FFFEFA",   // elevated surfaces
   card:              "#FFFFFF",
+  cardSurface:       "#F0EBE1",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
   border:            "transparent",
@@ -104,6 +105,7 @@ const dark = {
   backgroundTertiary:  "#292B30",
   surface:           "#25272C",
   card:              "#2C2F34",
+  cardSurface:       "#18191C",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
   border:            "transparent",

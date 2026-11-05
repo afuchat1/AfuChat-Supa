@@ -266,7 +266,7 @@ export default function ShopManage() {
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await load(); } finally { setRefreshing(false); } }} tintColor={colors.accent} />}>
         {!shop ? (
-          <View style={[styles.setupCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.setupCard, { backgroundColor: colors.cardSurface }]}>
             <Text style={{ fontSize: 48 }}>🏪</Text>
             <Text style={[styles.setupTitle, { color: colors.text }]}>Set Up Your Shop</Text>
             <Text style={[styles.setupSub, { color: colors.textMuted }]}>Create your AfuChat shop to sell products and earn ACoin from your followers.</Text>
@@ -454,7 +454,7 @@ export default function ShopManage() {
           const status = ORDER_STATUS_LABELS[order.status] || ORDER_STATUS_LABELS.pending;
           const buyer = (order as any).buyer_profile;
           return (
-            <View style={[styles.orderCard, { backgroundColor: colors.surface, borderLeftColor: status.color }]}>
+            <View style={[styles.orderCard, { backgroundColor: colors.cardSurface, borderLeftColor: status.color }]}>
               <View style={styles.orderHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.orderId, { color: colors.textMuted }]}>#{order.id.slice(-8).toUpperCase()}</Text>

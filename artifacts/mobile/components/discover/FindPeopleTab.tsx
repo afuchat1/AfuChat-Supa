@@ -614,7 +614,7 @@ export default function FindPeopleTab() {
           {[0, 1].map((row) => (
             <View key={row} style={styles.gridRow}>
               {[0, 1].map((column) => (
-                <View key={column} style={[styles.card, { width: cardWidth, backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View key={column} style={[styles.card, { width: cardWidth, backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                   <Skeleton width="100%" height={bannerHeight} borderRadius={0} />
                   <View style={styles.skeletonBody}>
                     <Skeleton width={66} height={66} borderRadius={33} />
@@ -665,7 +665,7 @@ export default function FindPeopleTab() {
                 return (
                   <View
                     key={person.id}
-                    style={[styles.card, { width: cardWidth, backgroundColor: colors.surface, borderColor: colors.border }]}
+                    style={[styles.card, { width: cardWidth, backgroundColor: colors.cardSurface, borderColor: colors.border }]}
                   >
                     <View style={[styles.banner, { height: bannerHeight, backgroundColor: colors.inputBg }]}>
                       {person.banner_url ? (

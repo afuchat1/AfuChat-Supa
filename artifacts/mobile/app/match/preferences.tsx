@@ -111,7 +111,7 @@ export default function MatchPreferencesScreen() {
 
           {/* Age range */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>AGE RANGE</Text>
-          <View style={[styles.ageCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.ageCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.ageHeader}>
               <Text style={[styles.ageLabel, { color: colors.text }]}>Minimum Age</Text>
               <Text style={[styles.ageValue, { color: "#FF2D55" }]}>{prefs.min_age}</Text>

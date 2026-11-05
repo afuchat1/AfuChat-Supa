@@ -376,7 +376,7 @@ export default function PrestigeScreen() {
         {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
         {activeTab === "overview" && (
           <View style={s.section}>
-            <View style={[s.valueCard, { backgroundColor: colors.surface, borderColor: tier.color + "45" }]}>
+            <View style={[s.valueCard, { backgroundColor: colors.cardSurface, borderColor: tier.color + "45" }]}>
               <View style={[s.valueIcon, { backgroundColor: tier.color + "18" }]}>
                 <Ionicons name="star-outline" size={20} color={tier.color} />
               </View>
@@ -390,7 +390,7 @@ export default function PrestigeScreen() {
 
             {/* Your tier perks */}
             <SectionHeader title={`${tier.emoji} ${tier.label.toUpperCase()} PERKS`} subtitle="Active benefits you have right now" colors={colors} />
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               {tier.perks.map((perk, i) => (
                 <View key={i}>
                   {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -409,7 +409,7 @@ export default function PrestigeScreen() {
             {nextTier && (
               <>
                 <SectionHeader title={`${nextTier.emoji} ${nextTier.label.toUpperCase()} UNLOCKS`} subtitle={`${(nextTier.minAcoin - acoin).toLocaleString()} AC away`} colors={colors} />
-                <View style={[s.card, { backgroundColor: colors.surface, borderColor: nextTier.color + "40" }]}>
+                <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: nextTier.color + "40" }]}>
                   {nextTier.perks.map((perk, i) => (
                     <View key={i}>
                       {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -432,7 +432,7 @@ export default function PrestigeScreen() {
               const isActive   = t.id === tier.id;
               const isUnlocked = acoin >= t.minAcoin;
               return (
-                <View key={t.id} style={[s.tierRow, { backgroundColor: colors.surface, borderColor: isActive ? t.color + "55" : colors.border, opacity: isUnlocked ? 1 : 0.55 }]}>
+                <View key={t.id} style={[s.tierRow, { backgroundColor: colors.cardSurface, borderColor: isActive ? t.color + "55" : colors.border, opacity: isUnlocked ? 1 : 0.55 }]}>
                   <View style={[s.tierRowLeft, { backgroundColor: t.color + "18" }]}>
                     <Text style={s.tierRowEmoji}>{t.emoji}</Text>
                   </View>
@@ -455,7 +455,7 @@ export default function PrestigeScreen() {
 
             {/* How to earn */}
             <SectionHeader title="EARN MORE ACOIN" subtitle="Climb the tiers faster" colors={colors} />
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               {[
                 { emoji: "💳", label: "Top-Up ACoin",         sub: "Buy AC directly from your wallet",            action: "/app/afupay?section=topup" },
                 { emoji: "🔄", label: "Convert Nexa → ACoin", sub: "Turn your XP into spendable ACoins",          action: "/app/afupay?section=exchange" },
@@ -534,7 +534,7 @@ export default function PrestigeScreen() {
                         <View
                           key={item.id}
                           style={[s.shopCard, {
-                            backgroundColor: colors.surface,
+                            backgroundColor: colors.cardSurface,
                             borderColor: owned ? itemTier.color + "66" : tierUnlocked ? colors.border : colors.border,
                             opacity: tierUnlocked ? 1 : 0.5,
                           }]}
@@ -646,7 +646,7 @@ export default function PrestigeScreen() {
               </View>
             ) : (
               <>
-                <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                   {richList.slice(3).map((u, idx) => {
                     const uTier = getPrestigeTier(u.acoin || 0);
                     const isMe  = u.id === user?.id;
@@ -682,7 +682,7 @@ export default function PrestigeScreen() {
                 {nearYou.length > 0 && (
                   <>
                     <SectionHeader title="NEAR YOUR RANK" subtitle={`Users close to your position #${myRank}`} colors={colors} />
-                    <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                       {nearYou.map((u, idx) => {
                         const uTier = getPrestigeTier(u.acoin || 0);
                         const uRank = richList.findIndex((r) => r.id === u.id) + 1;
@@ -733,7 +733,7 @@ export default function PrestigeScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 {transactions.map((tx, i) => (
                   <View key={tx.id}>
                     {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}

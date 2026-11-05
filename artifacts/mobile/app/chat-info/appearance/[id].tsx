@@ -280,7 +280,7 @@ export default function ChatAppearanceScreen() {
         )}
 
         {/* ── Live Preview ── */}
-        <View style={[s.previewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[s.previewCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <LivePreview
             fontSize={effectiveFontSize}
             wallpaper={appearance.wallpaper}
@@ -292,7 +292,7 @@ export default function ChatAppearanceScreen() {
 
         {/* ── Text Size ── */}
         <SectionTitle label="TEXT SIZE" colors={colors} />
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 16 }]}>
+        <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border, padding: 16 }]}>
           <View style={s.fontRow}>
             {FONT_SIZES.map((f) => {
               const active = (appearance.fontSize ?? 15) === f.value;
@@ -317,7 +317,7 @@ export default function ChatAppearanceScreen() {
 
         {/* ── Wallpaper Pattern ── */}
         <SectionTitle label="WALLPAPER PATTERN" colors={colors} />
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <View style={s.wallpaperRow}>
             {WALLPAPERS.map((w) => {
               const active = (appearance.wallpaper ?? undefined) === w.value;
@@ -349,7 +349,7 @@ export default function ChatAppearanceScreen() {
         {hasCustom && (
           <>
             <SectionTitle label="" colors={colors} />
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               <TouchableOpacity
                 style={s.resetRow}
                 onPress={resetAll}

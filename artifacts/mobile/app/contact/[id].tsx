@@ -697,7 +697,7 @@ export default function ContactScreen() {
                   return (
                     <TouchableOpacity
                       key={eu.id}
-                      style={[s.expandCard, { backgroundColor: colors.surface, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
+                      style={[s.expandCard, { backgroundColor: colors.cardSurface, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
                       activeOpacity={0.75}
                       onPress={() => {
                         setExpandedStat(null);

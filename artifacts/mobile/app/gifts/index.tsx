@@ -338,7 +338,7 @@ export default function GiftsScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.giftCard, { backgroundColor: colors.surface, width: cardW }]}
+        style={[styles.giftCard, { backgroundColor: colors.cardSurface, width: cardW }]}
         onPress={() => setSelectedGift(item)}
         onLongPress={isOwnProfile ? () => togglePin(item) : undefined}
         activeOpacity={0.7}

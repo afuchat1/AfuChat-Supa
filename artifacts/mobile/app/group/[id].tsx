@@ -693,7 +693,7 @@ export default function GroupManageScreen() {
             </View>
           )}
 
-          <View style={[s.membersCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[s.membersCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
             {filteredMembers.length === 0 ? (
               <View style={{ padding: 24, alignItems: "center" }}>
                 <Text style={{ color: colors.textMuted, fontSize: 14, fontFamily: "Inter_400Regular" }}>

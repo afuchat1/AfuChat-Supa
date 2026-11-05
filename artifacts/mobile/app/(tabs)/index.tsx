@@ -2131,7 +2131,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           onPress={() => setSelectionMenuVisible(false)}
         >
           <Pressable
-            style={[selStyles.menuCard, { backgroundColor: colors.surface }]}
+            style={[selStyles.menuCard, { backgroundColor: colors.cardSurface }]}
             onPress={(event) => event.stopPropagation()}
           >
             <View style={selStyles.menuHandle} />

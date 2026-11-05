@@ -39,7 +39,7 @@ function Section({
   return (
     <View style={sec.section}>
       <Text style={[sec.sectionLabel, { color: colors.textMuted }]}>{t(title)}</Text>
-      <View style={[sec.card, { backgroundColor: colors.card }]}>{children}</View>
+      <View style={[sec.card, { backgroundColor: colors.cardSurface }]}>{children}</View>
     </View>
   );
 }

@@ -431,7 +431,7 @@ export default function QRScannerScreen() {
   if (!permission?.granted) {
     return (
       <View style={[s.root, s.centered, { backgroundColor: colors.background, paddingHorizontal: 40 }]}>
-        <View style={[s.permCard, { backgroundColor: colors.surface }]}>
+        <View style={[s.permCard, { backgroundColor: colors.cardSurface }]}>
           <Ionicons name="camera" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
           <Text style={[s.permTitle, { color: colors.text }]}>Camera Required</Text>
           <Text style={[s.permSub, { color: colors.textMuted }]}>AfuChat needs camera access to scan QR codes</Text>

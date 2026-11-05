@@ -154,7 +154,7 @@ function InfoRow({
 }
 
 function InfoCard({ children, colors }: { children: React.ReactNode; colors: any }) {
-  return <View style={[s.infoCard, { backgroundColor: colors.surface }]}>{children}</View>;
+  return <View style={[s.infoCard, { backgroundColor: colors.cardSurface }]}>{children}</View>;
 }
 
 function MemberRow({ member, accent, colors, isMe }: { member: Member; accent: string; colors: any; isMe: boolean }) {

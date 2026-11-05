@@ -446,7 +446,7 @@ export default function DeviceSecurityScreen() {
             }
             renderItem={({ item }) => (
               <View style={[styles.deviceCard, {
-                backgroundColor: colors.surface,
+                backgroundColor: colors.cardSurface,
                 borderColor: item.is_current ? colors.accent + "55" : colors.border,
               }]}>
                 <View style={[styles.platformIconWrap, {
@@ -501,7 +501,7 @@ export default function DeviceSecurityScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
           <Text style={[styles.secGroup, { color: colors.textMuted }]}>APP LOCK</Text>
 
-          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.prefCard, { backgroundColor: colors.cardSurface }]}>
             <PrefRow
               icon="finger-print"
               iconColor="#5856D6"
@@ -540,7 +540,7 @@ export default function DeviceSecurityScreen() {
           </View>
 
           <Text style={[styles.secGroup, { color: colors.textMuted }]}>ACCOUNT SECURITY</Text>
-          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.prefCard, { backgroundColor: colors.cardSurface }]}>
             <TouchableOpacity
               style={styles.actionRow}
               onPress={() => router.push("/settings/security" as any)}

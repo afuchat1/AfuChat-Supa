@@ -547,7 +547,7 @@ export default function MatchOnboarding() {
               <Text style={[styles.stepTitle, { color: colors.text }]}>Where are you?</Text>
               <Text style={[styles.stepSub, { color: colors.textMuted }]}>Your location helps find people near you. Only your city or country is ever shown. Your exact location is never shared.</Text>
 
-              <View style={[styles.locationCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.locationCard, { backgroundColor: colors.cardSurface }]}>
                 <Ionicons name="shield-checkmark" size={20} color="#34C759" />
                 <Text style={[styles.locationPrivacy, { color: colors.textSecondary }]}>
                   AfuMatch never shares your precise location. Only your city name is shown to potential matches.
@@ -602,7 +602,7 @@ export default function MatchOnboarding() {
                 />
               </View>
 
-              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: BRAND }]}>
+          <View style={[styles.summaryCard, { backgroundColor: colors.cardSurface, borderColor: BRAND }]}>
                 <Text style={[styles.summaryTitle, { color: colors.text }]}>Your AfuMatch Profile</Text>
                 <View style={styles.summaryRows}>
                   <SummaryRow icon="person" label={name || "N/A"} />

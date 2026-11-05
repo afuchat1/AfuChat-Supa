@@ -158,7 +158,7 @@ export default function AfuQRApp() {
 
         {result && typeInfo && (
           <View
-            style={[s.resultCard, { bottom: insets.bottom + 16, backgroundColor: colors.surface }]}
+            style={[s.resultCard, { bottom: insets.bottom + 16, backgroundColor: colors.cardSurface }]}
           >
             <View style={s.resultTop}>
               <View style={[s.resultIconWrap, { backgroundColor: Colors.brand + "18" }]}>

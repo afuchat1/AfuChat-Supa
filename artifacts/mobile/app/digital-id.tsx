@@ -380,7 +380,7 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
   const AV = Math.round(cw * 0.30);
 
   return (
-    <View style={[s.card, { width: cw, height: ch, backgroundColor: colors.surface }]}>
+    <View style={[s.card, { width: cw, height: ch, backgroundColor: colors.cardSurface }]}>
       <SecurityPattern w={cw} h={ch} color={theme.primary} />
 
       {/* TOP STRIP */}
@@ -451,7 +451,7 @@ function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber,
   const QR_SIZE = Math.round(ch * 0.46);
 
   return (
-    <View style={[s.card, { width: cw, height: ch, backgroundColor: colors.surface }]}>
+    <View style={[s.card, { width: cw, height: ch, backgroundColor: colors.cardSurface }]}>
       <SecurityPattern w={cw} h={ch} color={theme.secondary || theme.primary} />
 
       {/* TOP STRIP */}

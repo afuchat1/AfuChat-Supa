@@ -108,7 +108,7 @@ const sl = StyleSheet.create({
 
 function MenuCard({ children, colors }: { children: React.ReactNode; colors: any }) {
   return (
-    <View style={[mc.card, { backgroundColor: colors.surface }]}>
+    <View style={[mc.card, { backgroundColor: colors.cardSurface }]}>
       {children}
     </View>
   );
@@ -406,7 +406,7 @@ export default function MeScreen() {
       >
 
         {/* ── Hero Card ───────────────────────────────────────────────────── */}
-        <View style={[s.heroCard, { backgroundColor: colors.surface }]}>
+      <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
 
           {/* Avatar + info row */}
           <View style={s.heroTop}>

@@ -106,7 +106,7 @@ export default function TransferScreen() {
         </View>
 
         {fee && (
-          <View style={[styles.feeCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.feeCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.feeRow}>
               <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>Transfer Amount</Text>
               <Text style={[styles.feeValue, { color: colors.text }]}>{fee.subtotal} ACoins</Text>
@@ -141,7 +141,7 @@ export default function TransferScreen() {
           <Text style={styles.sendBtnText}>{loading ? "Sending..." : "Send Money"}</Text>
         </TouchableOpacity>
 
-        <View style={[styles.noteCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.noteCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <Ionicons name="shield-checkmark" size={18} color={colors.warning} />
           <Text style={[styles.noteText, { color: colors.textSecondary }]}>
             All transfers are secured and recorded. A {fee?.feePercent || 1.5}% fee is charged per transaction.

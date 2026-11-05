@@ -77,7 +77,7 @@ export default function AfuSavedApp() {
     if (!post) return null;
     const author = post.author;
     return (
-      <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
         <View style={s.cardHeader}>
           {author?.avatar_url ? (
             <Image source={{ uri: author.avatar_url }} style={s.avatar} />

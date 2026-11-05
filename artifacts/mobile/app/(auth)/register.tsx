@@ -115,8 +115,8 @@ function GlassModal({ visible, onClose, children }: { visible: boolean; onClose:
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View style={[gm.overlay, { opacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View style={[gm.card, { transform: [{ scale }], backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface }]} />
+        <Animated.View style={[gm.card, { transform: [{ scale }], backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.cardSurface }]} />
           <View style={[gm.topBorder, { backgroundColor: colors.border }]} />
           {children}
         </Animated.View>

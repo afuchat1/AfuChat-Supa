@@ -92,7 +92,7 @@ export default function InAppNotificationCard({
       style={[
         styles.card,
         {
-          backgroundColor: colors.surface,
+          backgroundColor: colors.cardSurface,
           borderColor: notification.read_at ? colors.border : accent,
         },
       ]}

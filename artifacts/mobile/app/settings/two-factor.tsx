@@ -390,7 +390,7 @@ export default function TwoFactorScreen() {
 
           {/* ── Security score (when enabled) ── */}
           {enrolled && (
-            <View style={[s.scoreCard, { backgroundColor: colors.surface, borderColor: "rgba(48,209,88,0.2)" }]}>
+            <View style={[s.scoreCard, { backgroundColor: colors.cardSurface, borderColor: "rgba(48,209,88,0.2)" }]}>
               <View style={s.scoreLeft}>
                 <Text style={[s.scoreLabel, { color: colors.textMuted }]}>ACCOUNT SECURITY</Text>
                 <Text style={[s.scoreValue, { color: "#30D158" }]}>Strong</Text>
@@ -411,7 +411,7 @@ export default function TwoFactorScreen() {
           {!enrolled && (
             <>
               <Text style={[s.sectionLabel, { color: colors.textMuted }]}>GET STARTED</Text>
-              <View style={[s.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[s.actionCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 <TouchableOpacity style={s.actionRow} onPress={startEnroll} activeOpacity={0.75}>
                   <LinearGradient
                     colors={["#5856D6", "#3634A3"]}
@@ -430,7 +430,7 @@ export default function TwoFactorScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={[s.compatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[s.compatCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 <Text style={[s.compatTitle, { color: colors.textMuted }]}>COMPATIBLE APPS</Text>
                 {[
                   { name: "Google Authenticator", icon: "logo-google",    note: "iOS & Android" },
@@ -460,7 +460,7 @@ export default function TwoFactorScreen() {
           {enrolled && (
             <>
               <Text style={[s.sectionLabel, { color: colors.textMuted }]}>MANAGE</Text>
-              <View style={[s.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[s.actionCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 <TouchableOpacity style={s.actionRow} onPress={() => setShowDisableGate(true)} activeOpacity={0.75}>
                   <View style={[s.actionIcon, { backgroundColor: "#FF3B30" }]}>
                     <Ionicons name="shield" size={18} color="#fff" />
@@ -476,7 +476,7 @@ export default function TwoFactorScreen() {
               </View>
 
               <Text style={[s.sectionLabel, { color: colors.textMuted }]}>RECOVERY OPTIONS</Text>
-              <View style={[s.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[s.actionCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 <TouchableOpacity
                   style={s.actionRow}
                   onPress={() => { setRecoveryEmail(user?.email ?? ""); setRecoveryError(""); setStep({ id: "recovery-email" }); }}
@@ -573,7 +573,7 @@ export default function TwoFactorScreen() {
             </View>
 
             {/* Step 1 — QR card */}
-            <View style={[s.enrollCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.enrollCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               <View style={s.enrollCardHeader}>
                 <View style={s.enrollStepBadge}><Text style={s.enrollStepNum}>1</Text></View>
                 <View>
@@ -618,7 +618,7 @@ export default function TwoFactorScreen() {
             </View>
 
             {/* Step 2 — Confirm checkbox */}
-            <View style={[s.enrollCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.enrollCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               <View style={s.enrollCardHeader}>
                 <View style={[s.enrollStepBadge, scannedAck && { backgroundColor: "#5856D6" }]}>
                   {scannedAck
@@ -657,7 +657,7 @@ export default function TwoFactorScreen() {
 
             {/* Step 3 — Code entry (reveals after checkbox) */}
             {scannedAck && (
-              <View style={[s.enrollCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[s.enrollCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 <View style={s.enrollCardHeader}>
                   <View style={[s.enrollStepBadge, verifyCode.length === 6 && { backgroundColor: "#5856D6" }]}>
                     {verifyCode.length === 6

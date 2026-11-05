@@ -14,7 +14,7 @@ export function IncomingCallModal() {
   return (
     <Modal visible transparent animationType="fade" onRequestClose={declineCall}>
       <View style={styles.backdrop}>
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
           <Text style={[styles.label, { color: colors.textMuted }]}>Incoming voice call</Text>
           <Avatar
             uri={incomingNotice.callerAvatar}

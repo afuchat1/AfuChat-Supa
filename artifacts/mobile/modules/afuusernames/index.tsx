@@ -129,7 +129,7 @@ function ListingCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.surface, opacity: pressed ? 0.78 : 1 },
+        { backgroundColor: colors.cardSurface, opacity: pressed ? 0.78 : 1 },
       ]}
     >
       <View style={[styles.handleMark, { backgroundColor: auction ? Colors.gold + "20" : colors.accent + "16" }]}>
@@ -172,7 +172,7 @@ function ListingCard({
 function FeaturedCard({ item, colors, onPress }: { item: FeaturedPlacement; colors: any; onPress: () => void }) {
   const listing = item.listing;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.featuredCard, { backgroundColor: colors.surface, opacity: pressed ? 0.82 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.featuredCard, { backgroundColor: colors.cardSurface, opacity: pressed ? 0.82 : 1 }]}>
       <View style={styles.featuredTop}><View style={[styles.featuredBadge, { backgroundColor: Colors.gold + "22" }]}><Ionicons name="star-outline" size={12} color={Colors.gold} /><Text style={[styles.featuredBadgeText, { color: Colors.gold }]}>FEATURED</Text></View><Text style={[styles.featuredTime, { color: colors.textMuted }]}>{timeLeft(item.ends_at)}</Text></View>
       <View style={styles.featuredHandleRow}>
         <Text style={[styles.featuredHandle, { color: colors.text }]} numberOfLines={1}>@{listing.username}</Text>
@@ -248,7 +248,7 @@ function BidSheet({ item, visible, onClose, onDone, colors }: { item: Listing | 
 
 function OwnedCard({ item, colors }: { item: OwnedUsername; colors: any }) {
   return (
-    <View style={[styles.ownedCard, { backgroundColor: colors.surface }]}>
+    <View style={[styles.ownedCard, { backgroundColor: colors.cardSurface }]}>
       <View style={[styles.ownedMark, { backgroundColor: colors.accent + "16" }]}>
         <Text style={[styles.ownedAt, { color: colors.accent }]}>@</Text>
       </View>

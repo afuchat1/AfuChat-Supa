@@ -266,7 +266,7 @@ export default function MatchProfileEditScreen() {
 
           {/* Photos */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>PHOTOS</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.photoGrid}>
               {Array.from({ length: 6 }).map((_, i) => {
                 const photo = photos[i];
@@ -296,7 +296,7 @@ export default function MatchProfileEditScreen() {
 
           {/* About */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ABOUT YOU</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>NAME</Text>
               <TextInput
@@ -341,7 +341,7 @@ export default function MatchProfileEditScreen() {
 
           {/* Interests */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>INTERESTS ({interests.length}/8)</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.interestGrid}>
               {INTERESTS_LIST.map((tag) => {
                 const on = interests.includes(tag);
@@ -364,7 +364,7 @@ export default function MatchProfileEditScreen() {
 
           {/* Career */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>CAREER & EDUCATION</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, zIndex: 20 }]}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface, zIndex: 20 }]}>
             {[
               { l: "JOB TITLE", v: jobTitle, s: setJobTitle, ph: "e.g. Designer" },
               { l: "COMPANY", v: company, s: setCompany, ph: "e.g. Apple" },
@@ -395,7 +395,7 @@ export default function MatchProfileEditScreen() {
           {receivedGifts.length > 0 && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>GIFTS RECEIVED ({receivedGifts.length})</Text>
-              <View style={[styles.sectionCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface }]}>
                 <View style={styles.giftGrid}>
                   {receivedGifts.slice(0, 18).map((g) => {
                     const isHidden = hiddenGiftIds.has(g.id);
@@ -435,7 +435,7 @@ export default function MatchProfileEditScreen() {
 
           {/* Location */}
           <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>LOCATION</Text>
-          <View style={[styles.sectionCard, { backgroundColor: colors.surface, zIndex: 10 }]}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface, zIndex: 10 }]}>
             {/* Country — auto-detected, locked */}
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>COUNTRY</Text>

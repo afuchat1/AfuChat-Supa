@@ -1810,7 +1810,7 @@ export function SearchScreen({
     return (
       <View >
         <TouchableOpacity
-          style={[ss.contentCard, { backgroundColor: colors.surface }]}
+          style={[ss.contentCard, { backgroundColor: colors.cardSurface }]}
           activeOpacity={0.82}
           onPress={() => {
             trackSearchClick();
@@ -2181,7 +2181,7 @@ export function SearchScreen({
     return (
       <View >
         <TouchableOpacity
-          style={[ss.contentCard, { backgroundColor: colors.surface }]}
+          style={[ss.contentCard, { backgroundColor: colors.cardSurface }]}
           onPress={() => {
             trackSearchClick();
             Haptics.selectionAsync();

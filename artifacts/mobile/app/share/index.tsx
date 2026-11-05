@@ -52,7 +52,7 @@ function ContactRow({
   const { colors, accent } = useTheme();
   return (
     <TouchableOpacity
-      style={[styles.contactRow, { backgroundColor: colors.card }]}
+      style={[styles.contactRow, { backgroundColor: colors.cardSurface }]}
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.72}
@@ -450,7 +450,7 @@ export default function ShareToAfuChatScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.previewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.previewCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <View style={[styles.previewBadge, { backgroundColor: accent + "20" }]}>
             <Ionicons name={shareIntent.type === "weburl" ? "link" : firstImage ? "image" : "share-social"} size={18} color={accent} />
           </View>
@@ -472,7 +472,7 @@ export default function ShareToAfuChatScreen() {
         </View>
 
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>CHOOSE WHERE TO SHARE</Text>
-        <TouchableOpacity style={[styles.destinationCard, { backgroundColor: colors.card }]} onPress={shareToFeed} activeOpacity={0.78}>
+        <TouchableOpacity style={[styles.destinationCard, { backgroundColor: colors.cardSurface }]} onPress={shareToFeed} activeOpacity={0.78}>
           <View style={[styles.destinationIcon, { backgroundColor: "#007AFF20" }]}>
             <Ionicons name="globe-outline" size={24} color="#007AFF" />
           </View>
@@ -487,7 +487,7 @@ export default function ShareToAfuChatScreen() {
         {loadingRecentChats && recentChats.length === 0 ? (
           <ActivityIndicator color={accent} style={{ marginVertical: 18 }} />
         ) : recentChats.length === 0 ? (
-          <View style={[styles.emptyRecent, { backgroundColor: colors.card }]}>
+          <View style={[styles.emptyRecent, { backgroundColor: colors.cardSurface }]}>
             <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textMuted} />
             <Text style={[styles.emptyRecentText, { color: colors.textMuted }]}>Your recent chats will appear here</Text>
           </View>
@@ -505,7 +505,7 @@ export default function ShareToAfuChatScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.destinationCard, { backgroundColor: colors.card }, showContacts && { borderColor: accent, borderWidth: 1 }]}
+          style={[styles.destinationCard, { backgroundColor: colors.cardSurface }, showContacts && { borderColor: accent, borderWidth: 1 }]}
           onPress={() => setShowContacts((value) => !value)}
           activeOpacity={0.78}
         >
@@ -524,7 +524,7 @@ export default function ShareToAfuChatScreen() {
             {loadingContacts ? (
               <ActivityIndicator color={accent} style={{ marginVertical: 28 }} />
             ) : contacts.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: colors.card }]}>
+              <View style={[styles.emptyCard, { backgroundColor: colors.cardSurface }]}>
                 <Ionicons name="people-outline" size={30} color={colors.textMuted} />
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>No contacts yet</Text>
                 <Text style={[styles.emptySub, { color: colors.textMuted }]}>Follow people on AfuChat to send shared content to them.</Text>

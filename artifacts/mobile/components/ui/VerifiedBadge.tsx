@@ -123,7 +123,7 @@ export default function VerifiedBadge({
         <Pressable style={s.backdrop} onPress={() => setVisible(false)} />
 
         <View style={s.sheet}>
-          <View style={[s.card, { backgroundColor: colors.surface }]}>
+          <View style={[s.card, { backgroundColor: colors.cardSurface }]}>
             <View style={[s.handle, { backgroundColor: colors.border }]} />
 
             <View style={s.header}>

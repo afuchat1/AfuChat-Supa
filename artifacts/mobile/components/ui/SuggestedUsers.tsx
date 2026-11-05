@@ -176,7 +176,7 @@ function UserCard({
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.surface }]}
+      style={[styles.card, { backgroundColor: colors.cardSurface }]}
       onPress={() => router.push({ pathname: "/[handle]", params: { handle: user.handle } })}
       activeOpacity={0.85}
     >
@@ -543,7 +543,7 @@ export function SuggestedUsers({
         <SectionHeader compact={compact} colors={colors} accent={accent} loading />
         <View style={styles.skeletonRow}>
           {[1, 2, 3].map(i => (
-            <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface }]} />
+            <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.cardSurface }]} />
           ))}
         </View>
       </View>

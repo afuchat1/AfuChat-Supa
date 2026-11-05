@@ -39,7 +39,7 @@ function Section({
         {title && (
           <Text style={[s.sectionLabel, { color: colors.textMuted }]}>{t(title)}</Text>
         )}
-      <View style={[s.card, { backgroundColor: colors.card }]}>
+      <View style={[s.card, { backgroundColor: colors.cardSurface }]}>
         {children}
       </View>
     </View>
@@ -129,7 +129,7 @@ export default function SettingsScreen() {
 
         {/* ── Profile card ──────────────────────────────────────────────── */}
         <TouchableOpacity
-          style={[s.profileCard, { backgroundColor: colors.card }]}
+          style={[s.profileCard, { backgroundColor: colors.cardSurface }]}
           onPress={() => router.push("/profile/edit")}
           activeOpacity={0.8}
         >

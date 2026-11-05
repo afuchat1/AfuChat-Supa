@@ -26,7 +26,7 @@ function Section({
   return (
     <View style={s.section}>
       {title && <Text style={[s.sectionLabel, { color: colors.textMuted }]}>{title}</Text>}
-      <View style={[s.card, { backgroundColor: colors.card }]}>{children}</View>
+      <View style={[s.card, { backgroundColor: colors.cardSurface }]}>{children}</View>
     </View>
   );
 }
@@ -109,7 +109,7 @@ export default function ManageAccountScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Banner */}
-        <View style={[s.banner, { backgroundColor: colors.card }]}>
+        <View style={[s.banner, { backgroundColor: colors.cardSurface }]}>
           <View style={[s.bannerIcon, { backgroundColor: "#0A84FF18" }]}>
             <Ionicons name="person-circle" size={24} color="#0A84FF" />
           </View>

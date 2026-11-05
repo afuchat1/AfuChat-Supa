@@ -377,7 +377,7 @@ export default function CreateDuetScreen() {
           </View>
 
           {/* Info card */}
-          <View style={[s.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[s.infoCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
             <Ionicons name="information-circle" size={18} color={colors.textMuted} />
             <Text style={[s.infoText, { color: colors.textMuted }]}>
               Your duet will appear side-by-side with the original video in the feed. It will be public on your profile.

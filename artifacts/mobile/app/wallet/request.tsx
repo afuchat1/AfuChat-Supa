@@ -136,7 +136,7 @@ export default function MoneyRequestScreen() {
           </View>
 
           {/* Target card */}
-          <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
             <Avatar uri={target.avatar_url} name={target.display_name} size={54} />
             <View style={{ flex: 1 }}>
               <Text style={[s.name, { color: colors.text }]}>{target.display_name}</Text>

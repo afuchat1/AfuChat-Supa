@@ -79,7 +79,7 @@ export function ContactRowSkeleton() {
 export function PostSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.postCard, { backgroundColor: colors.surface }]}>
+    <View style={[sk.postCard, { backgroundColor: colors.cardSurface }]}>
       <View style={sk.postHeader}>
         <Skeleton width={40} height={40} borderRadius={20} />
         <View style={{ marginLeft: 10, flex: 1, gap: 6 }}>
@@ -248,7 +248,7 @@ export function ContactProfileSkeleton() {
 export function GiftCardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.giftCard, { backgroundColor: colors.surface }]}>
+    <View style={[sk.giftCard, { backgroundColor: colors.cardSurface }]}>
       <Skeleton width={40} height={40} borderRadius={8} />
       <Skeleton width={60} height={12} style={{ marginTop: 6 }} />
       <Skeleton width={50} height={10} style={{ marginTop: 4 }} />
@@ -334,7 +334,7 @@ export function ListRowSkeleton() {
 export function GameCardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.gameCard, { backgroundColor: colors.surface }]}>
+    <View style={[sk.gameCard, { backgroundColor: colors.cardSurface }]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Skeleton width={60} height={20} borderRadius={8} />
         <Skeleton width={100} height={14} />
@@ -382,7 +382,7 @@ export function AdminSkeleton() {
 export function MarketplaceCardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.marketCard, { backgroundColor: colors.surface }]}>
+    <View style={[sk.marketCard, { backgroundColor: colors.cardSurface }]}>
       <Skeleton width="100%" height={100} borderRadius={10} />
       <View style={{ padding: 8, gap: 6 }}>
         <Skeleton width={80} height={14} />

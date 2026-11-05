@@ -535,7 +535,7 @@ function ProductCard({
 
   return (
     <TouchableOpacity
-      style={[s.card, { width: cardW, backgroundColor: colors.surface }]}
+      style={[s.card, { width: cardW, backgroundColor: colors.cardSurface }]}
       onPress={onPress}
       activeOpacity={0.88}
     >
@@ -672,7 +672,7 @@ function ProductDetail({
 
           {/* Shop */}
           {product.shops && (
-            <View style={[s.shopCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.shopCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               <Avatar
                 uri={product.shops.logo_url || product.shops.profiles?.avatar_url}
                 name={product.shops.name}

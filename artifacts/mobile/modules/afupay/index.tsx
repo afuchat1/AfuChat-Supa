@@ -397,7 +397,7 @@ export default function AfuPayApp({
                 <Text style={[s.seeAll, { color: Colors.brand }]}>See all</Text>
               </TouchableOpacity>
             </View>
-            <View style={[s.txCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.txCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               {recentTx.map((tx, i) => (
                 <View key={tx.id}>
                   {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -451,7 +451,7 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
               <Text style={[s.emptyText, { color: colors.textMuted }]}>No transactions</Text>
             </View>
           ) : (
-            <View style={[s.txCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[s.txCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               {txs.map((tx: Tx, i: number) => (
                 <View key={tx.id}>
                   {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -880,7 +880,7 @@ function ReceiveView({ colors, insets, profile, onBack }: any) {
 
         {/* AfuPay ID card with copy */}
         <TouchableOpacity
-          style={[s.idCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[s.idCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
           onPress={copyId}
           activeOpacity={0.7}
         >
@@ -1037,7 +1037,7 @@ function RequestsView({ colors, insets, user, onBack }: any) {
               <Text style={[s.emptyText, { color: colors.textMuted }]}>No {tab} requests</Text>
             </View>
           ) : shown.map(r => (
-            <View key={r.id} style={[s.requestCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View key={r.id} style={[s.requestCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={[s.txLabel, { color: colors.text }]}>
                   {tab === "incoming" ? "From" : "To"} @{(tab === "incoming" ? r.requester : r.target)?.handle || "unknown"}

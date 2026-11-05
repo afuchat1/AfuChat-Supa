@@ -194,7 +194,7 @@ export default function StoreStorefront() {
               </View>
 
               {/* Store info card */}
-              <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
+              <View style={[st.infoCard, { backgroundColor: colors.cardSurface }]}>
                 <View style={st.infoRow}>
                   <View style={[st.logoWrap, { borderColor: colors.background }]}>
                     <Avatar uri={shop.logo_url || seller?.avatar_url} name={shop.name} size={64} square={true} />

@@ -244,7 +244,7 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Section: Business Info */}
-          <View style={[st.card, { backgroundColor: colors.surface }]}>
+          <View style={[st.card, { backgroundColor: colors.cardSurface }]}>
             <Text style={[st.sectionLabel, { color: colors.text }]}>Business Information</Text>
 
             <Label text="Business Name *" />
@@ -299,7 +299,7 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Section: Contact */}
-          <View style={[st.card, { backgroundColor: colors.surface }]}>
+          <View style={[st.card, { backgroundColor: colors.cardSurface }]}>
             <Text style={[st.sectionLabel, { color: colors.text }]}>Contact & Location</Text>
 
             <Label text="Phone Number *" />
@@ -343,7 +343,7 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Section: Social */}
-          <View style={[st.card, { backgroundColor: colors.surface }]}>
+          <View style={[st.card, { backgroundColor: colors.cardSurface }]}>
             <Text style={[st.sectionLabel, { color: colors.text }]}>Social Media (optional)</Text>
 
             <Label text="Instagram Handle" />

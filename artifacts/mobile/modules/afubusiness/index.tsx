@@ -406,7 +406,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
       <View style={[st.root, { backgroundColor: colors.background }]}>
         {renderHeader("Create Your Shop")}
         <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }}>
-          <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
+          <View style={[st.infoCard, { backgroundColor: colors.cardSurface }]}>
             <Ionicons name="storefront" size={32} color={accent} />
             <Text style={[st.infoTitle, { color: colors.text }]}>Launch on AfuMarket</Text>
             <Text style={[st.infoText, { color: colors.textMuted }]}>Create your store to start selling to thousands of AfuChat users.</Text>
@@ -456,7 +456,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
         {renderHeader("Analytics")}
         {listLoading ? (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-            {[1,2,3].map(i => <View key={i} style={[st.kpiCard, { backgroundColor: colors.surface }]}><ActivityIndicator size="small" color={accent} /></View>)}
+            {[1,2,3].map(i => <View key={i} style={[st.kpiCard, { backgroundColor: colors.cardSurface }]}><ActivityIndicator size="small" color={accent} /></View>)}
           </ScrollView>
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 20 }}>
@@ -473,7 +473,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
               ))}
             </View>
             {shop && (
-              <View style={[st.shopStatCard, { backgroundColor: colors.surface }]}>
+              <View style={[st.shopStatCard, { backgroundColor: colors.cardSurface }]}>
                 <Text style={[st.sectionLabel, { color: colors.textSecondary }]}>SHOP OVERVIEW</Text>
                 <View style={{ marginTop: 12, gap: 10 }}>
                   <View style={st.shopStatRow}>

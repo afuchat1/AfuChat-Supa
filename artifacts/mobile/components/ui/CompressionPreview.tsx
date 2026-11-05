@@ -139,7 +139,7 @@ export function CompressionCard({ est, style }: CardProps) {
       style={[
         cs.card,
         style,
-        { backgroundColor: colors.surface, borderColor: colors.border, opacity, transform: [{ translateY }] },
+        { backgroundColor: colors.cardSurface, borderColor: colors.border, opacity, transform: [{ translateY }] },
       ]}
     >
       {/* ── Header ── */}

@@ -198,7 +198,7 @@ export default function AfuServicesApp({
               key={service.id}
               style={[
                 styles.serviceCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
+                { backgroundColor: colors.cardSurface, borderColor: colors.border },
               ]}
               onPress={() => openService(service)}
               activeOpacity={0.8}

@@ -148,7 +148,7 @@ export default function ViewProfileScreen() {
 
         <View style={{ padding: 16, gap: 12 }}>
           {/* Relationship goal */}
-          <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.infoCard, { backgroundColor: colors.cardSurface }]}>
             <Text style={{ fontSize: 26 }}>{goalInfo.emoji}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[styles.infoCardLabel, { color: colors.textMuted }]}>Looking for</Text>
@@ -158,7 +158,7 @@ export default function ViewProfileScreen() {
 
           {/* Gifts received section */}
           {gifts.length > 0 && (
-            <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
               <View style={styles.giftCardHeader}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>Gifts Received 🎁</Text>
                 <View style={[styles.giftCountBadge, { backgroundColor: BRAND + "18" }]}>
@@ -186,7 +186,7 @@ export default function ViewProfileScreen() {
 
           {/* Bio */}
           {profile.bio && (
-            <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>About {profile.name}</Text>
               <Text style={[styles.cardBody, { color: colors.textSecondary }]}>{profile.bio}</Text>
             </View>
@@ -194,7 +194,7 @@ export default function ViewProfileScreen() {
 
           {/* Interests */}
           {profile.interests && profile.interests.length > 0 && (
-            <View style={[styles.card, { backgroundColor: colors.surface }]}>
+        <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>Interests</Text>
               <View style={styles.interestWrap}>
                 {profile.interests.map((tag: string) => (
@@ -208,7 +208,7 @@ export default function ViewProfileScreen() {
 
           {/* Education */}
           {(profile.school || profile.education_level) && (
-            <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.infoCard, { backgroundColor: colors.cardSurface }]}>
               <Ionicons name="school" size={22} color="#007AFF" />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.infoCardLabel, { color: colors.textMuted }]}>Education</Text>
@@ -220,7 +220,7 @@ export default function ViewProfileScreen() {
           )}
 
           {/* Safety notice */}
-          <View style={[styles.safetyCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.safetyCard, { backgroundColor: colors.cardSurface }]}>
             <Ionicons name="shield-checkmark" size={18} color="#34C759" />
             <Text style={[styles.safetyText, { color: colors.textMuted }]}>
               Always meet in public places. Tell someone where you're going. Trust your instincts.

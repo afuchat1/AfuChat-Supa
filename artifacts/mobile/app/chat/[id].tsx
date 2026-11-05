@@ -9510,7 +9510,7 @@ STRICT RULES:
               )}
             </View>
           )}
-          <View style={[st.messageOptionsCard, { backgroundColor: colors.surface, maxHeight: Math.min(380, Dimensions.get("window").height * 0.52) }]}>
+          <View style={[st.messageOptionsCard, { backgroundColor: colors.cardSurface, maxHeight: Math.min(380, Dimensions.get("window").height * 0.52) }]}>
             <ScrollView
               showsVerticalScrollIndicator={false}
               bounces={false}
@@ -9953,7 +9953,7 @@ STRICT RULES:
       <Modal visible={!!envReveal} transparent animationType="none" onRequestClose={() => setEnvReveal(null)}>
         <View style={st.envRevealOverlay}>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setEnvReveal(null)} />
-          <View style={[st.envRevealCard, { backgroundColor: colors.surface }]}>
+          <View style={[st.envRevealCard, { backgroundColor: colors.cardSurface }]}>
             <View style={st.envRevealTop}>
               <Text style={st.envRevealBigEmoji}>🧧</Text>
               {envReveal?.amount !== null ? (
@@ -10040,7 +10040,7 @@ STRICT RULES:
             activeOpacity={1}
             onPress={() => { setShowChatOptions(false); setShowMutePicker(false); setShowDisappearingPicker(false); }}
           />
-          <View style={[st.ddCard, { backgroundColor: colors.surface, top: insets.top + 54 }]}>
+          <View style={[st.ddCard, { backgroundColor: colors.cardSurface, top: insets.top + 54 }]}>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
               {/* Search */}
               <DdRow colors={colors} icon="search" label="Search"

@@ -150,7 +150,7 @@ export default function BlockedUsersScreen() {
             renderItem={({ item, index }) => {
               const isLast = index === filtered.length - 1;
               return (
-                <View style={[s.rowWrapper, { backgroundColor: colors.card, marginHorizontal: 16 }]}>
+                <View style={[s.rowWrapper, { backgroundColor: colors.cardSurface, marginHorizontal: 16 }]}>
                   <View style={s.row}>
                     <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={46} />
                     <View style={{ flex: 1 }}>

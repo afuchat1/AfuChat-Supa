@@ -117,7 +117,7 @@ export default function AboutScreen() {
       >
 
         {/* ── Hero card ─────────────────────────────────────────────────── */}
-        <View style={[s.heroCard, { backgroundColor: colors.card }]}>
+        <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
           <LinearGradient
             colors={isDark
               ? ["rgba(31,149,255,0.12)", "transparent"]
@@ -153,7 +153,7 @@ export default function AboutScreen() {
         {/* ── Stats ─────────────────────────────────────────────────────── */}
         <View style={s.statsRow}>
           {STATS.map(({ value, label }) => (
-            <View key={label} style={[s.statBox, { backgroundColor: colors.card }]}>
+            <View key={label} style={[s.statBox, { backgroundColor: colors.cardSurface }]}>
               <Text style={[s.statValue, { color: ACCENT }]}>{value}</Text>
               <Text style={[s.statLabel, { color: colors.textMuted }]}>{t(label)}</Text>
             </View>
@@ -164,7 +164,7 @@ export default function AboutScreen() {
         <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{t("about.features_section")}</Text>
         <View style={s.featuresGrid}>
           {FEATURES.map(({ icon, label, desc }) => (
-            <View key={label} style={[s.featureCard, { backgroundColor: colors.card }]}>
+            <View key={label} style={[s.featureCard, { backgroundColor: colors.cardSurface }]}>
               <View style={[s.featureIconBox, { backgroundColor: ACCENT + "15" }]}>
                 <Ionicons name={icon as any} size={22} color={ACCENT} />
               </View>
@@ -176,7 +176,7 @@ export default function AboutScreen() {
 
         {/* ── Company ───────────────────────────────────────────────────── */}
         <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{t("about.company_section")}</Text>
-        <View style={[s.companyCard, { backgroundColor: colors.card }]}>
+        <View style={[s.companyCard, { backgroundColor: colors.cardSurface }]}>
           {[
             { label: "about.legal_name",   value: "AfuChat Technologies Limited" },
             { label: "about.founded",      value: "2023" },
@@ -225,7 +225,7 @@ export default function AboutScreen() {
 
         {/* GitHub */}
         <TouchableOpacity
-          style={[s.githubCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[s.githubCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
           onPress={() => openExternalLink(GITHUB_URL).catch(() => {})}
           activeOpacity={0.82}
         >
@@ -244,7 +244,7 @@ export default function AboutScreen() {
 
         {/* ── Links ─────────────────────────────────────────────────────── */}
         <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{t("about.legal_support_section")}</Text>
-        <View style={[s.linksCard, { backgroundColor: colors.card }]}>
+        <View style={[s.linksCard, { backgroundColor: colors.cardSurface }]}>
           {LINKS.map(({ icon, label, onPress }, i) => (
             <React.Fragment key={label}>
               {i > 0 && <View style={[s.linkDivider, { backgroundColor: colors.separator }]} />}

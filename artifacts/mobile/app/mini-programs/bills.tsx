@@ -115,7 +115,7 @@ export default function BillsScreen() {
         </View>
 
         {fee && (
-          <View style={[styles.feeCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.feeCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.feeRow}>
               <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>{selectedBill?.name} Bill</Text>
               <Text style={[styles.feeValue, { color: colors.text }]}>{fee.subtotal} ACoins</Text>

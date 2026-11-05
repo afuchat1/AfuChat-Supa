@@ -21,7 +21,6 @@ export interface GlassCardProps {
 export const GlassCard = React.memo(function GlassCard({
   children,
   style,
-  variant = "medium",
   noBorder = false,
   noShadow = false,
   noSpecular = false,
@@ -37,14 +36,7 @@ export const GlassCard = React.memo(function GlassCard({
   // Default radius from T.radius — no hardcoded 16
   const r = flat.borderRadius ?? T.radius.md;
 
-  // Keep variants on distinct theme layers so the same component has depth
-  // in both palettes without introducing per-screen colors.
-  const bg =
-    variant === "subtle"
-      ? colors.backgroundSecondary
-      : variant === "strong"
-      ? colors.backgroundTertiary
-      : colors.surface;
+  const bg = colors.cardSurface;
   const shadow = noShadow
     ? undefined
     : isDark

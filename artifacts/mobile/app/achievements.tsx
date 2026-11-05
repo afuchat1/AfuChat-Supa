@@ -308,7 +308,7 @@ function AlmostThere({ achievements, onPress }: { achievements: Achievement[]; o
           const pct = Math.round((a.progress! / a.total!) * 100);
           const color = RARITY_COLOR[a.rarity];
           return (
-            <TouchableOpacity key={a.id} style={[at.card, { backgroundColor: colors.surface }]} onPress={() => onPress(a)} activeOpacity={0.8}>
+            <TouchableOpacity key={a.id} style={[at.card, { backgroundColor: colors.cardSurface }]} onPress={() => onPress(a)} activeOpacity={0.8}>
               <View style={[at.iconWrap, { backgroundColor: color + "20" }]}>
                 <Ionicons name={a.icon as any} size={22} color={color} />
               </View>

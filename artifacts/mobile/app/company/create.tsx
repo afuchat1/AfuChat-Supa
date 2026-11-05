@@ -409,7 +409,7 @@ export default function CreateCompanyPageScreen() {
               </View>
 
               {/* ── Registry Search ── */}
-              <View style={[styles.registryCard, { backgroundColor: colors.surface, borderColor: colors.accent + "40" }]}>
+              <View style={[styles.registryCard, { backgroundColor: colors.cardSurface, borderColor: colors.accent + "40" }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <View style={[styles.registryIconWrap, { backgroundColor: colors.accent + "14" }]}>
                     <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
@@ -565,7 +565,7 @@ export default function CreateCompanyPageScreen() {
                       <TouchableOpacity
                         key={t.label}
                         style={[styles.typeCard, {
-                          backgroundColor: sel ? colors.accent + "14" : colors.surface,
+                          backgroundColor: sel ? colors.accent + "14" : colors.cardSurface,
                           borderColor: sel ? colors.accent : colors.border,
                         }]}
                         onPress={() => set("org_type", t.label)}

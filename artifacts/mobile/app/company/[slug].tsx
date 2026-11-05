@@ -466,7 +466,7 @@ export default function CompanyPageScreen() {
       </View>
 
       {/* Info Card */}
-      <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.infoCard, { backgroundColor: colors.cardSurface }]}>
         {/* Name + verified */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <Text style={[styles.pageName, { color: colors.text }]}>{page.name}</Text>
@@ -934,7 +934,7 @@ export default function CompanyPageScreen() {
             };
             const jColor = jobTypeColors[job.job_type] ?? { bg: colors.accent + "18", text: colors.accent };
             return (
-              <View style={[styles.jobCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={[styles.jobCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 <View style={styles.jobCardHeader}>
                   <View style={[styles.jobLogoSmall, { backgroundColor: colors.accent }]}>
                     {page.logo_url

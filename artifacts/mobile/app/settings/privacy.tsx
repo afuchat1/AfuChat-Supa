@@ -22,7 +22,7 @@ function Section({
   return (
     <View style={s.section}>
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>{t(title)}</Text>
-      <View style={[s.card, { backgroundColor: colors.card }]}>{children}</View>
+      <View style={[s.card, { backgroundColor: colors.cardSurface }]}>{children}</View>
     </View>
   );
 }

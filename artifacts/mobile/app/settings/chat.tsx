@@ -147,7 +147,7 @@ export default function ChatSettingsScreen() {
       >
         {/* ── THEME COLOR ──────────────────────────────────── */}
         <SectionTitle label="ACCENT COLOUR" />
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <View style={s.cardHeaderRow}>
             <View style={s.iconWrap}>
               <Ionicons name="color-palette-outline" size={22} color={colors.text} />
@@ -180,7 +180,7 @@ export default function ChatSettingsScreen() {
         </View>
 
         {/* ── LIVE PREVIEW ─────────────────────────────────── */}
-        <View style={[s.previewCard, { backgroundColor: isDark ? colors.surface : "#f0f0f5", borderColor: colors.border }]}>
+        <View style={[s.previewCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <Text style={[s.previewLabel, { color: colors.textMuted }]}>PREVIEW</Text>
           <View style={s.previewBubbleRow}>
             <View style={[s.previewBubble, s.previewBubbleLeft, { backgroundColor: colors.surface, borderRadius: bubbleRadius, borderColor: colors.border, borderWidth: 0.5 }]}>
@@ -202,7 +202,7 @@ export default function ChatSettingsScreen() {
         {/* ── APPEARANCE ───────────────────────────────────── */}
         <SectionTitle label="APPEARANCE" />
         {/* Bubble style */}
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 10 }]}>
+        <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border, marginBottom: 10 }]}>
           <View style={s.cardHeaderRow}>
             <View style={s.iconWrap}>
               <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
@@ -230,7 +230,7 @@ export default function ChatSettingsScreen() {
         </View>
 
         {/* Font size */}
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 10 }]}>
+        <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border, marginBottom: 10 }]}>
           <View style={s.cardHeaderRow}>
             <View style={s.iconWrap}>
               <Ionicons name="text-outline" size={22} color={colors.text} />

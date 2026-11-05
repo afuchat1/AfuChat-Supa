@@ -130,7 +130,7 @@ export default function PrivacyRestrictedScreen() {
           renderItem={({ item, index }) => {
             const isLast = index === filtered.length - 1;
             return (
-              <View style={[s.rowWrapper, { backgroundColor: colors.card, marginHorizontal: 16 }]}>
+              <View style={[s.rowWrapper, { backgroundColor: colors.cardSurface, marginHorizontal: 16 }]}>
                 <View style={s.row}>
                   <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
                   <View style={{ flex: 1 }}>

@@ -301,7 +301,7 @@ export default function FreelanceListingScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero card */}
-        <View style={[st.heroCard, { backgroundColor: colors.surface }]}>
+      <View style={[st.heroCard, { backgroundColor: colors.cardSurface }]}>
           <View style={[st.heroEmoji, { backgroundColor: accent + "15" }]}>
             <Text style={{ fontSize: 48 }}>{gig.emoji}</Text>
           </View>

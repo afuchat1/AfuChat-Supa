@@ -52,7 +52,7 @@ export default function AfuCollectionsApp() {
 
   function renderItem({ item }: { item: Collection }) {
     return (
-      <TouchableOpacity style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => showAlert(item.title, item.description || "No description")} activeOpacity={0.8}>
+      <TouchableOpacity style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]} onPress={() => showAlert(item.title, item.description || "No description")} activeOpacity={0.8}>
         {item.cover_url ? (
           <Image source={{ uri: item.cover_url }} style={s.cover} resizeMode="cover" />
         ) : (

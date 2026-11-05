@@ -148,7 +148,7 @@ export default function OfflineVideosScreen() {
   const StatsHeader = (
     <>
       {/* Stats card */}
-      <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.statsCard, { backgroundColor: colors.cardSurface }]}>
         <View style={styles.statsTop}>
           <View style={[styles.iconBadge, { backgroundColor: accent + "22" }]}>
             <Ionicons name="cloud-download" size={22} color={accent} />
@@ -194,7 +194,7 @@ export default function OfflineVideosScreen() {
   );
 
   const EmptyState = (
-    <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+    <View style={[styles.emptyCard, { backgroundColor: colors.cardSurface }]}>
       <View style={[styles.emptyIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
         <Ionicons name="cloud-offline" size={40} color={colors.textMuted} />
       </View>

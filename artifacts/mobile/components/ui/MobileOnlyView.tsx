@@ -34,14 +34,14 @@ export function MobileOnlyView({ title, description }: Props) {
           {description ||
             `${title} is only available on the AfuChat mobile app. Download it from the Play Store or App Store to access this feature.`}
         </Text>
-        <View style={[styles.storeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.storeCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <Ionicons name="logo-google-playstore" size={28} color="#01875F" />
           <View>
             <Text style={[styles.storeLabel, { color: colors.textMuted }]}>Get it on</Text>
             <Text style={[styles.storeName, { color: colors.text }]}>Google Play</Text>
           </View>
         </View>
-        <View style={[styles.storeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={[styles.storeCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
           <Ionicons name="logo-apple" size={28} color={colors.text} />
           <View>
             <Text style={[styles.storeLabel, { color: colors.textMuted }]}>Download on the</Text>

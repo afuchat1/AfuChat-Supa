@@ -245,7 +245,7 @@ function LinkPreviewCard({ url, colors }: { url: string; colors: any }) {
         flexDirection: "row",
         alignItems: "stretch",
         minHeight: 80,
-        backgroundColor: colors.card,
+        backgroundColor: colors.cardSurface,
       }}
     >
       {/* Thumbnail: og:image if available, otherwise large favicon */}
@@ -816,7 +816,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
             <TouchableOpacity
               onPress={openPost}
               activeOpacity={0.85}
-              style={[styles.articleCard, { backgroundColor: colors.card }]}
+              style={[styles.articleCard, { backgroundColor: colors.cardSurface }]}
             >
               {allImages.length > 0 && (
                 <CachedImage
@@ -1019,7 +1019,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
       >
         <Pressable style={styles.crownModalBackdrop} onPress={() => setShowCrownDetails(false)}>
           <Pressable
-            style={[styles.crownModalCard, { backgroundColor: colors.surface }]}
+            style={[styles.crownModalCard, { backgroundColor: colors.cardSurface }]}
             onPress={(event) => event.stopPropagation()}
           >
             <View style={styles.crownModalIcon}>

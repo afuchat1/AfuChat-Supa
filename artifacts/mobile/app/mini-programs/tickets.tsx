@@ -139,7 +139,7 @@ export default function TicketsScreen() {
         )}
 
         {fee && (
-          <View style={[styles.feeCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.feeCard, { backgroundColor: colors.cardSurface }]}>
             <View style={styles.feeRow}>
               <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>{quantity}× {ticket?.name} Ticket</Text>
               <Text style={[styles.feeValue, { color: colors.text }]}>{fee.subtotal} ACoins</Text>

@@ -70,7 +70,7 @@ export default function AfuEventsApp({ initialTab }: { initialTab?: "upcoming" |
   function renderEvent({ item }: { item: Event }) {
     const freeOrPaid = item.price === 0 ? "Free" : `${item.price} AC`;
     return (
-      <TouchableOpacity style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => showAlert(item.title, `${item.description || ""}\n\n📍 ${item.location || (item.is_online ? "Online" : "TBD")}\n🕐 ${formatEventDate(item.starts_at)}\n💰 ${freeOrPaid}`)} activeOpacity={0.8}>
+      <TouchableOpacity style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]} onPress={() => showAlert(item.title, `${item.description || ""}\n\n📍 ${item.location || (item.is_online ? "Online" : "TBD")}\n🕐 ${formatEventDate(item.starts_at)}\n💰 ${freeOrPaid}`)} activeOpacity={0.8}>
         {item.cover_url ? (
           <Image source={{ uri: item.cover_url }} style={s.cover} resizeMode="cover" />
         ) : (

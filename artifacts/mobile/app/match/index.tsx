@@ -156,14 +156,14 @@ function CardDetailModal({
             </View>
             {/* Bio */}
             {candidate.bio && (
-              <View style={[detailStyles.card, { backgroundColor: colors.surface }]}>
+      <View style={[detailStyles.card, { backgroundColor: colors.cardSurface }]}>
                 <Text style={[detailStyles.cardTitle, { color: colors.text }]}>About {candidate.name}</Text>
                 <Text style={[detailStyles.cardBody, { color: colors.textSecondary }]}>{candidate.bio}</Text>
               </View>
             )}
             {/* Interests */}
             {candidate.interests.length > 0 && (
-              <View style={[detailStyles.card, { backgroundColor: colors.surface }]}>
+      <View style={[detailStyles.card, { backgroundColor: colors.cardSurface }]}>
                 <Text style={[detailStyles.cardTitle, { color: colors.text }]}>Interests</Text>
                 <View style={detailStyles.chips}>
                   {candidate.interests.map((t) => (
@@ -856,12 +856,12 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
           {/* Card area */}
           <View style={styles.cardArea}>
             {loading ? (
-              <View style={[styles.card, { width: cardWidth, height: cardHeight, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }]}>
+            <View style={[styles.card, { width: cardWidth, height: cardHeight, backgroundColor: colors.cardSurface, alignItems: "center", justifyContent: "center" }]}>
                 <ActivityIndicator color={BRAND} size="large" />
                 <Text style={[styles.loadingText, { color: colors.textMuted }]}>Finding people nearby…</Text>
               </View>
             ) : displayStack.length === 0 ? (
-              <View style={[styles.card, { width: cardWidth, height: cardHeight, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", padding: 32 }]}>
+            <View style={[styles.card, { width: cardWidth, height: cardHeight, backgroundColor: colors.cardSurface, alignItems: "center", justifyContent: "center", padding: 32 }]}>
                 <View style={[styles.emptyIcon, { backgroundColor: BRAND }]}><Ionicons name="search" size={40} color="#fff" /></View>
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>You've seen everyone!</Text>
                 <Text style={[styles.emptySub, { color: colors.textMuted }]}>New people join every day. Check back later or adjust your preferences.</Text>

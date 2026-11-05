@@ -208,7 +208,7 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* ── Product info ── */}
-        <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
+        <View style={[st.infoCard, { backgroundColor: colors.cardSurface }]}>
           {/* Price + name */}
           <View style={st.priceRow}>
             <Text style={[st.priceMain, { color: colors.accent }]}>{formatShopAcoin(product.price_acoin)}</Text>
@@ -269,7 +269,7 @@ export default function ProductDetailScreen() {
 
         {/* ── Store section ── */}
         {shop && seller && (
-          <View style={[st.storeCard, { backgroundColor: colors.surface }]}>
+          <View style={[st.storeCard, { backgroundColor: colors.cardSurface }]}>
             <Text style={[st.storeCardTitle, { color: colors.textSecondary }]}>Sold by</Text>
             <TouchableOpacity
               style={st.storeRow}
@@ -303,7 +303,7 @@ export default function ProductDetailScreen() {
         )}
 
         {/* ── Checkout guarantee ── */}
-        <View style={[st.guaranteeCard, { backgroundColor: colors.surface }]}>
+        <View style={[st.guaranteeCard, { backgroundColor: colors.cardSurface }]}>
           {[
             { icon: "shield-checkmark", label: "Buyer Protection", desc: "Full refund if order doesn't arrive" },
             { icon: "wallet", label: "ACoins Wallet", desc: "Secure, instant payment from your wallet" },
@@ -368,7 +368,7 @@ export default function ProductDetailScreen() {
       {/* ── Order success modal ── */}
       <Modal visible={!!orderDone} transparent animationType="none">
         <View style={st.successOverlay}>
-          <View style={[st.successCard, { backgroundColor: colors.surface }]}>
+          <View style={[st.successCard, { backgroundColor: colors.cardSurface }]}>
             <View style={[st.successIcon, { backgroundColor: "#34C75920" }]}>
               <Ionicons name="checkmark-circle" size={56} color="#34C759" />
             </View>
@@ -392,7 +392,7 @@ export default function ProductDetailScreen() {
               <Text style={[st.checkoutTitle, { color: colors.text }]}>Confirm Order</Text>
 
               {/* Product summary */}
-              <View style={[st.checkoutProduct, { backgroundColor: colors.surface }]}>
+              <View style={[st.checkoutProduct, { backgroundColor: colors.cardSurface }]}>
                 {images[0] && (
                   <Image source={{ uri: images[0] }} style={st.checkoutProductImg} />
                 )}
@@ -404,7 +404,7 @@ export default function ProductDetailScreen() {
               </View>
 
               {/* Fee breakdown */}
-              <View style={[st.feeCard, { backgroundColor: colors.surface }]}>
+              <View style={[st.feeCard, { backgroundColor: colors.cardSurface }]}>
                 <Text style={[st.feeTitle, { color: colors.textSecondary }]}>Order Summary</Text>
                 <View style={st.feeRow}>
                   <Text style={[st.feeLabel, { color: colors.textMuted }]}>Subtotal ({qty} item{qty > 1 ? "s" : ""})</Text>

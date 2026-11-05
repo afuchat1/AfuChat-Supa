@@ -137,7 +137,7 @@ function LinkPreviewCard({ url, colors }: { url: string; colors: any }) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
-      style={[st.linkCard, { backgroundColor: colors.card }]}
+      style={[st.linkCard, { backgroundColor: colors.cardSurface }]}
       onPress={() => { openExternalLink(url).catch(() => {}); }}
     >
       <View style={[st.linkThumb, { backgroundColor: colors.backgroundSecondary }]}>

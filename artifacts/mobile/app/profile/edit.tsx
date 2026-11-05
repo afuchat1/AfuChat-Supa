@@ -109,7 +109,7 @@ function ProfileCompletionCard({
   const barColor   = allDone ? "#34C759" : accent;
 
   return (
-    <View style={[compStyles.card, { backgroundColor: colors.surface }]}>
+    <View style={[compStyles.card, { backgroundColor: colors.cardSurface }]}>
       {/* Header row */}
       <View style={compStyles.header}>
         <View style={compStyles.headerLeft}>
@@ -283,7 +283,7 @@ function SectionCard({ title, icon, children, colors }: {
   title: string; icon: string; children: React.ReactNode; colors: any;
 }) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface }]}>
+    <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
       <View style={styles.cardHeader}>
         <Ionicons name={icon as any} size={16} color={colors.textMuted} />
         <Text style={[styles.cardTitle, { color: colors.textMuted }]}>{title}</Text>
