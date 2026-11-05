@@ -17,10 +17,17 @@ import {
 } from "@/lib/pushNotifications";
 
 export default function PushNotificationManager() {
-  const { user, session, profile } = useAuth();
+  const { user, session, profile, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (Platform.OS === "web" || !user?.id || session?.user?.id !== user.id) return;
+    if (
+      Platform.OS === "web" ||
+      !isAuthenticated ||
+      !user?.id ||
+      session?.user?.id !== user.id
+    ) {
+      return;
+    }
     try {
       configurePushNotifications();
     } catch (error) {
@@ -89,7 +96,13 @@ export default function PushNotificationManager() {
       subscription.remove();
       responseSubscription?.remove();
     };
-  }, [user?.id, session?.user?.id, profile?.display_name, profile?.avatar_url]);
+  }, [
+    isAuthenticated,
+    user?.id,
+    session?.user?.id,
+    profile?.display_name,
+    profile?.avatar_url,
+  ]);
 
   return null;
 }

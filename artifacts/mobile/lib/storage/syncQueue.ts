@@ -3,7 +3,7 @@
 // device reconnects. Exactly how Instagram/WhatsApp defer network operations.
 
 import { getDB } from "./db";
-import { supabase } from "@/lib/supabase";
+import { getLiveSupabaseSession, supabase } from "@/lib/supabase";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export type QueueActionType =
@@ -64,6 +64,9 @@ export async function drainQueue(maxItems = 50): Promise<void> {
   _draining = true;
 
   try {
+    const session = await getLiveSupabaseSession();
+    if (!session) return;
+
     const db = await getDB();
     const limit = Number.isFinite(maxItems)
       ? Math.max(1, Math.min(50, Math.floor(maxItems)))
@@ -76,7 +79,16 @@ export async function drainQueue(maxItems = 50): Promise<void> {
       let payload: Record<string, any> = {};
       try { payload = JSON.parse(item.payload as unknown as string); } catch {}
 
-      const success = await executeAction(item.action_type, payload);
+      const actionUserId =
+        typeof payload.user_id === "string"
+          ? payload.user_id
+          : typeof payload.follower_id === "string"
+            ? payload.follower_id
+            : null;
+      if (actionUserId && actionUserId !== session.user.id) continue;
+
+      const success = await executeAction(item.action_type, payload, session.user.id);
+      if (success === "wrong_user") continue;
       if (success) {
         await db.runAsync("DELETE FROM offline_queue WHERE id = ?", [item.id]);
       } else {
@@ -103,7 +115,8 @@ export async function drainQueue(maxItems = 50): Promise<void> {
 async function executeAction(
   type: QueueActionType,
   payload: Record<string, any>,
-): Promise<boolean> {
+  authenticatedUserId: string,
+): Promise<boolean | "wrong_user"> {
   try {
     switch (type) {
       case "like_post": {
@@ -192,6 +205,7 @@ async function executeAction(
               (payload.content == null || m.content === payload.content),
             );
         if (!msg) return true; // already sent or not found — remove from queue
+        if (msg.sender_id !== authenticatedUserId) return "wrong_user";
         const { data, error } = await supabase
           .from("messages")
           .insert({

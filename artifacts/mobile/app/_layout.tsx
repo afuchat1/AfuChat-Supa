@@ -552,12 +552,6 @@ export default function RootLayout() {
   // without holding the image memory cache while Android may reclaim the app.
   useEffect(() => {
     if (Platform.OS === "web") return;
-    // Remove disk images created by older app versions; all current image
-    // rendering and prefetching is memory-only.
-    void import("expo-image")
-      .then(({ Image }) => Image.clearDiskCache())
-      .catch(() => {});
-
     let trimTimer: ReturnType<typeof setTimeout> | null = null;
     const sub = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") {

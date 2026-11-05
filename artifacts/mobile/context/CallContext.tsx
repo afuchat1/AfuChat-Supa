@@ -59,7 +59,7 @@ export function useCall() {
 }
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
-  const { user, profile } = useAuth();
+  const { user, profile, isAuthenticated } = useAuth();
   const [status, setStatus] = useState<CallStatus>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [incomingNotice, setIncomingNotice] = useState<IncomingCallNotice | null>(null);
@@ -68,11 +68,23 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isAvailable, setIsAvailable] = useState(false);
   const userRef = useRef(user);
   const profileRef = useRef(profile);
+  const isAuthenticatedRef = useRef(isAuthenticated);
   userRef.current = user;
   profileRef.current = profile;
+  isAuthenticatedRef.current = isAuthenticated;
 
   useEffect(() => {
     let disposed = false;
+    if (!isAuthenticated || !user?.id) {
+      setStatus("idle");
+      setCallInfo(null);
+      setIncomingNotice(null);
+      setIsAvailable(false);
+      return () => {
+        disposed = true;
+      };
+    }
+
     const refreshAvailability = () => {
       if (!disposed) setIsAvailable(getWebRTCAvailable());
     };
@@ -86,17 +98,6 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active") setTimeout(refreshAvailability, 100);
     });
-
-    if (!user?.id) {
-      setStatus("idle");
-      setCallInfo(null);
-      setIncomingNotice(null);
-      return () => {
-        disposed = true;
-        retryTimers.forEach(clearTimeout);
-        appStateSubscription.remove();
-      };
-    }
 
     const removeListener = addCallEngineListener((event) => {
       if (disposed) return;
@@ -121,7 +122,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       removeListener();
       cleanupPromise.then((cleanup) => cleanup()).catch(() => {});
     };
-  }, [user?.id]);
+  }, [isAuthenticated, user?.id]);
 
   const startCall = useCallback(async (params: {
     calleeId: string;
@@ -130,7 +131,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     chatId: string | null;
   }): Promise<string> => {
     const u = userRef.current;
-    if (!u) throw new Error("Not signed in");
+    if (!isAuthenticatedRef.current || !u) {
+      throw new Error("Reconnect to your account before making calls.");
+    }
     try {
       return await engineStart({
         ...params,
@@ -148,7 +151,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const acceptCall = useCallback(async () => {
     const notice = incomingNotice;
     const u = userRef.current;
-    if (!notice || !u) return;
+    if (!isAuthenticatedRef.current || !notice || !u) return;
     try {
       await engineAccept(notice, {
         myId: u.id,
@@ -164,12 +167,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   }, [incomingNotice]);
 
   const declineCall = useCallback(() => {
-    if (incomingNotice) engineDecline(incomingNotice);
+    if (isAuthenticatedRef.current && incomingNotice) {
+      engineDecline(incomingNotice);
+    }
     setIncomingNotice(null);
   }, [incomingNotice]);
 
   const endCall = useCallback(async () => {
-    await engineEnd();
+    if (isAuthenticatedRef.current) await engineEnd();
   }, []);
 
   const toggleMute = useCallback(() => setIsMuted(engineMute()), []);

@@ -120,3 +120,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     ...(isStaticRender ? { transport: StaticRenderWebSocket as any } : {}),
   },
 });
+
+/**
+ * Return the current non-expired Supabase session for background services.
+ * Cached AfuChat identity is intentionally not accepted as authentication.
+ */
+export async function getLiveSupabaseSession() {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    const session = data?.session;
+    if (error || !session?.user?.id || !session.access_token) return null;
+    if (
+      typeof session.expires_at === "number" &&
+      session.expires_at * 1000 <= Date.now()
+    ) {
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}

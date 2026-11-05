@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState } from "react-native";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { getLiveSupabaseSession, supabase } from "@/lib/supabase";
 import {
   getStoredAccounts,
   getStoredAccount,
@@ -151,6 +151,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
   const [equippedGoods, setEquippedGoods] = useState<Set<string>>(new Set());
   const [linkedAccounts, setLinkedAccounts] = useState<StoredAccount[]>([]);
+  const isAuthenticated = Boolean(
+    session?.user?.id &&
+      session.user.id === user?.id &&
+      (typeof session.expires_at !== "number" ||
+        session.expires_at * 1000 > Date.now())
+  );
 
   // ── Guard refs ──────────────────────────────────────────────────────────────
   // Kept for the legacy account-store migration path; no account-switch UI is
@@ -159,9 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isLinkingRef = useRef(false);
   const switchOperationRef = useRef(0);
   const linkedAccountsRequestRef = useRef(0);
-  // Tracks explicit user-initiated sign-out so we can distinguish it from
-  // involuntary sign-outs (expired token, server error, network failure).
-  // onAuthStateChange ignores SIGNED_OUT unless this is true.
+  // Tracks explicit sign-out so an expired/invalid session can clear the live
+  // credential while preserving the cached offline identity.
   const isUserSigningOut = useRef(false);
   // Invalidates async bootstrap work when auth identity changes.
   // Late completions must never restore an old user or navigate over a newer flow.
@@ -628,15 +633,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let sessionResolved = false;
     let offlineSyncTimer: ReturnType<typeof setTimeout> | null = null;
     let offlineSyncTask: { cancel?: () => void } | null = null;
-    const scheduleOfflineSync = () => {
-      if (offlineSyncTimer) return;
+    const cancelOfflineSyncSchedule = () => {
+      if (offlineSyncTimer) clearTimeout(offlineSyncTimer);
+      offlineSyncTimer = null;
+      offlineSyncTask?.cancel?.();
+      offlineSyncTask = null;
+    };
+    const scheduleOfflineSync = (userId: string) => {
+      if (!userId || offlineSyncTimer) return;
       // Let the first authenticated route render before opening the offline
       // queue and its realtime/network listeners on a release build.
       offlineSyncTimer = setTimeout(() => {
         offlineSyncTimer = null;
         if (!isCurrentBootstrap()) return;
         offlineSyncTask = runAfterIdle(() => {
-          if (isCurrentBootstrap()) startOfflineSync();
+          if (!isCurrentBootstrap()) return;
+          void getLiveSupabaseSession()
+            .then((liveSession) => {
+              if (
+                isCurrentBootstrap() &&
+                liveSession?.user?.id === userId
+              ) {
+                startOfflineSync();
+              }
+            })
+            .catch(() => {});
         });
       }, 5000);
     };
@@ -657,7 +678,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         created_at: "",
       } as User);
       setLoading(false);
-      scheduleOfflineSync();
     });
 
     // Safety-net: if getSession() ever hangs indefinitely on native (no reject,
@@ -705,7 +725,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }, 5000);
             })
             .catch(() => {});
-          scheduleOfflineSync();
+          scheduleOfflineSync(session.user.id);
         } else {
           // Do not decide that there is no offline identity until the durable
           // backup has had a chance to warm the synchronous cache.
@@ -815,8 +835,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   }
                 }, 3000);
               }
-            } else {
-              scheduleOfflineSync();
             }
           } else {
             // Truly no identity anywhere — user has never logged in on this device.
@@ -841,21 +859,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (newSession?.user) sessionResolved = true;
       const eventGeneration = authGenerationRef.current;
 
-      // TOKEN_REFRESHED: patch tokens in-place, don't re-fetch the profile.
+      // TOKEN_REFRESHED: update the live session immutably without re-fetching
+      // the profile. Cached offline identity remains visible while this runs.
       if (event === "TOKEN_REFRESHED") {
         setSession((prev) => {
           if (!prev || !newSession) return newSession;
-          if (prev.access_token === newSession.access_token) return prev;
-          return Object.assign(prev, {
-            access_token: newSession.access_token,
-            refresh_token: newSession.refresh_token,
-            expires_at: newSession.expires_at,
-            expires_in: newSession.expires_in,
-          });
+          if (
+            prev.access_token === newSession.access_token &&
+            prev.refresh_token === newSession.refresh_token &&
+            prev.expires_at === newSession.expires_at
+          ) {
+            return prev;
+          }
+          return { ...prev, ...newSession };
         });
         if (newSession?.user) {
-          setUser((prev) => prev ?? newSession.user);
+          setUser((prev) =>
+            prev?.id === newSession.user.id && prev.aud !== "offline"
+              ? prev
+              : newSession.user
+          );
           setCachedUserId(newSession.user.id);
+          scheduleOfflineSync(newSession.user.id);
           // Keep stored tokens fresh
           updateAccountTokens(
             newSession.user.id,
@@ -866,18 +891,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Never clear auth state on involuntary sign-outs (offline, token refresh
-      // failure, server error). Only a user-initiated signOut() call sets
-      // isUserSigningOut=true, which is the only case where we allow clearing.
+      // Clear an invalid Supabase session immediately, but retain the cached
+      // user/profile as offline UI. This prevents stale credentials from
+      // keeping realtime and user-specific services authenticated.
       if (!newSession?.user) {
         if (!isUserSigningOut.current) {
+          cancelOfflineSyncSchedule();
+          setSession(null);
+          stopOfflineSync();
           // Involuntary SIGNED_OUT: Supabase cleared its AsyncStorage session
           // (e.g., access token expired and refresh token was rejected).
           // Attempt a silent background restore from SecureStore.
-          // CRITICAL: we do NOT clear any user state here regardless of outcome.
-          // A user who has ever logged in must NEVER be involuntarily signed out.
           if (!sessionRestoreRef.current) {
-             const currentUserId = user?.id ?? session?.user?.id ?? getCachedUserId();
+            const currentUserId = getCachedUserId() ?? user?.id ?? session?.user?.id;
             const restorePromise = getStoredAccounts()
               .then(async (accts) => {
                 if (
@@ -898,8 +924,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   // On success: TOKEN_REFRESHED fires and updates session state.
                 } catch (error) {
                 }
-                // On failure: user keeps their current (synthetic) session and
-                // cached data — they stay in the shell until they sign in again.
+                // On failure, cached identity/data remain available offline;
+                // user-specific backend work stays disabled until sign-in.
               })
               .catch(() => {});
             sessionRestoreRef.current = restorePromise;
@@ -923,9 +949,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const newUserId = newSession.user.id;
 
-      setSession((prev) => (prev?.user?.id === newUserId ? prev : newSession));
-      setUser((prev) => (prev?.id === newUserId ? prev : newSession.user));
+      setSession((prev) =>
+        prev?.user?.id === newUserId ? { ...prev, ...newSession } : newSession
+      );
+      setUser((prev) =>
+        prev?.id === newUserId && prev.aud !== "offline" ? prev : newSession.user
+      );
       setCachedUserId(newUserId);
+      scheduleOfflineSync(newUserId);
 
       if (event === "SIGNED_IN") {
         // Persist fresh tokens to SecureStore immediately on every sign-in.
@@ -968,11 +999,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       authGenerationRef.current += 1;
-      if (offlineSyncTimer) clearTimeout(offlineSyncTimer);
-      offlineSyncTask?.cancel?.();
+      cancelOfflineSyncSchedule();
       listener.subscription.unsubscribe();
+      stopOfflineSync();
     };
   }, []);
+
+  // Stop treating an expired token as a live session even if the app is
+  // backgrounded/offline and Supabase has not emitted SIGNED_OUT yet.
+  useEffect(() => {
+    const userId = session?.user?.id;
+    const expiresAt = session?.expires_at;
+    if (!userId || typeof expiresAt !== "number") return;
+
+    const expireSession = () => {
+      stopOfflineSync();
+      setSession((current) =>
+        current?.user?.id === userId && current.expires_at === expiresAt
+          ? null
+          : current
+      );
+    };
+    const remainingMs = expiresAt * 1000 - Date.now();
+    if (remainingMs <= 0) {
+      expireSession();
+      return;
+    }
+    const timer = setTimeout(expireSession, remainingMs);
+    return () => clearTimeout(timer);
+  }, [session]);
 
   // Save current session tokens whenever the live session changes.
   // Guarded by isSwitchingRef / isLinkingRef so it never fires mid-switch.
@@ -984,7 +1039,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Update last_seen on app foreground
   useEffect(() => {
-    if (!session?.user?.id || session.user.id !== user?.id) return;
+    if (!isAuthenticated || !session?.user?.id || session.user.id !== user?.id) return;
     const updateLastSeen = () => {
       if (isOnline()) supabase.rpc("update_last_seen").then(null, () => {});
     };
@@ -1005,7 +1060,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sub.remove();
       clearInterval(interval);
     };
-  }, [session?.user?.id, user?.id]);
+  }, [isAuthenticated, session?.user?.id, user?.id]);
 
   // Reconnect: restore the live session first, then re-fetch the profile.
   // Cached identity alone must never trigger an unauthenticated profile request.
@@ -1041,7 +1096,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Real-time profile subscription — any DB UPDATE flows straight into state
   useEffect(() => {
-    if (!session?.user?.id || session.user.id !== user?.id) return;
+    if (!isAuthenticated || !session?.user?.id || session.user.id !== user?.id) return;
     const authenticatedUserId = session.user.id;
     const channel = supabase
       .channel(`profile-rt:${authenticatedUserId}`)
@@ -1061,13 +1116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [session?.user?.id, user?.id]);
+  }, [isAuthenticated, session?.user?.id, user?.id]);
 
   // Premium status is based only on an active paid subscription.
   const isPremium = getActivePlanTier(subscription) !== "free";
   const isVerifiedCreator = resolveCreatorVerification(profile?.is_verified, subscription);
-  const isAuthenticated = Boolean(session?.user?.id && session.user.id === user?.id);
-
   const contextValue = useMemo(
     () => ({
       session,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Linking, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { getCachedUserId } from "@/lib/offlineStore";
@@ -14,6 +14,8 @@ export default function IndexScreen() {
   const { colors } = useTheme();
   const { session, profile, loading, user } = useAuth();
   const redirected = useRef(false);
+  const knownIdentityRef = useRef(false);
+  knownIdentityRef.current = Boolean(getCachedUserId() || user?.id || session?.user?.id);
   const [initialUrlChecked, setInitialUrlChecked] = useState(false);
   const [initialDeepLinkPending, setInitialDeepLinkPending] = useState(false);
   const [languageChecked, setLanguageChecked] = useState(false);
@@ -22,23 +24,32 @@ export default function IndexScreen() {
 
   useEffect(() => {
     let mounted = true;
-    Linking.getInitialURL().catch(() => null).then(async (url) => {
-      if (!mounted) return;
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const finish = (deepLinkPending: boolean) => {
+      if (!mounted || settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      setInitialDeepLinkPending(deepLinkPending);
+      setInitialUrlChecked(true);
+    };
+    // A native Linking bridge can stall during Android startup. The root
+    // deep-link gate still owns navigation; this bound only prevents the
+    // ordinary index route from remaining blank indefinitely.
+    timeout = setTimeout(() => finish(false), 2500);
+    Linking.getInitialURL().then(async (url) => {
+      if (!mounted || settled) return;
+      let deepLinkPending = false;
       if (isAfuChatDeepLink(url)) {
         // Resolve the action only to stop the ordinary boot redirect from
         // racing the root deep-link gate, which owns actual navigation.
-        const action = await handleIncomingUrl(url);
-        if (mounted) setInitialDeepLinkPending(!!action);
+        deepLinkPending = !!(await handleIncomingUrl(url));
       }
-      if (mounted) setInitialUrlChecked(true);
-    }).catch(() => {
-      if (mounted) {
-        setInitialDeepLinkPending(false);
-        setInitialUrlChecked(true);
-      }
-    });
+      finish(deepLinkPending);
+    }).catch(() => finish(false));
     return () => {
       mounted = false;
+      if (timeout) clearTimeout(timeout);
     };
   }, []);
 
@@ -46,19 +57,26 @@ export default function IndexScreen() {
   // routing so a new user can understand the welcome experience.
   useEffect(() => {
     let mounted = true;
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const finish = (selected: boolean) => {
+      if (!mounted || settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      setLanguageSelected(selected);
+      setLanguageChecked(true);
+    };
+    // If durable preference storage is slow, let returning users reach their
+    // cached app shell and send first-run users through the language gate.
+    timeout = setTimeout(() => finish(knownIdentityRef.current), 2500);
     AsyncStorage.getItem(LANGUAGE_PREFERENCE_KEY)
       .then((stored) => {
-        if (!mounted) return;
-        setLanguageSelected(!!stored && stored !== "none");
-        setLanguageChecked(true);
+        finish(!!stored && stored !== "none");
       })
-      .catch(() => {
-        if (!mounted) return;
-        setLanguageSelected(false);
-        setLanguageChecked(true);
-      });
+      .catch(() => finish(knownIdentityRef.current));
     return () => {
       mounted = false;
+      if (timeout) clearTimeout(timeout);
     };
   }, []);
 
@@ -170,7 +188,12 @@ export default function IndexScreen() {
   // This route is only a navigation handoff. Returning users are routed from
   // the synchronous local identity cache, so never show an account-restoring
   // or loading message while background auth work continues.
-  return <View style={[styles.boot, { backgroundColor: colors.background }]} />;
+  return (
+    <View style={[styles.boot, { backgroundColor: colors.background }]}>
+      <ActivityIndicator size="small" />
+      <Text style={styles.bootLabel}>Loading AfuChat…</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -178,6 +201,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 14,
+    gap: 12,
+  },
+  bootLabel: {
+    color: "#64748b",
+    fontSize: 14,
   },
 });

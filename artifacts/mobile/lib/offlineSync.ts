@@ -1,5 +1,5 @@
 import { runAfterIdle } from "./runAfterIdle";
-import { supabase } from "./supabase";
+import { getLiveSupabaseSession, supabase } from "./supabase";
 import {
   getPendingMessages,
   removePendingMessage,
@@ -22,8 +22,13 @@ export async function syncPendingMessages(): Promise<void> {
   syncing = true;
 
   try {
+    const session = await getLiveSupabaseSession();
+    if (!session) return;
+
     // 1. Sync legacy AsyncStorage pending messages
-    const pending = await getPendingMessages();
+    const pending = (await getPendingMessages()).filter(
+      (msg) => msg.sender_id === session.user.id,
+    );
     for (const msg of pending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
         // Deduplication: check if a message with the same content+chat+sender
@@ -58,7 +63,9 @@ export async function syncPendingMessages(): Promise<void> {
     }
 
     // 2. Sync SQLite pending messages (primary path)
-    const localPending = await getPendingLocalMessages();
+    const localPending = (await getPendingLocalMessages()).filter(
+      (msg) => msg.sender_id === session.user.id,
+    );
     for (const msg of localPending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
         // Deduplication: same guard as above
@@ -112,6 +119,7 @@ async function reconnectRealtime(): Promise<void> {
   if (realtimeReconnecting) return;
   realtimeReconnecting = true;
   try {
+    if (!(await getLiveSupabaseSession())) return;
     await supabase.realtime.disconnect();
     await supabase.realtime.connect();
   } catch {
@@ -167,7 +175,13 @@ function stopRetryInterval(): void {
 }
 
 export function startOfflineSync(): void {
-  if (unsubscribe) return;
+  if (unsubscribe) {
+    if (isOnline()) {
+      void syncPendingMessages();
+      void drainQueue(MAX_ITEMS_PER_SYNC);
+    }
+    return;
+  }
 
   // Keep both offline systems under the same authenticated lifecycle. The root
   // layout must not start either one before Supabase has restored identity.
@@ -208,12 +222,16 @@ export async function preloadConversationMessages(
   chatIds: string[],
 ): Promise<void> {
   if (!isOnline() || chatIds.length === 0) return;
+  const initialSession = await getLiveSupabaseSession();
+  if (!initialSession) return;
   // This is background warm-up, not a requirement for opening chat. Start
   // after current interactions and keep it small so a large chat list cannot
   // monopolise the JS/native bridge or saturate the network.
   await new Promise<void>((resolve) => {
     runAfterIdle(resolve);
   });
+  const currentSession = await getLiveSupabaseSession();
+  if (currentSession?.user?.id !== initialSession.user.id) return;
   for (const chatId of chatIds.slice(0, 5)) {
     if (!isOnline()) break;
     try {

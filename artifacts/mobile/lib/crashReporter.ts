@@ -145,6 +145,7 @@ export function markStartupPhase(phase: StartupPhase): void {
 /** Call whenever auth state changes (user login / logout). */
 export function setCrashReporterUserId(id: string | null): void {
   _userId = id;
+  if (id) scheduleQueuedCrashReportFlush();
 }
 
 /**
@@ -364,7 +365,15 @@ async function _persistGlobalCrashLog(
 
 async function _send(payload: Record<string, unknown>): Promise<boolean> {
   try {
-    const { supabase } = require("@/lib/supabase");
+    const { getLiveSupabaseSession, supabase } = require("@/lib/supabase");
+    const session = await getLiveSupabaseSession();
+    if (!session) return false;
+    if (
+      typeof payload.user_id === "string" &&
+      payload.user_id !== session.user.id
+    ) {
+      return false;
+    }
     const { error } = await supabase.from("crash_logs").insert(payload);
     return !error;
   } catch {
@@ -386,6 +395,8 @@ async function _addToQueue(payload: Record<string, unknown>): Promise<void> {
 
 async function _flushQueue(): Promise<void> {
   try {
+    const { getLiveSupabaseSession } = require("@/lib/supabase");
+    if (!(await getLiveSupabaseSession())) return;
     const AsyncStorage = require("@react-native-async-storage/async-storage").default;
     const raw = await AsyncStorage.getItem(QUEUE_KEY);
     if (!raw) return;

@@ -20,6 +20,22 @@ async function openDB(): Promise<DB> {
   };
 }
 
+async function execSchemaChange(db: DB, sql: string): Promise<void> {
+  try {
+    await db.execAsync(sql);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isReplayOfAddedColumn =
+      /^\s*ALTER\s+TABLE\b[\s\S]*\bADD\s+COLUMN\b/i.test(sql) &&
+      /duplicate column name/i.test(message);
+    const isReplayOfDroppedColumn =
+      /^\s*ALTER\s+TABLE\b[\s\S]*\bDROP\s+COLUMN\b/i.test(sql) &&
+      /no such column/i.test(message);
+    if (isReplayOfAddedColumn || isReplayOfDroppedColumn) return;
+    throw error;
+  }
+}
+
 export async function getDB(): Promise<DB> {
   if (_db) return _db;
   if (_initPromise) return _initPromise;
@@ -104,14 +120,12 @@ async function runMigrations(db: DB) {
   }
 
   if (currentVersion < 2) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE feed_posts ADD COLUMN viewed_at INTEGER");
-    await safeAdd("ALTER TABLE feed_posts ADD COLUMN saved_to_tab TEXT");
+    await execSchemaChange(db, "ALTER TABLE feed_posts ADD COLUMN viewed_at INTEGER");
+    await execSchemaChange(db, "ALTER TABLE feed_posts ADD COLUMN saved_to_tab TEXT");
     await db.runAsync("UPDATE schema_version SET version = 2");
   }
 
   if (currentVersion < 3) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS contacts (
         id TEXT PRIMARY KEY, display_name TEXT NOT NULL, handle TEXT NOT NULL,
@@ -124,25 +138,22 @@ async function runMigrations(db: DB) {
   }
 
   if (currentVersion < 4) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE media_cache ADD COLUMN file_name TEXT");
+    await execSchemaChange(db, "ALTER TABLE media_cache ADD COLUMN file_name TEXT");
     await db.runAsync("UPDATE schema_version SET version = 4");
   }
 
   if (currentVersion < 5) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE media_cache ADD COLUMN saved_to_device INTEGER NOT NULL DEFAULT 0");
+    await execSchemaChange(db, "ALTER TABLE media_cache ADD COLUMN saved_to_device INTEGER NOT NULL DEFAULT 0");
     await db.runAsync("UPDATE schema_version SET version = 5");
   }
 
   if (currentVersion < 6) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE media_cache ADD COLUMN last_accessed INTEGER");
-    await safeAdd("ALTER TABLE media_cache ADD COLUMN owner_id TEXT");
-    await safeAdd("ALTER TABLE media_cache ADD COLUMN message_id TEXT");
-    await safeAdd("ALTER TABLE media_cache ADD COLUMN mime_type TEXT");
-    await safeAdd("UPDATE media_cache SET last_accessed = stored_at WHERE last_accessed IS NULL");
-    await safeAdd("CREATE INDEX IF NOT EXISTS idx_media_last_accessed ON media_cache(last_accessed)");
+    await execSchemaChange(db, "ALTER TABLE media_cache ADD COLUMN last_accessed INTEGER");
+    await execSchemaChange(db, "ALTER TABLE media_cache ADD COLUMN owner_id TEXT");
+    await execSchemaChange(db, "ALTER TABLE media_cache ADD COLUMN message_id TEXT");
+    await execSchemaChange(db, "ALTER TABLE media_cache ADD COLUMN mime_type TEXT");
+    await db.execAsync("UPDATE media_cache SET last_accessed = stored_at WHERE last_accessed IS NULL");
+    await db.execAsync("CREATE INDEX IF NOT EXISTS idx_media_last_accessed ON media_cache(last_accessed)");
     await db.runAsync("UPDATE schema_version SET version = 6");
   }
 
@@ -207,15 +218,13 @@ async function runMigrations(db: DB) {
   }
 
   if (currentVersion < 10) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE video_registry ADD COLUMN watched_at INTEGER");
-    await safeAdd("UPDATE video_registry SET watched_at = stored_at WHERE watched_at IS NULL");
-    await safeAdd("CREATE INDEX IF NOT EXISTS idx_video_watched ON video_registry(watched_at DESC)");
+    await execSchemaChange(db, "ALTER TABLE video_registry ADD COLUMN watched_at INTEGER");
+    await db.execAsync("UPDATE video_registry SET watched_at = stored_at WHERE watched_at IS NULL");
+    await db.execAsync("CREATE INDEX IF NOT EXISTS idx_video_watched ON video_registry(watched_at DESC)");
     await db.runAsync("UPDATE schema_version SET version = 10");
   }
 
   if (currentVersion < 11) {
-    const safe = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
     // Preserve existing local data during this schema version.
     await db.runAsync("UPDATE schema_version SET version = 11");
   }
@@ -237,11 +246,10 @@ async function runMigrations(db: DB) {
 
   // ── v13: Author metadata on video_registry for offline feed display ────────────
   if (currentVersion < 13) {
-    const safe = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safe("ALTER TABLE video_registry ADD COLUMN author_id TEXT");
-    await safe("ALTER TABLE video_registry ADD COLUMN author_handle TEXT");
-    await safe("ALTER TABLE video_registry ADD COLUMN author_name TEXT");
-    await safe("ALTER TABLE video_registry ADD COLUMN author_avatar TEXT");
+    await execSchemaChange(db, "ALTER TABLE video_registry ADD COLUMN author_id TEXT");
+    await execSchemaChange(db, "ALTER TABLE video_registry ADD COLUMN author_handle TEXT");
+    await execSchemaChange(db, "ALTER TABLE video_registry ADD COLUMN author_name TEXT");
+    await execSchemaChange(db, "ALTER TABLE video_registry ADD COLUMN author_avatar TEXT");
     await db.runAsync("UPDATE schema_version SET version = 13");
   }
 
@@ -257,13 +265,12 @@ async function runMigrations(db: DB) {
 
   // ── v15: remove obsolete preference columns from local settings ────────────
   if (currentVersion < 15) {
-    const safe = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
     for (const column of [
       "notif_likes", "notif_comments", "notif_follows", "notif_messages",
       "notif_mentions", "notif_reposts", "notif_tips", "notif_system",
       "notif_stories", "notif_live",
     ]) {
-      await safe(`ALTER TABLE user_settings DROP COLUMN ${column}`);
+      await execSchemaChange(db, `ALTER TABLE user_settings DROP COLUMN ${column}`);
     }
     await db.runAsync("UPDATE schema_version SET version = 15");
   }
@@ -297,16 +304,14 @@ async function runMigrations(db: DB) {
   }
 
   if (currentVersion < 17) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE conversations ADD COLUMN created_by TEXT");
+    await execSchemaChange(db, "ALTER TABLE conversations ADD COLUMN created_by TEXT");
     await db.runAsync("UPDATE schema_version SET version = 17");
   }
 
   if (currentVersion < 18) {
-    const safeAdd = async (sql: string) => { try { await db.execAsync(sql); } catch {} };
-    await safeAdd("ALTER TABLE messages ADD COLUMN sender_display_name TEXT");
-    await safeAdd("ALTER TABLE messages ADD COLUMN sender_avatar_url TEXT");
-    await safeAdd("ALTER TABLE messages ADD COLUMN sender_handle TEXT");
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN sender_display_name TEXT");
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN sender_avatar_url TEXT");
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN sender_handle TEXT");
     await db.runAsync("UPDATE schema_version SET version = 18");
   }
 }
