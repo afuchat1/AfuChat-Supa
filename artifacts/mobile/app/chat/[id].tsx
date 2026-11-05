@@ -8349,6 +8349,7 @@ STRICT RULES:
           <View style={{ flex: 1 }}>
             <FlatList
               ref={flatListRef}
+              removeClippedSubviews={false}
               data={listData}
               keyExtractor={(m) => m.id}
               extraData={[highlightedMsgId, lensCardMsg?.id, searchActive, searchMatchIndices.length, searchCursor, isAfuAiTyping]}

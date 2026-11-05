@@ -59,7 +59,7 @@ function updateShortcutsFromServerRows(rows: any[]): void {
  * the server list replaces it when available.
  */
 export default function NativeShareShortcutSync() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (!user) {
@@ -89,6 +89,10 @@ export default function NativeShareShortcutSync() {
               return;
             }
 
+            // A cached identity can publish local shortcuts, but cannot make
+            // authenticated server requests until Supabase restores its session.
+            if (!isAuthenticated) return;
+
             const { data, error } = await supabase.rpc("get_chat_list", {
               p_unread_excluded_ids: [],
             });
@@ -109,7 +113,7 @@ export default function NativeShareShortcutSync() {
       idleTask.cancel();
       if (timer) clearTimeout(timer);
     };
-  }, [user?.id]);
+  }, [user?.id, isAuthenticated]);
 
   return null;
 }

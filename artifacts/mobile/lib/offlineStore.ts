@@ -345,8 +345,8 @@ let _uidMirror: string | null = null;
 
 /**
  * Pre-populate the synchronous user-ID cache from the AsyncStorage backup.
- * Call this before the auth bootstrap reads getCachedUserId(), so the
- * synchronous cache includes the durable backup when MMKV uses memory storage.
+ * Auth bootstrap starts this alongside session restoration; once it resolves,
+ * the mirror includes the durable backup when MMKV uses memory storage.
  *
  * Safe to call multiple times — exits immediately if the cache is already warm.
  */

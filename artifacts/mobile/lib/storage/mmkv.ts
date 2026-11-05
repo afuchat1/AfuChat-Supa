@@ -55,6 +55,20 @@ function createLocalStorageStore(): MMKVLike {
 }
 
 let _store: MMKVLike | null = null;
+type StoreBackend = "uninitialized" | "mmkv" | "memory" | "localStorage";
+let _storeBackend: StoreBackend = "uninitialized";
+let _persistentStoreInitFailed = false;
+
+/** Read current storage health without forcing native storage initialization. */
+export function getStorageDiagnostics(): {
+  backend: StoreBackend;
+  persistentStoreInitFailed: boolean;
+} {
+  return {
+    backend: _storeBackend,
+    persistentStoreInitFailed: _persistentStoreInitFailed,
+  };
+}
 
 /**
  * Returns true when running inside Expo Go.
@@ -95,6 +109,7 @@ function getStore(): MMKVLike {
       _store = typeof localStorage !== "undefined"
         ? createLocalStorageStore()
         : createMemoryStore();
+      _storeBackend = typeof localStorage !== "undefined" ? "localStorage" : "memory";
       return _store;
     }
   } catch {}
@@ -102,6 +117,7 @@ function getStore(): MMKVLike {
   // Expo Go: MMKV JSI module is absent — fall back to in-memory.
   if (isExpoGo()) {
     _store = createMemoryStore();
+    _storeBackend = "memory";
     return _store;
   }
 
@@ -111,6 +127,7 @@ function getStore(): MMKVLike {
     try {
       const { MMKV } = require("react-native-mmkv") as any;
       _store = new MMKV({ id: "afuchat-store" });
+      _storeBackend = "mmkv";
       return _store!;
     } catch (err) {
       if (attempt === 0) continue; // retry once
@@ -119,10 +136,13 @@ function getStore(): MMKVLike {
       if (typeof console !== "undefined") {
         console.error("[MMKV] Failed to initialise persistent store — falling back to in-memory. All data will be lost on restart.", err);
       }
+      _persistentStoreInitFailed = true;
+      _storeBackend = "memory";
     }
   }
 
   _store = createMemoryStore();
+  _storeBackend = "memory";
   return _store!;
 }
 

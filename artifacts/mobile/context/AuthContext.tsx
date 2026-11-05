@@ -25,6 +25,7 @@ import {
   clearCachedUserId,
   wipeAllLocalData,
 } from "@/lib/offlineStore";
+import { markStartupPhase } from "@/lib/crashReporter";
 import { clearAllConversations } from "@/lib/storage/localConversations";
 import { invalidateConversationsPreload } from "@/lib/conversationsPreload";
 import { saveLocalProfile, getLocalProfile } from "@/lib/storage/localProfile";
@@ -82,9 +83,18 @@ type Subscription = {
   plan_features: any[];
 };
 
+type OfflineIdentity = {
+  id: string;
+  email: string | null;
+};
+
 type AuthContextType = {
   session: Session | null;
   user: User | null;
+  /** Cached UI identity only; it does not authorize Supabase requests. */
+  offlineIdentity: OfflineIdentity | null;
+  /** True only when the current Supabase session matches the visible user. */
+  isAuthenticated: boolean;
   profile: Profile | null;
   subscription: Subscription | null;
   isPremium: boolean;
@@ -99,6 +109,8 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
+  offlineIdentity: null,
+  isAuthenticated: false,
   profile: null,
   subscription: null,
   isPremium: false,
@@ -132,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: (_syncProfile as any)?.email ?? "",
           app_metadata: {},
           user_metadata: {},
-          aud: "authenticated",
+          aud: "offline",
           created_at: "",
         } as User)
       : null
@@ -605,6 +617,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Bootstrap ────────────────────────────────────────────────────────────────
 
   useEffect(() => {
+    markStartupPhase("auth_restoration");
     const bootstrapGeneration = ++authGenerationRef.current;
     const isCurrentBootstrap = () => authGenerationRef.current === bootstrapGeneration;
 
@@ -640,7 +653,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: (fastProfile as any)?.email ?? "",
         app_metadata: {},
         user_metadata: {},
-        aud: "authenticated",
+        aud: "offline",
         created_at: "",
       } as User);
       setLoading(false);
@@ -750,15 +763,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               (durableProfile?.id === effectiveUserId ? durableProfile : null);
             if (initialProfile) setProfile(initialProfile as Profile);
 
-            // Set a synthetic user immediately so the app routes to home without
-            // waiting for a network round-trip. The real session replaces it once
-            // the background token refresh completes (TOKEN_REFRESHED fires).
+            // Set a cached UI identity immediately so local routes can render
+            // without a network round-trip. This is not an authenticated Supabase
+            // session; the real session replaces it after token refresh.
             const syntheticUser = {
               id: effectiveUserId,
               email: primaryAccount?.email || (cachedSync as any)?.email || "",
               app_metadata: {},
               user_metadata: {},
-              aud: "authenticated",
+              aud: "offline",
               created_at: "",
             } as User;
             if (!isCurrentBootstrap()) return;
@@ -971,7 +984,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Update last_seen on app foreground
   useEffect(() => {
-    if (!user) return;
+    if (!session?.user?.id || session.user.id !== user?.id) return;
     const updateLastSeen = () => {
       if (isOnline()) supabase.rpc("update_last_seen").then(null, () => {});
     };
@@ -992,27 +1005,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sub.remove();
       clearInterval(interval);
     };
-  }, [user]);
+  }, [session?.user?.id, user?.id]);
 
-  // Reconnect: re-fetch profile + refresh JWT when network comes back.
-  // Pass the refresh token explicitly from SecureStore rather than relying on
-  // supabase.auth.refreshSession() with no args — Supabase may have cleared its
-  // own AsyncStorage session after an involuntary SIGNED_OUT while offline.
+  // Reconnect: restore the live session first, then re-fetch the profile.
+  // Cached identity alone must never trigger an unauthenticated profile request.
+  // Pass stored tokens explicitly when available because Supabase may have
+  // cleared its own session after an involuntary SIGNED_OUT while offline.
   useEffect(() => {
     if (!user) return;
     const userId = user.id;
     const unsub = onConnectivityChange((online) => {
       if (online) {
-        fetchProfile(userId);
         getStoredAccount(userId)
-          .then((stored) => {
+          .then(async (stored) => {
             if (stored) {
-              return supabase.auth.setSession({
+              const { data, error } = await supabase.auth.setSession({
                 access_token: stored.accessToken,
                 refresh_token: stored.refreshToken,
               });
+              if (!error && data.session?.user.id === userId) {
+                await fetchProfile(userId);
+              }
+              return;
             }
-            return supabase.auth.refreshSession();
+            const { data, error } = await supabase.auth.refreshSession();
+            if (!error && data.session?.user.id === userId) {
+              await fetchProfile(userId);
+            }
           })
           .catch(() => {});
       }
@@ -1022,12 +1041,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Real-time profile subscription — any DB UPDATE flows straight into state
   useEffect(() => {
-    if (!user) return;
+    if (!session?.user?.id || session.user.id !== user?.id) return;
+    const authenticatedUserId = session.user.id;
     const channel = supabase
-      .channel(`profile-rt:${user.id}`)
+      .channel(`profile-rt:${authenticatedUserId}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${authenticatedUserId}` },
         (payload) => {
           const incoming = payload.new as Partial<Profile>;
           setProfile((prev) => {
@@ -1041,16 +1061,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+  }, [session?.user?.id, user?.id]);
 
   // Premium status is based only on an active paid subscription.
   const isPremium = getActivePlanTier(subscription) !== "free";
   const isVerifiedCreator = resolveCreatorVerification(profile?.is_verified, subscription);
+  const isAuthenticated = Boolean(session?.user?.id && session.user.id === user?.id);
 
   const contextValue = useMemo(
     () => ({
       session,
       user,
+      offlineIdentity:
+        !isAuthenticated && user?.id
+          ? { id: user.id, email: user.email ?? null }
+          : null,
+      isAuthenticated,
       profile,
       subscription,
       isPremium,
@@ -1061,7 +1087,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile,
       patchProfile,
     }),
-    [session, user, profile, subscription, isPremium, isVerifiedCreator, equippedGoods, loading, signOut]
+    [session, user, isAuthenticated, profile, subscription, isPremium, isVerifiedCreator, equippedGoods, loading, signOut]
   );
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

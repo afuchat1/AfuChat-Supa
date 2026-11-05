@@ -283,6 +283,7 @@ export default function MomentsScreen() {
         </View>
       ) : (
         <FlatList
+          removeClippedSubviews={false}
           data={storyUsers}
           keyExtractor={(item) => item.userId}
           renderItem={renderItem}

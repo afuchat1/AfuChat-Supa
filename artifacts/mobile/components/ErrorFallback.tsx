@@ -17,6 +17,7 @@ import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "@/hooks/useTheme";
+import { redactCrashText, safeCrashSummary } from "@/lib/crashReporter";
 
 export const CRASH_LOG_KEY = "afuchat_last_crash_log";
 const PREV_CRASH_KEY = "afuchat_prev_crash_log";
@@ -51,17 +52,17 @@ export function buildCrashLog(error: Error, componentStack?: string): string {
     buildDeviceInfo(),
     "",
     "────────────────  Error  ───────────────────",
-    error.message ?? "Unknown error",
+    safeCrashSummary(error.message ?? "Unknown error"),
     "",
   ];
   if (error.stack) {
     parts.push("────────────  JS Stack Trace  ──────────────");
-    parts.push(error.stack.trim());
+    parts.push(redactCrashText(error.stack.trim()));
     parts.push("");
   }
   if (componentStack) {
     parts.push("──────────  React Component Stack  ─────────");
-    parts.push(componentStack.trim());
+    parts.push(redactCrashText(componentStack.trim()));
     parts.push("");
   }
   parts.push("════════════════════════════════════════════");
@@ -178,7 +179,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           selectable
           numberOfLines={5}
         >
-          {error.message}
+          {safeCrashSummary(error.message ?? "Unknown error")}
         </Text>
       </View>
 

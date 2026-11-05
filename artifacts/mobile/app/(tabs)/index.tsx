@@ -1946,6 +1946,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           ) : (
             /* Web / PagerView-unavailable fallback — horizontal FlatList pager */
             <FlatList
+              removeClippedSubviews={false}
               ref={pagerListRef}
               data={pages}
               keyExtractor={(p) => ("filter" in p ? p.id : "all")}

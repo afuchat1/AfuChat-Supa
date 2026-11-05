@@ -1,13 +1,12 @@
-import "@/polyfills";
+import { markStartupPhase, setCrashReporterUserId, setCrashNotificationHandler } from "@/lib/crashReporter";
 import "react-native-gesture-handler";
 import "@/lib/navigationGuard";
 import * as SplashScreen from "expo-splash-screen";
 
 // Keep the native splash visible until we explicitly hide it
 SplashScreen.preventAutoHideAsync().catch(() => {});
-import { initCrashReporter, setCrashReporterUserId, setCrashNotificationHandler } from "@/lib/crashReporter";
 import { showAlert } from "@/lib/alert";
-initCrashReporter();
+markStartupPhase("primary");
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
@@ -101,14 +100,18 @@ I18nManager.allowRTL(false);
 I18nManager.forceRTL(false);
 
 function ActivityTrackerSync() {
-  const { user } = useAuth();
-  useEffect(() => { initActivityTracker(user?.id ?? null); }, [user?.id]);
+  const { user, isAuthenticated } = useAuth();
+  useEffect(() => {
+    initActivityTracker(isAuthenticated ? user?.id ?? null : null);
+  }, [isAuthenticated, user?.id]);
   return null;
 }
 
 function CrashReporterUserSync() {
-  const { user } = useAuth();
-  useEffect(() => { setCrashReporterUserId(user?.id ?? null); }, [user?.id]);
+  const { user, isAuthenticated } = useAuth();
+  useEffect(() => {
+    setCrashReporterUserId(isAuthenticated ? user?.id ?? null : null);
+  }, [isAuthenticated, user?.id]);
   return null;
 }
 
@@ -471,6 +474,11 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
   const [webFontTimeout, setWebFontTimeout] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
+
+  useEffect(() => {
+    if (!rootNavigationState?.key || (Platform.OS !== "web" && !splashDone)) return;
+    markStartupPhase("operational");
+  }, [rootNavigationState?.key, splashDone]);
 
   const handleSplashDone = useCallback(() => {
     SplashScreen.hideAsync().catch(() => {});

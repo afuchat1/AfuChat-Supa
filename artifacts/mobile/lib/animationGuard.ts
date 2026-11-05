@@ -20,7 +20,7 @@
  * 3. iOS MemoryWarning — if the OS sends a low-memory signal, we cancel
  *    immediately without waiting for a background transition.
  *
- * 5. Three value types supported:
+ * 4. Three value types supported:
  *    • Reanimated SharedValue  (react-native-reanimated v4+)
  *    • Legacy Animated.Value   (React Native core Animated API)
  *    • CompositeAnimation      (Animated.loop / Animated.sequence refs)
@@ -172,7 +172,6 @@ function cancelAll(reason: string): void {
 function handleAppStateChange(next: AppStateStatus): void {
   const wasActive  = previousState === "active";
   const goingBack  = next === "background" || next === "inactive";
-  const comingFront = previousState !== "active" && next === "active";
 
   if (wasActive && goingBack) {
     _lastBgAt = Date.now();

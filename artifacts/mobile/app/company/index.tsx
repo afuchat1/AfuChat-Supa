@@ -290,6 +290,7 @@ export default function CompanyIndexScreen() {
         </View>
       ) : (
         <FlatList
+          removeClippedSubviews={false}
           data={displayedPages}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}

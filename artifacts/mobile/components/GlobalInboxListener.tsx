@@ -23,7 +23,7 @@ import { emitIncomingMessage, IncomingMessage } from "@/lib/globalMessageEvents"
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export function GlobalInboxListener() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const recentIds = useRef(new Set<string>());
   const evictionTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const userIdRef = useRef(user?.id);
@@ -49,7 +49,7 @@ export function GlobalInboxListener() {
 
   // ── Supabase Broadcast subscription with auto-reconnect ────────────────────
   useEffect(() => {
-    if (!user?.id) return;
+    if (!isAuthenticated || !user?.id) return;
 
     let destroyed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -141,7 +141,7 @@ export function GlobalInboxListener() {
       evictionTimers.current.forEach((timer) => clearTimeout(timer));
       evictionTimers.current.clear();
     };
-  }, [user?.id, handlePayload]);
+  }, [isAuthenticated, user?.id, handlePayload]);
 
   return null;
 }

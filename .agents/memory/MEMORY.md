@@ -14,6 +14,7 @@
 - [Android module compatibility](android-module-compatibility.md) — Support Android 14 and earlier; verify Expo autolinking before manually registering native ReactPackages.
 - [Android AfuMusic launch triage](android-afumusic-launch-triage.md) — The user reports physical Android startup crashes associated with AfuMusic player controls; verify media setup and SDK-aligned versions.
 - [Android build toolchain](android-build-toolchain.md) — Keep AGP, Gradle, and Kotlin aligned across Expo-generated build files and version catalogs.
+- [Android startup safety](android-startup-safety.md) — Keep offline identity non-authoritative, startup reporting privacy-safe, and Android list safeguards scoped to affected screens.
 - [TypeScript check heap](typescript-check-heap.md) — Run full mobile typechecks with a 4 GB Node heap; the default heap can run out before diagnostics.
 - [App-wide input and floating surfaces](afuchat-input-surface.md) — Keep all input bars compact, single-shell glass surfaces; share the same architecture for floating controls.
 - [AfuChat durable user data](afu-durable-user-data.md) — Keep durable user data out of OS-clearable cache storage; use persistent app storage or the server.
