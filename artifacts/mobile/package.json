@@ -1,6 +1,6 @@
 {
   "name": "@workspace/mobile",
-  "version": "2.2.7",
+  "version": "0.0.6",
   "private": true,
   "expo": {
     "doctor": {
