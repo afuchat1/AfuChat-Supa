@@ -2,6 +2,7 @@
 // Native (Android/iOS): uses react-native-mmkv (JSI, synchronous).
 // Web:      uses localStorage so data persists across page refreshes.
 // Expo Go:  in-memory store (MMKV module is not available in Expo Go).
+import { isExpoGo } from "@/lib/expoEnvironment";
 
 type MMKVLike = {
   set(key: string, value: string | number | boolean): void;
@@ -68,35 +69,6 @@ export function getStorageDiagnostics(): {
     backend: _storeBackend,
     persistentStoreInitFailed: _persistentStoreInitFailed,
   };
-}
-
-/**
- * Returns true when running inside Expo Go.
- * react-native-mmkv is NOT bundled in Expo Go — requiring it would throw.
- */
-function isExpoGo(): boolean {
-  try {
-    const Constants = require("expo-constants").default;
-    if (
-      Constants?.appOwnership === "expo" ||
-      Constants?.executionEnvironment === "storeClient"
-    ) {
-      return true;
-    }
-  } catch {}
-
-  try {
-    const { NativeModules } = require("react-native");
-    if (NativeModules?.ExponentConstants?.appOwnership === "expo") return true;
-  } catch {}
-
-  // NOTE: do NOT check `typeof global.__expo !== "undefined"` here.
-  // The __expo global is injected by the Expo SDK runtime in ALL Expo apps —
-  // including production standalone builds — so that check is a false positive
-  // that causes production apps to silently fall back to the in-memory store
-  // and lose all data on every restart.
-
-  return false;
 }
 
 function getStore(): MMKVLike {

@@ -31,6 +31,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/env";
 import { useAuth } from "@/context/AuthContext";
+import { isExpoGo } from "@/lib/expoEnvironment";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -328,7 +329,7 @@ export default function SignInScreen() {
   // browser or account picker. A first-time user still gets the native picker
   // when they press Continue with Google.
   useEffect(() => {
-    if (Platform.OS !== "android" || user || nativeAutoSignInRef.current) return;
+    if (Platform.OS !== "android" || isExpoGo() || user || nativeAutoSignInRef.current) return;
     nativeAutoSignInRef.current = true;
     let cancelled = false;
     setOauthLoading("google");

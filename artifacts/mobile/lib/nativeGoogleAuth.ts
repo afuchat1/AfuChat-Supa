@@ -1,3 +1,4 @@
+import { isExpoGo } from "@/lib/expoEnvironment";
 import { Platform } from "react-native";
 import { GOOGLE_WEB_CLIENT_ID } from "@/lib/env";
 
@@ -22,7 +23,7 @@ export type NativeGoogleResult =
 let configurePromise: Promise<GoogleSigninModule | null> | null = null;
 
 function getGoogleSignin(): GoogleSigninModule | null {
-  if (Platform.OS !== "android") return null;
+  if (Platform.OS !== "android" || isExpoGo()) return null;
 
   try {
     return require("@react-native-google-signin/google-signin").GoogleSignin as GoogleSigninModule;
