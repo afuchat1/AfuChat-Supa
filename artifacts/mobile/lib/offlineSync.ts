@@ -9,6 +9,7 @@ import {
 import { drainQueue, startSyncQueue, stopSyncQueue } from "./storage/syncQueue";
 import {
   getPendingLocalMessages,
+  isClientMessageId,
   markMessageSynced,
   getLocalMessageCount,
   saveMessages,
@@ -31,6 +32,39 @@ export async function syncPendingMessages(): Promise<void> {
     );
     for (const msg of pending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
+        if (isClientMessageId(msg.id)) {
+          const insertPayload: Record<string, unknown> = {
+            id: msg.id,
+            chat_id: msg.chat_id,
+            sender_id: msg.sender_id,
+            encrypted_content: msg.encrypted_content,
+          };
+          if (msg.reply_to_message_id) {
+            insertPayload.reply_to_message_id = msg.reply_to_message_id;
+          }
+          const { data: inserted, error: insertError } = await supabase
+            .from("messages")
+            .insert(insertPayload)
+            .select("id, encrypted_content")
+            .single();
+          if (!insertError && inserted?.id === msg.id) {
+            await removePendingMessage(msg.id);
+            continue;
+          }
+
+          const { data: committed, error: confirmError } = await supabase
+            .from("messages")
+            .select("id, encrypted_content")
+            .eq("id", msg.id)
+            .eq("chat_id", msg.chat_id)
+            .eq("sender_id", msg.sender_id)
+            .maybeSingle();
+          if (!confirmError && committed?.id === msg.id && committed.encrypted_content === msg.encrypted_content) {
+            await removePendingMessage(msg.id);
+          }
+          continue;
+        }
+
         // Deduplication: check if a message with the same content+chat+sender
         // was already inserted (e.g., sent on a previous retry before the ack
         // arrived). If found, just remove from queue without re-inserting.
@@ -68,32 +102,62 @@ export async function syncPendingMessages(): Promise<void> {
     );
     for (const msg of localPending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
-        // Deduplication: same guard as above
-        const { data: existing } = await supabase
-          .from("messages")
-          .select("id")
-          .eq("chat_id", msg.conversation_id)
-          .eq("sender_id", msg.sender_id)
-          .eq("encrypted_content", msg.content)
-          .gte("sent_at", new Date(Date.now() - 60_000).toISOString())
-          .maybeSingle();
+        // New local messages use the same UUID as the server row, so a retry
+        // after a lost acknowledgement is safely idempotent without treating
+        // two intentionally identical messages as duplicates. Keep the
+        // timestamp/content check only for rows queued by older app versions.
+        if (!isClientMessageId(msg.id)) {
+          const { data: legacyMatch } = await supabase
+            .from("messages")
+            .select("id")
+            .eq("chat_id", msg.conversation_id)
+            .eq("sender_id", msg.sender_id)
+            .eq("encrypted_content", msg.content)
+            .gte("sent_at", new Date(Date.now() - 60_000).toISOString())
+            .maybeSingle();
 
-        if (existing) {
-          await markMessageSynced(msg.id, existing.id);
-          continue;
+          if (legacyMatch) {
+            await markMessageSynced(msg.id, legacyMatch.id);
+            continue;
+          }
         }
+
+        const insertPayload: Record<string, unknown> = {
+          chat_id: msg.conversation_id,
+          sender_id: msg.sender_id,
+          encrypted_content: msg.content,
+        };
+        if (isClientMessageId(msg.id)) insertPayload.id = msg.id;
+        if (msg.reply_to_id) insertPayload.reply_to_message_id = msg.reply_to_id;
 
         const { data, error } = await supabase
           .from("messages")
-          .insert({
-            chat_id: msg.conversation_id,
-            sender_id: msg.sender_id,
-            encrypted_content: msg.content,
-          })
+          .insert(insertPayload)
           .select("id")
           .single();
         if (!error && data?.id) {
           await markMessageSynced(msg.id, data.id);
+          continue;
+        }
+
+        // If the insert committed but its acknowledgement was lost, confirm the
+        // same immutable message ID before retrying. Never infer success from
+        // matching text for new client-ID messages.
+        if (isClientMessageId(msg.id)) {
+          const { data: committed, error: confirmError } = await supabase
+            .from("messages")
+            .select("id, encrypted_content")
+            .eq("id", msg.id)
+            .eq("chat_id", msg.conversation_id)
+            .eq("sender_id", msg.sender_id)
+            .maybeSingle();
+          if (
+            !confirmError &&
+            committed?.id === msg.id &&
+            committed.encrypted_content === msg.content
+          ) {
+            await markMessageSynced(msg.id, committed.id);
+          }
         }
       } catch {
         // Leave the row pending. The next connectivity/interval pass can retry.

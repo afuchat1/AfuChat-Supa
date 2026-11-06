@@ -23,7 +23,6 @@ import {
   getOfflineCacheStats,
   clearAllOfflineVideos,
   removeOfflineVideo,
-  clearExpiredOfflineVideos,
   type OfflineVideoEntry,
 } from "@/lib/videoCache";
 import { useLanguage } from "@/context/LanguageContext";
@@ -74,7 +73,6 @@ export default function OfflineVideosScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      await clearExpiredOfflineVideos();
       const [recent, all, st] = await Promise.all([
         getRecentlyWatchedVideos(24),
         getOfflineVideos(),

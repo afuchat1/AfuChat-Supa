@@ -64,7 +64,7 @@ import { useAppAccent } from "@/context/AppAccentContext";
 import { useTheme } from "@/hooks/useTheme";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
-import { getCachedVideoUri, cacheVideo, markVideoWatched, getOfflineVideos } from "@/lib/videoCache";
+import { getCachedVideoUri, cacheVideo, markVideoWatched, saveVideoForOffline, getOfflineVideos } from "@/lib/videoCache";
 import { storage } from "@/lib/storage/mmkv";
 import { recordWatchHistory } from "@/lib/watchHistory";
 import { onShortsRefresh } from "@/lib/shortsRefresh";
@@ -269,9 +269,10 @@ const ssStyles = StyleSheet.create({
 
 // ─── VideoContextMenu ─────────────────────────────────────────────────────────
 
-function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownload, onCopyLink, onNotInterested, onReport, autoScroll, onToggleAutoScroll }: {
+function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownload, onSaveOffline, onCopyLink, onNotInterested, onReport, autoScroll, onToggleAutoScroll }: {
   visible: boolean; item: VideoPost | null; onClose: () => void;
   onShare: () => void; onRepost: () => void; onDownload: () => void;
+  onSaveOffline: () => void;
   onCopyLink: () => void; onNotInterested: () => void; onReport: () => void;
   autoScroll: boolean; onToggleAutoScroll: () => void;
 }) {
@@ -296,6 +297,10 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onCopyLink)} activeOpacity={0.65}>
         <Ionicons name="link" size={24} color={colors.text} style={cmStyles.rowIcon} />
         <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Copy link</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={cmStyles.row} onPress={() => tap(onSaveOffline)} activeOpacity={0.65}>
+        <Ionicons name="cloud-download" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Save offline</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onDownload)} activeOpacity={0.65}>
         <Ionicons name="download" size={24} color={colors.text} style={cmStyles.rowIcon} />
@@ -1761,6 +1766,26 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     setTimeout(() => setDownloadToast(null), durationMs);
   }
 
+  async function handleSaveOffline(item: VideoPost) {
+    const result = await saveVideoForOffline(item.id, item.video_url, {
+      title: `${item.profile?.display_name ?? ""}${item.content ? `: ${item.content.slice(0, 60)}` : ""}`,
+      thumbnail: item.image_url ?? null,
+      authorId: item.author_id,
+      authorHandle: item.profile?.handle,
+      authorName: item.profile?.display_name,
+      authorAvatar: item.profile?.avatar_url ?? null,
+    });
+    if (result.success) {
+      showToast(result.alreadySaved ? "Already saved offline" : "Saved for offline viewing", 3000);
+    } else if (result.reason === "storage_limit") {
+      showToast("Offline storage is full. Remove a saved video first.", 3500);
+    } else if (result.reason === "already_saving") {
+      showToast("This video is already being saved", 2500);
+    } else {
+      showToast("Could not save offline. Check your connection and try again.", 3500);
+    }
+  }
+
   async function handleDownload(item: VideoPost) {
     if (downloading) return;
 
@@ -2037,6 +2062,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         onShare={() => menuItem && setShareSheetItem(menuItem)}
         onRepost={() => menuItem && handleRepost(menuItem)}
         onDownload={() => menuItem && handleDownload(menuItem)}
+        onSaveOffline={() => menuItem && handleSaveOffline(menuItem)}
         onCopyLink={() => menuItem && handleCopyLink(menuItem)}
         onNotInterested={() => { if (menuItem) { setMenuItem(null); handleNotInterested(menuItem); } }}
         onReport={() => menuItem && handleReport(menuItem)}

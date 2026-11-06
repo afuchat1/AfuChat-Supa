@@ -588,7 +588,6 @@ export default function RootLayout() {
     // Do not compete with the first route for the JS/native bridge. Auth starts
     // sync only after identity restoration, while storage maintenance is delayed
     // until the first screen has had time to settle.
-    let purgeTimer: ReturnType<typeof setTimeout> | null = null;
     let storageTimer: ReturnType<typeof setTimeout> | null = null;
     const idleTask = runAfterIdle(() => {
       // Keep maintenance out of the first route's data and interaction window.
@@ -597,26 +596,15 @@ export default function RootLayout() {
         // Keep maintenance modules out of the critical startup bundle. These
         // imports are intentionally lazy because storage/index re-exports many
         // SQLite/cache modules.
-        const storageReady = import("@/lib/storage")
+        import("@/lib/storage")
           .then(({ initDeviceStorage }) => initDeviceStorage())
           .catch(() => undefined);
-
-        // Video cleanup can open the same SQLite database and touch the file
-        // system. Let the first storage pass settle before doing that work.
-        purgeTimer = setTimeout(() => {
-          if (AppState.currentState !== "active") return;
-          storageReady
-            .then(() => import("@/lib/videoCache"))
-            .then(({ runScheduledVideoPurge }) => runScheduledVideoPurge())
-            .catch(() => {});
-        }, 7000);
       }, 4500);
     });
 
     return () => {
       idleTask.cancel();
       if (storageTimer) clearTimeout(storageTimer);
-      if (purgeTimer) clearTimeout(purgeTimer);
     };
   }, [rootNavigationState?.key]);
 

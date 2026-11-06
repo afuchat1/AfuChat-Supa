@@ -85,12 +85,12 @@ import UserName from "@/components/ui/UserName";
 import { useSuperApp } from "@/lib/superapp/SuperAppContext";
 
 import {
-  queueMessage,
   isOnline,
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageRead } from "@/lib/storage/localMessages";
+import { createLocalMessageId, getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageRead, markMessageSynced } from "@/lib/storage/localMessages";
+import { queueMessage, removePendingMessage } from "@/lib/offlineStore";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
 import {
@@ -6320,17 +6320,32 @@ STRICT RULES:
     if (!text || !user || sending || (!session && !isLocalNotesId(id))) return;
     if (blockMessageAction()) return;
     setSending(true);
-    if (draftSaveTimer.current) { clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
-    if (!directText) setInput("");
-    if (id) {
-      AsyncStorage.removeItem(`chat_draft_${id}`).catch(() => {});
-      if (user && !isLocalNotesId(id)) {
-        supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", id).then(() => {});
+    const localDraftKeys = new Set<string>();
+    const persistLocalDraft = async (chatId: string) => {
+      const key = `chat_draft_${chatId}`;
+      localDraftKeys.add(key);
+      await AsyncStorage.setItem(key, text);
+    };
+    const clearLocalDrafts = () => {
+      for (const key of localDraftKeys) {
+        AsyncStorage.removeItem(key).catch(() => {});
       }
+    };
+    if (id) {
+      try { await persistLocalDraft(id); } catch {}
     }
+    if (draftSaveTimer.current) { clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const activeChatId = await getOrCreateChatId();
+    let activeChatId: string | null = null;
+    try {
+      activeChatId = await getOrCreateChatId();
+    } catch {
+      setSending(false);
+      if (!directText) setInput(text);
+      showAlert("Failed to start chat", "Your draft is saved on this device. Check your connection and try again.");
+      return;
+    }
     if (!activeChatId) {
       setSending(false);
       showAlert("Failed to start chat", "Could not create the conversation. Please check your connection and try again.");
@@ -6338,7 +6353,63 @@ STRICT RULES:
     }
 
     const now = new Date().toISOString();
-    const msgId = `msg_${Date.now()}`;
+    const msgId = createLocalMessageId();
+    const isLocalNotesChat = isLocalNotesId(activeChatId);
+    const isOfflineQueueMessage = !isLocalNotesChat && !isAfuAiDirectChat;
+    let activeDraftPersisted = false;
+    try {
+      await persistLocalDraft(activeChatId);
+      activeDraftPersisted = true;
+    } catch {}
+
+    // Keep an AI prompt recoverable as a draft while its server-side processing
+    // is in flight. Normal chat messages are persisted to SQLite below instead.
+    if (isAfuAiDirectChat && !activeDraftPersisted) {
+      setSending(false);
+      if (!directText) setInput(text);
+      showAlert("Draft not saved", "Your message is still in the composer. Please try sending again.");
+      return;
+    }
+
+    if (isOfflineQueueMessage) {
+      try {
+        if (Platform.OS === "web") {
+          await queueMessage({
+            id: msgId,
+            chat_id: activeChatId,
+            sender_id: user.id,
+            encrypted_content: text,
+            created_at: now,
+            reply_to_message_id: replyTo?.id || null,
+            sender_display_name: profile?.display_name || "You",
+            sender_avatar_url: profile?.avatar_url || null,
+            sender_handle: profile?.handle || null,
+          });
+        } else {
+          await savePendingMessage({
+            id: msgId,
+            conversation_id: activeChatId,
+            sender_id: user.id,
+            content: text,
+            sent_at: now,
+            reply_to_id: replyTo?.id || null,
+            sender_display_name: profile?.display_name || "You",
+            sender_avatar_url: profile?.avatar_url || null,
+            sender_handle: profile?.handle || null,
+          });
+        }
+      } catch {
+        setSending(false);
+        if (!directText) setInput(text);
+        showAlert(
+          "Message not saved",
+          "A safe copy could not be stored on this device, so the message was not sent. Please try again.",
+        );
+        return;
+      }
+      if (!directText) setInput("");
+      clearLocalDrafts();
+    }
 
     const userMsg: Message = {
       id: msgId,
@@ -6348,7 +6419,8 @@ STRICT RULES:
       sent_at: now,
       sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
       reply_to_message_id: replyTo?.id || null,
-      status: "sent",
+      status: isOfflineQueueMessage ? "sending" : "sent",
+      _pending: isOfflineQueueMessage,
       reactions: [],
     };
     setMessages((prev) => [userMsg, ...prev]);
@@ -6357,19 +6429,30 @@ STRICT RULES:
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     setNewMsgCount(0);
     setReplyTo(null);
-    setSending(false);
+    if (isOfflineQueueMessage) setSending(false);
 
-    if (isLocalNotesId(activeChatId)) {
-      await saveLocalNotesMessage(user.id, {
-        id: msgId,
-        sender_id: user.id,
-        encrypted_content: text,
-        sent_at: now,
-        reply_to_message_id: userMsg.reply_to_message_id || null,
-        attachment_url: null,
-        attachment_type: null,
-        status: "sent",
-      });
+    if (isLocalNotesChat) {
+      try {
+        await saveLocalNotesMessage(user.id, {
+          id: msgId,
+          sender_id: user.id,
+          encrypted_content: text,
+          sent_at: now,
+          reply_to_message_id: userMsg.reply_to_message_id || null,
+          attachment_url: null,
+          attachment_type: null,
+          status: "sent",
+        });
+      } catch {
+        setMessages((prev) => prev.filter((message) => message.id !== msgId));
+        if (!directText) setInput(text);
+        setSending(false);
+        showAlert("Message not saved", "Your note could not be saved on this device. Please try again.");
+        return;
+      }
+      if (!directText) setInput("");
+      clearLocalDrafts();
+      setSending(false);
       return;
     }
 
@@ -6396,22 +6479,48 @@ STRICT RULES:
       }
 
       const insertPayload: any = {
+        id: msgId,
         chat_id: activeChatId,
         sender_id: user.id,
         encrypted_content: text,
       };
       if (userMsg.reply_to_message_id) insertPayload.reply_to_message_id = userMsg.reply_to_message_id;
 
-      const { data: inserted, error: aiInsertErr } = await supabase.from("messages").insert(insertPayload).select("id").single();
-      if (aiInsertErr) {
-        console.error("[sendMessage/afuai] insert error:", JSON.stringify(aiInsertErr));
+      let { data: inserted, error: aiInsertErr } = await supabase
+        .from("messages")
+        .insert(insertPayload)
+        .select("id, chat_id, sender_id, encrypted_content")
+        .single();
+      if (aiInsertErr || !inserted) {
+        const { data: committed, error: confirmError } = await supabase
+          .from("messages")
+          .select("id, chat_id, sender_id, encrypted_content")
+          .eq("id", msgId)
+          .eq("chat_id", activeChatId)
+          .eq("sender_id", user.id)
+          .maybeSingle();
+        if (!confirmError && committed?.encrypted_content === text) {
+          inserted = committed;
+          aiInsertErr = null;
+        }
       }
-      if (inserted) {
+      if (!inserted) {
+        console.error("[sendMessage/afuai] message was not confirmed:", aiInsertErr?.code);
         setMessages((prev) =>
-          prev.map((m) => m.id === msgId ? { ...m, id: inserted.id } : m)
+          prev.map((m) => m.id === msgId ? { ...m, status: "failed" as const, _pending: true } : m)
         );
+        setSending(false);
+        showAlert("Message not sent", "Your prompt is saved as a draft. Check your connection and try again.");
+        return;
       }
 
+      setMessages((prev) =>
+        prev.map((m) => m.id === msgId ? { ...m, id: inserted.id, status: "sent" as const, _pending: false } : m)
+      );
+      if (!directText) setInput("");
+      clearLocalDrafts();
+      supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", activeChatId).then(() => {});
+      setSending(false);
       await recordDailyUsage("afuai_messages");
       const snapshot = messages;
       handleAfuAiResponse(text, snapshot, activeChatId);
@@ -6421,32 +6530,58 @@ STRICT RULES:
 
     if (!isOnline()) {
       setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, status: "sending" as const, _pending: true } : m));
-      // Save to both legacy queue (AsyncStorage) and new SQLite pending table
-      await Promise.all([
-        queueMessage({ id: msgId, chat_id: activeChatId, sender_id: user.id, encrypted_content: text, created_at: now }),
-        savePendingMessage({ id: msgId, conversation_id: activeChatId, sender_id: user.id, content: text, sent_at: now }),
-      ]);
+      // The SQLite row was committed before clearing the composer. It is the
+      // durable outbox; don't duplicate new sends into the legacy AsyncStorage
+      // queue, which could submit the same text twice after a restart.
+      setSending(false);
       return;
     }
 
     const insertPayload: any = {
+      id: msgId,
       chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: text,
     };
     if (replyTo) insertPayload.reply_to_message_id = replyTo.id;
 
-    const { data: inserted, error } = await supabase.from("messages").insert(insertPayload).select("id").single();
+    let { data: inserted, error } = await supabase
+      .from("messages")
+      .insert(insertPayload)
+      .select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type")
+      .single();
+    if (error || !inserted) {
+      // A timed-out request may have committed on the server even though the
+      // response never reached this device. The stable client ID lets us
+      // confirm that exact row instead of resending or guessing from its text.
+      const { data: committed, error: confirmError } = await supabase
+        .from("messages")
+        .select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type")
+        .eq("id", msgId)
+        .eq("chat_id", activeChatId)
+        .eq("sender_id", user.id)
+        .maybeSingle();
+      if (!confirmError && committed?.encrypted_content === text) {
+        inserted = committed;
+        error = null;
+      }
+    }
     if (inserted) {
+      await markMessageSynced(msgId, inserted.id).catch(() => {});
+      if (Platform.OS === "web") await removePendingMessage(msgId);
+      if (user && !isLocalNotesId(activeChatId)) {
+        supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", activeChatId).then(() => {});
+      }
       setMessages((prev) =>
         prev.map((m) => m.id === msgId ? { ...m, id: inserted.id, status: "sent" as const, _pending: false } : m)
       );
     } else {
       console.error("[sendMessage] insert failed — code:", error?.code, "message:", error?.message);
       setMessages((prev) =>
-        prev.map((m) => m.id === msgId ? { ...m, status: "failed" as const } : m)
+        prev.map((m) => m.id === msgId ? { ...m, status: "failed" as const, _pending: true } : m)
       );
     }
+    setSending(false);
 
     if (!error && inserted) {
       const recipientIds = (

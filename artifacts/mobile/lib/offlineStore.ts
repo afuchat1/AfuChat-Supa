@@ -25,6 +25,10 @@ export type PendingMessage = {
   sender_id: string;
   encrypted_content: string;
   created_at: string;
+  reply_to_message_id?: string | null;
+  sender_display_name?: string | null;
+  sender_avatar_url?: string | null;
+  sender_handle?: string | null;
 };
 
 // NetInfo is asynchronous on native, and release builds can mount the first
@@ -221,12 +225,12 @@ export async function getCachedMoments(): Promise<any[]> {
 }
 
 export async function queueMessage(msg: PendingMessage): Promise<void> {
-  try {
-    const raw = await AsyncStorage.getItem(CACHE_KEYS.PENDING_MESSAGES);
-    const pending: PendingMessage[] = raw ? JSON.parse(raw) : [];
-    pending.push(msg);
-    await AsyncStorage.setItem(CACHE_KEYS.PENDING_MESSAGES, JSON.stringify(pending));
-  } catch {}
+  const raw = await AsyncStorage.getItem(CACHE_KEYS.PENDING_MESSAGES);
+  const pending: PendingMessage[] = raw ? JSON.parse(raw) : [];
+  const existingIndex = pending.findIndex((item) => item.id === msg.id);
+  if (existingIndex >= 0) pending[existingIndex] = msg;
+  else pending.push(msg);
+  await AsyncStorage.setItem(CACHE_KEYS.PENDING_MESSAGES, JSON.stringify(pending));
 }
 
 export async function getPendingMessages(): Promise<PendingMessage[]> {

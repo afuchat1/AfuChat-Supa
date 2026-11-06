@@ -9,6 +9,9 @@
 //   • getNewestMessageDate() → cursor for delta sync
 
 import { getDB } from "./db";
+import { Platform } from "react-native";
+import { isClientMessageId } from "./messageIds";
+export { createLocalMessageId, isClientMessageId } from "./messageIds";
 
 export type LocalMessage = {
   id: string;
@@ -72,6 +75,34 @@ export async function getLocalMessages(
   afterSentAt?: string,
 ): Promise<LocalMessage[]> {
   try {
+    if (Platform.OS === "web") {
+      const { getPendingMessages } = await import("../offlineStore");
+      const queued = await getPendingMessages();
+      return queued
+        .filter((msg) => msg.chat_id === conversationId)
+        .map((msg) => ({
+          id: msg.id,
+          conversation_id: conversationId,
+          sender_id: msg.sender_id,
+          sender_display_name: msg.sender_display_name ?? null,
+          sender_avatar_url: msg.sender_avatar_url ?? null,
+          sender_handle: msg.sender_handle ?? null,
+          content: msg.encrypted_content,
+          attachment_url: null,
+          attachment_type: null,
+          reply_to_id: msg.reply_to_message_id ?? null,
+          status: "sending",
+          sent_at: msg.created_at,
+          edited_at: null,
+          is_pending: true,
+          synced: false,
+        }))
+        .filter((msg) => !beforeSentAt || msg.sent_at < beforeSentAt)
+        .filter((msg) => !afterSentAt || msg.sent_at > afterSentAt)
+        .sort((a, b) => a.sent_at.localeCompare(b.sent_at))
+        .slice(-limit);
+    }
+
     const db = await getDB();
     const conditions = ["conversation_id = ?"];
     const params: (string | number)[] = [conversationId];
@@ -213,31 +244,41 @@ export async function savePendingMessage(msg: {
   sent_at: string;
   attachment_url?: string | null;
   attachment_type?: string | null;
+  reply_to_id?: string | null;
+  sender_display_name?: string | null;
+  sender_avatar_url?: string | null;
+  sender_handle?: string | null;
 }): Promise<void> {
-  try {
-    const db = await getDB();
-    await db.runAsync(
-      `INSERT OR REPLACE INTO messages
-       (id, conversation_id, sender_id, content, attachment_url, attachment_type,
-        reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, 'sending', ?, NULL, 1, 0, ?)`,
-      [
-        msg.id, msg.conversation_id, msg.sender_id, msg.content,
-        msg.attachment_url ?? null, msg.attachment_type ?? null,
-        msg.sent_at, Date.now(),
-      ],
-    );
-  } catch {}
+  const db = await getDB();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO messages
+     (id, conversation_id, sender_id, content, attachment_url, attachment_type,
+      reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at,
+      sender_display_name, sender_avatar_url, sender_handle)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'sending', ?, NULL, 1, 0, ?, ?, ?, ?)`,
+    [
+      msg.id,
+      msg.conversation_id,
+      msg.sender_id,
+      msg.content,
+      msg.attachment_url ?? null,
+      msg.attachment_type ?? null,
+      msg.reply_to_id ?? null,
+      msg.sent_at,
+      Date.now(),
+      msg.sender_display_name ?? null,
+      msg.sender_avatar_url ?? null,
+      msg.sender_handle ?? null,
+    ],
+  );
 }
 
 export async function markMessageSynced(localId: string, serverId: string): Promise<void> {
-  try {
-    const db = await getDB();
-    await db.runAsync(
-      "UPDATE messages SET id = ?, is_pending = 0, synced = 1, status = 'sent' WHERE id = ?",
-      [serverId, localId],
-    );
-  } catch {}
+  const db = await getDB();
+  await db.runAsync(
+    "UPDATE messages SET id = ?, is_pending = 0, synced = 1, status = 'sent' WHERE id = ?",
+    [serverId, localId],
+  );
 }
 
 export async function markMessageDelivered(messageId: string): Promise<void> {
@@ -262,15 +303,11 @@ export async function deleteLocalMessage(messageId: string): Promise<void> {
 }
 
 export async function getPendingLocalMessages(): Promise<LocalMessage[]> {
-  try {
-    const db = await getDB();
-    const rows = await db.getAllAsync<any>(
-      "SELECT * FROM messages WHERE is_pending = 1 ORDER BY sent_at ASC",
-    );
-    return rows.map((r) => ({ ...r, is_pending: true, synced: false }));
-  } catch {
-    return [];
-  }
+  const db = await getDB();
+  const rows = await db.getAllAsync<any>(
+    "SELECT * FROM messages WHERE is_pending = 1 ORDER BY sent_at ASC",
+  );
+  return rows.map((r) => ({ ...r, is_pending: true, synced: false }));
 }
 
 /** User-initiated: delete ALL messages in a conversation from device. */
