@@ -262,7 +262,6 @@ function ChatRow({
   item,
   onPress,
   onAction,
-  isActive,
   isTyping,
   phonebookName,
   selectMode = false,
@@ -276,7 +275,6 @@ function ChatRow({
     action: "togglePin" | "toggleArchive" | "delete" | "open" | "mute" | "unmute",
     item: ChatItem,
   ) => void;
-  isActive?: boolean;
   isTyping?: boolean;
   phonebookName?: string;
   selectMode?: boolean;
@@ -298,7 +296,7 @@ function ChatRow({
   return (
     <View>
     <TouchableOpacity
-      style={[styles.row, { backgroundColor: isSelected || isActive ? colors.accent + "18" : colors.cardSurface }]}
+      style={styles.row}
       // Selection is intentionally avatar-only. The row itself always keeps
       // its normal navigation behavior, matching the New Chat contact picker.
       onPress={onPress}
@@ -547,8 +545,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const pathname = usePathname() || "/";
-  const activeChatMatch = pathname.match(/^\/chat\/([^/]+)/);
-  const activeChatId = activeChatMatch ? activeChatMatch[1] : null;
 
   // Phone-book name overrides: show the name the user saved in their contacts
   // inside chat rows instead of the registered display_name.
@@ -2046,7 +2042,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   <ChatRow
                     item={item}
                     phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                    isActive={panelMode && item.id === activeChatId}
                     isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                     selectMode={selectMode}
                     isSelected={selectedIds.has(item.id)}
@@ -2521,7 +2516,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
-    borderRadius: 18,
   },
   rowContent: { flex: 1 },
   rowTop: {
