@@ -43,12 +43,6 @@ export function FloatingGlassSurface({
         ? "rgba(255,255,255,0.12)"
         : colors.inputBg
       : colors.navigationSurface;
-  const surfaceBorder =
-    variant === "input"
-      ? isDark
-        ? "rgba(255,255,255,0.22)"
-        : colors.border
-      : colors.navigationBorder;
 
   return (
     <View
@@ -59,8 +53,8 @@ export function FloatingGlassSurface({
         cornerRadius !== undefined ? { borderRadius: cornerRadius } : undefined,
         {
           backgroundColor: surfaceBackground,
-          borderColor: surfaceBorder,
-          borderWidth: variant === "input" ? StyleSheet.hairlineWidth : 1,
+          borderColor: "transparent",
+          borderWidth: 0,
           ...floatingNavigationShadow(isDark),
         },
       ]}
@@ -224,7 +218,7 @@ export const floatingNavigationStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   glassSurface: {
     borderRadius: 999,
-    borderWidth: 1,
+    borderWidth: 0,
     overflow: "visible",
   },
   glassClip: {

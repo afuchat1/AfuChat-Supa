@@ -332,6 +332,15 @@ function WebGlobalStyles() {
       button, input, textarea, select {
         font-family: inherit;
       }
+      button, input, textarea, select,
+      [role="button"], [role="radio"], [role="tab"], [role="link"], [role="textbox"] {
+        border: 0 !important;
+        box-shadow: none !important;
+      }
+      button::-moz-focus-inner, input::-moz-focus-inner {
+        border: 0;
+        padding: 0;
+      }
     `;
     document.head.appendChild(style);
     return () => style.remove();

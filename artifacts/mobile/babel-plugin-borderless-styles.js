@@ -44,6 +44,26 @@ function propertyName(property, types) {
   return null;
 }
 
+function isBorderReset(key, value, types) {
+  const stringValue = types.isStringLiteral(value)
+    ? value.value.trim().toLowerCase()
+    : null;
+
+  if (key === "border" || /width$/i.test(key)) {
+    if (types.isNumericLiteral(value) && value.value === 0) return true;
+    if (stringValue && /^0(?:\.0+)?(?:px)?$/.test(stringValue)) return true;
+  }
+
+  if (
+    stringValue === "none" &&
+    (key === "border" || key.startsWith("border"))
+  ) {
+    return true;
+  }
+
+  return /color$/i.test(key) && stringValue === "transparent";
+}
+
 function isStyleSheetCreateCall(node, types) {
   if (!types.isCallExpression(node) || !types.isMemberExpression(node.callee)) {
     return false;
@@ -101,11 +121,24 @@ module.exports = function borderlessStylesPlugin({ types }) {
   return {
     name: "borderless-app-styles",
     visitor: {
-      ObjectProperty(path) {
+      ObjectProperty(path, state) {
+        const key = propertyName(path.node, types);
+        // boxShadow is a web-only surface edge in this app. Native surfaces
+        // use shadowColor/elevation instead, so removing this key preserves
+        // native depth while eliminating web rings across shared controls.
+        if (key === "boxShadow" && state.file.opts.caller?.platform === "web") {
+          path.remove();
+          return;
+        }
+
         if (!isInsideStyleDefinition(path, types)) return;
 
-        const key = propertyName(path.node, types);
-        if (BORDER_STYLE_PROPERTIES.has(key)) {
+        // Keep explicit resets: deleting borderWidth: 0 exposes browser-default
+        // outlines on web inputs and controls even though the app asks for none.
+        if (
+          BORDER_STYLE_PROPERTIES.has(key) &&
+          !isBorderReset(key, path.node.value, types)
+        ) {
           path.remove();
           return;
         }
