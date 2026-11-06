@@ -8070,7 +8070,7 @@ STRICT RULES:
     <ChatFontSizeCtx.Provider value={effectiveChatFontSize}>
     <View style={[st.root, { backgroundColor: colors.background }]}>
       <WallpaperOverlay wallpaper={chatAppearance?.wallpaper} dark={isDark} />
-      <View style={[st.header, { backgroundColor: colors.surface, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
+      <View style={[st.header, { backgroundColor: colors.background, paddingTop: insets.top + 4, borderBottomColor: colors.border }]}>
         {(
           <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={st.backBtn} />
         )}
@@ -8240,7 +8240,7 @@ STRICT RULES:
 
       {/* ── Stranger message-request banner ── */}
       {isStranger && chatInfo?.other_id && !isNotificationsChat && (
-        <View style={[st.strangerBanner, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={[st.strangerBanner, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <View style={[st.strangerIconWrap, { backgroundColor: "#FF9500" + "18" }]}>
               <Ionicons name="person-add" size={18} color="#FF9500" />

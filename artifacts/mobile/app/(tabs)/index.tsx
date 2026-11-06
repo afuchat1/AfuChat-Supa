@@ -298,7 +298,7 @@ function ChatRow({
   return (
     <View>
     <TouchableOpacity
-      style={[styles.row, { backgroundColor: isSelected ? colors.accent + "18" : isActive ? colors.backgroundSecondary : colors.surface }]}
+      style={[styles.row, { backgroundColor: isSelected || isActive ? colors.accent + "18" : colors.cardSurface }]}
       // Selection is intentionally avatar-only. The row itself always keeps
       // its normal navigation behavior, matching the New Chat contact picker.
       onPress={onPress}
@@ -1813,7 +1813,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
         {/* ── Folder tab bar — fixed, always visible regardless of list content ── */}
         {showFolderUI && (
-          <View style={{ backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
+          <View style={{ backgroundColor: colors.background }}>
             <ScrollView
               ref={folderScrollRef}
               horizontal
@@ -2517,9 +2517,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
+    marginHorizontal: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
+    borderRadius: 18,
   },
   rowContent: { flex: 1 },
   rowTop: {

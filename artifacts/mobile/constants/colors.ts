@@ -31,12 +31,12 @@ const light = {
   textSecondary:     "#4F493F",
   textMuted:         "#625B50",
 
-  // ── Backgrounds — warm canvas with clearly separated surfaces ───────────────
-  background:        "#F0EBE1",   // page / screen
+  // ── Backgrounds — match the Settings page canvas and card surfaces ──────────
+  background:        "#E8E1D5",   // page / screen
   backgroundSecondary: "#E8E1D5",
   backgroundTertiary:  "#DED7CA",
-  surface:           "#FFFEFA",   // elevated surfaces
-  card:              "#FFFFFF",
+  surface:           "#F0EBE1",   // card / elevated surfaces
+  card:              "#F0EBE1",
   cardSurface:       "#F0EBE1",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
@@ -67,8 +67,8 @@ const light = {
   glassBgSubtle:     "rgba(0,0,0,0.05)",
 
   // ── Navigation ──────────────────────────────────────────────────────────────
-  header:            "#F0EBE1",
-  navigationSurface: "#FFFEFA",
+  header:            "#E8E1D5",
+  navigationSurface: "#F0EBE1",
   navigationBorder:  "transparent",
   navigationActive:  BRAND,
   navigationInactive: "#625B50",
@@ -99,12 +99,12 @@ const dark = {
   textSecondary:     "#D8DCE1",
   textMuted:         "#B8BDC5",
 
-  // ── Backgrounds — layered charcoal surfaces with clear separation ───────────
-  background:        "#18191C",
+  // ── Backgrounds — match the Settings page canvas and card surfaces ──────────
+  background:        "#202226",
   backgroundSecondary: "#202226",
   backgroundTertiary:  "#292B30",
-  surface:           "#25272C",
-  card:              "#2C2F34",
+  surface:           "#18191C",
+  card:              "#18191C",
   cardSurface:       "#18191C",
 
   // ── Lines ───────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ const dark = {
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   header:            "#202226",
-  navigationSurface: "#24262B",
+  navigationSurface: "#18191C",
   navigationBorder:  "transparent",
   navigationActive:  "#FFF8F0",
   navigationInactive: "#B8BDC5",

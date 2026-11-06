@@ -23,7 +23,7 @@ export const GlassCard = React.memo(function GlassCard({
   style,
   noBorder = false,
   noShadow = false,
-  noSpecular = false,
+  noSpecular = true,
   forceDark,
   forceLight,
   innerStyle,
@@ -33,8 +33,8 @@ export const GlassCard = React.memo(function GlassCard({
   const isDark = forceDark ? true : forceLight ? false : themeDark;
 
   const flat = StyleSheet.flatten(style || {}) as any;
-  // Default radius from T.radius — no hardcoded 16
-  const r = flat.borderRadius ?? T.radius.md;
+  // Default radius matches the grouped cards on the Settings page.
+  const r = flat.borderRadius ?? T.radius.card;
 
   const bg = colors.cardSurface;
   const shadow = noShadow

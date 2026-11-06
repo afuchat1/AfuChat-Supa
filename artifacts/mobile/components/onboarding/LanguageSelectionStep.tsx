@@ -249,7 +249,7 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
             { backgroundColor: colors.accent },
             !selected && [
               styles.continueButtonDisabled,
-              { backgroundColor: colors.inputBg },
+              { backgroundColor: colors.cardSurface },
             ],
             pressed && selected && styles.continueButtonPressed,
           ]}

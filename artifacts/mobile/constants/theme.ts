@@ -49,6 +49,7 @@ export const T = {
     xs:    6,    // tight chips, inline badges
     sm:   12,    // small cards, icon wraps
     md:   16,    // standard cards, inputs, buttons
+    card: 18,    // grouped cards, matching Settings sections
     lg:   22,    // modals, sheets, large cards
     xl:   28,    // hero surfaces
     xxl:  34,    // full-bleed panels
