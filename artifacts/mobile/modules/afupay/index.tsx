@@ -154,7 +154,7 @@ function SubHeader({ title, onBack, colors }: { title: string; onBack: () => voi
 function WalletHeader({ colors, insets, onBack }: { colors: any; insets: { top: number }; onBack: () => void }) {
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 18) : insets.top;
   return (
-    <View style={[s.walletHeader, { backgroundColor: "#F0ECDF", paddingTop: topInset }]}>
+    <View style={[s.walletHeader, { backgroundColor: "#FFFEFA", paddingTop: topInset }]}>
       <View style={s.walletHeaderRow}>
         <GlassBackButton onPress={onBack} accessibilityLabel="Go back" />
         <View style={s.walletHeaderTitleWrap}>
@@ -162,6 +162,27 @@ function WalletHeader({ colors, insets, onBack }: { colors: any; insets: { top: 
           <Text style={[s.walletHeaderSubtitle, { color: "#66645D" }]}>Money 和 services in one place</Text>
         </View>
         <View style={s.walletHeaderRightSpacer} />
+      </View>
+    </View>
+  );
+}
+
+function WalletBottomNav({ view, setView, insets }: { view: AppView; setView: (view: AppView) => void; insets: { bottom: number } }) {
+  return (
+    <View style={[s.bottomNavDock, { bottom: Math.max(insets.bottom, Platform.OS === "web" ? 10 : 8) }]}>
+      <View style={s.bottomNavPill}>
+        {([
+          { key: "home", label: "Overview", icon: "wallet-outline", active: view === "home", action: () => setView("home") },
+          { key: "history", label: "Activity", icon: "receipt-outline", active: view === "history", action: () => setView("history") },
+          { key: "topup", label: "Top up", icon: "add-circle-outline", active: view === "topup", action: () => setView("topup") },
+          { key: "requests", label: "Requests", icon: "arrow-down-circle-outline", active: view === "requests", action: () => setView("requests") },
+          { key: "services", label: "Services", icon: "grid-outline", active: view === "services", action: () => setView("services") },
+        ] as const).map((item) => (
+          <TouchableOpacity key={item.key} onPress={item.action} activeOpacity={0.78} style={[s.bottomNavItem, item.active && s.bottomNavItemActive]}>
+            <Ionicons name={item.icon as any} size={24} color={item.active ? "#2525C4" : "#66645B"} />
+            <Text numberOfLines={1} style={[s.bottomNavLabel, { color: item.active ? "#2525C4" : "#66645B" }]}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   );
@@ -330,13 +351,13 @@ export default function AfuPayApp({
     : txFilter === "gifts" ? transactions.filter(t => ["gift_sent", "gift_received", "red_envelope_sent", "red_envelope_claimed"].includes(t.type))
     : transactions.filter(t => t.currency === txFilter);
 
-  if (view === "history") return <HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => setView("home")} />;
-  if (view === "topup") return <TopUpView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} />;
-  if (view === "send") return <SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} />;
-  if (view === "receive") return <ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} />;
-  if (view === "exchange") return <ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} />;
-  if (view === "requests") return <RequestsView colors={colors} insets={insets} user={user} onBack={() => setView("home")} />;
-  if (view === "services") return <AfuServicesApp embedded onBack={() => setView("home")} />;
+  if (view === "history") return <View style={[s.walletRoot, { flex: 1 }]}><HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "topup") return <View style={[s.walletRoot, { flex: 1 }]}><TopUpView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "send") return <View style={[s.walletRoot, { flex: 1 }]}><SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "receive") return <View style={[s.walletRoot, { flex: 1 }]}><ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "exchange") return <View style={[s.walletRoot, { flex: 1 }]}><ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "requests") return <View style={[s.walletRoot, { flex: 1 }]}><RequestsView colors={colors} insets={insets} user={user} onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "services") return <View style={[s.walletRoot, { flex: 1 }]}><AfuServicesApp embedded onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
 
   const recentTx = transactions.slice(0, 6);
 
@@ -455,22 +476,7 @@ export default function AfuPayApp({
 
         
       </ScrollView>
-      <View style={[s.bottomNavDock, { bottom: Math.max(insets.bottom, Platform.OS === "web" ? 10 : 8) }]}>
-        <View style={s.bottomNavPill}>
-          {([
-            { key: "home", label: "Overview", icon: "wallet-outline", active: view === "home", action: () => setView("home") },
-            { key: "history", label: "Activity", icon: "receipt-outline", active: view === "history", action: () => setView("history") },
-            { key: "topup", label: "Top up", icon: "add-circle-outline", active: view === "topup", action: () => setView("topup") },
-            { key: "requests", label: "Requests", icon: "arrow-down-circle-outline", active: view === "requests", action: () => setView("requests") },
-            { key: "services", label: "Services", icon: "grid-outline", active: view === "services", action: () => setView("services") },
-          ] as const).map((item) => (
-            <TouchableOpacity key={item.key} onPress={item.action} activeOpacity={0.78} style={[s.bottomNavItem, item.active && s.bottomNavItemActive]}>
-              <Ionicons name={item.icon as any} size={27} color={item.active ? "#2525C4" : "#66645B"} />
-              <Text numberOfLines={1} style={[s.bottomNavLabel, { color: item.active ? "#2525C4" : "#66645B" }]}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <WalletBottomNav view={view} setView={setView} insets={insets} />
     </View>
   );
 }
@@ -1104,35 +1110,35 @@ const W = Dimensions.get("window").width;
 const s = StyleSheet.create({
   root: { flex: 1 },
   walletRoot: { flex: 1, width: "100%", backgroundColor: "#F0ECDF", position: "relative" },
-  bottomNavDock: { position: "absolute", left: 0, right: 0, alignItems: "center", paddingHorizontal: 20, zIndex: 20, ...(Platform.OS === "web" ? { position: "fixed" as any, bottom: 10 } : {}) },
-  bottomNavPill: { width: "100%", maxWidth: 680, height: 82, borderRadius: 44, backgroundColor: "#FFFEFA", flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 7, elevation: 18, shadowColor: "#1C251B", shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
-  bottomNavItem: { flex: 1, height: 68, borderRadius: 36, alignItems: "center", justifyContent: "center", gap: 2, minWidth: 0 },
+  bottomNavDock: { position: "absolute", left: 0, right: 0, alignItems: "center", paddingHorizontal: 22, zIndex: 20, ...(Platform.OS === "web" ? { position: "fixed" as any, bottom: 10 } : {}) },
+  bottomNavPill: { width: "100%", maxWidth: 680, height: 50, borderRadius: 28, backgroundColor: "#FFFEFA", flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 5, elevation: 18, shadowColor: "#1C251B", shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
+  bottomNavItem: { flex: 1, height: 44, borderRadius: 24, alignItems: "center", justifyContent: "center", gap: 1, minWidth: 0 },
   bottomNavItemActive: { backgroundColor: "#E7E6FA" },
-  bottomNavLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  bottomNavLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   walletHeaderRightSpacer: { width: 56 },
   heroCoinGlyph: { color: "#0B5133", fontSize: 17, fontFamily: "Inter_700Bold" },
 
   walletHeader: { borderBottomWidth: 0 },
-  walletHeaderRow: { height: 92, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22 },
+  walletHeaderRow: { height: 53, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
   walletHeaderTitleWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  walletHeaderTitle: { fontSize: 27, fontFamily: "Inter_700Bold", letterSpacing: -0.6 },
-  walletHeaderSubtitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 7 },
+  walletHeaderTitle: { fontSize: 19, fontFamily: "Inter_700Bold", letterSpacing: -0.6 },
+  walletHeaderSubtitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 3 },
   walletHeaderMark: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#E8F2FF", alignItems: "center", justifyContent: "center" },
   heroTopLine: { flexDirection: "row", alignItems: "center" },
   heroCoinMark: { width: 27, height: 27, borderRadius: 14, backgroundColor: "#F7C94B", alignItems: "center", justifyContent: "center" },
   heroNexaLabel: { flexDirection: "row", alignItems: "center" },
-  heroNexaAmount: { color: "#F39A12", fontSize: 39, fontFamily: "Inter_700Bold", marginTop: 4 },
+  heroNexaAmount: { color: "#F39A12", fontSize: 27, fontFamily: "Inter_700Bold", marginTop: 4 },
   heroNexaCaption: { color: "rgba(255,255,255,0.68)", fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textAlign: "right" },
   heroFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   heroTrustItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  heroTrustText: { color: "rgba(255,255,255,0.58)", fontSize: 15, fontFamily: "Inter_500Medium" },
-  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 48, justifyContent: "space-between", marginBottom: 18 },
-  actionTile: { width: "31.5%", minHeight: 132, alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8, borderRadius: 24, backgroundColor: "transparent" },
+  heroTrustText: { color: "rgba(255,255,255,0.58)", fontSize: 11, fontFamily: "Inter_500Medium" },
+  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 25, justifyContent: "space-between", marginBottom: 10 },
+  actionTile: { width: "31.5%", minHeight: 76, alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 5, borderRadius: 18, backgroundColor: "transparent" },
   actionBadge: { position: "absolute", top: -5, right: -6, backgroundColor: "#E53935", borderRadius: 10, minWidth: 19, height: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   activityHeading: { flexDirection: "row", alignItems: "center", gap: 10 },
   activityAccent: { width: 4, height: 25, borderRadius: 2, backgroundColor: Colors.brand },
-  activityTitle: { fontSize: 19, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  activityTitle: { fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   securityBanner: { marginHorizontal: 16, marginTop: 18, marginBottom: 18, padding: 14, borderRadius: 20, backgroundColor: "#EAF3FF", flexDirection: "row", alignItems: "center", gap: 12 },
   securityIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#D5E8FF", alignItems: "center", justifyContent: "center" },
   securityTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
@@ -1144,30 +1150,30 @@ const s = StyleSheet.create({
   emptyActivityButton: { marginTop: 15, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14, backgroundColor: Colors.brand },
   emptyActivityButtonText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   walletBackGlyph: { fontSize: 34, lineHeight: 34, fontFamily: "Inter_400Regular", marginTop: -2 },
-  heroCard: { marginHorizontal: 30, marginTop: 30, marginBottom: 38, borderRadius: 38, paddingHorizontal: 38, paddingTop: 36, paddingBottom: 30, overflow: "hidden" },
+  heroCard: { marginHorizontal: 17, marginTop: 17, marginBottom: 22, borderRadius: 24, paddingHorizontal: 22, paddingTop: 20, paddingBottom: 17, overflow: "hidden" },
   heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  heroLabel: { color: "rgba(255,255,255,0.72)", fontSize: 16, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
-  heroAmount: { color: "#fff", fontSize: 46, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
+  heroLabel: { color: "rgba(255,255,255,0.72)", fontSize: 13, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
+  heroAmount: { color: "#fff", fontSize: 31, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
   heroCurrency: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   heroRight: { alignItems: "flex-end", paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.2)" },
-  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 30, marginBottom: 26 },
+  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 18, marginBottom: 14 },
   heroSub: { color: "rgba(255,255,255,0.72)", fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 },
   actionsRow: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 8, gap: 8, justifyContent: "space-around", marginBottom: 8 },
   actionItem: { alignItems: "center", gap: 5, width: (W - 32) / 3, marginBottom: 4, paddingVertical: 4 },
-  actionIcon: { width: 94, height: 94, borderRadius: 30, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 17, fontFamily: "Inter_500Medium" },
-  section: { paddingHorizontal: 30, marginTop: 30 },
+  actionIcon: { width: 55, height: 55, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  section: { paddingHorizontal: 17, marginTop: 18 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   sectionTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   seeAll: { fontSize: 13, fontFamily: "Inter_500Medium" },
   txCard: { borderRadius: 22, borderWidth: 0, overflow: "hidden", paddingHorizontal: 3, elevation: 1, shadowColor: "#13294B", shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 3 } },
-  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingVertical: 24, gap: 18 },
-  txIcon: { width: 68, height: 68, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 11 },
+  txIcon: { width: 39, height: 39, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   txInfo: { flex: 1 },
-  txLabel: { fontSize: 20, fontFamily: "Inter_600SemiBold", marginBottom: 5 },
-  txSub: { fontSize: 16, fontFamily: "Inter_400Regular" },
-  txAmt: { fontSize: 19, fontFamily: "Inter_700Bold" },
-  sep: { height: StyleSheet.hairlineWidth, marginLeft: 110 },
+  txLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
+  txSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  txAmt: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 64 },
   emptyWrap: { alignItems: "center", paddingVertical: 40, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   emptyBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginTop: 4 },
