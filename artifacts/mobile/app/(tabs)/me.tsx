@@ -114,7 +114,7 @@ function MenuCard({ children, colors }: { children: React.ReactNode; colors: any
   );
 }
 const mc = StyleSheet.create({
-  card: { overflow: "hidden" },
+  card: { borderRadius: 18, overflow: "hidden" },
 });
 
 // ─── Profile Completion Bar ───────────────────────────────────────────────────
@@ -727,7 +727,7 @@ const s = StyleSheet.create({
   content: { gap: 0, paddingHorizontal: 0 },
 
   // Hero
-  heroCard: { overflow: "hidden" },
+  heroCard: { borderRadius: 20, overflow: "hidden" },
   heroTop: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14, gap: 14 },
   heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },
   heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
@@ -744,20 +744,20 @@ const s = StyleSheet.create({
   acoinSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
 
   // Stats
-  statsRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
+  statsRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8, borderRadius: 18, overflow: "hidden" },
   statCell: { flex: 1, alignItems: "center", gap: 3 },
   statValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statDivider: { width: 0.5, marginVertical: 4 },
 
   // Quick actions
-  quickRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 4 },
+  quickRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 4, borderRadius: 18, overflow: "hidden" },
   quickBtn: { flex: 1, alignItems: "center", gap: 7 },
   quickIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   quickLabel: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center" },
 
   // Premium banner
-  premiumBanner: { padding: 20, flexDirection: "row", alignItems: "center", gap: 14 },
+  premiumBanner: { padding: 20, flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 18, overflow: "hidden" },
   premiumIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   premiumTitle: { color: "#FFD60A", fontSize: 15, fontFamily: "Inter_700Bold" },
   premiumSub: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
