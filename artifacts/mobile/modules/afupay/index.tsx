@@ -152,18 +152,16 @@ function SubHeader({ title, onBack, colors }: { title: string; onBack: () => voi
 }
 
 function WalletHeader({ colors, insets, onBack }: { colors: any; insets: { top: number }; onBack: () => void }) {
-  const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
+  const topInset = Platform.OS === "web" ? Math.max(insets.top, 18) : insets.top;
   return (
-    <View style={[s.walletHeader, { backgroundColor: colors.background, paddingTop: topInset }]}>
+    <View style={[s.walletHeader, { backgroundColor: "#F0ECDF", paddingTop: topInset }]}>
       <View style={s.walletHeaderRow}>
         <GlassBackButton onPress={onBack} accessibilityLabel="Go back" />
         <View style={s.walletHeaderTitleWrap}>
-          <Text style={[s.walletHeaderTitle, { color: colors.text }]}>Wallet</Text>
-          <Text style={[s.walletHeaderSubtitle, { color: colors.textMuted }]}>Money and services in one place</Text>
+          <Text style={[s.walletHeaderTitle, { color: "#171717" }]}>钱包</Text>
+          <Text style={[s.walletHeaderSubtitle, { color: "#66645D" }]}>Money 和 services in one place</Text>
         </View>
-        <View style={s.walletHeaderMark}>
-          <Ionicons name="wallet" size={22} color={Colors.brand} />
-        </View>
+        <View style={s.walletHeaderRightSpacer} />
       </View>
     </View>
   );
@@ -343,52 +341,52 @@ export default function AfuPayApp({
   const recentTx = transactions.slice(0, 6);
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
+    <View style={[s.root, s.walletRoot]}>
       <WalletHeader colors={colors} insets={insets} onBack={handleHomeBack} />
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 112 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); refreshProfile?.(); }} />}
       >
-        <LinearGradient colors={["#087BFA", "#0646C8", "#063AAB"]} style={s.heroCard}>
+        <LinearGradient colors={["#073B2B", "#022D21"]} style={s.heroCard}>
           <View style={s.heroTopLine}>
             <View style={s.heroCoinMark}>
-              <Ionicons name="logo-usd" size={18} color="#0755C9" />
+              <Text style={s.heroCoinGlyph}>A</Text>
             </View>
             <Text style={s.heroLabel}>ACoin Balance</Text>
             <View style={{ flex: 1 }} />
             <View style={s.heroNexaLabel}>
-              <Ionicons name="layers" size={15} color="#55E4D1" />
+              <Ionicons name="layers-outline" size={15} color="#A8C9B8" />
               <Text style={s.heroLabel}>Nexa (XP)</Text>
             </View>
           </View>
           <View style={s.heroRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.heroAmount}>{fmtAmt(acoin)} <Text style={s.heroCurrency}>AC</Text></Text>
-              <Text style={s.heroSub}>Available balance</Text>
+              
             </View>
             <View style={s.heroRight}>
               <Text style={s.heroNexaAmount}>{fmtAmt(nexa)}</Text>
-              <Text style={s.heroNexaCaption}>XP balance</Text>
+              
             </View>
           </View>
           <View style={s.heroDivider} />
           <View style={s.heroFooter}>
             <View style={s.heroTrustItem}><Ionicons name="shield-checkmark" size={15} color="#57E2C0" /><Text style={s.heroTrustText}>AfuPay</Text></View>
-            <View style={s.heroTrustItem}><Ionicons name="lock-closed" size={14} color="#BBD9FF" /><Text style={s.heroTrustText}>Secure</Text></View>
-            <View style={s.heroTrustItem}><Ionicons name="flash" size={14} color="#BBD9FF" /><Text style={s.heroTrustText}>Fast</Text></View>
-            <View style={s.heroTrustItem}><Ionicons name="globe-outline" size={14} color="#BBD9FF" /><Text style={s.heroTrustText}>Global</Text></View>
+            <View style={s.heroTrustItem}><Text style={s.heroTrustText}>· Secure</Text></View>
+            <View style={s.heroTrustItem}><Text style={s.heroTrustText}>· Fast</Text></View>
+            <View style={s.heroTrustItem}><Text style={s.heroTrustText}>· Global</Text></View>
           </View>
         </LinearGradient>
 
         <View style={s.actionsGrid}>
           {[
-            { icon: "add" as const, label: "Buy", color: "#087BFA", bg: "#E8F2FF", view: "topup" as AppView },
-            { icon: "paper-plane" as const, label: "Send", color: "#087BFA", bg: "#E8F2FF", view: "send" as AppView },
-            { icon: "qr-code" as const, label: "Receive", color: "#087BFA", bg: "#E8F2FF", view: "receive" as AppView },
-            { icon: "swap-horizontal" as const, label: "Convert", color: "#087BFA", bg: "#E8F2FF", view: "exchange" as AppView },
-            { icon: "receipt-outline" as const, label: "Requests", color: "#087BFA", bg: "#E8F2FF", view: "requests" as AppView },
-            { icon: "time-outline" as const, label: "History", color: "#087BFA", bg: "#E8F2FF", view: "history" as AppView },
+            { icon: "add" as const, label: "Buy", color: "#25B95D", bg: "#E0EBD9", view: "topup" as AppView },
+            { icon: "paper-plane" as const, label: "Send", color: "#F39A13", bg: "#F6E8CE", view: "send" as AppView },
+            { icon: "qr-code" as const, label: "Receive", color: "#2926C9", bg: "#E2DFEA", view: "receive" as AppView },
+            { icon: "swap-horizontal" as const, label: "Convert", color: "#8C68DC", bg: "#E8E0EB", view: "exchange" as AppView },
+            { icon: "receipt-outline" as const, label: "Requests", color: "#B65BD1", bg: "#EBDDEB", view: "requests" as AppView },
+            { icon: "time-outline" as const, label: "History", color: "#E77D4D", bg: "#F4E1D4", view: "history" as AppView },
           ].map((a) => {
             const badge = a.label === "Requests" && pendingRequestCount > 0 ? pendingRequestCount : 0;
             return (
@@ -416,14 +414,14 @@ export default function AfuPayApp({
             <View style={s.sectionRow}>
               <View style={s.activityHeading}>
                 <View style={s.activityAccent} />
-                <Text style={[s.activityTitle, { color: colors.text }]}>Recent activity</Text>
+                <Text style={[s.activityTitle, { color: "#55534C" }]}>RECENT ACTIVITY</Text>
               </View>
               <TouchableOpacity onPress={() => setView("history")} hitSlop={8}>
-                <Text style={[s.seeAll, { color: Colors.brand }]}>View all  ›</Text>
+                <Text style={[s.seeAll, { color: "#2524B9" }]}>查看全部</Text>
               </TouchableOpacity>
             </View>
             {recentTx.length > 0 ? (
-              <View style={[s.txCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+              <View style={[s.txCard, { backgroundColor: "#FFFEFA", borderColor: "transparent" }]}>
                 {recentTx.map((tx, i) => (
                   <View key={tx.id}>
                     {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -455,15 +453,24 @@ export default function AfuPayApp({
           </View>
         )}
 
-        <View style={[s.securityBanner, { backgroundColor: colors.cardSurface }]}>
-          <View style={s.securityIcon}><Ionicons name="shield-checkmark" size={22} color="#087BFA" /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.securityTitle, { color: colors.text }]}>Your wallet is secure</Text>
-            <Text style={[s.securityCaption, { color: colors.textMuted }]}>Protected by AfuChat Technologies</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.brand} />
-        </View>
+        
       </ScrollView>
+      <View style={[s.bottomNavDock, { bottom: Math.max(insets.bottom, Platform.OS === "web" ? 10 : 8) }]}>
+        <View style={s.bottomNavPill}>
+          {([
+            { key: "home", label: "Overview", icon: "wallet-outline", active: view === "home", action: () => setView("home") },
+            { key: "history", label: "Activity", icon: "receipt-outline", active: view === "history", action: () => setView("history") },
+            { key: "topup", label: "Top up", icon: "add-circle-outline", active: view === "topup", action: () => setView("topup") },
+            { key: "requests", label: "Requests", icon: "arrow-down-circle-outline", active: view === "requests", action: () => setView("requests") },
+            { key: "services", label: "Services", icon: "grid-outline", active: view === "services", action: () => setView("services") },
+          ] as const).map((item) => (
+            <TouchableOpacity key={item.key} onPress={item.action} activeOpacity={0.78} style={[s.bottomNavItem, item.active && s.bottomNavItemActive]}>
+              <Ionicons name={item.icon as any} size={27} color={item.active ? "#2525C4" : "#66645B"} />
+              <Text numberOfLines={1} style={[s.bottomNavLabel, { color: item.active ? "#2525C4" : "#66645B" }]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
     </View>
   );
 }
@@ -1096,27 +1103,36 @@ function RequestsView({ colors, insets, user, onBack }: any) {
 const W = Dimensions.get("window").width;
 const s = StyleSheet.create({
   root: { flex: 1 },
+  walletRoot: { flex: 1, width: "100%", backgroundColor: "#F0ECDF", position: "relative" },
+  bottomNavDock: { position: "absolute", left: 0, right: 0, alignItems: "center", paddingHorizontal: 20, zIndex: 20, ...(Platform.OS === "web" ? { position: "fixed" as any, bottom: 10 } : {}) },
+  bottomNavPill: { width: "100%", maxWidth: 680, height: 82, borderRadius: 44, backgroundColor: "#FFFEFA", flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 7, elevation: 18, shadowColor: "#1C251B", shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
+  bottomNavItem: { flex: 1, height: 68, borderRadius: 36, alignItems: "center", justifyContent: "center", gap: 2, minWidth: 0 },
+  bottomNavItemActive: { backgroundColor: "#E7E6FA" },
+  bottomNavLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  walletHeaderRightSpacer: { width: 56 },
+  heroCoinGlyph: { color: "#0B5133", fontSize: 17, fontFamily: "Inter_700Bold" },
+
   walletHeader: { borderBottomWidth: 0 },
-  walletHeaderRow: { height: 64, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16 },
-  walletHeaderTitleWrap: { flex: 1, alignItems: "flex-start", marginLeft: 12 },
-  walletHeaderTitle: { fontSize: 25, fontFamily: "Inter_700Bold", letterSpacing: -0.6 },
-  walletHeaderSubtitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 3 },
+  walletHeaderRow: { height: 92, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 22 },
+  walletHeaderTitleWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  walletHeaderTitle: { fontSize: 27, fontFamily: "Inter_700Bold", letterSpacing: -0.6 },
+  walletHeaderSubtitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 7 },
   walletHeaderMark: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#E8F2FF", alignItems: "center", justifyContent: "center" },
   heroTopLine: { flexDirection: "row", alignItems: "center" },
   heroCoinMark: { width: 27, height: 27, borderRadius: 14, backgroundColor: "#F7C94B", alignItems: "center", justifyContent: "center" },
   heroNexaLabel: { flexDirection: "row", alignItems: "center" },
-  heroNexaAmount: { color: "#FFC247", fontSize: 27, fontFamily: "Inter_700Bold", marginTop: 4 },
+  heroNexaAmount: { color: "#F39A12", fontSize: 39, fontFamily: "Inter_700Bold", marginTop: 4 },
   heroNexaCaption: { color: "rgba(255,255,255,0.68)", fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textAlign: "right" },
   heroFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   heroTrustItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  heroTrustText: { color: "rgba(255,255,255,0.86)", fontSize: 11, fontFamily: "Inter_500Medium" },
-  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, justifyContent: "space-between", marginBottom: 4 },
-  actionTile: { width: "31.5%", minHeight: 112, alignItems: "center", justifyContent: "center", gap: 9, marginBottom: 10, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.78)" },
+  heroTrustText: { color: "rgba(255,255,255,0.58)", fontSize: 15, fontFamily: "Inter_500Medium" },
+  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 48, justifyContent: "space-between", marginBottom: 18 },
+  actionTile: { width: "31.5%", minHeight: 132, alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 8, borderRadius: 24, backgroundColor: "transparent" },
   actionBadge: { position: "absolute", top: -5, right: -6, backgroundColor: "#E53935", borderRadius: 10, minWidth: 19, height: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
   activityHeading: { flexDirection: "row", alignItems: "center", gap: 10 },
   activityAccent: { width: 4, height: 25, borderRadius: 2, backgroundColor: Colors.brand },
-  activityTitle: { fontSize: 19, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  activityTitle: { fontSize: 19, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   securityBanner: { marginHorizontal: 16, marginTop: 18, marginBottom: 18, padding: 14, borderRadius: 20, backgroundColor: "#EAF3FF", flexDirection: "row", alignItems: "center", gap: 12 },
   securityIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#D5E8FF", alignItems: "center", justifyContent: "center" },
   securityTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
@@ -1128,30 +1144,30 @@ const s = StyleSheet.create({
   emptyActivityButton: { marginTop: 15, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14, backgroundColor: Colors.brand },
   emptyActivityButtonText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   walletBackGlyph: { fontSize: 34, lineHeight: 34, fontFamily: "Inter_400Regular", marginTop: -2 },
-  heroCard: { marginHorizontal: 16, marginTop: 12, marginBottom: 18, borderRadius: 26, paddingHorizontal: 22, paddingTop: 21, paddingBottom: 18, overflow: "hidden", elevation: 5, shadowColor: "#0755C9", shadowOpacity: 0.18, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+  heroCard: { marginHorizontal: 30, marginTop: 30, marginBottom: 38, borderRadius: 38, paddingHorizontal: 38, paddingTop: 36, paddingBottom: 30, overflow: "hidden" },
   heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  heroLabel: { color: "rgba(255,255,255,0.86)", fontSize: 13, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
-  heroAmount: { color: "#fff", fontSize: 39, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
+  heroLabel: { color: "rgba(255,255,255,0.72)", fontSize: 16, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
+  heroAmount: { color: "#fff", fontSize: 46, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
   heroCurrency: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
   heroRight: { alignItems: "flex-end", paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.2)" },
-  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 18, marginBottom: 13 },
+  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 30, marginBottom: 26 },
   heroSub: { color: "rgba(255,255,255,0.72)", fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 },
   actionsRow: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 8, gap: 8, justifyContent: "space-around", marginBottom: 8 },
   actionItem: { alignItems: "center", gap: 5, width: (W - 32) / 3, marginBottom: 4, paddingVertical: 4 },
-  actionIcon: { width: 62, height: 62, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  section: { paddingHorizontal: 16, marginTop: 18 },
+  actionIcon: { width: 94, height: 94, borderRadius: 30, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 17, fontFamily: "Inter_500Medium" },
+  section: { paddingHorizontal: 30, marginTop: 30 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   sectionTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   seeAll: { fontSize: 13, fontFamily: "Inter_500Medium" },
   txCard: { borderRadius: 22, borderWidth: 0, overflow: "hidden", paddingHorizontal: 3, elevation: 1, shadowColor: "#13294B", shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 3 } },
-  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 13, paddingVertical: 15, gap: 12 },
-  txIcon: { width: 43, height: 43, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingVertical: 24, gap: 18 },
+  txIcon: { width: 68, height: 68, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   txInfo: { flex: 1 },
-  txLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
-  txSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  txAmt: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  sep: { height: StyleSheet.hairlineWidth, marginLeft: 68 },
+  txLabel: { fontSize: 20, fontFamily: "Inter_600SemiBold", marginBottom: 5 },
+  txSub: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  txAmt: { fontSize: 19, fontFamily: "Inter_700Bold" },
+  sep: { height: StyleSheet.hairlineWidth, marginLeft: 110 },
   emptyWrap: { alignItems: "center", paddingVertical: 40, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   emptyBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginTop: 4 },
