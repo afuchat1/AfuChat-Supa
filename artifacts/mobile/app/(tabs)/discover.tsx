@@ -51,6 +51,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import PostUploadBanner from "@/components/ui/PostUploadBanner";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { getNetworkProfile } from "@/lib/networkQuality";
 import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
 import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments } from "@/lib/offlineStore";
 import { timeAgo as formatRelative, formatPostDate } from "@/lib/timeAgo";
@@ -1192,22 +1193,19 @@ export default function DiscoverScreen() {
       return next;
     });
   }, [snackAnim]);
-  const PAGE_SIZE = 30;
+  const getAdaptivePageSize = () => {
+    const profile = getNetworkProfile();
+    return profile.type === "wifi" && profile.expensive !== true ? 30 : 15;
+  };
   const imgViewer = useImageViewer();
 
   useEffect(() => {
     let cancelled = false;
     discoverMusicPlaybackCacheRef.current = new Map();
     if (!user) { setDiscoverMusic([]); return; }
-    listMusicTracks().then((tracks) => {
+    listMusicTracks(8).then((tracks) => {
       if (cancelled) return;
-      const visibleTracks = tracks.slice(0, 8);
-      setDiscoverMusic(visibleTracks);
-      void Promise.all(
-        visibleTracks
-          .filter((track) => track.price === 0 || track.isOwned)
-          .map((track) => resolveDiscoverMusicUri(track).catch(() => null)),
-      );
+      setDiscoverMusic(tracks);
     }).catch(() => { if (!cancelled) setDiscoverMusic([]); });
     return () => { cancelled = true; };
   }, [user?.id, resolveDiscoverMusicUri]);
@@ -1677,6 +1675,7 @@ export default function DiscoverScreen() {
     // --- Following tab ---
     if (activeTab === "following") {
       if (!user) { setLoading(false); setRefreshing(false); setLoadingMore(false); return; }
+      const pageSize = getAdaptivePageSize();
 
       // Cache following IDs for 5 min — skip the round-trip on every tab switch.
       const FOLLOWING_IDS_TTL = 5 * 60 * 1000;
@@ -1720,16 +1719,16 @@ export default function DiscoverScreen() {
         .in("visibility", ["public", "followers"])
         .order("created_at", { ascending: false });
       const { data } = await (followOlderThan
-        ? followBaseQ.lt("created_at", followOlderThan).limit(PAGE_SIZE)
+        ? followBaseQ.lt("created_at", followOlderThan).limit(pageSize)
         : followNewerThan
-          ? followBaseQ.gt("created_at", followNewerThan).limit(PAGE_SIZE)
-          : followBaseQ.limit(PAGE_SIZE));
+          ? followBaseQ.gt("created_at", followNewerThan).limit(pageSize)
+          : followBaseQ.limit(pageSize));
 
       if (data) {
-        if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
+        if (data.length < pageSize) setHasMore(false); else setHasMore(true);
 
         const postIds = data.map((p: any) => p.id);
-        const _followLimit = PAGE_SIZE * 3;
+        const _followLimit = pageSize * 3;
         const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
           postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
           postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
@@ -1819,9 +1818,10 @@ export default function DiscoverScreen() {
     //  2. MID       — posts 4–30 days old, random window per session
     //  3. THROWBACK — posts older than 30 days, random window per session
     // Streams are shuffled before scoring so every pull-to-refresh feels different.
-    const RECENT_SIZE = 12;
-    const MID_SIZE = 10;
-    const THROWBACK_SIZE = 8;
+    const pageSize = getAdaptivePageSize();
+    const RECENT_SIZE = pageSize === 30 ? 12 : 8;
+    const MID_SIZE = pageSize === 30 ? 10 : 5;
+    const THROWBACK_SIZE = pageSize === 30 ? 8 : 3;
 
     const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -1947,7 +1947,7 @@ export default function DiscoverScreen() {
         .limit(6);
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
 
-      const _fyLimit = PAGE_SIZE * 3;
+      const _fyLimit = pageSize * 3;
       const [
         { data: myLikes },
         { data: replyCounts },

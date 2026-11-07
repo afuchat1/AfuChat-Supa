@@ -4,7 +4,10 @@ import {
   pickBestSource,
   type VideoManifest,
 } from "@/lib/videoApi";
-import { getPreferredVideoHeight } from "@/lib/networkQuality";
+import {
+  getPreferredVideoHeight,
+  getPreferredVideoMaxBitrateKbps,
+} from "@/lib/networkQuality";
 
 interface ResolvedSource {
   uri: string;
@@ -29,7 +32,11 @@ interface ResolvedSource {
 export function useResolvedVideoSource(
   postId: string | null | undefined,
   fallbackUrl: string,
-  opts: { videoAssetId?: string | null; targetHeight?: number } = {},
+  opts: {
+    videoAssetId?: string | null;
+    targetHeight?: number;
+    maxBitrateKbps?: number;
+  } = {},
 ): ResolvedSource {
   const [state, setState] = useState<ResolvedSource>({
     uri: fallbackUrl,
@@ -58,8 +65,9 @@ export function useResolvedVideoSource(
       if (manifest && manifest.sources.length > 0) {
         const picked = pickBestSource(manifest, {
           // If caller didn't specify a target height, use network-aware default:
-          // 360p on cellular (saves ~75% vs 720p), 720p on WiFi
+          // low-data renditions on cellular/unknown, higher quality on Wi-Fi.
           targetHeight: opts.targetHeight ?? getPreferredVideoHeight(),
+          maxBitrateKbps: opts.maxBitrateKbps ?? getPreferredVideoMaxBitrateKbps(),
         });
         setState({
           uri: picked.url || fallbackUrl,
@@ -91,7 +99,7 @@ export function useResolvedVideoSource(
       if (timer) clearTimeout(timer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postId, fallbackUrl, opts.targetHeight]);
+  }, [postId, fallbackUrl, opts.targetHeight, opts.maxBitrateKbps]);
 
   return state;
 }

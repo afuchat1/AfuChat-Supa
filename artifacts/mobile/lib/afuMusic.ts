@@ -14,6 +14,7 @@ const MAX_COVER_BYTES = 15 * 1024 * 1024;
 const AUDIO_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/ogg", "audio/aac"]);
 const COVER_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 const MUSIC_TRACK_COLUMNS = "id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,cover_url,cover_storage_path,created_at";
+const MUSIC_TRACK_WITH_CREATOR_COLUMNS = `${MUSIC_TRACK_COLUMNS},creator:profiles!music_tracks_creator_id_fkey(display_name,handle)`;
 
 type MusicRow = {
   id: string;
@@ -96,11 +97,11 @@ async function currentUserId(): Promise<string> {
   return data.user.id;
 }
 
-async function loadTracks(query?: string, ids?: string[]): Promise<AfuMusicTrack[]> {
+async function loadTracks(query?: string, ids?: string[], limit = 100): Promise<AfuMusicTrack[]> {
   const userId = await currentUserId();
   let request = supabase
     .from("music_tracks")
-    .select(MUSIC_TRACK_COLUMNS)
+    .select(MUSIC_TRACK_WITH_CREATOR_COLUMNS)
     .eq("status", "published");
   if (ids) {
     if (!ids.length) return [];
@@ -109,26 +110,21 @@ async function loadTracks(query?: string, ids?: string[]): Promise<AfuMusicTrack
     const escaped = query.trim().replace(/[%_,]/g, "");
     if (escaped) request = request.or(`title.ilike.%${escaped}%,artist.ilike.%${escaped}%,genre.ilike.%${escaped}%`);
   }
-  request = request.order("created_at", { ascending: false }).limit(100);
-  const [{ data: rows, error }, { data: purchases }, { data: profiles }, offline] = await Promise.all([
+  request = request.order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, Math.floor(limit))));
+  const [{ data: rows, error }, { data: purchases }, offline] = await Promise.all([
     request,
     supabase.from("music_purchases").select("track_id").eq("buyer_id", userId),
-    supabase.from("profiles").select("id,display_name,handle").limit(1000),
     getOfflineMusicEntries(userId),
   ]);
   if (error) throw error;
 
   const purchased = new Set((purchases ?? []).map((item: any) => item.track_id));
   const cached = new Set(offline.map((entry) => entry.trackId));
-  const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.id, profile]));
-  return ((rows ?? []) as MusicRow[]).map((row) => rowToTrack({
-    ...row,
-    creator: profileMap.get(row.creator_id),
-  }, purchased, cached, userId));
+  return ((rows ?? []) as MusicRow[]).map((row) => rowToTrack(row, purchased, cached, userId));
 }
 
-export async function listMusicTracks() {
-  return loadTracks();
+export async function listMusicTracks(limit = 100) {
+  return loadTracks(undefined, undefined, limit);
 }
 
 export async function listCreatorMusicTracks(): Promise<AfuMusicTrack[]> {

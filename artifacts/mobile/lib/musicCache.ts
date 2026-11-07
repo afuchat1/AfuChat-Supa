@@ -96,6 +96,15 @@ export async function cacheMusicFile(
   if (Platform.OS === "web") {
     throw new Error("Offline music is available in the mobile app.");
   }
+  const entries = (await readRegistry(ownerId)).filter((entry) => entry.trackId !== track.id);
+  const currentBytes = entries.reduce((sum, entry) => sum + Math.max(0, entry.fileSize || 0), 0);
+  const declaredFileSize = track.fileSize ?? 0;
+  if (
+    entries.length + 1 > MAX_OFFLINE_TRACKS ||
+    (declaredFileSize > 0 && currentBytes + declaredFileSize > MAX_OFFLINE_BYTES)
+  ) {
+    throw new Error("Offline music storage is full. Remove a saved track before downloading another.");
+  }
   await ensureMusicDirectory();
 
   const directory = accountDirectory(ownerId);
@@ -106,13 +115,19 @@ export async function cacheMusicFile(
   const fileUri = `${directory}${filenameFor(track)}`;
   const existing = await FileSystem.getInfoAsync(fileUri);
   let fileSize = (existing as any).size ?? 0;
+  let downloadedNow = false;
   if (!existing.exists || fileSize <= 0) {
     const result = await FileSystem.downloadAsync(remoteUri, fileUri);
+    if (result.status < 200 || result.status >= 300) {
+      await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+      throw new Error(`The track download failed (HTTP ${result.status}).`);
+    }
     const info = await FileSystem.getInfoAsync(result.uri);
     if (!info.exists || !((info as any).size > 0)) {
       throw new Error("The track could not be saved to private storage.");
     }
     fileSize = (info as any).size ?? 0;
+    downloadedNow = true;
   }
 
   const next: OfflineMusicEntry = {
@@ -122,19 +137,17 @@ export async function cacheMusicFile(
     cachedAt: Date.now(),
     track: { ...track, audioUrl: fileUri, isCached: true },
   };
-  const entries = (await readRegistry(ownerId)).filter((entry) => entry.trackId !== track.id);
-  entries.unshift(next);
-
-  let totalBytes = entries.reduce((sum, entry) => sum + Math.max(0, entry.fileSize || 0), 0);
-  while (entries.length > MAX_OFFLINE_TRACKS || totalBytes > MAX_OFFLINE_BYTES) {
-    const removed = entries.pop();
-    if (!removed) break;
-    totalBytes -= Math.max(0, removed.fileSize || 0);
-    if (removed.trackId !== track.id) {
-      await FileSystem.deleteAsync(removed.fileUri, { idempotent: true }).catch(() => {});
-    }
+  if (entries.length + 1 > MAX_OFFLINE_TRACKS || currentBytes + fileSize > MAX_OFFLINE_BYTES) {
+    if (downloadedNow) await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    throw new Error("Offline music storage is full. Remove a saved track before downloading another.");
   }
-  await writeRegistry(ownerId, entries);
+  entries.unshift(next);
+  try {
+    await writeRegistry(ownerId, entries);
+  } catch (error) {
+    if (downloadedNow) await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
+    throw error;
+  }
   return next;
 }
 

@@ -92,6 +92,7 @@ export async function getRankedSearchSuggestions(
   query: string,
   limit = 6,
   includeSimilar = false,
+  signal?: AbortSignal,
 ): Promise<RankedSearchTerm[]> {
   const normalized = normalizeSearchTerm(query);
   if (normalized && coreLength(normalized) < 2) return [];
@@ -101,11 +102,13 @@ export async function getRankedSearchSuggestions(
   const cached = readCache(termCache, cacheKey);
   if (cached) return cached;
 
-  const { data, error } = await supabase.rpc("get_ranked_search_suggestions", {
+  let request = supabase.rpc("get_ranked_search_suggestions", {
     p_query: normalized,
     p_limit: safeLimit,
     p_include_similar: includeSimilar,
   });
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
   if (error) throw error;
 
   const rows = parseRankedTerms(data);
@@ -116,14 +119,16 @@ export async function getRankedSearchSuggestions(
 export function getSimilarSearchTerms(
   query: string,
   limit = 10,
+  signal?: AbortSignal,
 ): Promise<RankedSearchTerm[]> {
-  return getRankedSearchSuggestions(query, limit, true);
+  return getRankedSearchSuggestions(query, limit, true, signal);
 }
 
 export async function getSearchProfileSuggestions(
   query: string,
   userId: string | undefined,
   limit = 4,
+  signal?: AbortSignal,
 ): Promise<SearchProfileSuggestion[]> {
   if (!userId) return [];
 
@@ -135,10 +140,12 @@ export async function getSearchProfileSuggestions(
   const cached = readCache(profileCache, cacheKey);
   if (cached) return cached;
 
-  const { data, error } = await supabase.rpc("get_search_profile_suggestions", {
+  let request = supabase.rpc("get_search_profile_suggestions", {
     p_query: normalized,
     p_limit: safeLimit,
   });
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
   if (error) throw error;
 
   const rows = Array.isArray(data)
@@ -158,6 +165,7 @@ export async function getSearchProfileSuggestions(
 export async function getPlatformSearchSuggestions(
   query: string,
   limit = 8,
+  signal?: AbortSignal,
 ): Promise<PlatformSearchSuggestion[]> {
   const normalized = normalizeSearchTerm(query);
   if (!normalized || coreLength(normalized) < 2) return [];
@@ -167,10 +175,12 @@ export async function getPlatformSearchSuggestions(
   const cached = readCache(contentSuggestionCache, cacheKey);
   if (cached) return cached;
 
-  const { data, error } = await supabase.rpc("get_platform_search_suggestions", {
+  let request = supabase.rpc("get_platform_search_suggestions", {
     p_query: normalized,
     p_limit: safeLimit,
   });
+  if (signal) request = request.abortSignal(signal);
+  const { data, error } = await request;
   if (error) throw error;
 
   const rows: PlatformSearchSuggestion[] = Array.isArray(data)

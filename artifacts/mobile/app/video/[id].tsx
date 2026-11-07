@@ -74,7 +74,16 @@ import { trackEvent } from "@/lib/activityTracker";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
-import { getPreferredVideoHeight, isOffline as checkIsOffline, subscribeToNetworkChanges } from "@/lib/networkQuality";
+import {
+  getNetworkProfile,
+  getPreferredVideoHeight,
+  getPreferredVideoMaxBitrateKbps,
+  isOffline as checkIsOffline,
+  shouldPreloadAdjacentVideo,
+  subscribeToNetworkChanges,
+  subscribeToNetworkProfileChanges,
+  type NetworkProfile,
+} from "@/lib/networkQuality";
 import { safePause, safePlay } from "@/lib/safeMedia";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
@@ -367,6 +376,11 @@ const VideoItem = React.memo(function VideoItem({
   const { colors } = useTheme();
   const { playMusic } = useGlobalMusicPlayer();
   const insets = useSafeAreaInsets();
+  const [networkProfile, setNetworkProfile] = useState<NetworkProfile>(() => getNetworkProfile());
+  useEffect(() => subscribeToNetworkProfileChanges(setNetworkProfile), []);
+  const shouldPreload = isNearActive && shouldPreloadAdjacentVideo(networkProfile);
+  const shouldMountVideo = isActive || shouldPreload;
+  const preloadOnly = !isActive && shouldPreload;
   // On web, create the player with its final stable source. expo-video's web
   // replace() calls HTMLMediaElement.play() without handling the returned
   // promise, so replacing the fallback URL with a resolved/cache URL can
@@ -374,7 +388,7 @@ const VideoItem = React.memo(function VideoItem({
   // players still start empty and use replaceAsync below because that path
   // supports the native player lifecycle.
   const player = useVideoPlayer(
-    Platform.OS === "web" ? { uri: item.video_url } : null,
+    Platform.OS === "web" && shouldMountVideo ? { uri: item.video_url } : null,
     (p) => { p.loop = true; p.muted = false; },
   );
   const videoViewRef = useRef<VideoView>(null);
@@ -447,18 +461,23 @@ const VideoItem = React.memo(function VideoItem({
   const lastSavedProgressRef = useRef(0);   // timestamp of last AsyncStorage save
   const cacheDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: getPreferredVideoHeight() });
+  const resolved = useResolvedVideoSource(
+    shouldMountVideo && !cachedUri ? item.id : null,
+    item.video_url,
+    {
+      targetHeight: getPreferredVideoHeight(networkProfile),
+      maxBitrateKbps: getPreferredVideoMaxBitrateKbps(networkProfile),
+    },
+  );
   // When an error occurs fall back directly to the raw video_url, bypassing cache/manifest
   const playbackUri = videoError ? item.video_url : (cachedUri || resolved.uri || item.video_url);
-  const shouldMountVideo = isActive || isNearActive;
   const sourceReadyRef = useRef(Platform.OS === "web" && !!item.video_url);
-  const preloadOnly = !isActive && isNearActive;
   const showExpand = !!item.content && (item.content.split("\n").length > 2 || item.content.length > 120);
 
   // Start pre-caching once the video enters the preload window.
   // Delay by 500 ms so the download does NOT compete with the swipe animation.
   useEffect(() => {
-    if (!isNearActive || cacheAttempted.current || !item.video_url) return;
+    if ((!isActive && !shouldPreload) || cacheAttempted.current || !item.video_url) return;
     cacheAttempted.current = true;
     cacheDelayRef.current = setTimeout(() => {
       getCachedVideoUri(item.video_url).then((ex) => {
@@ -467,7 +486,7 @@ const VideoItem = React.memo(function VideoItem({
       }).catch(() => {});
     }, 500);
     return () => { if (cacheDelayRef.current) { clearTimeout(cacheDelayRef.current); cacheDelayRef.current = null; } };
-  }, [isNearActive]);
+  }, [isActive, shouldPreload]);
 
   // Cleanup PiP-exit cover timer on unmount
   useEffect(() => {
@@ -1919,7 +1938,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     <VideoItem
       item={item}
       isActive={index === activeIndex}
-      isNearActive={Math.abs(index - activeIndex) <= 2}
+      isNearActive={index === activeIndex + 1}
       isFollowing={followingSet.has(item.author_id)}
       isSelf={user?.id === item.author_id}
       commentsOpen={commentPostId === item.id}

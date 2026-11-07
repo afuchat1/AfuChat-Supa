@@ -482,6 +482,7 @@ export function SearchScreen({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
   const suggestionRequestRef = useRef(0);
+  const suggestionAbortRef = useRef<AbortController | null>(null);
   const searchEngagementSentRef = useRef(new Map<string, number>());
 
   const [query,        setQuery]        = useState("");
@@ -493,6 +494,11 @@ export function SearchScreen({
   const [loading,     setLoading]     = useState(false);
   const [results,     setResults]     = useState<AllResults>(EMPTY);
   const [hasSearched, setHasSearched] = useState(false);
+
+  function cancelActiveSuggestionRequest() {
+    suggestionAbortRef.current?.abort();
+    suggestionAbortRef.current = null;
+  }
   const [history,          setHistory]          = useState<string[]>([]);
   const [saved,            setSaved]            = useState<SavedSearch[]>([]);
   const [personalizedTags, setPersonalizedTags] = useState<string[]>([]);
@@ -553,6 +559,7 @@ export function SearchScreen({
     loadInitial();
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      cancelActiveSuggestionRequest();
       suggestionRequestRef.current += 1;
     };
   }, []);
@@ -1213,6 +1220,7 @@ export function SearchScreen({
     setQuery(t);
     setDidYouMean(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelActiveSuggestionRequest();
     searchIdRef.current += 1;
     setResults(EMPTY);
     setHasSearched(false);
@@ -1225,23 +1233,26 @@ export function SearchScreen({
     setSearchSuggestions(mergeSuggestionItems(t, [], [], [], localSuggestionsFor(t)));
     if (t.trim().length >= 2) {
       debounceRef.current = setTimeout(async () => {
+        const controller = new AbortController();
+        suggestionAbortRef.current = controller;
         const [rankedTerms, profileSuggestions, contentSuggestions] = await Promise.all([
-          getRankedSearchSuggestions(t, 6).catch((error) => {
-            console.warn("[AfuSearch] Ranked suggestions unavailable:", error?.message || error);
+          getRankedSearchSuggestions(t, 6, false, controller.signal).catch((error) => {
+            if (!controller.signal.aborted) console.warn("[AfuSearch] Ranked suggestions unavailable:", error?.message || error);
             return [] as RankedSearchTerm[];
           }),
-          getSearchProfileSuggestions(t, user?.id, 4).catch((error) => {
-            console.warn("[AfuSearch] Profile suggestions unavailable:", error?.message || error);
+          getSearchProfileSuggestions(t, user?.id, 4, controller.signal).catch((error) => {
+            if (!controller.signal.aborted) console.warn("[AfuSearch] Profile suggestions unavailable:", error?.message || error);
             return [] as SearchProfileSuggestion[];
           }),
           isAfuSearch
-            ? getPlatformSearchSuggestions(t, 8).catch((error) => {
-                console.warn("[AfuSearch] Content suggestions unavailable:", error?.message || error);
+            ? getPlatformSearchSuggestions(t, 8, controller.signal).catch((error) => {
+                if (!controller.signal.aborted) console.warn("[AfuSearch] Content suggestions unavailable:", error?.message || error);
                 return [] as PlatformSearchSuggestion[];
               })
             : Promise.resolve([] as PlatformSearchSuggestion[]),
         ]);
-        if (requestId !== suggestionRequestRef.current) return;
+        if (suggestionAbortRef.current === controller) suggestionAbortRef.current = null;
+        if (controller.signal.aborted || requestId !== suggestionRequestRef.current) return;
         setSearchSuggestions(mergeSuggestionItems(
           t,
           rankedTerms,
@@ -1255,6 +1266,7 @@ export function SearchScreen({
 
   function onSubmit() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelActiveSuggestionRequest();
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
@@ -1273,6 +1285,7 @@ export function SearchScreen({
 
   function onSuggestionPress(suggestion: SearchSuggestionItem) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelActiveSuggestionRequest();
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
@@ -1555,6 +1568,7 @@ export function SearchScreen({
 
   function clearSearch() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelActiveSuggestionRequest();
     suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
     setSearchSuggestions([]); setDidYouMean(null);
@@ -1565,6 +1579,7 @@ export function SearchScreen({
 
   function onHistoryPress(term: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelActiveSuggestionRequest();
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
@@ -1576,6 +1591,7 @@ export function SearchScreen({
 
   function onTagPress(tag: string) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    cancelActiveSuggestionRequest();
     suggestionRequestRef.current += 1;
     setSearchSuggestions([]);
     clearLensResults();
