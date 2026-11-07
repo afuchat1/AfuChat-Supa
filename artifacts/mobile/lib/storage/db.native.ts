@@ -330,4 +330,10 @@ async function runMigrations(db: DB) {
     `);
     await db.runAsync("UPDATE schema_version SET version = 19");
   }
+
+  if (currentVersion < 20) {
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN delivered_at TEXT");
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN read_at TEXT");
+    await db.runAsync("UPDATE schema_version SET version = 20");
+  }
 }

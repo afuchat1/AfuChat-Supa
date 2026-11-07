@@ -89,7 +89,7 @@ import {
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { createLocalMessageId, getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageRead, markMessageSynced } from "@/lib/storage/localMessages";
+import { createLocalMessageId, getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageDelivered, markMessageRead, saveMessageReceipts, markMessageSynced } from "@/lib/storage/localMessages";
 import { queueMessage, removePendingMessage } from "@/lib/offlineStore";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
@@ -159,8 +159,8 @@ async function persistIncomingStatus(
 ): Promise<void> {
   if (messageIds.length === 0) return;
 
-  await Promise.all(messageIds.map((messageId) => markMessageRead(messageId)));
   const now = new Date().toISOString();
+  await Promise.all(messageIds.map((messageId) => markMessageRead(messageId, now)));
   const rows = messageIds.map((messageId) => ({
     message_id: messageId,
     user_id: userId,
@@ -329,6 +329,31 @@ type Message = {
   _notification?: NotificationMessageData;
 };
 
+type MessageReceiptSnapshot = {
+  delivered_at: string | null;
+  read_at: string | null;
+};
+
+function latestReceiptTime(
+  current: string | null | undefined,
+  incoming: string | null | undefined,
+): string | null {
+  if (!incoming) return current ?? null;
+  if (!current || incoming > current) return incoming;
+  return current;
+}
+
+function mergeReceiptRow(
+  receipts: Map<string, MessageReceiptSnapshot>,
+  row: { message_id: string; delivered_at?: string | null; read_at?: string | null },
+): void {
+  const current = receipts.get(row.message_id);
+  receipts.set(row.message_id, {
+    delivered_at: latestReceiptTime(current?.delivered_at, row.delivered_at),
+    read_at: latestReceiptTime(current?.read_at, row.read_at),
+  });
+}
+
 function isOptimisticMatch(local: Message, server: Message): boolean {
   const isTemporary = local._pending ||
     local.id.startsWith("msg_") ||
@@ -342,6 +367,16 @@ function isOptimisticMatch(local: Message, server: Message): boolean {
   const serverTime = new Date(server.sent_at).getTime();
   return Number.isFinite(localTime) && Number.isFinite(serverTime) &&
     Math.abs(localTime - serverTime) <= 15000;
+}
+
+async function cacheConfirmedOutgoingMessage(message: any, sender?: any): Promise<void> {
+  if (!message?.id || !message?.chat_id || !message?.sender_id) return;
+  await saveMessages(message.chat_id, [{
+    ...message,
+    sent_at: message.sent_at || new Date().toISOString(),
+    status: message.status || "sent",
+    sender: message.sender ?? sender,
+  }]);
 }
 
 type SenderSnapshot = NonNullable<Message["sender"]>;
@@ -2628,6 +2663,21 @@ function ChatScreen() {
   const [showMoreEmojis, setShowMoreEmojis] = useState(false);
   const [textSelectionMessageId, setTextSelectionMessageId] = useState<string | null>(null);
   const [messageSourceLanguage, setMessageSourceLanguage] = useState<string | null>(null);
+  const [msgInfoTarget, setMsgInfoTarget] = useState<Message | null>(null);
+
+  useEffect(() => {
+    if (!msgInfoTarget) return;
+    const latest = messages.find((message) => message.id === msgInfoTarget.id);
+    if (!latest || latest === msgInfoTarget) return;
+    if (
+      latest.sent_at !== msgInfoTarget.sent_at ||
+      latest.delivered_at !== msgInfoTarget.delivered_at ||
+      latest.read_at !== msgInfoTarget.read_at ||
+      latest.status !== msgInfoTarget.status
+    ) {
+      setMsgInfoTarget(latest);
+    }
+  }, [messages, msgInfoTarget]);
 
   useEffect(() => {
     const message = showReactions;
@@ -2665,7 +2715,6 @@ function ChatScreen() {
     setAiReplies([]);
     setShowMoreEmojis(false);
   }, []);
-  const [msgInfoTarget, setMsgInfoTarget] = useState<Message | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<{ id: string; handle: string; display_name: string; avatar_url: string | null }[]>([]);
   const [showRedEnvelope, setShowRedEnvelope] = useState(false);
@@ -3465,6 +3514,8 @@ function ChatScreen() {
               attachment_url: m.attachment_url,
               attachment_type: m.attachment_type,
               edited_at: m.edited_at,
+              delivered_at: m.delivered_at,
+              read_at: m.read_at,
               status: m.status as any,
               reactions: [],
               _pending: m.is_pending,
@@ -3518,8 +3569,9 @@ function ChatScreen() {
       }
     }
 
-    // Delta sync: only fetch messages NEWER than what's already stored on device.
-    // On web: always fetch fresh from the server (no local cache).
+    // Always backfill the latest server page, even when local history exists.
+    // Some send paths create a server message without first writing a local
+    // outbox row; a strict timestamp delta can skip those rows after navigation.
     const newestStored = await getNewestMessageDate(chatId);
     const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
     if (!isCurrentLoad()) return;
@@ -3529,10 +3581,7 @@ function ChatScreen() {
       .eq("chat_id", chatId)
       .order("sent_at", { ascending: false })
       .limit(100);
-    if (newestStored) {
-      msgQuery = msgQuery.gt("sent_at", newestStored);
-    }
-    if (clearedAtServer && (!newestStored || clearedAtServer > newestStored)) {
+    if (clearedAtServer) {
       msgQuery = msgQuery.gt("sent_at", clearedAtServer);
     }
       const { data } = await msgQuery;
@@ -3646,17 +3695,25 @@ function ChatScreen() {
               reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
             }
           }
-          const statusMap = new Map<string, { read_at: string | null; delivered_at: string | null }>();
+          const statusMap = new Map<string, MessageReceiptSnapshot>();
           for (const s of (statuses || []) as any[]) {
-            statusMap.set(s.message_id, { read_at: s.read_at || null, delivered_at: s.delivered_at || null });
+            mergeReceiptRow(statusMap, s);
           }
+          for (const [messageId, receipt] of statusMap) {
+            void saveMessageReceipts(messageId, receipt);
+          }
+          void saveMessages(chatId, mapped.map((message: any) => {
+            const receipt = statusMap.get(message.id);
+            if (!receipt) return message;
+            return {
+              ...message,
+              ...receipt,
+              status: message.sender_id === user.id
+                ? (receipt.read_at ? "read" : receipt.delivered_at ? "delivered" : "sent")
+                : message.status,
+            };
+          }));
           const msgIdSet = new Set(msgIds);
-          const readIds = (statuses || [])
-            .filter((status: any) => status.read_at)
-            .map((status: any) => status.message_id);
-          if (readIds.length > 0) {
-            void Promise.all(readIds.map((messageId: string) => markMessageRead(messageId)));
-          }
           setMessages((prev) =>
             prev.map((m) => {
               if (!msgIdSet.has(m.id)) return m;
@@ -3750,6 +3807,8 @@ function ChatScreen() {
               attachment_url: message.attachment_url,
               attachment_type: message.attachment_type,
               edited_at: message.edited_at,
+              delivered_at: message.delivered_at,
+              read_at: message.read_at,
               sender: localSenderSnapshot(message),
               status: message.status as any,
               reactions: [],
@@ -3805,12 +3864,12 @@ function ChatScreen() {
                   });
                 }
               }
-              const statusMap = new Map<string, { read_at: string | null; delivered_at: string | null }>();
+              const statusMap = new Map<string, MessageReceiptSnapshot>();
               for (const status of (statuses || []) as any[]) {
-                statusMap.set(status.message_id, {
-                  read_at: status.read_at || null,
-                  delivered_at: status.delivered_at || null,
-                });
+                mergeReceiptRow(statusMap, status);
+              }
+              for (const [messageId, receipt] of statusMap) {
+                void saveMessageReceipts(messageId, receipt);
               }
               const notificationMap = new Map<string, NotificationMessageData>();
               const hydratedNotifications = await hydrateNotificationEvents(notificationEvents || [], user.id);
@@ -3884,9 +3943,9 @@ function ChatScreen() {
           if (existing) { existing.count++; if (r.user_id === user.id) existing.myReaction = true; }
           else reactionMap[r.message_id].push({ emoji: r.reaction, count: 1, myReaction: r.user_id === user.id });
         }
-        const statusMap2 = new Map<string, { read_at: string | null; delivered_at: string | null }>();
+        const statusMap2 = new Map<string, MessageReceiptSnapshot>();
         for (const s of (statuses || []) as any[]) {
-          statusMap2.set(s.message_id, { read_at: s.read_at || null, delivered_at: s.delivered_at || null });
+          mergeReceiptRow(statusMap2, s);
         }
         const mapped = data.map((m: any) => {
           const isBot = m.sender_id === AFUAI_BOT_ID;
@@ -3940,7 +3999,6 @@ function ChatScreen() {
       setNetworkOnline(online);
       if (online && !isLocalNotes) {
         await syncPendingMessages().catch(() => {});
-        setMessages((prev) => prev.filter((m) => !m._pending));
         setHasMore(true);
         loadMessages();
       }
@@ -4400,6 +4458,7 @@ function ChatScreen() {
                   reactions: [],
                   status: "sent" as const,
                 };
+                await cacheConfirmedOutgoingMessage(autoMsgFull);
                 setMessages((prev) => [autoMsgFull, ...prev]);
               }
             } catch {}
@@ -4583,13 +4642,15 @@ function ChatScreen() {
       if (!reader_id || reader_id === user?.id || !Array.isArray(message_ids)) return;
       const deliveredSet = new Set(message_ids);
       const deliveredAt = rawDeliveredAt || new Date().toISOString();
+      void Promise.all(message_ids.map((messageId) => markMessageDelivered(messageId, deliveredAt)));
       setMessages((prev) =>
-        prev.map((m) =>
-          // Only upgrade "sent" → "delivered"; never downgrade from "read"
-          m.sender_id === user?.id && deliveredSet.has(m.id) && m.status === "sent"
-            ? { ...m, status: "delivered" as const, delivered_at: deliveredAt }
-            : m
-        )
+        prev.map((m) => {
+          if (m.sender_id !== user?.id || !deliveredSet.has(m.id)) return m;
+          const nextDeliveredAt = latestReceiptTime(m.delivered_at, deliveredAt);
+          const nextStatus = m.status === "read" || m.read_at ? "read" : "delivered";
+          if (nextDeliveredAt === m.delivered_at && nextStatus === m.status) return m;
+          return { ...m, status: nextStatus, delivered_at: nextDeliveredAt };
+        })
       );
     };
 
@@ -4601,11 +4662,15 @@ function ChatScreen() {
       setMessages((prev) =>
         prev.map((m) =>
           m.sender_id === user?.id && readSet.has(m.id)
-            ? { ...m, status: "read" as const, read_at: readAt }
+            ? {
+                ...m,
+                status: "read" as const,
+                read_at: latestReceiptTime(m.read_at, readAt),
+              }
             : m
         )
       );
-      void Promise.all(message_ids.map((messageId) => markMessageRead(messageId)));
+      void Promise.all(message_ids.map((messageId) => markMessageRead(messageId, readAt)));
     };
 
     let receiveChannel: ReturnType<typeof supabase.channel>;
@@ -4698,15 +4763,21 @@ function ChatScreen() {
         (payload: any) => {
           const { message_id, user_id: actorId, delivered_at, read_at } = payload.new || {};
           if (!message_id || actorId === user.id) return; // ignore my own receipts
+          void saveMessageReceipts(message_id, { delivered_at, read_at });
           setMessages((prev) =>
             prev.map((m) => {
               if (m.id !== message_id || m.sender_id !== user.id) return m;
-              const nextStatus: Message["status"] = read_at ? "read" : delivered_at ? "delivered" : m.status;
-              if (nextStatus === m.status) return m;
-              return { ...m, status: nextStatus, delivered_at: delivered_at || m.delivered_at, read_at: read_at || m.read_at };
+              const nextDeliveredAt = latestReceiptTime(m.delivered_at, delivered_at);
+              const nextReadAt = latestReceiptTime(m.read_at, read_at);
+              const nextStatus: Message["status"] = nextReadAt ? "read" : nextDeliveredAt ? "delivered" : m.status;
+              if (
+                nextStatus === m.status &&
+                nextDeliveredAt === m.delivered_at &&
+                nextReadAt === m.read_at
+              ) return m;
+              return { ...m, status: nextStatus, delivered_at: nextDeliveredAt, read_at: nextReadAt };
             })
           );
-          if (read_at) void markMessageRead(message_id);
         }
       )
       .on(
@@ -4715,15 +4786,21 @@ function ChatScreen() {
         (payload: any) => {
           const { message_id, user_id: actorId, delivered_at, read_at } = payload.new || {};
           if (!message_id || actorId === user.id) return;
+          void saveMessageReceipts(message_id, { delivered_at, read_at });
           setMessages((prev) =>
             prev.map((m) => {
               if (m.id !== message_id || m.sender_id !== user.id) return m;
-              const nextStatus: Message["status"] = read_at ? "read" : delivered_at ? "delivered" : m.status;
-              if (nextStatus === m.status) return m;
-              return { ...m, status: nextStatus, delivered_at: delivered_at || m.delivered_at, read_at: read_at || m.read_at };
+              const nextDeliveredAt = latestReceiptTime(m.delivered_at, delivered_at);
+              const nextReadAt = latestReceiptTime(m.read_at, read_at);
+              const nextStatus: Message["status"] = nextReadAt ? "read" : nextDeliveredAt ? "delivered" : m.status;
+              if (
+                nextStatus === m.status &&
+                nextDeliveredAt === m.delivered_at &&
+                nextReadAt === m.read_at
+              ) return m;
+              return { ...m, status: nextStatus, delivered_at: nextDeliveredAt, read_at: nextReadAt };
             })
           );
-          if (read_at) void markMessageRead(message_id);
         }
       )
       .subscribe();
@@ -6168,12 +6245,17 @@ STRICT RULES:
     }
 
     try {
-      const { error } = await supabase.from("messages").insert({
+      const { data: inserted, error } = await supabase.from("messages").insert({
         chat_id: targetChatId,
         sender_id: user.id,
         encrypted_content: content,
-      });
+      }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
       if (error) throw error;
+      await cacheConfirmedOutgoingMessage(inserted, {
+        display_name: profile?.display_name || "You",
+        avatar_url: profile?.avatar_url ?? null,
+        handle: profile?.handle || "",
+      });
       setForwardMsg(null);
       setForwardChats([]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -6385,6 +6467,7 @@ STRICT RULES:
         const msgResult = await supabase.from("messages").insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: payloadStr, attachment_type: "payment" }).select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type").single();
         if (msgResult.data) {
           const newMsg: Message = { ...msgResult.data, sender: { display_name: profile.display_name || "You", avatar_url: profile.avatar_url || null, handle: profile.handle || "" }, reactions: [], status: "sent" };
+          await cacheConfirmedOutgoingMessage(newMsg);
           setMessages((prev) => [newMsg, ...prev]);
           flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
           notifyInsertedChatMessage({
@@ -6585,12 +6668,12 @@ STRICT RULES:
       let { data: inserted, error: aiInsertErr } = await supabase
         .from("messages")
         .insert(insertPayload)
-        .select("id, chat_id, sender_id, encrypted_content")
+        .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
         .single();
       if (aiInsertErr || !inserted) {
         const { data: committed, error: confirmError } = await supabase
           .from("messages")
-          .select("id, chat_id, sender_id, encrypted_content")
+          .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
           .eq("id", msgId)
           .eq("chat_id", activeChatId)
           .eq("sender_id", user.id)
@@ -6610,6 +6693,11 @@ STRICT RULES:
         return;
       }
 
+      await cacheConfirmedOutgoingMessage(inserted, {
+        display_name: profile?.display_name || "You",
+        avatar_url: profile?.avatar_url ?? null,
+        handle: profile?.handle || "",
+      });
       setMessages((prev) =>
         prev.map((m) => m.id === msgId ? { ...m, id: inserted.id, status: "sent" as const, _pending: false } : m)
       );
@@ -6644,7 +6732,7 @@ STRICT RULES:
     let { data: inserted, error } = await supabase
       .from("messages")
       .insert(insertPayload)
-      .select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type")
+      .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
       .single();
     if (error || !inserted) {
       // A timed-out request may have committed on the server even though the
@@ -6652,7 +6740,7 @@ STRICT RULES:
       // confirm that exact row instead of resending or guessing from its text.
       const { data: committed, error: confirmError } = await supabase
         .from("messages")
-        .select("id, chat_id, sender_id, encrypted_content, sent_at, attachment_type")
+        .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
         .eq("id", msgId)
         .eq("chat_id", activeChatId)
         .eq("sender_id", user.id)
@@ -6664,6 +6752,11 @@ STRICT RULES:
     }
     if (inserted) {
       await markMessageSynced(msgId, inserted.id).catch(() => {});
+      await cacheConfirmedOutgoingMessage(inserted, {
+        display_name: profile?.display_name || "You",
+        avatar_url: profile?.avatar_url ?? null,
+        handle: profile?.handle || "",
+      }).catch(() => {});
       if (Platform.OS === "web") await removePendingMessage(msgId);
       if (user && !isLocalNotesId(activeChatId)) {
         supabase.from("chat_drafts").delete().eq("user_id", user.id).eq("chat_id", activeChatId).then(() => {});
@@ -6744,7 +6837,14 @@ STRICT RULES:
       chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: `🧧 Red Envelope [${envId}] - ${envelopeMsg || "Good luck!"}`,
-    }).select("id").single();
+    }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
+    if (insertedEnvelope) {
+      await cacheConfirmedOutgoingMessage(insertedEnvelope, {
+        display_name: profile?.display_name || "You",
+        avatar_url: profile?.avatar_url ?? null,
+        handle: profile?.handle || "",
+      });
+    }
     notifyInsertedChatMessage({
       chatId: activeChatId,
       messageId: insertedEnvelope?.id,
@@ -6843,7 +6943,14 @@ STRICT RULES:
       chat_id: activeChatId,
       sender_id: user.id,
       encrypted_content: `🎁 ${gift.emoji} ${gift.name}${message.trim() ? ` - ${message.trim()}` : ""}|giftId:${gift.id}|receiverId:${receiverId}`,
-    }).select("id").single();
+    }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
+    if (insertedGift) {
+      await cacheConfirmedOutgoingMessage(insertedGift, {
+        display_name: profile?.display_name || "You",
+        avatar_url: profile?.avatar_url ?? null,
+        handle: profile?.handle || "",
+      });
+    }
     notifyInsertedChatMessage({
       chatId: activeChatId,
       messageId: insertedGift?.id,
@@ -6998,8 +7105,15 @@ STRICT RULES:
           encrypted_content: label,
           attachment_url: JSON.stringify(uploaded),
           attachment_type: "image_group",
-        }).select("id").single();
+        }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
         if (insertError) throw insertError;
+        if (inserted) {
+          await cacheConfirmedOutgoingMessage(inserted, {
+            display_name: profile?.display_name || "You",
+            avatar_url: profile?.avatar_url ?? null,
+            handle: profile?.handle || "",
+          });
+        }
         setMessages((prev) => prev.map((m) =>
           m.id === tempId
             ? { ...m, id: inserted?.id || tempId, attachment_url: JSON.stringify(uploaded), _pending: false }
@@ -7074,8 +7188,15 @@ STRICT RULES:
             encrypted_content: label,
             attachment_url: publicUrl,
             attachment_type: attachment.type,
-          }).select("id").single();
+          }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
           if (insertError) throw insertError;
+          if (inserted) {
+            await cacheConfirmedOutgoingMessage(inserted, {
+              display_name: profile?.display_name || "You",
+              avatar_url: profile?.avatar_url ?? null,
+              handle: profile?.handle || "",
+            });
+          }
           setMessages((prev) => prev.map((message) =>
             message.id === pendingIds[index]
               ? { ...message, id: inserted?.id || pendingIds[index], attachment_url: publicUrl, _pending: false }
@@ -7138,7 +7259,14 @@ STRICT RULES:
         encrypted_content: label,
         attachment_url: publicUrl,
         attachment_type: type,
-      }).select("id").single();
+      }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
+      if (inserted) {
+        await cacheConfirmedOutgoingMessage(inserted, {
+          display_name: profile?.display_name || "You",
+          avatar_url: profile?.avatar_url ?? null,
+          handle: profile?.handle || "",
+        });
+      }
 
       // Replace optimistic bubble with real message (real URL + real DB id)
       setMessages((prev) => prev.map((m) =>
@@ -7196,9 +7324,14 @@ STRICT RULES:
       sender_id: user.id,
       encrypted_content: emoji,
       attachment_type: "sticker",
-    }).select("id").single();
+    }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
 
     if (inserted) {
+      await cacheConfirmedOutgoingMessage(inserted, {
+        display_name: profile?.display_name || "You",
+        avatar_url: profile?.avatar_url ?? null,
+        handle: profile?.handle || "",
+      });
       setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: inserted.id } : m));
       notifyInsertedChatMessage({
         chatId: activeChatId,
@@ -7525,12 +7658,19 @@ STRICT RULES:
           encrypted_content: "🎤 Voice message",
           attachment_url: publicUrl,
           attachment_type: "audio",
-        }).select("id").single();
+        }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
         if (insertErr) {
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
           showAlert("Error", "Failed to send voice message.");
           setSending(false);
           return;
+        }
+        if (insertedVoice) {
+          await cacheConfirmedOutgoingMessage(insertedVoice, {
+            display_name: profile?.display_name || "You",
+            avatar_url: profile?.avatar_url ?? null,
+            handle: profile?.handle || "",
+          });
         }
         setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, _pending: false } : m));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -7620,12 +7760,19 @@ STRICT RULES:
         encrypted_content: "🎤 Voice message",
         attachment_url: publicUrl,
         attachment_type: "audio",
-      }).select("id").single();
+      }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
       if (insertErr) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         showAlert("Error", "Failed to send voice message.");
         setSending(false);
         return;
+      }
+      if (insertedVoice) {
+        await cacheConfirmedOutgoingMessage(insertedVoice, {
+          display_name: profile?.display_name || "You",
+          avatar_url: profile?.avatar_url ?? null,
+          handle: profile?.handle || "",
+        });
       }
       setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, _pending: false } : m));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -9279,9 +9426,14 @@ STRICT RULES:
               const { data: insertedGif, error: gifError } = await supabase
                 .from("messages")
                 .insert({ chat_id: activeChatId, sender_id: user.id, encrypted_content: "GIF", attachment_url: url, attachment_type: "gif" })
-                .select("id")
+                .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
                 .single();
               if (!gifError && insertedGif?.id) {
+                await cacheConfirmedOutgoingMessage(insertedGif, {
+                  display_name: profile?.display_name || "You",
+                  avatar_url: profile?.avatar_url ?? null,
+                  handle: profile?.handle || "",
+                });
                 notifyInsertedChatMessage({
                   chatId: activeChatId,
                   messageId: insertedGif.id,
@@ -9528,7 +9680,14 @@ STRICT RULES:
                               chat_id: activeChatId,
                               sender_id: user.id,
                               encrypted_content: `👤 ${item.name}${item.phone ? `\n${item.phone}` : ""}`,
-                            }).select("id").single();
+                            }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
+                            if (insertedContact) {
+                              await cacheConfirmedOutgoingMessage(insertedContact, {
+                                display_name: profile?.display_name || "You",
+                                avatar_url: profile?.avatar_url ?? null,
+                                handle: profile?.handle || "",
+                              });
+                            }
                             notifyInsertedChatMessage({
                               chatId: activeChatId,
                               messageId: insertedContact?.id,
