@@ -100,6 +100,7 @@ import { setTotalUnread } from "@/lib/chatUnreadEvents";
 import { prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { updateNativeShareShortcuts } from "@/lib/nativeShareShortcuts";
 import { cacheChatListRows } from "@/lib/chatListSnapshot";
+import { chatActivityLabel, normalizeChatActivity, type ChatActivity } from "@/lib/chatActivity";
 
 
 function stripMdPreview(s: string): string {
@@ -271,7 +272,7 @@ function ChatRow({
   item,
   onPress,
   onAction,
-  isTyping,
+  activity,
   phonebookName,
   selectMode = false,
   isSelected = false,
@@ -284,7 +285,7 @@ function ChatRow({
     action: "togglePin" | "toggleArchive" | "delete" | "open" | "mute" | "unmute",
     item: ChatItem,
   ) => void;
-  isTyping?: boolean;
+  activity?: ChatActivity;
   phonebookName?: string;
   selectMode?: boolean;
   isSelected?: boolean;
@@ -397,12 +398,23 @@ function ChatRow({
           </View>
         </View>
         <View style={styles.rowBottom}>
-          {isTyping ? (
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
-              <Text style={[styles.preview, { color: colors.accent, fontFamily: "Inter_500Medium" }]}>
-                typing
+          {activity ? (
+            <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }}>
+              {activity === "recording" && (
+                <Ionicons name="mic" size={13} color={colors.accent} />
+              )}
+              {activity === "sending_image" && (
+                <Ionicons name="image" size={13} color={colors.accent} />
+              )}
+              <Text
+                style={[styles.preview, { flexShrink: 1, color: colors.accent, fontFamily: "Inter_500Medium", textAlign: "left" }]}
+                numberOfLines={1}
+              >
+                {chatActivityLabel(activity)}
               </Text>
-              <TypingDots color={colors.accent} />
+              {(activity === "typing" || activity === "sending_image") && (
+                <TypingDots color={colors.accent} />
+              )}
             </View>
           ) : item.draft ? (
             <Text style={[styles.preview, { flex: 1 }]} numberOfLines={1}>
@@ -576,8 +588,9 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const searchAnim = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef<TextInputInstance>(null);
   const [tabFilter, setTabFilter] = useState<ChatTabKey>("all");
-  const [typingChatIds, setTypingChatIds] = useState<Record<string, boolean>>({});
-  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [chatActivities, setChatActivities] = useState<Record<string, ChatActivity>>({});
+  const chatActivitiesBySenderRef = useRef<Map<string, Map<string, ChatActivity>>>(new Map());
+  const activityTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const realtimeReconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatLoadInFlightRef = useRef<Promise<void> | null>(null);
   const lastChatLoadAtRef = useRef(0);
@@ -593,6 +606,41 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const { prefs: chatPrefs } = useChatPreferences();
   const { features: advancedFeatures } = useAdvancedFeatures();
   const { width: windowWidth } = useWindowDimensions();
+
+  const updateChatActivity = useCallback((chatId: string, senderId: string, activity: ChatActivity | null) => {
+    const timerKey = `${chatId}:${senderId}`;
+    if (activityTimersRef.current[timerKey]) {
+      clearTimeout(activityTimersRef.current[timerKey]);
+      delete activityTimersRef.current[timerKey];
+    }
+    const bySender = chatActivitiesBySenderRef.current.get(chatId) ?? new Map<string, ChatActivity>();
+    if (activity) {
+      bySender.set(senderId, activity);
+      activityTimersRef.current[timerKey] = setTimeout(() => {
+        updateChatActivity(chatId, senderId, null);
+      }, 6500);
+      chatActivitiesBySenderRef.current.set(chatId, bySender);
+    } else {
+      bySender.delete(senderId);
+      if (bySender.size === 0) chatActivitiesBySenderRef.current.delete(chatId);
+    }
+    const values = [...bySender.values()];
+    const nextActivity = values.includes("sending_image")
+      ? "sending_image"
+      : values.includes("recording")
+        ? "recording"
+        : values.includes("typing")
+          ? "typing"
+          : null;
+    setChatActivities((previous) => {
+      if (!nextActivity && !(chatId in previous)) return previous;
+      if (nextActivity && previous[chatId] === nextActivity) return previous;
+      const next = { ...previous };
+      if (nextActivity) next[chatId] = nextActivity;
+      else delete next[chatId];
+      return next;
+    });
+  }, []);
 
   const openChatSearch = useCallback(() => {
     setSearchOpen(true);
@@ -1502,29 +1550,23 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   }, [user, chatIdsKey, loadChats]);
 
   useEffect(() => {
-    if (!user || !chatPrefs.typing_indicators) return;
+    if (!user) return;
     const ch = supabase.channel(`user-typing-${user.id}`, { config: { broadcast: { self: false } } });
     ch.on("broadcast", { event: "typing" }, (payload) => {
-      const { chat_id: chatId, user_id: uid, is_typing } = (payload.payload || {}) as any;
+      const data = (payload.payload || {}) as any;
+      const { chat_id: chatId, user_id: uid } = data;
       if (!uid || uid === user.id || !chatId) return;
-      if (is_typing) {
-        if (typingTimersRef.current[chatId]) clearTimeout(typingTimersRef.current[chatId]);
-        setTypingChatIds((prev) => ({ ...prev, [chatId]: true }));
-        typingTimersRef.current[chatId] = setTimeout(() => {
-          setTypingChatIds((prev) => { const next = { ...prev }; delete next[chatId]; return next; });
-        }, 6000);
-      } else {
-        if (typingTimersRef.current[chatId]) { clearTimeout(typingTimersRef.current[chatId]); delete typingTimersRef.current[chatId]; }
-        setTypingChatIds((prev) => { const next = { ...prev }; delete next[chatId]; return next; });
-      }
+      const activity = normalizeChatActivity(data);
+      updateChatActivity(chatId, uid, activity === "typing" && !chatPrefs.typing_indicators ? null : activity);
     }).subscribe();
     return () => {
       supabase.removeChannel(ch);
-      Object.values(typingTimersRef.current).forEach((t) => clearTimeout(t));
-      typingTimersRef.current = {};
-      setTypingChatIds({});
+      Object.values(activityTimersRef.current).forEach((timer) => clearTimeout(timer));
+      activityTimersRef.current = {};
+      chatActivitiesBySenderRef.current.clear();
+      setChatActivities({});
     };
-  }, [user, chatPrefs.typing_indicators]);
+  }, [user, chatPrefs.typing_indicators, updateChatActivity]);
 
   const tabFiltered = chats.filter((c) => {
     if (tabFilter === "unread") return c.unread_count > 0;
@@ -1924,7 +1966,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                           <ChatRow
                             item={item}
                             phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                            isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                            activity={chatActivities[item.id]}
                             selectMode={selectMode}
                             isSelected={selectedIds.has(item.id)}
                             onEnterSelectMode={() => enterSelectMode(item.id)}
@@ -2002,7 +2044,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                           <ChatRow
                             item={item}
                             phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                            isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                            activity={chatActivities[item.id]}
                             selectMode={selectMode}
                             isSelected={selectedIds.has(item.id)}
                             onEnterSelectMode={() => enterSelectMode(item.id)}
@@ -2062,7 +2104,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   <ChatRow
                     item={item}
                     phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                    isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
+                    activity={chatActivities[item.id]}
                     selectMode={selectMode}
                     isSelected={selectedIds.has(item.id)}
                     onEnterSelectMode={() => enterSelectMode(item.id)}
@@ -2537,7 +2579,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
-  rowContent: { flex: 1 },
+  rowContent: { flex: 1, minWidth: 0 },
   rowTop: {
     flexDirection: "row",
     justifyContent: "space-between",

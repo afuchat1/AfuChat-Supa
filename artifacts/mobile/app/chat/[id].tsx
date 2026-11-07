@@ -133,6 +133,7 @@ import {
 } from "@/lib/chatNotificationSound";
 import { clearAIUnread } from "@/lib/aiChatStore";
 import { GIPHY_API_KEY } from "@/lib/env";
+import { chatActivityLabel, normalizeChatActivity, type ChatActivity } from "@/lib/chatActivity";
 import { BlurView } from "expo-blur";
 import WallpaperOverlay from "@/components/chat/WallpaperOverlay";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
@@ -751,12 +752,17 @@ function SmartReplyBar({ messages, myId, input, onSend, colors }: {
   );
 }
 
-function TypingBubble({ colors, compact = false }: { colors: any; compact?: boolean }) {
+function TypingBubble({ colors, compact = false, activity = "typing" }: {
+  colors: any;
+  compact?: boolean;
+  activity?: ChatActivity;
+}) {
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (activity !== "typing" && activity !== "sending_image") return;
     const bounce = (dot: Animated.Value, delay: number) =>
       Animated.loop(
         Animated.sequence([
@@ -777,7 +783,7 @@ function TypingBubble({ colors, compact = false }: { colors: any; compact?: bool
     const a3 = bounce(dot3, 300);
     a1.start(); a2.start(); a3.start();
     return () => { a1.stop(); a2.stop(); a3.stop(); };
-  }, []);
+  }, [activity]);
 
   const dotColor = colors.bubbleIncomingText === "#FFFFFF"
     ? "rgba(255,255,255,0.9)"
@@ -786,26 +792,43 @@ function TypingBubble({ colors, compact = false }: { colors: any; compact?: bool
   return (
     <View style={{ paddingHorizontal: compact ? 0 : 16, paddingBottom: compact ? 0 : 4 }}>
       <View style={{
-        width: compact ? 48 : 64,
-        height: compact ? 28 : 38,
         alignSelf: "flex-start",
+        minHeight: compact ? 28 : 34,
+        maxWidth: "90%",
+        flexDirection: "row",
         alignItems: "center",
-        justifyContent: "center",
+        gap: 6,
+        paddingHorizontal: compact ? 8 : 11,
+        paddingVertical: compact ? 4 : 6,
+        borderRadius: 18,
+        backgroundColor: colors.inputBg,
       }}>
-        <View style={{ flexDirection: "row", gap: compact ? 4 : 5, alignItems: "center" }}>
-          {[dot1, dot2, dot3].map((dot, i) => (
-            <Animated.View
-              key={i}
-              style={{
-                width: compact ? 5 : 7,
-                height: compact ? 5 : 7,
-                borderRadius: 4,
-                backgroundColor: dotColor,
-                transform: [{ translateY: dot }],
-              }}
-            />
-          ))}
-        </View>
+        {activity !== "typing" && (
+          <Ionicons
+            name={activity === "recording" ? "mic" : "image"}
+            size={compact ? 13 : 15}
+            color={colors.accent}
+          />
+        )}
+        <Text style={{ color: colors.textSecondary, fontSize: compact ? 11 : 12, fontFamily: "Inter_500Medium" }}>
+          {activity === "typing" ? "Typing" : activity === "recording" ? "Recording audio" : "Sending image"}
+        </Text>
+        {(activity === "typing" || activity === "sending_image") && (
+          <View style={{ flexDirection: "row", gap: compact ? 4 : 5, alignItems: "center" }}>
+            {[dot1, dot2, dot3].map((dot, i) => (
+              <Animated.View
+                key={i}
+                style={{
+                  width: compact ? 4 : 5,
+                  height: compact ? 4 : 5,
+                  borderRadius: 4,
+                  backgroundColor: dotColor,
+                  transform: [{ translateY: dot }],
+                }}
+              />
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -2576,10 +2599,12 @@ function ChatScreen() {
       ? "unlocked"
       : readCachedMessageGate(user?.id, id);
   const [phonebookName, setPhonebookName] = useState<string | null>(null);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const typingMapRef = useRef<Map<string, string>>(new Map());
+  const [typingUsers, setTypingUsers] = useState<Array<{ userId: string; name: string; activity: ChatActivity }>>([]);
+  const typingMapRef = useRef<Map<string, { name: string; activity: ChatActivity }>>(new Map());
   const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const activityChannelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
+  const activityHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const msgSubDroppedRef = useRef(false);
   const [isAfuAiTyping, setIsAfuAiTyping] = useState(false);
   const [showAfuAiMenu, setShowAfuAiMenu] = useState(false);
@@ -4522,23 +4547,32 @@ function ChatScreen() {
     if (!user || !id || isLocalNotesId(id) || isNotificationsChat) return;
     const isDM = !!chatInfo && !chatInfo.is_group && !chatInfo.is_channel && !!chatInfo.other_id;
     const otherId = chatInfo?.other_id;
+    const activityMemberIds = chatInfo?.is_group
+      ? [...new Set((chatInfo.member_ids || []).filter((memberId) => memberId && memberId !== user.id))]
+      : [];
 
     const handleTypingEvent = (payload: any) => {
-      const { user_id: uid, display_name: name, is_typing } = (payload.payload || {}) as any;
+      const data = (payload.payload || {}) as any;
+      const { user_id: uid, display_name: name } = data;
       if (!uid || uid === user?.id) return;
+      const activity = normalizeChatActivity(data);
       const clearTyper = () => {
         if (typingTimersRef.current.has(uid)) {
           clearTimeout(typingTimersRef.current.get(uid)!);
           typingTimersRef.current.delete(uid);
         }
         typingMapRef.current.delete(uid);
-        setTypingUsers(Array.from(typingMapRef.current.values()));
+        setTypingUsers(Array.from(typingMapRef.current, ([userId, entry]) => ({ userId, ...entry })));
       };
-      if (is_typing) {
-        typingMapRef.current.set(uid, name || "Someone");
+      if (activity === "typing" && !chatPrefs.typing_indicators) {
+        clearTyper();
+        return;
+      }
+      if (activity) {
+        typingMapRef.current.set(uid, { name: name || "Someone", activity });
         if (typingTimersRef.current.has(uid)) clearTimeout(typingTimersRef.current.get(uid)!);
-        typingTimersRef.current.set(uid, setTimeout(clearTyper, 6000));
-        setTypingUsers(Array.from(typingMapRef.current.values()));
+        typingTimersRef.current.set(uid, setTimeout(clearTyper, 6500));
+        setTypingUsers(Array.from(typingMapRef.current, ([userId, entry]) => ({ userId, ...entry })));
       } else {
         clearTyper();
       }
@@ -4576,6 +4610,7 @@ function ChatScreen() {
 
     let receiveChannel: ReturnType<typeof supabase.channel>;
     let sendChannel: ReturnType<typeof supabase.channel> | null = null;
+    const activityChannels: ReturnType<typeof supabase.channel>[] = [];
 
     if (isDM && otherId) {
       receiveChannel = supabase.channel(`user-typing-${user.id}`, { config: { broadcast: { self: false } } });
@@ -4596,6 +4631,7 @@ function ChatScreen() {
       sendChannel = supabase.channel(`user-typing-${otherId}`, { config: { broadcast: { self: false } } });
       sendChannel.subscribe();
       typingChannelRef.current = sendChannel;
+      activityChannels.push(sendChannel);
     } else {
       receiveChannel = supabase.channel(`typing:${id}`, { config: { broadcast: { self: false } } });
       receiveChannel
@@ -4604,15 +4640,30 @@ function ChatScreen() {
         .on("broadcast", { event: "read" }, handleReadEvent)
         .subscribe();
       typingChannelRef.current = receiveChannel;
+      activityChannels.push(receiveChannel);
+      for (const memberId of activityMemberIds) {
+        const memberChannel = supabase.channel(`user-typing-${memberId}`, { config: { broadcast: { self: false } } });
+        memberChannel.subscribe();
+        activityChannels.push(memberChannel);
+      }
     }
+    activityChannelsRef.current = activityChannels;
 
     return () => {
+      broadcastChatActivity(null, id);
       supabase.removeChannel(receiveChannel);
       if (sendChannel) supabase.removeChannel(sendChannel);
+      activityChannels.forEach((channel) => {
+        if (channel !== receiveChannel && channel !== sendChannel) supabase.removeChannel(channel);
+      });
+      if (activityHeartbeatRef.current) clearInterval(activityHeartbeatRef.current);
+      activityHeartbeatRef.current = null;
+      activityChannelsRef.current = [];
       typingChannelRef.current = null;
       typingTimersRef.current.forEach((t) => clearTimeout(t));
       typingTimersRef.current.clear();
       typingMapRef.current.clear();
+      setTypingUsers([]);
     };
   }, [
     user,
@@ -4620,7 +4671,9 @@ function ChatScreen() {
     chatInfo?.other_id,
     chatInfo?.is_group,
     chatInfo?.is_channel,
+    chatInfo?.member_ids,
     chatPrefs.read_receipts,
+    chatPrefs.typing_indicators,
     isNotificationsChat,
   ]);
 
@@ -4706,16 +4759,50 @@ function ChatScreen() {
     };
   }, [chatInfo?.other_id, chatInfo?.is_group, chatInfo?.is_channel, id, isDraft, isNotificationsChat]);
 
-  function handleTyping() {
+  function broadcastChatActivity(activity: ChatActivity | null, chatIdOverride?: string) {
+    const chatId = chatIdOverride || effectiveChatId;
+    if (!user || !chatId || isLocalNotesId(chatId) || isNotificationsChat) return;
+    if (activity === "typing" && !chatPrefs.typing_indicators) activity = null;
+    if (activity !== "typing" && typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+      typingTimeout.current = null;
+    }
+    const payload = {
+      user_id: user.id,
+      display_name: profile?.display_name || "Someone",
+      chat_id: chatId,
+      activity,
+      is_typing: activity === "typing",
+    };
+    activityChannelsRef.current.forEach((channel) => {
+      channel.send({ type: "broadcast", event: "typing", payload });
+    });
+    if (activityHeartbeatRef.current) {
+      clearInterval(activityHeartbeatRef.current);
+      activityHeartbeatRef.current = null;
+    }
+    if (activity) {
+      activityHeartbeatRef.current = setInterval(() => {
+        activityChannelsRef.current.forEach((channel) => {
+          channel.send({ type: "broadcast", event: "typing", payload });
+        });
+      }, 2500);
+    }
+  }
+
+  function handleTyping(hasText: boolean) {
     if (!user || !id || isDraft || isLocalNotesId(id)) return;
     if (!chatPrefs.typing_indicators) return;
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
-    const isDM = !!chatInfo && !chatInfo.is_group && !chatInfo.is_channel;
-    const basePayload: Record<string, any> = { user_id: user.id, display_name: profile?.display_name || "Someone", is_typing: true };
-    if (isDM) basePayload.chat_id = id;
-    typingChannelRef.current?.send({ type: "broadcast", event: "typing", payload: basePayload });
+    if (!hasText) {
+      typingTimeout.current = null;
+      broadcastChatActivity(null, id);
+      return;
+    }
+    broadcastChatActivity("typing", id);
     typingTimeout.current = setTimeout(() => {
-      typingChannelRef.current?.send({ type: "broadcast", event: "typing", payload: { ...basePayload, is_typing: false } });
+      broadcastChatActivity(null, id);
+      typingTimeout.current = null;
     }, 3000);
   }
 
@@ -6323,6 +6410,11 @@ STRICT RULES:
     const text = (directText ?? input).trim();
     if (!text || !user || sending || (!session && !isLocalNotesId(id))) return;
     if (blockMessageAction()) return;
+    if (typingTimeout.current) {
+      clearTimeout(typingTimeout.current);
+      typingTimeout.current = null;
+    }
+    broadcastChatActivity(null);
     setSending(true);
     const localDraftKeys = new Set<string>();
     const persistLocalDraft = async (chatId: string) => {
@@ -6856,6 +6948,12 @@ STRICT RULES:
     const activeChatId = await getOrCreateChatId();
     if (!activeChatId) return;
 
+    const isSendingImage =
+      selectedImages.some((image) => image.type === "image") ||
+      attachmentPreview?.type === "image";
+    if (isSendingImage) broadcastChatActivity("sending_image", activeChatId);
+
+    try {
     // Upload an all-image selection as one grouped gallery in the chat.
     if (selectedImages.length > 0 && selectedImages.every((image) => image.type === "image")) {
       const images = selectedImages.slice(0, 6);
@@ -7061,6 +7159,9 @@ STRICT RULES:
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       showAlert("Upload failed", e?.message || "Could not upload file");
     }
+    } finally {
+      if (isSendingImage) broadcastChatActivity(null, activeChatId);
+    }
   }
 
   async function sendStickerMessage(emoji: string) {
@@ -7194,6 +7295,7 @@ STRICT RULES:
 
       setIsRecording(true);
       setRecLocked(true);
+      broadcastChatActivity("recording");
       setRecordingDuration(0);
       setRecordingTenths(0);
       recordingDurationRef.current = 0;
@@ -7209,6 +7311,7 @@ STRICT RULES:
       recordingStartingRef.current = false;
       setIsRecording(false);
       setRecLocked(false);
+      broadcastChatActivity(null);
       showAlert("Error", "Could not start recording.");
     }
   }
@@ -7262,6 +7365,7 @@ STRICT RULES:
       recLockedSV.value = true;
       setIsRecording(true);
       setRecLocked(true);
+      broadcastChatActivity("recording");
       setRecordingDuration(0);
       setRecordingTenths(0);
       recordingDurationRef.current = 0;
@@ -7273,6 +7377,7 @@ STRICT RULES:
       recordingStartingRef.current = false;
       setIsRecording(false);
       setRecLocked(false);
+      broadcastChatActivity(null);
       showAlert("Microphone permission needed", "Please allow microphone access in your browser settings, then try again.");
     }
   }
@@ -7287,6 +7392,7 @@ STRICT RULES:
           await (recorderRef.current as any)?.startAsync();
         }
         setIsRecordingPaused(false);
+        broadcastChatActivity("recording");
         startRecordingClock();
       } else {
         if (webMediaRecorderRef.current) {
@@ -7296,6 +7402,7 @@ STRICT RULES:
         }
         clearInterval(recordingTimer.current);
         setIsRecordingPaused(true);
+        broadcastChatActivity(null);
       }
     } catch {
       showAlert("Recording unavailable", "Could not change the recording state. Please try again.");
@@ -7349,7 +7456,8 @@ STRICT RULES:
       try { await recorderRef.current?.stop(); } catch (_) {}
       recorderRef.current = null;
       recordingActiveRef.current = false;
-    recordingStartingRef.current = false;
+      recordingStartingRef.current = false;
+      broadcastChatActivity(null);
       setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       return;
     }
@@ -7444,6 +7552,8 @@ STRICT RULES:
         recordingActiveRef.current = false;
         setSending(false);
         showAlert("Error", "Failed to send voice message.");
+      } finally {
+        broadcastChatActivity(null);
       }
       return; // never fall through to native path
     }
@@ -7541,10 +7651,13 @@ STRICT RULES:
       setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
       setSending(false);
       showAlert("Error", "Failed to send voice message.");
+    } finally {
+      broadcastChatActivity(null);
     }
   }
 
   async function cancelVoiceRecording() {
+    broadcastChatActivity(null);
     clearInterval(recordingTimer.current);
     clearInterval(meterInterval.current);
     recAmpHistoryRef.current = [];
@@ -8247,11 +8360,19 @@ STRICT RULES:
               )}
               <VerifiedBadge isVerified={chatInfo?.is_verified} isOrganizationVerified={chatInfo?.is_organization_verified} size={16} />
             </View>
-            {typingUsers.length > 0 ? (
-              <Text style={[st.headerSub, { color: BRAND }]}>
-                {`${typingUsers.join(", ")} typing...`}
-              </Text>
-            ) : isNotificationsChat ? (
+            {typingUsers.length > 0 ? (() => {
+              const activity = typingUsers[0].activity;
+              const activeNames = typingUsers
+                .filter((entry) => entry.activity === activity)
+                .map((entry) => entry.name)
+                .join(", ");
+              const count = typingUsers.filter((entry) => entry.activity === activity).length;
+              return (
+                <Text style={[st.headerSub, { color: BRAND }]} numberOfLines={1}>
+                  {`${activeNames} ${count > 1 ? "are" : "is"} ${chatActivityLabel(activity)}…`}
+                </Text>
+              );
+            })() : isNotificationsChat ? (
               <Text style={[st.headerSub, { color: colors.accent }]}>Official · updates & actions</Text>
             ) : isLocalNotes ? (
               <Text style={[st.headerSub, { color: colors.textMuted }]}>Private · stored on this device</Text>
@@ -8514,7 +8635,10 @@ STRICT RULES:
               ListHeaderComponent={
                 <>
                   {(typingUsers.length > 0 || (isAfuAiDirectChat && isAfuAiTyping)) && (
-                    <TypingBubble colors={colors} />
+                    <TypingBubble
+                      colors={colors}
+                      activity={typingUsers[0]?.activity || "typing"}
+                    />
                   )}
                 </>
               }
@@ -8941,7 +9065,7 @@ STRICT RULES:
                           onChangeText={(t) => {
                             setInput(t);
                             if (!t) setComposerInputLines(1);
-                            handleTyping();
+                            handleTyping(!!t.trim());
                             saveDraft(t);
                             if (advancedFeatures.user_tagging) {
                               const atMatch = t.match(/@(\w*)$/);
