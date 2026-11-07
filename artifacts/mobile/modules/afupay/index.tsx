@@ -1111,7 +1111,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   walletRoot: { flex: 1, width: "100%", backgroundColor: "#F0ECDF", position: "relative" },
   bottomNavDock: { position: "absolute", left: 0, right: 0, alignItems: "center", paddingHorizontal: 22, zIndex: 20, ...(Platform.OS === "web" ? { position: "fixed" as any, bottom: 10 } : {}) },
-  bottomNavPill: { width: "100%", maxWidth: 680, height: 50, borderRadius: 28, backgroundColor: "#FFFEFA", flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 5, elevation: 18, shadowColor: "#1C251B", shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
+  bottomNavPill: { width: "100%", height: 50, borderRadius: 28, backgroundColor: "#FFFEFA", flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 5, elevation: 18, shadowColor: "#1C251B", shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
   bottomNavItem: { flex: 1, height: 44, borderRadius: 24, alignItems: "center", justifyContent: "center", gap: 1, minWidth: 0 },
   bottomNavItemActive: { backgroundColor: "#E7E6FA" },
   bottomNavLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
