@@ -12,6 +12,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
+import { transferAcoin } from "@/lib/acoinTransfers";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
@@ -94,7 +95,7 @@ export default function WalletScanPage() {
   }
 
   async function send() {
-    if (!recipient || !user || !profile) return;
+    if (sending || !recipient || !user || !profile) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) { showAlert("Invalid", "Enter a valid amount."); return; }
     if (amt > balance) { showAlert("Insufficient", `Not enough ${currency === "acoin" ? "ACoin" : "Nexa"}.`); return; }
@@ -125,23 +126,12 @@ export default function WalletScanPage() {
           sender_id: user.id, receiver_id: recipient.id, amount: amt, message: note.trim() || null,
         });
       } else {
-        const { error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: amt }).maybeSingle();
-        if (deductErr) { showAlert("Error", "Could not deduct ACoin."); setSending(false); return; }
-        const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: recipient.id, p_amount: amt });
-        if (creditErr) {
-          await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: amt }).then(null, () => {});
-          showAlert("Error", "Could not credit recipient. Your balance has been restored."); setSending(false); return;
+        const result = await transferAcoin(recipient.id, amt, note);
+        if (result.status !== "sent") {
+          showAlert(result.status === "unknown" ? "Transfer not confirmed" : "Transfer failed", result.message);
+          setSending(false);
+          return;
         }
-        await Promise.all([
-          supabase.from("acoin_transactions").insert({
-            user_id: user.id, amount: -amt, transaction_type: "acoin_transfer_sent",
-            metadata: { to_handle: recipient.handle, message: note.trim() || null },
-          }),
-          supabase.from("acoin_transactions").insert({
-            user_id: recipient.id, amount: amt, transaction_type: "acoin_transfer_received",
-            metadata: { from_handle: profile.handle, message: note.trim() || null },
-          }),
-        ]).catch(() => {});
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

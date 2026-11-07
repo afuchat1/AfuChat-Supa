@@ -23,6 +23,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { transferAcoin } from "@/lib/acoinTransfers";
 import { SUPABASE_EDGE_URL } from "@/lib/env";
 import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
@@ -779,7 +780,7 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
   }, [initialRecipientId]);
 
   async function send() {
-    if ((!initialRecipientId && !handle.trim()) || !amount.trim() || !user) return;
+    if (sending || (!initialRecipientId && !handle.trim()) || !amount.trim() || !user) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) { showAlert("Invalid", "Enter a valid amount."); return; }
     const balance = currency === "acoin" ? (profile?.acoin || 0) : (profile?.xp || 0);
@@ -809,20 +810,9 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
         showAlert("Error", "The transfer could not be recorded. Your Nexa was restored."); setSending(false); return;
       }
     } else {
-      const { data: transfer, error: transferErr } = await supabase
-        .rpc("transfer_acoin", {
-          p_recipient_id: recipient.id,
-          p_amount: amt,
-          p_note: note.trim() || null,
-        })
-        .maybeSingle();
-      if (transferErr) {
-        showAlert("Transfer not confirmed", "Check your wallet activity before trying again.");
-        setSending(false);
-        return;
-      }
-      if ((transfer as any)?.success !== true) {
-        showAlert("Transfer failed", (transfer as any)?.message || "Could not send ACoin.");
+      const result = await transferAcoin(recipient.id, amt, note);
+      if (result.status !== "sent") {
+        showAlert(result.status === "unknown" ? "Transfer not confirmed" : "Transfer failed", result.message);
         setSending(false);
         return;
       }

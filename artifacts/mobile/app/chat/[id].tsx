@@ -68,6 +68,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useChatAppearance } from "@/lib/chatAppearance";
 import ChatAppearanceSheet from "@/components/chat/ChatAppearanceSheet";
 import { supabase, supabaseUrl as SUPA_URL, supabaseAnonKey as SUPA_KEY } from "@/lib/supabase";
+import { transferAcoin } from "@/lib/acoinTransfers";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useGiftPrices } from "@/hooks/useGiftPrices";
@@ -5269,10 +5270,8 @@ function ChatScreen() {
         const { data: recip } = await supabase.from("profiles").select("id, display_name").eq("handle", handle.toLowerCase()).single();
         if (!recip) return { success: false, message: `User @${handle} not found` };
         if (recip.id === user.id) return { success: false, message: "Cannot send to yourself" };
-        const { error: dedErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: acAmt }).maybeSingle();
-        if (dedErr) return { success: false, message: "Could not deduct ACoin" };
-        await supabase.rpc("credit_acoin", { p_user_id: recip.id, p_amount: acAmt });
-        await supabase.from("acoin_transactions").insert([{ user_id: user.id, amount: -acAmt, transaction_type: "acoin_transfer_sent", metadata: { to_user_id: recip.id, to_handle: handle, message: msg || null } }, { user_id: recip.id, amount: acAmt, transaction_type: "acoin_transfer_received", metadata: { from_user_id: user.id, from_handle: live.handle, message: msg || null } }]);
+        const result = await transferAcoin(recip.id, acAmt, msg || null);
+        if (result.status !== "sent") return { success: false, message: result.message };
         return { success: true, message: `Sent ${acAmt} ACoin to ${(recip as any).display_name}`, invoice: { type: "ACoin Transfer", date: new Date().toISOString(), from: `@${live.handle}`, to: `@${handle}`, amount: acAmt, currency: "ACoin", reference: `ACN-${Date.now().toString(36).toUpperCase()}`, status: "Completed" } };
       }
       case "follow": {
@@ -6454,21 +6453,12 @@ STRICT RULES:
           return;
         }
       } else {
-        const { error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: amt }).maybeSingle();
-        if (deductErr) { showAlert("Error", "Could not deduct ACoin. Please check your balance and try again."); setWalletSending(false); return; }
-        const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: recipient.id, p_amount: amt });
-        if (creditErr) {
-          try {
-            await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: amt });
-          } catch {}
-          showAlert("Error", "Could not credit the recipient. Your ACoin was restored.");
+        const result = await transferAcoin(recipient.id, amt, noteText);
+        if (result.status !== "sent") {
+          showAlert(result.status === "unknown" ? "Transfer not confirmed" : "Transfer failed", result.message);
           setWalletSending(false);
           return;
         }
-        await Promise.all([
-          supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -amt, transaction_type: "acoin_transfer_sent", metadata: { to_user_id: recipient.id, to_handle: recipient.handle, message: noteText } }),
-          supabase.from("acoin_transactions").insert({ user_id: recipient.id, amount: amt, transaction_type: "acoin_transfer_received", metadata: { from_user_id: user.id, from_handle: profile.handle, message: noteText } }),
-        ]).catch(() => {});
       }
       const activeChatId = await getOrCreateChatId();
       if (activeChatId) {
