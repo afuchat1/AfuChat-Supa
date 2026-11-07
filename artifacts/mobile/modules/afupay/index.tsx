@@ -809,21 +809,23 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
         showAlert("Error", "The transfer could not be recorded. Your Nexa was restored."); setSending(false); return;
       }
     } else {
-      const { data: deduction, error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: amt }).maybeSingle();
-      if (deductErr || (deduction as any)?.success !== true) {
-        showAlert("Error", (deduction as any)?.message || "Could not deduct ACoin.");
+      const { data: transfer, error: transferErr } = await supabase
+        .rpc("transfer_acoin", {
+          p_recipient_id: recipient.id,
+          p_amount: amt,
+          p_note: note.trim() || null,
+        })
+        .maybeSingle();
+      if (transferErr) {
+        showAlert("Transfer not confirmed", "Check your wallet activity before trying again.");
         setSending(false);
         return;
       }
-      const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: recipient.id, p_amount: amt });
-      if (creditErr) {
-        await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: amt }).then(null, () => {});
-        showAlert("Error", "Could not credit recipient. Your balance has been restored."); setSending(false); return;
+      if ((transfer as any)?.success !== true) {
+        showAlert("Transfer failed", (transfer as any)?.message || "Could not send ACoin.");
+        setSending(false);
+        return;
       }
-      await Promise.all([
-        supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -amt, transaction_type: "acoin_transfer_sent", metadata: { to_handle: handle.trim().toLowerCase(), message: note.trim() || null } }),
-        supabase.from("acoin_transactions").insert({ user_id: recipient.id, amount: amt, transaction_type: "acoin_transfer_received", metadata: { from_handle: profile?.handle, message: note.trim() || null } }),
-      ]).catch(() => {});
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showAlert("Sent!", `${fmtAmt(amt)} ${currency === "acoin" ? "ACoin" : "Nexa"} sent to ${recipient.display_name}`);
