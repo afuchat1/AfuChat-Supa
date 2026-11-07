@@ -168,7 +168,9 @@ async function persistIncomingStatus(
   }));
 
   if (!isOnline()) {
-    await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
+    try {
+      await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
+    } catch {}
     return;
   }
 
@@ -176,7 +178,9 @@ async function persistIncomingStatus(
     .from("message_status")
     .upsert(rows, { onConflict: "message_id,user_id" });
   if (error) {
-    await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
+    try {
+      await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
+    } catch {}
   }
 }
 

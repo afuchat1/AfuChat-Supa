@@ -314,4 +314,20 @@ async function runMigrations(db: DB) {
     await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN sender_handle TEXT");
     await db.runAsync("UPDATE schema_version SET version = 18");
   }
+
+  if (currentVersion < 19) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS discover_people (
+        user_id TEXT NOT NULL,
+        person_id TEXT NOT NULL,
+        profile_json TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        stored_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, person_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_discover_people_owner_position
+        ON discover_people(user_id, position);
+    `);
+    await db.runAsync("UPDATE schema_version SET version = 19");
+  }
 }

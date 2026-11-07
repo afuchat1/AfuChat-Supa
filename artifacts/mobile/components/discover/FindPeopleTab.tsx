@@ -24,6 +24,12 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { beginDataSync, isOnline as hasLiveConnection, onReconnect } from "@/lib/offlineStore";
+import { enqueue } from "@/lib/storage/syncQueue";
+import {
+  getDiscoverPeople,
+  saveDiscoverPeople,
+} from "@/lib/storage/localDiscoverPeople";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Skeleton } from "@/components/ui/Skeleton";
 import * as Haptics from "@/lib/haptics";
@@ -111,10 +117,22 @@ export default function FindPeopleTab() {
     if (!userId) return;
     const requestId = ++loadRequestRef.current;
     const historyKey = `${RECOMMENDATION_HISTORY_KEY}:${userId}`;
+    const dismissedKey = `${DISMISSED_KEY}:${userId}`;
+    let hasSavedPeople = false;
+    let finishDataSync: (() => void) | null = null;
     if (manualRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
+      const savedPeople = await getDiscoverPeople(userId);
+      if (requestId !== loadRequestRef.current) return;
+      if (savedPeople.length > 0) {
+        hasSavedPeople = true;
+        setPeople(savedPeople as Person[]);
+        setVisibleCount(INITIAL_VISIBLE_COUNT);
+        setLoading(false);
+      }
+
       let dismissedIds = new Set<string>();
       let history = {
         seenIds: [] as string[],
@@ -123,7 +141,7 @@ export default function FindPeopleTab() {
       };
       try {
         const [rawDismissed, rawHistory] = await Promise.all([
-          AsyncStorage.getItem(DISMISSED_KEY),
+          AsyncStorage.getItem(dismissedKey),
           AsyncStorage.getItem(historyKey),
         ]);
         const parsed = rawDismissed ? JSON.parse(rawDismissed) : [];
@@ -150,6 +168,7 @@ export default function FindPeopleTab() {
       if (requestId !== loadRequestRef.current) return;
       setDismissed(dismissedIds);
 
+      finishDataSync = beginDataSync();
       const [
         { data: followingRows, error: followingError },
         { data: followerRows, error: followerError },
@@ -356,12 +375,18 @@ export default function FindPeopleTab() {
       if (requestId !== loadRequestRef.current) return;
       setPeople(rankedPeople);
       setVisibleCount(INITIAL_VISIBLE_COUNT);
+      try {
+        await saveDiscoverPeople(userId, rankedPeople);
+      } catch (storageError) {
+        console.warn("[find-people] Could not persist people for offline use", storageError);
+      }
     } catch (loadError) {
       if (requestId === loadRequestRef.current) {
         console.warn("[find-people] Could not load suggestions", loadError);
-        setError("Couldn’t load suggestions.");
+        if (!hasSavedPeople) setError("Couldn’t load suggestions.");
       }
     } finally {
+      finishDataSync?.();
       if (requestId === loadRequestRef.current) {
         setLoading(false);
         setRefreshing(false);
@@ -374,6 +399,13 @@ export default function FindPeopleTab() {
     return () => {
       loadRequestRef.current += 1;
     };
+  }, [loadRecommendations, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    return onReconnect(() => {
+      void loadRecommendations(true);
+    });
   }, [loadRecommendations, userId]);
 
   useEffect(() => {
@@ -426,41 +458,59 @@ export default function FindPeopleTab() {
 
   const dismissPerson = useCallback(async (personId: string) => {
     void Haptics.selectionAsync();
-    setPeople((current) => current.filter((person) => person.id !== personId));
+    const nextPeople = people.filter((person) => person.id !== personId);
+    setPeople(nextPeople);
+    if (userId) {
+      try {
+        await saveDiscoverPeople(userId, nextPeople);
+      } catch {}
+    }
     const nextDismissed = new Set(dismissed);
     nextDismissed.add(personId);
     setDismissed(nextDismissed);
     try {
       await AsyncStorage.setItem(
-        DISMISSED_KEY,
+        `${DISMISSED_KEY}:${userId}`,
         JSON.stringify(Array.from(nextDismissed).slice(-200)),
       );
     } catch {}
-  }, [dismissed]);
+  }, [dismissed, people, userId]);
 
   const connect = useCallback(async (person: Person) => {
     if (!user) return router.push("/(auth)/login" as any);
     if (person.is_following || followBusy === person.id) return;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFollowBusy(person.id);
-    setPeople((current) => current.map((item) => item.id === person.id
+    const nextPeople = people.map((item) => item.id === person.id
       ? { ...item, is_following: true }
-      : item));
+      : item);
     try {
-      const { error: followError } = await supabase.from("follows").upsert({
-        follower_id: user.id,
-        following_id: person.id,
-      }, { onConflict: "follower_id,following_id" });
-      if (followError) throw followError;
+      if (!hasLiveConnection()) {
+        await enqueue("follow_user", {
+          follower_id: user.id,
+          following_id: person.id,
+        });
+      } else {
+        const { error: followError } = await supabase.from("follows").upsert({
+          follower_id: user.id,
+          following_id: person.id,
+        }, { onConflict: "follower_id,following_id" });
+        if (followError) {
+          if (hasLiveConnection()) throw followError;
+          await enqueue("follow_user", {
+            follower_id: user.id,
+            following_id: person.id,
+          });
+        }
+      }
+      setPeople(nextPeople);
+      await saveDiscoverPeople(user.id, nextPeople);
     } catch {
-      setPeople((current) => current.map((item) => item.id === person.id
-        ? { ...item, is_following: false }
-        : item));
-      setError("Couldn’t connect right now. Try again.");
+      setError("Couldn’t follow right now. Try again.");
     } finally {
       setFollowBusy(null);
     }
-  }, [followBusy, user]);
+  }, [followBusy, people, user]);
 
   const handleListScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -649,7 +699,7 @@ export default function FindPeopleTab() {
             <View key={`row-${rowIndex}`} style={styles.gridRow}>
               {row.map((person) => {
                 const connected = person.is_following;
-                const buttonLabel = connected ? "Following" : person.is_following_me ? "Follow back" : "Connect";
+                const buttonLabel = connected ? "Following" : person.is_following_me ? "Follow back" : "Follow";
                 const mutualPeople = person.mutualPeople.slice(0, MAX_MUTUAL_AVATARS);
                 const mutualNames = mutualPeople.map((mutual) =>
                   mutual.display_name?.trim() || (mutual.handle ? `@${mutual.handle}` : ""),
@@ -777,8 +827,8 @@ export default function FindPeopleTab() {
                       style={[
                         styles.connectButton,
                         {
-                          borderColor: accent,
-                          backgroundColor: connected ? accent : "transparent",
+                          borderColor: connected ? colors.border : accent,
+                          backgroundColor: connected ? colors.inputBg : accent,
                         },
                       ]}
                       onPress={() => void connect(person)}
@@ -787,9 +837,9 @@ export default function FindPeopleTab() {
                       accessibilityLabel={`${buttonLabel} ${person.display_name}`}
                     >
                       {followBusy === person.id ? (
-                        <ActivityIndicator size="small" color={connected ? "#fff" : accent} />
+                        <ActivityIndicator size="small" color={connected ? colors.textMuted : "#fff"} />
                       ) : (
-                        <Text style={[styles.connectText, { color: connected ? "#fff" : accent }]}>
+                        <Text style={[styles.connectText, { color: connected ? colors.textMuted : "#fff" }]}>
                           {buttonLabel}
                         </Text>
                       )}
@@ -847,7 +897,7 @@ const styles = StyleSheet.create({
   webRefreshButton: { minHeight: 32, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 10, borderWidth: 1, borderRadius: 17 },
   webRefreshLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
   disabledButton: { opacity: 0.55 },
-  connectButton: { minHeight: 38, borderWidth: 1.4, borderRadius: 20, marginHorizontal: 12, alignItems: "center", justifyContent: "center" },
+  connectButton: { minHeight: 40, borderWidth: 1.4, borderRadius: 20, marginHorizontal: 12, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   connectText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   skeletonBody: { alignItems: "center", paddingHorizontal: 12, marginTop: -34 },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingVertical: 38, gap: 11 },

@@ -55,8 +55,17 @@ import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { HomeBanner } from "@/components/ui/HomeBanner";
-import { isOnline, onConnectivityChange, getCachedUserId } from "@/lib/offlineStore";
-import { getLocalConversations, saveConversations, deleteLocalConversation, pruneConversations, clearUnread, updateConversationFlags } from "@/lib/storage/localConversations";
+import { beginDataSync, isOnline, onConnectivityChange, getCachedUserId } from "@/lib/offlineStore";
+import {
+  getLocalConversations,
+  saveConversations,
+  deleteLocalConversation,
+  pruneConversations,
+  clearUnread,
+  updateConversationFlags,
+  updateConversationLastMessage,
+  incrementUnread,
+} from "@/lib/storage/localConversations";
 import {
   getLocalNotesConversation,
   isLocalNotesId,
@@ -775,6 +784,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
     const rpcStartedAt = Date.now();
     if (__DEV__) console.log("[ChatPerf] server RPC start");
+    const finishDataSync = beginDataSync();
     const rpcPromise = (async () => {
       try {
         const result = await supabase.rpc(
@@ -790,6 +800,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           chatRows: null,
           chatError: { message: error instanceof Error ? error.message : String(error) },
         };
+      } finally {
+        finishDataSync();
       }
     })();
     const [localNotes, rpcResult] = await Promise.all([
@@ -1407,6 +1419,17 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
             const preview = buildMsgPreview(msg.encrypted_content, msg.attachment_type);
             const isFromMe = msg.sender_id === user.id;
             const activeChatId = getActiveChatId();
+            const shouldIncrementUnread =
+              !isFromMe &&
+              msg.chat_id !== activeChatId &&
+              !wasChatRecentlyVisited(msg.chat_id) &&
+              !suppressUnreadIncrementRef.current;
+
+            // Persist the real realtime update immediately, so losing the
+            // network before the debounced list reconciliation cannot leave
+            // the durable Android conversation snapshot stale.
+            void updateConversationLastMessage(msg.chat_id, preview, msg.sent_at, isFromMe);
+            if (shouldIncrementUnread) void incrementUnread(msg.chat_id);
 
             // Instantly patch the matching conversation in state — no network call needed.
             setChats((prev) => {
@@ -1423,10 +1446,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   // replays buffered messages on reconnect which would otherwise
                   // mark every chat unread; loadChats() clears the suppression
                   // after it reconciles the correct counts from Supabase.
-                  unread_count:
-                    !isFromMe && msg.chat_id !== activeChatId && !wasChatRecentlyVisited(msg.chat_id) && !suppressUnreadIncrementRef.current
-                      ? c.unread_count + 1
-                      : c.unread_count,
+                  unread_count: shouldIncrementUnread ? c.unread_count + 1 : c.unread_count,
                 };
               });
 

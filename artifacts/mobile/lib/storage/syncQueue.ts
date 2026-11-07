@@ -4,7 +4,7 @@
 
 import { getDB } from "./db";
 import { getLiveSupabaseSession, supabase } from "@/lib/supabase";
-import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { beginDataSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export type QueueActionType =
   | "send_message"
@@ -41,7 +41,9 @@ export async function enqueue(
        VALUES (?, ?, ?, ?, 0, NULL)`,
       [id, actionType, JSON.stringify(payload), Date.now()],
     );
-  } catch {}
+  } catch (error) {
+    throw error;
+  }
   return id;
 }
 
@@ -62,6 +64,7 @@ function scheduleRetry(retryCount: number): void {
 export async function drainQueue(maxItems = 50): Promise<void> {
   if (_draining || !isOnline()) return;
   _draining = true;
+  let finishDataSync: (() => void) | null = null;
 
   try {
     const session = await getLiveSupabaseSession();
@@ -74,6 +77,7 @@ export async function drainQueue(maxItems = 50): Promise<void> {
     const items = await db.getAllAsync<QueueItem>(
       `SELECT * FROM offline_queue ORDER BY created_at ASC LIMIT ${limit}`,
     );
+    if (items.length > 0) finishDataSync = beginDataSync();
 
     for (const item of items) {
       let payload: Record<string, any> = {};
@@ -108,6 +112,7 @@ export async function drainQueue(maxItems = 50): Promise<void> {
     }
   } catch {
   } finally {
+    finishDataSync?.();
     _draining = false;
   }
 }
@@ -150,10 +155,10 @@ async function executeAction(
         return !error;
       }
       case "follow_user": {
-        const { error } = await supabase.from("follows").insert({
+        const { error } = await supabase.from("follows").upsert({
           follower_id: payload.follower_id,
           following_id: payload.following_id,
-        });
+        }, { onConflict: "follower_id,following_id", ignoreDuplicates: true });
         return !error;
       }
       case "unfollow_user": {
