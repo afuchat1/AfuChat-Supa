@@ -392,7 +392,7 @@ export default function AfuPayApp({
           ].map((a) => {
             const badge = a.label === "Requests" && pendingRequestCount > 0 ? pendingRequestCount : 0;
             return (
-              <TouchableOpacity key={a.label} style={s.actionTile} onPress={() => { Haptics.selectionAsync(); setView(a.view); }} activeOpacity={0.78}>
+              <TouchableOpacity key={a.label} style={[s.actionTile, { backgroundColor: colors.cardSurface }]} onPress={() => { Haptics.selectionAsync(); setView(a.view); }} activeOpacity={0.78}>
                 <View style={{ position: "relative" }}>
                   <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
                     <Ionicons name={a.icon} size={25} color={a.color} />
@@ -455,7 +455,7 @@ export default function AfuPayApp({
           </View>
         )}
 
-        <View style={s.securityBanner}>
+        <View style={[s.securityBanner, { backgroundColor: colors.cardSurface }]}>
           <View style={s.securityIcon}><Ionicons name="shield-checkmark" size={22} color="#087BFA" /></View>
           <View style={{ flex: 1 }}>
             <Text style={[s.securityTitle, { color: colors.text }]}>Your wallet is secure</Text>
