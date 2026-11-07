@@ -345,7 +345,11 @@ export default function AfuPayApp({
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <WalletHeader colors={colors} insets={insets} onBack={handleHomeBack} />
-      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 96 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() =>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 112 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); refreshProfile?.(); }} />}
+      >
         <LinearGradient colors={["#087BFA", "#0646C8", "#063AAB"]} style={s.heroCard}>
           <View style={s.heroTopLine}>
             <View style={s.heroCoinMark}>
