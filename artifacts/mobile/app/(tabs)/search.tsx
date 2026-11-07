@@ -34,7 +34,8 @@ import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
 import { getEdgeFnBase, edgeHeadersWithAuth } from "@/lib/aiHelper";
 import { getEngagera } from "@/lib/engagera";
-import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
+import { buildNavigationContext, detectNavIntent } from "@/lib/platformKnowledge";
+import { isValidInternalRoute } from "@/lib/routeCatalog";
 import {
   getRankedSearchSuggestions,
   getSearchProfileSuggestions,
@@ -332,9 +333,7 @@ async function fetchAiInsight(query: string): Promise<AiInsight | null> {
             role: "system" as const,
             content: `You are AfuChat's intelligent search and navigation assistant. Analyze the user's query in context of the AfuChat platform and return a JSON object that helps them find what they need OR navigate directly to the right screen.
 
-${PLATFORM_NAV_MAP}
-
-${PLATFORM_FEATURES_GUIDE}
+${buildNavigationContext()}
 
 AfuChat search categories (for content search):
 - people: user profiles, @handles, bios, organisations
@@ -365,6 +364,13 @@ Reply ONLY with a single JSON object — no markdown, no code fences, no explana
     const raw: string = aiRes.content ?? "";
     const parsed = parseAiJson(raw);
     if (!parsed) return navIntent ? { summary: `Navigate to ${navIntent.label}`, intent: "navigation", bestCategory: "all", keyTerms: [], suggestions: [], explanation: "", actions: [], navigateTo: navIntent.route, navigateLabel: navIntent.label } : null;
+    const modelRoute =
+      typeof parsed.navigateTo === "string" &&
+      parsed.navigateTo &&
+      isValidInternalRoute(parsed.navigateTo)
+        ? parsed.navigateTo
+        : undefined;
+    const destination = modelRoute ?? navIntent?.route;
     return {
       summary:       typeof parsed.summary       === "string" ? parsed.summary       : "",
       intent:        typeof parsed.intent         === "string" ? parsed.intent         : "mixed",
@@ -373,8 +379,10 @@ Reply ONLY with a single JSON object — no markdown, no code fences, no explana
       suggestions:   Array.isArray(parsed.suggestions)  ? parsed.suggestions  : [],
       explanation:   typeof parsed.explanation    === "string" ? parsed.explanation    : "",
       actions:       Array.isArray(parsed.actions)     ? parsed.actions     : [],
-      navigateTo:    typeof parsed.navigateTo     === "string" && parsed.navigateTo ? parsed.navigateTo : (navIntent?.route || undefined),
-      navigateLabel: typeof parsed.navigateLabel  === "string" && parsed.navigateLabel ? parsed.navigateLabel : (navIntent?.label || undefined),
+      navigateTo:    destination,
+      navigateLabel: modelRoute
+        ? (typeof parsed.navigateLabel === "string" && parsed.navigateLabel ? parsed.navigateLabel : undefined)
+        : (destination ? navIntent?.label : undefined),
       directAnswer:  typeof parsed.directAnswer   === "string" && parsed.directAnswer ? parsed.directAnswer : undefined,
     } as AiInsight;
   } catch {

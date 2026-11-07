@@ -104,7 +104,7 @@ const NAV_ROUTES: Record<string, string> = {
   "my-posts":         "/my-posts",
   "watch-history":    "/watch-history",
   // ── Commerce & mini-apps ──────────────────────────────────────────────────
-  shop:               "/shop",
+  shop:               "/app/afumarket",
   games:              "/app/afugames",
   freelance:          "/app/afufreelance",
   gifts:              "/app/afugifts",

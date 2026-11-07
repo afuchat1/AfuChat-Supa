@@ -121,6 +121,7 @@ import { getProfileCache, setProfileCache } from "@/lib/profileCache";
 import { subscribeToChat, broadcastToUserInbox } from "@/lib/globalMessageEvents";
 import { askAi, aiSuggestReply, transcribeAudio, getEdgeFnBase, edgeHeaders, aiTransformTone, aiFixText, aiEmojifyText } from "@/lib/aiHelper";
 import { buildNavigationContext, ACTION_ROUTES_GUIDE, detectVoiceNavCommand, pickNavConfirmation } from "@/lib/platformKnowledge";
+import { isValidInternalRoute } from "@/lib/routeCatalog";
 import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
 import {
   dismissChatNotifications,
@@ -2255,7 +2256,12 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
             {msg._aiActions.map((action, i) => (
               <TouchableOpacity
                 key={i}
-                onPress={() => { if (action.action === "navigate" && action.params?.route) router.push(action.params.route as any); }}
+                onPress={() => {
+                  const destination = action.params?.route;
+                  if (action.action === "navigate" && destination && isValidInternalRoute(destination)) {
+                    router.push(destination as any);
+                  }
+                }}
                 activeOpacity={0.75}
               >
                 <View style={{
@@ -5196,6 +5202,7 @@ function ChatScreen() {
     let execAction: { actionType: string; params: Record<string, any> } | undefined;
     text = text.replace(/\[ACTION:([^\]:]+):([^\]]+)\]/g, (_, label, route) => {
       const r = route.trim();
+      if (!isValidInternalRoute(r)) return "";
       let icon = "arrow-forward-circle";
       if (r.includes("wallet")) icon = "wallet";
       else if (r.includes("gift")) icon = "gift";
@@ -5222,9 +5229,11 @@ function ChatScreen() {
       try { execAction = { actionType, params: JSON.parse(j.trim()) }; } catch {}
       return "";
     });
-    text = text.replace(/\b(go to|visit|navigate to|open|tap|click)\s+(\/[\w\-/]+)/gi, (_, verb, route) => {
-      const label = route.replace(/^\//, "").replace(/\//g, " › ").replace(/-/g, " ");
-      actions.push({ label: label.charAt(0).toUpperCase() + label.slice(1), icon: "arrow-forward-circle", action: "navigate", params: { route: route.trim() } });
+    text = text.replace(/\b(go to|visit|navigate to|open|tap|click)\s+(\/[^\s)\]}>,]+)/gi, (_, _verb, route) => {
+      const destination = route.trim().replace(/[.,!?;:]+$/, "");
+      if (!isValidInternalRoute(destination)) return "";
+      const label = destination.split(/[?#]/, 1)[0].replace(/^\//, "").replace(/\//g, " › ").replace(/-/g, " ");
+      actions.push({ label: label.charAt(0).toUpperCase() + label.slice(1), icon: "arrow-forward-circle", action: "navigate", params: { route: destination } });
       return "";
     });
     text = text.replace(/\s\/[\w][\w\-/]*/g, " ");

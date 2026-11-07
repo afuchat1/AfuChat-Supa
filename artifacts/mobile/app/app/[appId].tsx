@@ -1,6 +1,7 @@
 import React from "react";
-import { useLocalSearchParams } from "expo-router";
-import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
+import { Redirect, useLocalSearchParams } from "expo-router";
+import AppPageShell, { normalizeAppNavKey } from "@/components/superapp/AppPageShell";
+import { isFullAppId, type FullAppId } from "@/lib/superapp/appRouteIds";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
 import AfuBusinessApp from "@/modules/afubusiness";
@@ -55,17 +56,6 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { isVerifiedCreator } from "@/lib/creatorEntitlements";
 import { safeRouter } from "@/lib/navUtils";
-
-const APP_IDS: FullAppId[] = [
-  "afupay", "afumarket", "afugames", "afubusiness", "afusearch",
-  "afufreelance", "afufiles", "afugifts",
-  "afuevents", "afumatch", "afucollections", "afuusernames",
-  "afuqr", "afusaved", "afumusic",
-];
-
-function isAppId(value: string): value is FullAppId {
-  return APP_IDS.includes(value as FullAppId);
-}
 
 function AppContent({
   appId,
@@ -158,7 +148,7 @@ export default function FullAppRoute() {
       return normalized == null ? [] : [[key, normalized]];
     }),
   ) as Record<string, string>;
-  if (!rawId || !isAppId(rawId)) return null;
+  if (!rawId || !isFullAppId(rawId)) return <Redirect href="/apps" />;
   return (
     <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)}>
       <AppContent appId={rawId} section={section} params={routeParams} />

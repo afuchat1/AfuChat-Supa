@@ -2,23 +2,9 @@ import React from "react";
 import { Platform, View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import AppBottomNav, { type AppNavItem } from "./AppBottomNav";
+import type { FullAppId } from "@/lib/superapp/appRouteIds";
 
-export type FullAppId =
-  | "afupay"
-  | "afumarket"
-  | "afugames"
-  | "afubusiness"
-  | "afusearch"
-  | "afufreelance"
-  | "afufiles"
-  | "afugifts"
-  | "afuevents"
-  | "afumatch"
-  | "afucollections"
-  | "afuusernames"
-  | "afuqr"
-  | "afusaved"
-  | "afumusic";
+export type { FullAppId } from "@/lib/superapp/appRouteIds";
 
 const NAV: Record<FullAppId, AppNavItem[]> = {
   afupay: [

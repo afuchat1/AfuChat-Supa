@@ -21,6 +21,7 @@
  */
 
 import { handleIncomingUrl } from "./deepLinkHandler";
+import { isKnownInternalRoutePattern } from "./routeCatalog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ const NAV_TESTS: NavTest[] = [
   { url: "afuchat://my-posts",     expectedType: "navigate", expectedPath: "/my-posts",          description: "My posts" },
   { url: "afuchat://watch-history",expectedType: "navigate", expectedPath: "/watch-history",     description: "Watch history" },
   // ── Commerce & mini-apps ────────────────────────────────────────────────
-  { url: "afuchat://shop",         expectedType: "navigate", expectedPath: "/shop",              description: "Shop" },
+  { url: "afuchat://shop",         expectedType: "navigate", expectedPath: "/app/afumarket",     description: "Shop" },
   { url: "afuchat://games",        expectedType: "navigate", expectedPath: "/app/afugames",      description: "Games" },
   { url: "afuchat://freelance",    expectedType: "navigate", expectedPath: "/app/afufreelance",  description: "Freelance" },
   { url: "afuchat://gifts",        expectedType: "navigate", expectedPath: "/app/afugifts",      description: "Gifts" },
@@ -181,13 +182,14 @@ async function runNavTests() {
 
       const typeMatch = gotType === tc.expectedType;
       const pathMatch = tc.expectedPath == null || gotPath === tc.expectedPath;
+      const availableRoute = gotPath == null || isKnownInternalRoutePattern(gotPath);
 
-      if (!typeMatch || !pathMatch) {
+      if (!typeMatch || !pathMatch || !availableRoute) {
         failures.push({
           desc: tc.description,
           url: tc.url,
           got: action === null ? "null" : `${action.type}${gotPath ? ` → ${gotPath}` : ""}`,
-          expected: tc.expectedPath ? `${tc.expectedType} → ${tc.expectedPath}` : tc.expectedType,
+          expected: tc.expectedPath ? `${tc.expectedType} → ${tc.expectedPath}${availableRoute ? "" : " (existing route)"}` : tc.expectedType,
         });
       }
     } catch (err) {

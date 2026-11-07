@@ -255,6 +255,32 @@ const PAGES: Record<
   },
 };
 
+/**
+ * Export the exact public document copy shown by this page for AfuAI.
+ * Keeping this derived from PAGES prevents the assistant's legal text from
+ * drifting away from what users actually see.
+ */
+export function getLegalPageKnowledge(): string {
+  return (Object.entries(PAGES) as [LegalPageKind, (typeof PAGES)[LegalPageKind]][])
+    .map(([kind, page]) => {
+      const lines = [
+        `Page: ${page.title}`,
+        `Page label: ${page.eyebrow}`,
+        `Introduction: ${page.intro}`,
+        page.updated ?? "Last updated: August 14, 2026",
+        "Review this document here in AfuChat. Related account and privacy controls are available in Settings.",
+      ];
+      for (const section of page.sections) {
+        lines.push(section.title);
+        if (section.paragraphs) lines.push(...section.paragraphs);
+        if (section.bullets) lines.push(...section.bullets.map((bullet) => `• ${bullet}`));
+      }
+      lines.push("Connect · Discover · Create");
+      return `## ${kind}\n${lines.join("\n")}`;
+    })
+    .join("\n\n");
+}
+
 function navigateTo(path: string) {
   router.push(path as any);
 }

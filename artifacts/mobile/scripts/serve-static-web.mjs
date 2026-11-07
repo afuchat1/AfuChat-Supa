@@ -1,12 +1,59 @@
 import { createReadStream } from "node:fs";
-import { access, readFile, stat } from "node:fs/promises";
+import { access, readFile, readdir, stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, normalize, posix } from "node:path";
+import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decoratePublicHtml } from "./public-crawler.mjs";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
 const port = Number(process.env.PORT || 5000);
+
+async function collectHtmlFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const filePath = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...(await collectHtmlFiles(filePath)));
+    else if (entry.isFile() && entry.name.endsWith(".html")) files.push(filePath);
+  }
+  return files;
+}
+
+function routePatternForFile(filePath) {
+  let route = relative(root, filePath).replaceAll("\\", "/").replace(/\.html$/, "");
+  const parts = route.split("/");
+  if (parts.at(-1) === "index") parts.pop();
+  const visibleParts = parts.filter((part) => !/^\([^/]+\)$/.test(part));
+  return `/${visibleParts.join("/")}`.replace(/\/$/, "") || "/";
+}
+
+function isDynamicRoutePattern(route) {
+  return route.split("/").some((part) => /^\[.+\]$/.test(part));
+}
+
+function matchesRoutePattern(pattern, pathname) {
+  const expected = pattern.split("/").filter(Boolean);
+  const actual = pathname.split("/").filter(Boolean);
+  let expectedIndex = 0;
+  let actualIndex = 0;
+  while (expectedIndex < expected.length) {
+    const part = expected[expectedIndex];
+    if (/^\[\[\.\.\..+\]\]$/.test(part)) return true;
+    if (/^\[\.\.\..+\]$/.test(part)) return actualIndex < actual.length;
+    if (actualIndex >= actual.length) return false;
+    if (!/^\[[^/]+\]$/.test(part) && part !== actual[actualIndex]) return false;
+    expectedIndex += 1;
+    actualIndex += 1;
+  }
+  return actualIndex === actual.length;
+}
+
+const dynamicRouteFiles = (await collectHtmlFiles(root).catch(() => []))
+  .map((filePath) => ({
+    filePath,
+    route: routePatternForFile(filePath),
+  }))
+  .filter(({ route }) => isDynamicRoutePattern(route));
 
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
@@ -49,34 +96,15 @@ function routeCandidates(pathname) {
     `${clean}.html`,
     `${clean}/index.html`,
   ];
+  const dynamicMatches = dynamicRouteFiles
+    .filter(({ route }) => matchesRoutePattern(route, pathname))
+    .sort((a, b) => {
+      const staticParts = (route) => route.split("/").filter(Boolean).filter((part) => !/^\[.+\]$/.test(part)).length;
+      return staticParts(b.route) - staticParts(a.route);
+    })
+    .map(({ filePath }) => relative(root, filePath));
 
-  const segments = clean.split("/");
-  if (segments.length === 1) {
-    candidates.push("[handle].html");
-  } else {
-    const dynamicNames = {
-      article: "[id].html",
-      app: "[appId].html",
-      call: "[id].html",
-      channel: "[id].html",
-      chat: "[id].html",
-      "chat-info": "[id].html",
-      company: "[slug].html",
-      contact: "[id].html",
-      freelance: "[id].html",
-      group: "[id].html",
-      id: "[afuId].html",
-      join: "[code].html",
-      match: "[id].html",
-      post: "[id].html",
-      report: "[userId].html",
-      video: "[id].html",
-    };
-    const dynamicName = dynamicNames[segments[0]];
-    if (dynamicName) candidates.push(`${segments[0]}/${dynamicName}`);
-  }
-
-  return candidates;
+  return [...new Set([...candidates, ...dynamicMatches])];
 }
 
 async function resolveFile(pathname) {
