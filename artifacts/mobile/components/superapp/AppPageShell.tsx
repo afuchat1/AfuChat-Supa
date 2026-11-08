@@ -71,6 +71,12 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "offline", label: "Downloads", icon: "cloud-download-outline", activeIcon: "cloud-download", href: "/app/afumusic?section=offline" },
     { key: "studio", label: "Studio", icon: "musical-notes-outline", activeIcon: "musical-notes", href: "/app/afumusic?section=studio" },
   ],
+  afufootball: [
+    { key: "live", label: "Matchday", icon: "football-outline", activeIcon: "football", href: "/app/afufootball" },
+    { key: "competitions", label: "Leagues", icon: "trophy-outline", activeIcon: "trophy", href: "/app/afufootball?section=competitions" },
+    { key: "followed", label: "Following", icon: "bookmark-outline", activeIcon: "bookmark", href: "/app/afufootball?section=followed" },
+    { key: "search", label: "Search", icon: "search-outline", activeIcon: "search", href: "/football/search" },
+  ],
 };
 
 // App modules own their in-flow header and back control. The shell places the
@@ -88,6 +94,7 @@ export function normalizeAppNavKey(section?: string) {
   if (section === "apply-seller") return "sell";
   if (section === "apply" || section === "manage" || section === "storefront" || section === "product" || section === "order") return "browse";
   if (section === "post-gig") return "post-gig";
+  if (["competitions", "followed"].includes(section ?? "")) return section;
   if (["airtime", "data-bundles", "bills", "transfer", "hotels", "tickets", "fee-details"].includes(section ?? "")) {
     return "services";
   }

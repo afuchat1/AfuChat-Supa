@@ -115,6 +115,16 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     keepAlive: false,
   },
   {
+    id: "afufootball",
+    name: "AfuFootball",
+    description: "Follow real fixtures, scores, teams and competitions.",
+    version: "1.0.0",
+    icon: "football",
+    gradient: ["#247A4B", "#69A85D"] as const,
+    keepAlive: false,
+    badge: "NEW",
+  },
+  {
     id: "afuevents",
     name: "Events",
     description: "Discover local and online events near you.",

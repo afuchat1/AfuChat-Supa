@@ -72,6 +72,7 @@ const NAV_ROUTES: Record<string, string> = {
   chats:              "/(tabs)/chats",
   chat:               "/(tabs)/chats",
   search:             "/app/afusearch",
+  football:           "/app/afufootball",
   "new-chat":         "/chat/new",
   communities:        "/(tabs)/communities",
   contacts:           "/(tabs)/contacts",
@@ -216,6 +217,31 @@ export async function handleIncomingUrl(url: string | null | undefined): Promise
       const chatId = decodePathSegment(segments[1]);
       if (isChatId(chatId)) {
         return { type: "navigate", path: "/chat/[id]", params: { id: chatId } };
+      }
+    }
+
+    // AfuFootball shared links are generated at /football/{match|team|league}/:id.
+    // Validate provider IDs before routing so arbitrary path segments are never
+    // interpreted as a dynamic entity ID.
+    if (segments[0] === "football") {
+      if (segments.length === 1) {
+        return { type: "navigate", path: "/app/afufootball" };
+      }
+      if (segments.length === 2 && segments[1] === "search") {
+        return { type: "navigate", path: "/football/search" };
+      }
+      if (segments.length === 2 && segments[1] === "settings") {
+        return { type: "navigate", path: "/football/settings" };
+      }
+      if (segments.length === 3 && ["match", "team", "league"].includes(segments[1])) {
+        const id = segments[2];
+        if (/^\d{1,10}$/.test(id) && Number(id) > 0) {
+          return {
+            type: "navigate",
+            path: `/football/${segments[1]}/[id]`,
+            params: { id },
+          };
+        }
       }
     }
 

@@ -14,6 +14,7 @@ export const APP_ROUTE_IDS = [
   "afuqr",
   "afusaved",
   "afumusic",
+  "afufootball",
 ] as const;
 
 export type FullAppId = (typeof APP_ROUTE_IDS)[number];

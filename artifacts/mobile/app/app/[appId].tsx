@@ -40,6 +40,7 @@ import TicketsScreen from "@/app/mini-programs/tickets";
 import TransferScreen from "@/app/mini-programs/transfer";
 import MoneyRequestScreen from "@/app/wallet/request";
 import AfuMusicApp from "@/modules/afumusic";
+import { AfuFootballApp } from "@/modules/afufootball";
 import {
   cacheMusicTrackOffline,
   getMusicPlaybackUri,
@@ -129,6 +130,8 @@ function AppContent({
       return <AfuSavedApp />;
     case "afumusic":
       return <ConnectedAfuMusic initialSection={section} />;
+    case "afufootball":
+      return <AfuFootballApp initialSection={section} />;
   }
 }
 

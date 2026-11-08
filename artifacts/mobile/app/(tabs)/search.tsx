@@ -69,6 +69,7 @@ import Colors from "@/constants/colors";
 import { searchMusicTracksByIds, getMusicPlaybackUri, listMusicTracks } from "@/lib/afuMusic";
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
+import { getFootballData } from "@/lib/afuFootball";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -92,7 +93,8 @@ const FALLBACK_TAGS = [
   "business", "sports", "movies", "food", "nature", "education",
 ];
 
-type SearchTab = "all" | "images" | "people" | "posts" | "videos" | "music" | "channels" | "events" | "gifts" | "market" | "jobs";
+type SearchTab = "all" | "images" | "people" | "posts" | "videos" | "music" | "channels" | "events" | "gifts" | "market" | "jobs" | "football";
+type FootballSearchResult = { id: string; kind: "team" | "competition" | "player"; name: string; subtitle: string; logo: string | null };
 type SortMode  = "relevance" | "recent" | "popular";
 type DateRange = "all" | "24h" | "7d" | "30d";
 
@@ -108,6 +110,7 @@ const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "jobs",     label: "Jobs",     icon: "briefcase" },
   { id: "gifts",    label: "Gifts",    icon: "gift" },
   { id: "market",   label: "Market",   icon: "storefront" },
+  { id: "football", label: "Football", icon: "football" },
 ];
 
 // CATEGORIES is computed inside SearchScreen so gradients pick up the
@@ -474,6 +477,7 @@ export function SearchScreen({
     { id: "jobs",     label: "Jobs",     icon: "briefcase",     gradient: [SUCCESS,"#30D158"]   as [string,string] },
     { id: "gifts",    label: "Gifts",    icon: "gift",          gradient: [GOLD,   "#F59E0B"]   as [string,string] },
     { id: "market",   label: "Market",   icon: "storefront",    gradient: [INDIGO, "#7986CB"]   as [string,string] },
+    { id: "football", label: "Football", icon: "football",      gradient: ["#247A4B", "#69A85D"] as [string,string] },
   ];
 
   const insets = useSafeAreaInsets();
@@ -501,6 +505,8 @@ export function SearchScreen({
   const verifiedOnly = false;
   const [loading,     setLoading]     = useState(false);
   const [results,     setResults]     = useState<AllResults>(EMPTY);
+  const [footballResults, setFootballResults] = useState<FootballSearchResult[]>([]);
+  const [footballNotice, setFootballNotice] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
 
   function cancelActiveSuggestionRequest() {
@@ -817,7 +823,7 @@ export function SearchScreen({
     const trimmed = q.trim();
     if (!fallbackFor) setDidYouMean(null);
     if (trimmed.length < 1 && currentTab !== "videos" && currentTab !== "jobs") {
-      setResults(EMPTY); setHasSearched(false); setDidYouMean(null); return;
+      setResults(EMPTY); setFootballResults([]); setFootballNotice(null); setHasSearched(false); setDidYouMean(null); return;
     }
 
     const id = ++searchIdRef.current;
@@ -1098,16 +1104,52 @@ export function SearchScreen({
       });
 
       const music = sortBySearchRank((musicRes || []) as AfuMusicTrack[], "music");
+      // Football search consumes three provider requests and has a separate
+      // results tab. Keep ordinary AfuSearch queries entirely within AfuChat.
+      const wantsFootball = currentTab === "football" && trimmed.length >= 2;
+      let footballRows: FootballSearchResult[] = [];
+      let providerNotice: string | null = null;
+      if (wantsFootball) {
+        const providerSearches = await Promise.all([
+          getFootballData<Record<string, any>>("searchTeams", { search: trimmed })
+            .then((data) => ({ data, error: null as string | null }))
+            .catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Football search is unavailable." })),
+          getFootballData<Record<string, any>>("searchCompetitions", { search: trimmed })
+            .then((data) => ({ data, error: null as string | null }))
+            .catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Football search is unavailable." })),
+          getFootballData<Record<string, any>>("searchPlayers", { search: trimmed })
+            .then((data) => ({ data, error: null as string | null }))
+            .catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Football search is unavailable." })),
+        ]);
+        const [teamData, leagueData, playerData] = providerSearches;
+        providerNotice = teamData.error ?? leagueData.error ?? playerData.error
+          ?? teamData.data?.warning ?? leagueData.data?.warning ?? playerData.data?.warning ?? null;
+        footballRows = [
+          ...(teamData.data?.response ?? []).map((item) => {
+            const team = item.team ?? item;
+            return { id: String(team.id), kind: "team" as const, name: team.name ?? "Team", subtitle: item.country ?? item.venue?.city ?? "Team", logo: team.logo ?? null };
+          }),
+          ...(leagueData.data?.response ?? []).map((item) => {
+            const league = item.league ?? item;
+            return { id: String(league.id), kind: "competition" as const, name: league.name ?? "Competition", subtitle: [league.country ?? item.country, league.season].filter(Boolean).join(" · ") || "Competition", logo: league.logo ?? null };
+          }),
+          ...(playerData.data?.response ?? []).map((item) => {
+            const player = item.player ?? item;
+            const statistics = item.statistics?.[0];
+            return { id: String(player.id), kind: "player" as const, name: player.name ?? "Player", subtitle: [statistics?.team?.name, statistics?.league?.name].filter(Boolean).join(" · ") || "Player", logo: player.photo ?? null };
+          }),
+        ];
+      }
       const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs, music };
       if (id !== searchIdRef.current) return;
 
       const total = people.length + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length + music.length;
+        + events.length + gifts.length + marketItems.length + jobs.length + music.length + footballRows.length;
       const publicResultCount = people.filter((item) =>
         item.kind === "org" || (item as PersonResult).is_private !== true,
       ).length
         + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length + music.length;
+        + events.length + gifts.length + marketItems.length + jobs.length + music.length + footballRows.length;
       if (recordExplicitSubmission && trimmed.length > 0) {
         addToHistory(trimmed).then(setHistory).catch(() => {});
       }
@@ -1139,6 +1181,8 @@ export function SearchScreen({
       }
 
       setResults(finalResults);
+      setFootballResults(footballRows);
+      setFootballNotice(providerNotice);
       setLoading(false);
       if (fallbackFor) setDidYouMean(total > 0 ? fallbackFor : null);
       if (recordExplicitSubmission && trimmed.length > 0 && publicResultCount > 0 && user) {
@@ -2616,7 +2660,8 @@ export function SearchScreen({
     const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
     const showMarket   = (tab === "all" || tab === "market")   && results.market.length > 0;
     const showJobs     = (tab === "all" || tab === "jobs")     && results.jobs.length > 0;
-    const any = showLens || showImages || showPeople || showPosts || showVideos || showMusic || showChannels || showEvents || showGifts || showMarket || showJobs;
+    const showFootball = tab === "football" && footballResults.length > 0;
+    const any = showLens || showImages || showPeople || showPosts || showVideos || showMusic || showChannels || showEvents || showGifts || showMarket || showJobs || showFootball || ((tab === "football" || tab === "all") && !!footballNotice && !footballResults.length);
 
     if (!any) return <NoResults />;
 
@@ -2732,6 +2777,48 @@ export function SearchScreen({
             </View>
           </View>
         )}
+        {showFootball && (
+          <View>
+            <SectionHeader icon="football" label="Football" color="#247A4B" onSeeAll={tab === "all" ? () => onTabPress("football") : undefined} />
+            <View style={{ paddingHorizontal: 12, gap: 8 }}>
+              {footballResults.map((item) => (
+                <TouchableOpacity
+                  key={`${item.kind}-${item.id}`}
+                  onPress={() => {
+                    if (item.kind === "team") safeRouter.push(`/football/team/${item.id}`);
+                    else if (item.kind === "competition") safeRouter.push(`/football/league/${item.id}`);
+                  }}
+                  disabled={item.kind === "player"}
+                  activeOpacity={0.76}
+                  accessibilityRole={item.kind === "player" ? undefined : "button"}
+                  accessibilityLabel={`${item.kind} ${item.name}`}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 11, padding: 12, borderRadius: 16, backgroundColor: colors.surface }}
+                >
+                  <View style={{ width: 42, height: 42, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "#247A4B18", overflow: "hidden" }}>
+                    {item.logo ? <ExpoImage source={{ uri: item.logo }} style={{ width: 30, height: 30 }} contentFit="contain" /> : <Ionicons name={item.kind === "player" ? "person-outline" : item.kind === "competition" ? "trophy-outline" : "football-outline"} size={19} color="#247A4B" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{item.name}</Text>
+                    <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 3 }}>{item.subtitle}</Text>
+                  </View>
+                  {item.kind === "player" ? <Text style={{ color: colors.textMuted, fontSize: 10 }}>Player</Text> : <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+        {tab === "football" && footballNotice && footballResults.length === 0 ? (
+          <View style={{ marginHorizontal: 16, marginTop: 12, padding: 15, borderRadius: 17, backgroundColor: colors.surface, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+            <Ionicons name="cloud-offline-outline" size={20} color={colors.textMuted} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Football provider connection</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>{footballNotice}</Text>
+              <TouchableOpacity onPress={() => performSearch(query, "football", verifiedOnly, sortMode, dateRange)} style={{ alignSelf: "flex-start", paddingTop: 8 }}>
+                <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
         {showChannels && (
           <View>
             <SectionHeader icon="megaphone" label="Channels" color={PURPLE} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />

@@ -82,6 +82,15 @@ const CATEGORIES: Category[] = [
         featuredSub: "Discover independent sounds, stream tracks and manage your library.",
       },
       {
+        id: "afufootball",
+        label: "AfuFootball",
+        icon: "football",
+        gradient: ["#247A4B", "#69A85D"],
+        route: "/app/afufootball",
+        badge: "NEW",
+        featuredSub: "Real fixtures, scores, teams and competitions from your provider.",
+      },
+      {
         id: "afubusiness",
         label: "AfuBusiness",
         icon: "briefcase",
