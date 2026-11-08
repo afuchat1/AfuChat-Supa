@@ -60,7 +60,6 @@ import { initActivityTracker } from "@/lib/activityTracker";
 import { MiniAppRuntimeProvider } from "@/lib/superapp/MiniAppRuntime";
 import { GlobalMusicPlayerProvider } from "@/components/GlobalMusicPlayer";
 import { AnimationGuardInit } from "@/components/AnimationGuardInit";
-import { SplashScreenView } from "@/components/ui/SplashScreenView";
 import NativeShareShortcutSync from "@/components/NativeShareShortcutSync";
 import DesktopShell from "@/components/web/DesktopShell";
 import { safeRouter } from "@/lib/navUtils";
@@ -492,18 +491,18 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
 
 export default function RootLayout() {
   const rootNavigationState = useRootNavigationState();
-  const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
-  const [splashDone, setSplashDone] = useState(false);
+  // Register the same bundled font family globally, but never make route
+  // visibility depend on font loading. Until Inter is ready, every route uses
+  // the platform sans-serif fallback; once ready, all routes switch together.
+  Font.useFonts(APP_FONTS);
 
   useEffect(() => {
-    if (!rootNavigationState?.key || (Platform.OS !== "web" && !splashDone)) return;
+    if (!rootNavigationState?.key) return;
     markStartupPhase("operational");
-  }, [rootNavigationState?.key, splashDone]);
-
-  const handleSplashDone = useCallback(() => {
-    SplashScreen.hideAsync().catch(() => {});
-    setSplashDone(true);
-  }, []);
+    if (Platform.OS !== "web") {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [rootNavigationState?.key]);
 
   // The visual splash overlay is intentionally native-only. Explicitly hide
   // the platform splash on web as well; otherwise preventAutoHideAsync() above
@@ -514,27 +513,16 @@ export default function RootLayout() {
     }
   }, []);
 
-  // If a production bundle cannot load a font asset, do not leave the native
-  // splash covering a blank screen forever. System fonts keep layout usable.
+  // Safety valve for a broken navigation bootstrap. In normal operation the
+  // splash is dismissed as soon as the root navigator is ready, independently
+  // of font or network activity.
   useEffect(() => {
-    if (fontError) {
-      SplashScreen.hideAsync().catch(() => {});
-      setSplashDone(true);
-    }
-  }, [fontError]);
-
-  // Fonts are bundled with the app, so they normally load locally. Keep the
-  // native splash wait bounded: if an asset fails or the device is unusually
-  // slow, open the app with the platform sans-serif fallback rather than
-  // holding every route behind a blank/loading screen.
-  useEffect(() => {
-    if (Platform.OS === "web" || splashDone) return;
+    if (Platform.OS === "web") return;
     const timeout = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
-      setSplashDone(true);
-    }, 2500);
+    }, 5000);
     return () => clearTimeout(timeout);
-  }, [splashDone]);
+  }, []);
 
   // Run deep-link route verification once in dev mode to catch any routes
   // that might accidentally fall through to [handle].tsx.
@@ -617,10 +605,6 @@ export default function RootLayout() {
       <ShareIntentProvider options={{ scheme: "afuchat" }}>
         <ErrorBoundary>
         <GestureHandlerRootView style={styles.root}>
-          {/* JS splash overlay — visible until fonts load, then fades out */}
-          {!splashDone && Platform.OS !== "web" && (
-            <SplashScreenView ready={fontsLoaded || !!fontError} onDone={handleSplashDone} />
-          )}
           <SafeAreaProvider>
             <ThemeProvider>
               <ThemedRoot>
