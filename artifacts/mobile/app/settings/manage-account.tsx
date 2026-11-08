@@ -7,13 +7,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "@/lib/haptics";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { TwoFactorGate } from "@/components/ui/TwoFactorGate";
 
@@ -70,33 +68,10 @@ export default function ManageAccountScreen() {
 
   // ── Download ────────────────────────────────────────────────────────────────
   const [showDownloadGate, setShowDownloadGate] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
-  async function handleDownloadData() {
+  function handleDownloadData() {
     if (!user) return;
-    setDownloading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("export-user-data", {
-        body: { types: ["profile", "posts", "messages", "activity", "transactions"] },
-      });
-
-      if (error || data?.error) {
-        const msg = data?.error ?? error?.message ?? "Something went wrong. Please try again.";
-        showAlert("Export Failed", msg);
-        return;
-      }
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const email = data?.email ?? user.email ?? "your registered email";
-      showAlert(
-        "Export Sent",
-        `Your data export has been sent to ${email}. Check your inbox for the attached JSON file.`
-      );
-    } catch {
-      showAlert("Error", "Failed to request data export. Please check your connection and try again.");
-    } finally {
-      setDownloading(false);
-    }
+    router.push({ pathname: "/settings/privacy-download", params: { preset: "all" } } as any);
   }
 
   return (
@@ -127,7 +102,6 @@ export default function ManageAccountScreen() {
             icon="cloud-download" iconColor="#0A84FF"
             label="Export My Data"
             sublabel="Download a copy of your profile, posts, messages and activity"
-            loading={downloading}
             onPress={() => setShowDownloadGate(true)}
             last colors={colors}
           />

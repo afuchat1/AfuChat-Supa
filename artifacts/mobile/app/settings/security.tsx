@@ -151,35 +151,12 @@ export default function SecuritySettingsScreen() {
     }
   }
 
-  // ── Download data (via Supabase Edge Function → email) ──────────────────────
+  // ── Download data (identity checked before opening the export screen) ────────
   const [showDownloadGate, setShowDownloadGate] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
-  async function handleDownloadData() {
+  function handleDownloadData() {
     if (!user) return;
-    setDownloading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("export-user-data", {
-        body: { types: ["profile", "posts", "messages", "activity", "transactions"] },
-      });
-
-      if (error || data?.error) {
-        const msg = data?.error ?? error?.message ?? "Something went wrong. Please try again.";
-        showAlert("Export Failed", msg);
-        return;
-      }
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const email = data?.email ?? user.email ?? "your registered email";
-      showAlert(
-        "Export Sent",
-        `Your data export has been sent to ${email}. Check your inbox for the attached JSON file.`
-      );
-    } catch {
-      showAlert("Error", "Failed to request data export. Please check your connection and try again.");
-    } finally {
-      setDownloading(false);
-    }
+    router.push({ pathname: "/settings/privacy-download", params: { preset: "all" } } as any);
   }
 
   // ── Sign Out (3-step — buried here intentionally) ────────────────────────────
@@ -291,7 +268,6 @@ export default function SecuritySettingsScreen() {
             iconColor="#0A84FF"
             label="settings.download_data"
             sublabel="security.export_data_description"
-            loading={downloading}
             onPress={() => setShowDownloadGate(true)}
             last
             colors={colors}
