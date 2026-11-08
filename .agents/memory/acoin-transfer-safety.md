@@ -14,3 +14,9 @@ Older AfuChat app builds may remain in use and continue calling the legacy two-R
 **Why:** The user explicitly requires older builds to keep working and receiving wallet history while avoiding a client update.
 
 **How to apply:** Keep debit authorization intact, preserve legacy RPC contracts, and verify that both sender and recipient entries appear through the existing transaction-history queries.
+
+The legacy `deduct_acoin` RPC has no request ID. Repeated same-amount calls can debit more than once while `credit_acoin` consumes only one matching intent. Do not reject every outstanding intent: older purchase flows also call `deduct_acoin` and may not consume a transfer intent.
+
+**Why:** A legacy send can leave the sender charged twice while the recipient is credited once; blindly treating every pending intent as a transfer would break unrelated purchases.
+
+**How to apply:** Keep duplicate protection scoped to a short same-sender/same-amount retry window, preserve the old RPC signatures, and never refund an expired intent without matching it to a verified transaction.

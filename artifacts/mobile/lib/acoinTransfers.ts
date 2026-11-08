@@ -14,7 +14,9 @@ export type AcoinTransferResult =
 const UNKNOWN_TRANSFER_MESSAGE =
   "Transfer not confirmed. Check your wallet activity before trying again.";
 
-export async function transferAcoin(
+const inFlightTransfers = new Map<string, Promise<AcoinTransferResult>>();
+
+export function transferAcoin(
   recipientId: string,
   amount: number,
   note?: string | null,
@@ -25,16 +27,34 @@ export async function transferAcoin(
     amount <= 0 ||
     amount > 2_147_483_647
   ) {
-    return { status: "rejected", message: "Enter a valid recipient and ACoin amount." };
+    return Promise.resolve({ status: "rejected", message: "Enter a valid recipient and ACoin amount." });
   }
 
+  const normalizedNote = note?.trim() || null;
+  const requestKey = JSON.stringify([recipientId, amount, normalizedNote]);
+  const activeRequest = inFlightTransfers.get(requestKey);
+  if (activeRequest) return activeRequest;
+
+  const request = submitAcoinTransfer(recipientId, amount, normalizedNote);
+  inFlightTransfers.set(requestKey, request);
+  void request.then(() => {
+    if (inFlightTransfers.get(requestKey) === request) inFlightTransfers.delete(requestKey);
+  });
+  return request;
+}
+
+async function submitAcoinTransfer(
+  recipientId: string,
+  amount: number,
+  note: string | null,
+): Promise<AcoinTransferResult> {
   try {
     // Transfers are not safe to retry automatically if the response is lost.
     const { data, error } = await supabase
       .rpc("transfer_acoin", {
         p_recipient_id: recipientId,
         p_amount: amount,
-        p_note: note?.trim() || null,
+        p_note: note,
       })
       .retry(false);
 
