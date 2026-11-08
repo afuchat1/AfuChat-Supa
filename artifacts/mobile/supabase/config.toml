@@ -23,3 +23,6 @@ verify_jwt = true
 
 [functions.call-turn-credentials]
 verify_jwt = true
+
+[functions.export-user-data]
+verify_jwt = true
