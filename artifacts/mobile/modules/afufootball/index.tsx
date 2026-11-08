@@ -131,6 +131,21 @@ function formatDateLabel(date: Date) {
   return date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function fixtureStatus(item: FootballRecord) {
   const status = item.fixture?.status;
   return status?.short === "NS" ? formatKickoff(item.fixture?.date) : status?.elapsed != null
@@ -653,7 +668,13 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
     setSelectedSection(initialHomeSection(initialSection));
   }, [initialSection]);
   const live = useFootballQuery<FootballRecord>("football:live", "live");
-  const dated = useFootballQuery<FootballRecord>(`football:fixtures:${date.toISOString().slice(0, 10)}`, "fixtures", { date: date.toISOString().slice(0, 10) });
+  const fixtureDate = localDateKey(date);
+  const fixtureTimeZone = localTimeZone();
+  const dated = useFootballQuery<FootballRecord>(
+    `football:fixtures:${fixtureDate}:${fixtureTimeZone ?? "provider-default"}`,
+    "fixtures",
+    { date: fixtureDate, timezone: fixtureTimeZone },
+  );
   const competitions = useFootballQuery<FootballRecord>("football:competitions", "competitions");
   const follows = useFollows();
   const { colors, pitch, green, navy } = usePalette();
@@ -1005,7 +1026,9 @@ export function FootballLeagueScreen() {
   const followQuery = useFollows();
   const competitionRecord = competition.result?.response?.find((row) => String((row.league ?? row).id) === String(id)) ?? competition.result?.response?.[0];
   const league = competitionRecord?.league ?? competitionRecord;
-  const season = league?.season ?? new Date().getFullYear();
+  const season = league?.season
+    ?? league?.seasons?.find((candidate: FootballRecord) => candidate.current)?.year
+    ?? new Date().getFullYear();
   const fixtures = useFootballQuery<FootballRecord>(`football:league-fixtures:${id}:${season}`, "fixtures", { league: id, season });
   const standings = useFootballQuery<FootballRecord>(`football:standings:${id}:${season}`, "standings", { league: id, season });
   const isFollowing = (followQuery.data ?? []).some((follow) => follow.entity_type === "league" && follow.entity_id === String(id));

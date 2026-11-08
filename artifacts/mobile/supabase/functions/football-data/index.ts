@@ -126,7 +126,11 @@ function buildProviderUrl(action: Action, params: Params): URL {
   } else if (action === "events" || action === "statistics" || action === "lineups") {
     url.searchParams.set("fixture", asPositiveInteger(params.fixture, "fixture"));
   } else if (action === "competitions") {
-    url.searchParams.set("current", "true");
+    if (params.id !== undefined && params.id !== null && params.id !== "") {
+      url.searchParams.set("id", asPositiveInteger(params.id, "id"));
+    } else {
+      url.searchParams.set("current", "true");
+    }
   } else if (action === "searchCompetitions" || action === "searchTeams" || action === "searchPlayers") {
     if (typeof params.search !== "string" || !params.search.trim()) {
       throw new Error("Enter a search term.");

@@ -2779,7 +2779,7 @@ export function SearchScreen({
         )}
         {showFootball && (
           <View>
-            <SectionHeader icon="football" label="Football" color="#247A4B" onSeeAll={tab === "all" ? () => onTabPress("football") : undefined} />
+            <SectionHeader icon="football" label="Football" color="#247A4B" />
             <View style={{ paddingHorizontal: 12, gap: 8 }}>
               {footballResults.map((item) => (
                 <TouchableOpacity
