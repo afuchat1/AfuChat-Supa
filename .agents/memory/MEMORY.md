@@ -1,4 +1,6 @@
 - [AfuFootball data provider](afufootball-data-provider.md) — API-Football Free is limited to 100 requests/day, so keep provider calls server-side, shared, and cached.
+- [AfuFootball visual direction](afufootball-visual-direction.md) — Apply the user’s stadium matchday reference across Football screens; leave the app-wide bottom navigation unchanged.
+- [Expo web image fitting](expo-web-image-fitting.md) — Use Expo Image with explicit dimensions for content-bearing hero art when ImageBackground crops unpredictably on web.
 - [AfuSearch results policy](afusearch-results-policy.md) — Use a flat mixed-content feed and one history/trending overlay; keep image search scoped to public AfuChat posts.
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
 - [Expo Go QR verification](expo-go-qr-verification.md) — If the managed tunnel is unavailable, use the installed ngrok provider and verify the Android bundle before sharing its QR.
