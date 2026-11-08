@@ -3,6 +3,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  ImageBackground,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -13,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
@@ -94,14 +97,25 @@ function useFollows() {
 }
 
 function usePalette() {
-  const { colors, isDark } = useTheme();
+  const { colors: appColors } = useTheme();
+  const colors = {
+    background: "#07182E",
+    backgroundTertiary: "#E8F1FB",
+    surface: "#F8FAFD",
+    text: "#10203A",
+    textSecondary: "#40516A",
+    textMuted: "#748197",
+    accent: "#1388F8",
+    error: appColors.error,
+  };
   return {
     colors,
-    isDark,
-    pitch: isDark ? "#24382E" : "#E1EBDD",
-    green: "#247A4B",
-    greenBright: "#36A66B",
-    amber: "#D89A3D",
+    pitch: "#EAF3FD",
+    green: "#18C887",
+    greenBright: "#2B9CF7",
+    amber: "#E8A631",
+    navy: "#07182E",
+    navyRaised: "#0C2A4E",
     card: colors.surface,
   };
 }
@@ -161,15 +175,18 @@ function ScreenFrame({
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: Math.max(insets.top, 12) + 8, paddingBottom: insets.bottom + 108 }}
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top, Platform.OS === "web" ? 67 : 10) + 6,
+          paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 8) + 104,
+        }}
       >
         <View style={styles.topRow}>
-          <Pressable onPress={() => safeRouter.back("/app/afufootball")} style={[styles.roundButton, { backgroundColor: colors.surface }]} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="arrow-back" size={20} color={colors.text} />
+          <Pressable onPress={() => safeRouter.back("/app/afufootball")} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
+            <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
           </Pressable>
           <View style={{ flex: 1, minWidth: 0 }}>
-            {eyebrow ? <Text style={[styles.eyebrow, { color: colors.textMuted }]}>{eyebrow.toUpperCase()}</Text> : null}
-            <Text numberOfLines={1} style={[styles.screenTitle, { color: colors.text }]}>{title}</Text>
+            <Text style={[styles.eyebrow, { color: "#8EA5C1" }]}>{eyebrow ?? "AFUCHAT FOOTBALL"}</Text>
+            <Text numberOfLines={1} style={[styles.screenTitle, { color: "#FFFFFF" }]}>{title}</Text>
           </View>
           {action}
         </View>
@@ -179,13 +196,15 @@ function ScreenFrame({
   );
 }
 
-function SectionTitle({ title, note, right }: { title: string; note?: string; right?: React.ReactNode }) {
+function SectionTitle({ title, note, right, tone = "page" }: { title: string; note?: string; right?: React.ReactNode; tone?: "page" | "card" }) {
   const { colors } = usePalette();
+  const titleColor = tone === "card" ? colors.text : "#F5F8FC";
+  const noteColor = tone === "card" ? colors.textMuted : "#A6B5C9";
   return (
     <View style={styles.sectionHeading}>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
-        {note ? <Text style={[styles.muted, { color: colors.textMuted, marginTop: 3 }]}>{note}</Text> : null}
+        <Text style={[styles.sectionTitle, { color: titleColor }]}>{title}</Text>
+        {note ? <Text style={[styles.muted, { color: noteColor, marginTop: 3 }]}>{note}</Text> : null}
       </View>
       {right}
     </View>
@@ -220,16 +239,17 @@ function DataNotice({
     );
   }
   if (error) {
-    const unconfigured = /key|configur|provider/i.test(error);
+    const expired = /expired|401|unauthorized|sign in/i.test(error);
+    const unconfigured = /key|configur|provider/i.test(error) && !expired;
     return (
       <View style={[styles.connectionCard, { backgroundColor: colors.surface }]}>
-        <View style={[styles.connectionIcon, { backgroundColor: unconfigured ? `${amber}20` : `${colors.error}20` }]}>
-          <Ionicons name={unconfigured ? "cloud-offline-outline" : "alert-circle-outline"} size={21} color={unconfigured ? amber : colors.error} />
+        <View style={[styles.connectionIcon, { backgroundColor: expired ? "#EAF3FD" : unconfigured ? `${amber}20` : `${colors.error}18` }]}>
+          <Ionicons name={expired ? "person-outline" : unconfigured ? "cloud-offline-outline" : "alert-circle-outline"} size={20} color={expired ? colors.accent : unconfigured ? amber : colors.error} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>{unconfigured ? "Provider connection pending" : "Could not refresh football data"}</Text>
-          <Text style={[styles.muted, { color: colors.textMuted, marginTop: 5 }]}>{unconfigured ? "Live fixtures and provider search will appear when the football data connection is configured." : error}</Text>
-          {onRetry ? <Pressable onPress={onRetry} accessibilityRole="button" style={[styles.retryButton, { backgroundColor: pitch }]}><Text style={[styles.retryText, { color: colors.text }]}>Try again</Text></Pressable> : null}
+          <Text style={[styles.cardTitle, { color: colors.text }]}>{expired ? "Sign in to load live football" : unconfigured ? "Football data is being connected" : "Football data is unavailable"}</Text>
+          <Text style={[styles.muted, { color: colors.textMuted, marginTop: 4 }]}>{expired ? "Your AfuChat session has expired. Sign in and refresh." : unconfigured ? "Live fixtures will appear when the provider connection is ready." : error}</Text>
+          {onRetry ? <Pressable onPress={onRetry} accessibilityRole="button" style={[styles.retryButton, { backgroundColor: pitch }]}><Ionicons name="refresh" size={14} color={colors.accent} /><Text style={[styles.retryText, { color: colors.accent }]}>Refresh</Text></Pressable> : null}
         </View>
       </View>
     );
@@ -238,12 +258,12 @@ function DataNotice({
     return (
       <View style={[styles.connectionCard, { backgroundColor: colors.surface }]}>
         <View style={[styles.connectionIcon, { backgroundColor: `${amber}20` }]}>
-          <Ionicons name="cloud-offline-outline" size={21} color={amber} />
+          <Ionicons name="cloud-offline-outline" size={20} color={amber} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Real-data connection not configured</Text>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Football data is being connected</Text>
           <Text style={[styles.muted, { color: colors.textMuted, marginTop: 5 }]}>{warning}</Text>
-          {onRetry ? <Pressable onPress={onRetry} accessibilityRole="button" style={[styles.retryButton, { backgroundColor: pitch }]}><Text style={[styles.retryText, { color: colors.text }]}>Check connection</Text></Pressable> : null}
+          {onRetry ? <Pressable onPress={onRetry} accessibilityRole="button" style={[styles.retryButton, { backgroundColor: pitch }]}><Ionicons name="refresh" size={14} color={colors.accent} /><Text style={[styles.retryText, { color: colors.accent }]}>Refresh</Text></Pressable> : null}
         </View>
       </View>
     );
@@ -397,23 +417,270 @@ function fixtureItems(response: FootballRecord[]) {
   return response.filter((row) => row?.fixture?.id != null);
 }
 
+type HomeSectionKey = "overview" | "matches" | "competitions" | "teams" | "standings";
+
+const HOME_SECTIONS: Array<{ key: HomeSectionKey; label: string; icon: React.ComponentProps<typeof Ionicons>["name"] }> = [
+  { key: "overview", label: "Overview", icon: "trophy-outline" },
+  { key: "matches", label: "Matches", icon: "calendar-outline" },
+  { key: "competitions", label: "Competitions", icon: "star-outline" },
+  { key: "teams", label: "Teams", icon: "people-outline" },
+  { key: "standings", label: "Standings", icon: "bar-chart-outline" },
+];
+
+function initialHomeSection(section?: string): HomeSectionKey {
+  if (section === "live" || section === "matches") return "matches";
+  if (section === "competitions") return "competitions";
+  if (section === "followed" || section === "teams") return "teams";
+  if (section === "standings") return "standings";
+  return "overview";
+}
+
+function FootballBrandHeader() {
+  const { colors } = usePalette();
+  return (
+    <View style={styles.brandHeader}>
+      <View style={styles.brandIdentity}>
+        <View style={styles.brandMark}>
+          <Ionicons name="football" size={22} color="#FFFFFF" />
+        </View>
+        <Text style={styles.brandName}>
+          Afu<Text style={{ color: colors.accent }}>Chat</Text>
+        </Text>
+      </View>
+      <Pressable
+        onPress={() => safeRouter.push("/football/search")}
+        style={styles.headerIconButton}
+        accessibilityRole="button"
+        accessibilityLabel="Search football"
+      >
+        <Ionicons name="search" size={22} color="#FFFFFF" />
+      </Pressable>
+      <Pressable
+        onPress={() => safeRouter.push("/football/settings")}
+        style={styles.headerIconButton}
+        accessibilityRole="button"
+        accessibilityLabel="Match notification settings"
+      >
+        <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
+      </Pressable>
+    </View>
+  );
+}
+
+function HomeLiveCard({ item }: { item: FootballRecord }) {
+  const home = item.teams?.home ?? {};
+  const away = item.teams?.away ?? {};
+  return (
+    <Pressable
+      onPress={() => safeRouter.push(`/football/match/${item.fixture?.id}`)}
+      accessibilityRole="button"
+      accessibilityLabel={`Open live match: ${home.name ?? "Home"} versus ${away.name ?? "Away"}`}
+      style={({ pressed }) => [styles.liveMatchWrap, { opacity: pressed ? 0.94 : 1 }]}
+    >
+      <LinearGradient colors={["#0757A5", "#092C5A", "#07182E"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.liveMatchCard}>
+        <View style={styles.liveMatchHeader}>
+          <View style={styles.liveNowPill}>
+            <View style={[styles.liveDot, { backgroundColor: "#20D58A" }]} />
+            <Text style={styles.liveNowText}>LIVE NOW</Text>
+          </View>
+          <Text numberOfLines={1} style={styles.liveLeague}>{item.league?.name ?? "Match centre"}  ›</Text>
+        </View>
+        <View style={styles.liveScoreRow}>
+          <View style={styles.liveTeam}>
+            <Logo uri={home.logo} label={home.name ?? "Home"} size={48} />
+            <Text numberOfLines={1} style={styles.liveTeamName}>{home.name ?? "Home"}</Text>
+          </View>
+          <Text style={styles.liveScore}>{item.goals?.home ?? "–"}</Text>
+          <View style={styles.liveMinute}><Text style={styles.liveMinuteText}>{fixtureStatus(item)}</Text></View>
+          <Text style={styles.liveScore}>{item.goals?.away ?? "–"}</Text>
+          <View style={styles.liveTeam}>
+            <Logo uri={away.logo} label={away.name ?? "Away"} size={48} />
+            <Text numberOfLines={1} style={styles.liveTeamName}>{away.name ?? "Away"}</Text>
+          </View>
+        </View>
+        <View style={styles.liveMatchAction}>
+          <Ionicons name="play-circle" size={17} color="#FFFFFF" />
+          <Text style={styles.liveMatchActionText}>View match details</Text>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+function HomeFixtureRow({ item }: { item: FootballRecord }) {
+  const home = item.teams?.home ?? {};
+  const away = item.teams?.away ?? {};
+  const date = item.fixture?.date ? new Date(item.fixture.date) : null;
+  const dateLabel = date && !Number.isNaN(date.getTime())
+    ? date.toLocaleDateString([], { month: "short", day: "2-digit" })
+    : "Date TBC";
+  return (
+    <View style={styles.homeFixtureRow}>
+      <Pressable
+        onPress={() => safeRouter.push(`/football/match/${item.fixture?.id}`)}
+        style={styles.homeFixtureMatch}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${home.name ?? "home team"} versus ${away.name ?? "away team"}`}
+      >
+        <View style={styles.homeFixtureTeam}>
+          <Text numberOfLines={1} style={[styles.homeFixtureTeamName, { textAlign: "right" }]}>{home.name ?? "Home"}</Text>
+          <Logo uri={home.logo} label={home.name ?? "Home"} size={27} />
+        </View>
+        <View style={styles.homeFixtureTime}>
+          <Text style={styles.homeFixtureKickoff}>{formatKickoff(item.fixture?.date)}</Text>
+          <Text style={styles.homeFixtureDate}>{dateLabel}</Text>
+        </View>
+        <View style={styles.homeFixtureTeam}>
+          <Logo uri={away.logo} label={away.name ?? "Away"} size={27} />
+          <Text numberOfLines={1} style={styles.homeFixtureTeamName}>{away.name ?? "Away"}</Text>
+        </View>
+      </Pressable>
+      <Pressable
+        onPress={() => safeRouter.push("/football/settings")}
+        style={styles.matchReminderButton}
+        accessibilityRole="button"
+        accessibilityLabel="Open match notification settings"
+        hitSlop={8}
+      >
+        <Ionicons name="notifications-outline" size={19} color="#1687F8" />
+      </Pressable>
+    </View>
+  );
+}
+
+function UpcomingMatchesCard({
+  items,
+  loading,
+  hasError,
+  onSeeAll,
+}: {
+  items: FootballRecord[];
+  loading: boolean;
+  hasError: boolean;
+  onSeeAll: () => void;
+}) {
+  return (
+    <View style={styles.homeSectionCard}>
+      <View style={styles.homeCardHeader}>
+        <View style={styles.homeCardHeading}>
+          <View style={styles.homeCardIcon}><Ionicons name="calendar" size={19} color="#1388F8" /></View>
+          <Text style={styles.homeCardTitle}>Upcoming Matches</Text>
+        </View>
+        <Pressable onPress={onSeeAll} style={styles.seeAllButton} accessibilityRole="button">
+          <Text style={styles.seeAllText}>See all</Text>
+          <Ionicons name="chevron-forward" size={16} color="#1388F8" />
+        </Pressable>
+      </View>
+      {loading ? (
+        <View style={styles.homeInlineState}>
+          <ActivityIndicator size="small" color="#1388F8" />
+          <Text style={styles.homeInlineText}>Loading today’s fixtures</Text>
+        </View>
+      ) : hasError ? (
+        <Text style={styles.homeInlineText}>Sign in to load today’s fixtures.</Text>
+      ) : items.length ? (
+        items.slice(0, 3).map((item) => <HomeFixtureRow key={String(item.fixture?.id)} item={item} />)
+      ) : (
+        <Text style={styles.homeInlineText}>No fixtures listed for today.</Text>
+      )}
+    </View>
+  );
+}
+
+function PopularCompetitionsCard({
+  items,
+  loading,
+  hasError,
+  onSeeAll,
+  onOpen,
+}: {
+  items: FootballRecord[];
+  loading: boolean;
+  hasError: boolean;
+  onSeeAll: () => void;
+  onOpen: (item: FootballRecord) => void;
+}) {
+  const competitions = items.slice(0, 6);
+  return (
+    <View style={styles.homeSectionCard}>
+      <View style={styles.homeCardHeader}>
+        <View style={styles.homeCardHeading}>
+          <View style={styles.homeCardIcon}><Ionicons name="trophy" size={19} color="#1388F8" /></View>
+          <Text style={styles.homeCardTitle}>Popular Competitions</Text>
+        </View>
+        <Pressable onPress={onSeeAll} style={styles.seeAllButton} accessibilityRole="button">
+          <Text style={styles.seeAllText}>See all</Text>
+          <Ionicons name="chevron-forward" size={16} color="#1388F8" />
+        </Pressable>
+      </View>
+      {loading ? (
+        <View style={styles.homeInlineState}>
+          <ActivityIndicator size="small" color="#1388F8" />
+          <Text style={styles.homeInlineText}>Loading competitions</Text>
+        </View>
+      ) : hasError ? (
+        <Text style={styles.homeInlineText}>Sign in to load competitions.</Text>
+      ) : competitions.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.competitionTiles}>
+          {competitions.map((item, index) => {
+            const league = item.league ?? item;
+            return (
+              <Pressable
+                key={String(league.id ?? index)}
+                onPress={() => onOpen(item)}
+                style={({ pressed }) => [styles.competitionTile, { opacity: pressed ? 0.82 : 1 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${league.name ?? "competition"}`}
+              >
+                <Logo uri={league.logo} label={league.name ?? "League"} size={39} />
+                <Text numberOfLines={2} style={styles.competitionTileName}>{league.name ?? "Competition"}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : (
+        <Text style={styles.homeInlineText}>Competitions will appear here.</Text>
+      )}
+    </View>
+  );
+}
+
 export function AfuFootballApp({ initialSection }: { initialSection?: string }) {
   const [date, setDate] = useState(() => new Date());
-  const [selectedSection, setSelectedSection] = useState(initialSection ?? "live");
+  const [selectedSection, setSelectedSection] = useState<HomeSectionKey>(() => initialHomeSection(initialSection));
   const insets = useSafeAreaInsets();
   useEffect(() => {
-    setSelectedSection(initialSection ?? "live");
+    setSelectedSection(initialHomeSection(initialSection));
   }, [initialSection]);
   const live = useFootballQuery<FootballRecord>("football:live", "live");
   const dated = useFootballQuery<FootballRecord>(`football:fixtures:${date.toISOString().slice(0, 10)}`, "fixtures", { date: date.toISOString().slice(0, 10) });
   const competitions = useFootballQuery<FootballRecord>("football:competitions", "competitions");
   const follows = useFollows();
-  const { colors, pitch, green } = usePalette();
+  const { colors, pitch, green, navy } = usePalette();
   const liveFixtures = fixtureItems(live.result?.response ?? []);
   const dateFixtures = fixtureItems(dated.result?.response ?? []);
   const compItems = competitions.result?.response ?? [];
   const following = follows.data ?? [];
-  const warning = recordWarning(live.result, dated.result, competitions.result);
+  const firstCompetition = compItems.find((row) => (row.league ?? row).id != null);
+  const firstLeague = firstCompetition?.league ?? firstCompetition ?? {};
+  const standingsSeason = firstLeague.season ?? firstLeague.seasons?.find((season: FootballRecord) => season.current)?.year ?? new Date().getFullYear();
+  const standingsQuery = useFootballQuery<FootballRecord>(
+    `football:home-standings:${firstLeague.id ?? "none"}:${standingsSeason}`,
+    "standings",
+    { league: firstLeague.id, season: standingsSeason },
+    selectedSection === "standings" && !!firstLeague.id,
+  );
+  const standingsRows: FootballRecord[] = standingsQuery.result?.response?.[0]?.league?.standings?.flat?.() ?? [];
+  const warning = recordWarning(live.result, dated.result, competitions.result, standingsQuery.result);
+  const homeError = selectedSection === "overview"
+    ? live.error ?? dated.error ?? competitions.error
+    : selectedSection === "matches"
+      ? live.error ?? dated.error
+      : selectedSection === "competitions"
+        ? competitions.error
+        : selectedSection === "teams"
+          ? follows.error
+          : standingsQuery.error ?? competitions.error;
 
   function changeDate(direction: number) {
     setDate((previous) => {
@@ -423,74 +690,152 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
     });
   }
 
-  const sections = [
-    { key: "live", label: "Matchday", icon: "radio-outline" as const },
-    { key: "competitions", label: "Competitions", icon: "trophy-outline" as const },
-    { key: "followed", label: "Following", icon: "bookmark-outline" as const },
-  ];
+  function openCompetition(item: FootballRecord) {
+    const league = item.league ?? item;
+    if (league.id) safeRouter.push(`/football/league/${league.id}`);
+  }
+
+  const sectionLoading = selectedSection === "overview"
+    ? live.loading || dated.loading || competitions.loading
+    : selectedSection === "matches"
+      ? live.loading || dated.loading
+      : selectedSection === "competitions"
+        ? competitions.loading
+        : selectedSection === "teams"
+          ? follows.loading
+          : standingsQuery.loading || competitions.loading;
+  const showGlobalNotice = !!homeError || (!sectionLoading && !!warning);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 108 }}>
-        <View style={styles.homeHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.eyebrow, { color: colors.textMuted }]}>AFUCHAT · FOOTBALL</Text>
-            <Text style={[styles.homeTitle, { color: colors.text }]}>The game,{"\n"}where you are.</Text>
-            <Text style={[styles.homeSubtitle, { color: colors.textSecondary }]}>From Kampala to every league in the feed.</Text>
-          </View>
-          <Pressable onPress={() => safeRouter.push("/football/search")} style={[styles.roundButton, { backgroundColor: colors.surface }]} accessibilityRole="button" accessibilityLabel="Search football">
-            <Ionicons name="search" size={20} color={colors.text} />
-          </Pressable>
-          <Pressable onPress={() => safeRouter.push("/football/settings")} style={[styles.roundButton, { backgroundColor: colors.surface }]} accessibilityRole="button" accessibilityLabel="Football settings">
-            <Ionicons name="options-outline" size={20} color={colors.text} />
-          </Pressable>
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: Math.max(insets.top, Platform.OS === "web" ? 67 : 10) + 4, paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 8) + 104 }}>
+        <FootballBrandHeader />
+        <ImageBackground
+          source={require("../../assets/images/football-hero.png")}
+          style={styles.heroImage}
+          imageStyle={styles.heroImagePhoto}
+          resizeMode="cover"
+          accessible
+          accessibilityLabel="Football stadium, live scores, fixtures and competitions"
+        />
 
-        <View style={[styles.heroCard, { backgroundColor: pitch }]}>
-          <View style={[styles.heroOrb, { backgroundColor: `${green}12` }]} />
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={[styles.liveDot, { backgroundColor: green }]} />
-            <Text style={[styles.heroLabel, { color: green }]}>YOUR FOOTBALL DESK</Text>
-          </View>
-          <Text style={[styles.heroCopy, { color: colors.text }]}>Every score{"\n"}has a home.</Text>
-          <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Follow the teams and competitions that matter to you.</Text>
-          <View style={styles.heroFooter}>
-            <Text style={[styles.heroNumber, { color: colors.text }]}>{following.length.toString().padStart(2, "0")}</Text>
-            <Text style={[styles.muted, { color: colors.textMuted, flex: 1, marginLeft: 8 }]}>followed teams and competitions</Text>
-            <Ionicons name="arrow-forward" size={20} color={green} />
-          </View>
-        </View>
-
-        <View style={[styles.sectionTabs, { backgroundColor: colors.surface }]}>
-          {sections.map((section) => {
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionTabs}>
+          {HOME_SECTIONS.map((section) => {
             const active = selectedSection === section.key;
             return (
-              <Pressable key={section.key} onPress={() => setSelectedSection(section.key)} style={[styles.sectionTab, active && { backgroundColor: colors.accent }]}>
-                <Ionicons name={section.icon} size={15} color={active ? "#FFFFFF" : colors.textMuted} />
-                <Text style={[styles.sectionTabText, { color: active ? "#FFFFFF" : colors.textSecondary }]}>{section.label}</Text>
+              <Pressable
+                key={section.key}
+                onPress={() => setSelectedSection(section.key)}
+                style={[styles.sectionTab, active && styles.sectionTabActive]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+              >
+                <Ionicons name={section.icon} size={18} color={active ? "#FFFFFF" : "#C5D1E0"} />
+                <Text style={[styles.sectionTabText, { color: active ? "#FFFFFF" : "#E1E8F1" }]}>{section.label}</Text>
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
-        {selectedSection === "live" ? (
+        {showGlobalNotice ? (
+          <DataNotice
+            error={homeError}
+            warning={warning}
+            onRetry={() => {
+              if (selectedSection === "teams") void follows.refresh();
+              else if (selectedSection === "competitions") void competitions.refresh();
+              else if (selectedSection === "standings") {
+                if (firstLeague.id) void standingsQuery.refresh();
+                else void competitions.refresh();
+              } else {
+                void live.refresh();
+                void dated.refresh();
+                if (selectedSection === "overview") void competitions.refresh();
+              }
+            }}
+          />
+        ) : null}
+
+        {selectedSection === "overview" ? (
           <>
-            <SectionTitle title="Live now" note="Scores refresh from the football provider." />
-            <DataNotice error={live.error} warning={warning} loading={live.loading} stale={live.isStale || !!live.result?.stale} onRetry={() => void live.refresh()} emptyText={!live.error && !live.loading && !liveFixtures.length ? "No live fixtures right now" : undefined} />
+            {liveFixtures.length ? (
+              <HomeLiveCard item={liveFixtures[0]} />
+            ) : live.loading ? (
+              <View style={styles.liveSkeleton}><ActivityIndicator color="#FFFFFF" /><Text style={styles.liveSkeletonText}>Checking live matches</Text></View>
+            ) : live.error ? null : (
+              <View style={styles.noLiveCard}>
+                <View style={styles.noLiveIcon}><Ionicons name="football-outline" size={23} color="#67B5FF" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.noLiveTitle}>No live matches right now</Text>
+                  <Text style={styles.noLiveSubtitle}>Today’s fixtures are listed below.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#8EA5C1" />
+              </View>
+            )}
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickActionRow}>
+              {[
+                { label: "Live Matches", icon: "flame" as const, tab: "matches" as const },
+                { label: "Today’s Fixtures", icon: "calendar" as const, tab: "matches" as const },
+                { label: "Leagues", icon: "trophy" as const, tab: "competitions" as const },
+                { label: "My Teams", icon: "star" as const, tab: "teams" as const },
+                { label: "Results", icon: "stats-chart" as const, tab: "matches" as const },
+              ].map((action) => (
+                <Pressable
+                  key={action.label}
+                  onPress={() => {
+                    setDate(new Date());
+                    setSelectedSection(action.tab);
+                  }}
+                  style={({ pressed }) => [styles.quickActionTile, { opacity: pressed ? 0.84 : 1 }]}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name={action.icon} size={22} color="#42A5FF" />
+                  <Text style={styles.quickActionLabel}>{action.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <UpcomingMatchesCard
+              items={dateFixtures}
+              loading={dated.loading && !dated.error}
+              hasError={!!dated.error}
+              onSeeAll={() => setSelectedSection("matches")}
+            />
+            <PopularCompetitionsCard
+              items={compItems}
+              loading={competitions.loading && !competitions.error}
+              hasError={!!competitions.error}
+              onSeeAll={() => setSelectedSection("competitions")}
+              onOpen={openCompetition}
+            />
+          </>
+        ) : null}
+
+        {selectedSection === "matches" ? (
+          <>
+            <SectionTitle
+              title="Live Matches"
+              note="Real-time scores from the football provider."
+              right={<Pressable onPress={() => safeRouter.push("/football/search")} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>}
+            />
+            {!homeError && live.loading ? <DataNotice loading /> : null}
+            {!homeError && !liveFixtures.length && !live.loading ? <DataNotice emptyText="No live matches right now" /> : null}
             {!live.error ? liveFixtures.map((item) => <FixtureRow key={String(item.fixture?.id)} item={item} />) : null}
-            <View style={{ marginTop: 19 }}>
+            <View style={{ marginTop: 8 }}>
               <SectionTitle
                 title="Fixtures"
-                note="Choose a date to see provider-listed matches."
+                note="Browse matches by date."
                 right={
                   <View style={styles.dateStepper}>
-                    <Pressable onPress={() => changeDate(-1)} style={[styles.stepButton, { backgroundColor: colors.surface }]} accessibilityLabel="Previous day"><Ionicons name="chevron-back" size={17} color={colors.text} /></Pressable>
-                    <Pressable onPress={() => setDate(new Date())} style={[styles.dateLabel, { backgroundColor: colors.surface }]}><Text style={[styles.dateLabelText, { color: colors.text }]}>{formatDateLabel(date)}</Text></Pressable>
-                    <Pressable onPress={() => changeDate(1)} style={[styles.stepButton, { backgroundColor: colors.surface }]} accessibilityLabel="Next day"><Ionicons name="chevron-forward" size={17} color={colors.text} /></Pressable>
+                    <Pressable onPress={() => changeDate(-1)} style={styles.stepButton} accessibilityLabel="Previous day"><Ionicons name="chevron-back" size={17} color="#FFFFFF" /></Pressable>
+                    <Pressable onPress={() => setDate(new Date())} style={styles.dateLabel}><Text style={styles.dateLabelText}>{formatDateLabel(date)}</Text></Pressable>
+                    <Pressable onPress={() => changeDate(1)} style={styles.stepButton} accessibilityLabel="Next day"><Ionicons name="chevron-forward" size={17} color="#FFFFFF" /></Pressable>
                   </View>
                 }
               />
-              <DataNotice error={dated.error} loading={dated.loading} stale={dated.isStale || !!dated.result?.stale} onRetry={() => void dated.refresh()} emptyText={!dated.error && !dated.loading && !dateFixtures.length ? "No fixtures listed for this date" : undefined} />
+              {!homeError && dated.loading ? <DataNotice loading /> : null}
+              {!dated.error && !dated.loading && !dateFixtures.length ? <DataNotice emptyText="No fixtures listed for this date" /> : null}
               {!dated.error ? dateFixtures.map((item) => <FixtureRow key={String(item.fixture?.id)} item={item} />) : null}
             </View>
           </>
@@ -498,25 +843,72 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
 
         {selectedSection === "competitions" ? (
           <>
-            <SectionTitle title="Competitions" note="Provider competitions currently available." />
-            <DataNotice error={competitions.error} warning={competitions.result?.warning} loading={competitions.loading} stale={competitions.isStale || !!competitions.result?.stale} onRetry={() => void competitions.refresh()} emptyText={!competitions.error && !competitions.loading && !compItems.length ? "No competitions available" : undefined} />
-            {compItems.map((item, index) => <CompetitionRow key={String(item.league?.id ?? item.id ?? index)} item={item} onPress={() => safeRouter.push(`/football/league/${item.league?.id ?? item.id}`)} />)}
+            <SectionTitle title="Popular Competitions" note="Explore leagues and tournaments." right={<Pressable onPress={() => safeRouter.push("/football/search")} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>} />
+            {!competitions.error && competitions.loading ? <DataNotice loading /> : null}
+            {!competitions.error && !competitions.loading && !compItems.length ? <DataNotice emptyText="No competitions available" /> : null}
+            {compItems.map((item, index) => <CompetitionRow key={String(item.league?.id ?? item.id ?? index)} item={item} onPress={() => openCompetition(item)} />)}
           </>
         ) : null}
 
-        {selectedSection === "followed" ? (
+        {selectedSection === "teams" ? (
           <>
-            <SectionTitle title="Your followed" note="Teams and competitions you want close." right={<Pressable onPress={() => safeRouter.push("/football/search")}><Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Find more</Text></Pressable>} />
-            {follows.error ? <DataNotice error={follows.error} onRetry={() => void follows.refresh()} /> : null}
-            {follows.isStale ? <DataNotice stale onRetry={() => void follows.refresh()} /> : null}
-            {follows.loading ? <DataNotice loading /> : !follows.error && following.length === 0 ? <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}><View style={[styles.emptyMark, { backgroundColor: pitch }]}><Ionicons name="bookmark-outline" size={22} color={green} /></View><Text style={[styles.cardTitle, { color: colors.text }]}>Your matchday starts here</Text><Text style={[styles.muted, { color: colors.textMuted, textAlign: "center", marginTop: 5 }]}>Follow a team or competition to keep it within reach.</Text><Pressable onPress={() => safeRouter.push("/football/search")} style={[styles.primaryButton, { backgroundColor: green, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Explore football</Text></Pressable></View> : null}
+            <SectionTitle
+              title="My Teams"
+              note="Clubs and competitions you follow."
+              right={<Pressable onPress={() => safeRouter.push("/football/search")} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>}
+            />
+            {follows.loading && !follows.error ? <DataNotice loading /> : null}
+            {!follows.error && !follows.loading && !following.length ? (
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+                <View style={[styles.emptyMark, { backgroundColor: pitch }]}><Ionicons name="star-outline" size={22} color={colors.accent} /></View>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Build your matchday</Text>
+                <Text style={[styles.muted, { color: colors.textMuted, textAlign: "center", marginTop: 5 }]}>Follow teams and competitions to keep them close.</Text>
+                <Pressable onPress={() => safeRouter.push("/football/search")} style={[styles.primaryButton, { backgroundColor: colors.accent, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Find teams</Text></Pressable>
+              </View>
+            ) : null}
             {following.map((item) => (
-              <Pressable key={item.id} onPress={() => safeRouter.push(item.entity_type === "team" ? `/football/team/${item.entity_id}` : `/football/league/${item.entity_id}`)} style={[styles.resultRow, { backgroundColor: colors.surface }]}>
+              <Pressable key={item.id} onPress={() => safeRouter.push(item.entity_type === "team" ? `/football/team/${item.entity_id}` : `/football/league/${item.entity_id}`)} style={({ pressed }) => [styles.resultRow, { backgroundColor: colors.surface, opacity: pressed ? 0.84 : 1 }]}>
                 <Logo uri={item.entity_logo} label={item.entity_name} size={42} />
                 <View style={{ flex: 1 }}><Text style={[styles.cardTitle, { color: colors.text }]}>{item.entity_name}</Text><Text style={[styles.muted, { color: colors.textMuted, marginTop: 3 }]}>{item.entity_type === "team" ? "Team" : "Competition"}</Text></View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={18} color={colors.accent} />
               </Pressable>
             ))}
+          </>
+        ) : null}
+
+        {selectedSection === "standings" ? (
+          <>
+            <SectionTitle title={firstLeague.name ? `${firstLeague.name} Standings` : "Standings"} note="Current table from the football provider." right={<Pressable onPress={() => setSelectedSection("competitions")} style={styles.headerLink}><Ionicons name="trophy-outline" size={18} color="#FFFFFF" /></Pressable>} />
+            {!firstLeague.id ? (
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
+                <View style={[styles.emptyMark, { backgroundColor: pitch }]}><Ionicons name="bar-chart-outline" size={22} color={colors.accent} /></View>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Choose a competition</Text>
+                <Text style={[styles.muted, { color: colors.textMuted, textAlign: "center", marginTop: 5 }]}>Open a league to view its current table.</Text>
+                <Pressable onPress={() => setSelectedSection("competitions")} style={[styles.primaryButton, { backgroundColor: colors.accent, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Browse competitions</Text></Pressable>
+              </View>
+            ) : standingsRows.length ? (
+              <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+                <SectionTitle title="Table" tone="card" />
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHead, { color: colors.textMuted, width: 28 }]}>#</Text>
+                  <Text style={[styles.tableHead, { color: colors.textMuted, flex: 1 }]}>TEAM</Text>
+                  <Text style={[styles.tableHead, { color: colors.textMuted, width: 36, textAlign: "right" }]}>PL</Text>
+                  <Text style={[styles.tableHead, { color: colors.textMuted, width: 39, textAlign: "right" }]}>GD</Text>
+                  <Text style={[styles.tableHead, { color: colors.accent, width: 38, textAlign: "right" }]}>PTS</Text>
+                </View>
+                {standingsRows.map((row, index) => (
+                  <Pressable key={`${row.team?.id}-${index}`} onPress={() => safeRouter.push(`/football/team/${row.team?.id}`)} style={styles.tableRow}>
+                    <Text style={[styles.tableRank, { color: colors.textMuted }]}>{row.rank}</Text>
+                    <View style={styles.tableTeam}><Logo uri={row.team?.logo} label={row.team?.name} size={24} /><Text numberOfLines={1} style={[styles.tableTeamName, { color: colors.text }]}>{row.team?.name}</Text></View>
+                    <Text style={[styles.tableStat, { color: colors.textSecondary }]}>{row.all?.played ?? "—"}</Text>
+                    <Text style={[styles.tableStat, { color: colors.textSecondary }]}>{row.goalsDiff ?? "—"}</Text>
+                    <Text style={[styles.tablePoints, { color: colors.accent }]}>{row.points ?? "—"}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <DataNotice error={standingsQuery.error} loading={standingsQuery.loading} onRetry={() => void standingsQuery.refresh()} emptyText={!standingsQuery.error && !standingsQuery.loading ? "Standings are not available for this competition" : undefined} />
+            )}
           </>
         ) : null}
       </ScrollView>
