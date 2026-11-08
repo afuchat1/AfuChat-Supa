@@ -106,7 +106,6 @@ const NAV_ROUTES: Record<string, string> = {
   "watch-history":    "/watch-history",
   // ── Commerce & mini-apps ──────────────────────────────────────────────────
   shop:               "/app/afumarket",
-  games:              "/app/afugames",
   freelance:          "/app/afufreelance",
   gifts:              "/app/afugifts",
   business:           "/app/afubusiness",
@@ -131,7 +130,7 @@ const SYSTEM_ROUTES = new Set([
   "terms", "about", "help", "feedback", "likes",
   "explore", "trending", "feed", "home", "index", "join",
   "achievements", "watch-history",
-  "business", "collections", "games", "welcome",
+  "business", "collections", "welcome",
   "store", "paid-communities", "phone-contacts", "file-manager",
   "create-post", "username-market", "user-discovery",
   "profile-not-found", "profile-private",

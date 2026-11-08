@@ -1,7 +1,6 @@
 export const APP_ROUTE_IDS = [
   "afupay",
   "afumarket",
-  "afugames",
   "afubusiness",
   "afusearch",
   "afufreelance",

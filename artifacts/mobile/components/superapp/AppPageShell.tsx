@@ -20,9 +20,6 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "orders", label: "Orders", icon: "receipt-outline", href: "/app/afumarket?section=orders" },
     { key: "sell", label: "Sell", icon: "pricetag-outline", href: "/app/afumarket?section=apply-seller" },
   ],
-  afugames: [
-    { key: "games", label: "AfuGames", icon: "game-controller-outline", href: "/app/afugames" },
-  ],
   afubusiness: [
     { key: "home", label: "Overview", icon: "home-outline", href: "/app/afubusiness" },
     { key: "analytics", label: "Analytics", icon: "bar-chart-outline", href: "/app/afubusiness?section=analytics" },

@@ -65,14 +65,6 @@ const CATEGORIES: Category[] = [
         featuredSub: "Shop from verified stores and sellers.",
       },
       {
-        id: "afugames",
-        label: "AfuGames",
-        icon: "game-controller",
-        gradient: ["#FF3B30", "#FF6B35"],
-         route: "/app/afugames",
-        featuredSub: "Play mini games and compete with friends.",
-      },
-      {
         id: "afumusic",
         label: "Music",
         icon: "musical-notes",
@@ -216,7 +208,7 @@ const CATEGORIES: Category[] = [
 ];
 
 const ALL_PAGES = CATEGORIES.flatMap((c) => c.pages);
-const FEATURED_IDS = ["afupay", "afumarket", "afugames", "afumatch", "afufreelance"];
+const FEATURED_IDS = ["afupay", "afumarket", "afumatch", "afufreelance"];
 
 function resolveGradient(gradient: [string, string], accent: string): [string, string] {
   return gradient.map((c) => (c === "#1018D8" ? accent : c)) as [string, string];

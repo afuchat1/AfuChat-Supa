@@ -21,15 +21,6 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     badge: "NEW",
   },
   {
-    id: "afugames",
-    name: "AfuGames",
-    description: "Play games and compete with friends.",
-    version: "1.0.0",
-    icon: "game-controller",
-    gradient: ["#FF3B30", "#FF6B35"] as const,
-    keepAlive: false,
-  },
-  {
     id: "afubusiness",
     name: "AfuBusiness",
     description: "Tools and analytics for your business.",

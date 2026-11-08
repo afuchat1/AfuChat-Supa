@@ -103,7 +103,6 @@ const NAV_TESTS: NavTest[] = [
   { url: "afuchat://watch-history",expectedType: "navigate", expectedPath: "/watch-history",     description: "Watch history" },
   // ── Commerce & mini-apps ────────────────────────────────────────────────
   { url: "afuchat://shop",         expectedType: "navigate", expectedPath: "/app/afumarket",     description: "Shop" },
-  { url: "afuchat://games",        expectedType: "navigate", expectedPath: "/app/afugames",      description: "Games" },
   { url: "afuchat://freelance",    expectedType: "navigate", expectedPath: "/app/afufreelance",  description: "Freelance" },
   { url: "afuchat://gifts",        expectedType: "navigate", expectedPath: "/app/afugifts",      description: "Gifts" },
   { url: "afuchat://business",     expectedType: "navigate", expectedPath: "/app/afubusiness",   description: "Business" },
