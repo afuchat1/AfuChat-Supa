@@ -139,6 +139,7 @@ import { chatActivityLabel, normalizeChatActivity, type ChatActivity } from "@/l
 import { BlurView } from "expo-blur";
 import WallpaperOverlay from "@/components/chat/WallpaperOverlay";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
+import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
 import { getActivePlanTier, getSubscriptionPrice } from "@/lib/creatorEntitlements";
 import EmojiStickerPicker from "@/components/chat/EmojiStickerPicker";
 import GiftPickerSheet, { DbGift } from "@/components/gifts/GiftPickerSheet";
@@ -161,15 +162,6 @@ async function persistIncomingStatus(
 ): Promise<void> {
   if (messageIds.length === 0) return;
 
-  const now = new Date().toISOString();
-  await Promise.all(messageIds.map((messageId) => markMessageRead(messageId, now)));
-  const rows = messageIds.map((messageId) => ({
-    message_id: messageId,
-    user_id: userId,
-    delivered_at: now,
-    ...(readReceipts ? { read_at: now } : {}),
-  }));
-
   if (!isOnline()) {
     try {
       await enqueue("mark_read", { chat_id: chatId, user_id: userId, message_ids: messageIds, read_receipts: readReceipts });
@@ -177,6 +169,16 @@ async function persistIncomingStatus(
     return;
   }
 
+  const receipts = await acknowledgeMessagesDelivered(messageIds, userId);
+  await Promise.all(receipts.map((receipt) => markMessageDelivered(receipt.message_id, receipt.delivered_at)));
+  if (!readReceipts) return;
+
+  const now = new Date().toISOString();
+  const rows = messageIds.map((messageId) => ({
+    message_id: messageId,
+    user_id: userId,
+    read_at: now,
+  }));
   const { error } = await supabase
     .from("message_status")
     .upsert(rows, { onConflict: "message_id,user_id" });
@@ -3762,10 +3764,7 @@ function ChatScreen() {
                 user.id,
                 shouldMarkRead,
               );
-              // Always broadcast "delivered" so the sender gets double-grey ticks.
-              // Only broadcast "read" if the user has read receipts enabled (privacy).
               const msgIds = toMark.map((m: any) => m.id);
-              typingChannelRef.current?.send({ type: "broadcast", event: "delivered", payload: { reader_id: user.id, message_ids: msgIds, chat_id: id, delivered_at: now } });
               if (shouldMarkRead) {
                 typingChannelRef.current?.send({ type: "broadcast", event: "read", payload: { reader_id: user.id, message_ids: msgIds, chat_id: id, read_at: now } });
               }
@@ -4482,9 +4481,6 @@ function ChatScreen() {
               user.id,
               chatPrefs.read_receipts,
             );
-            // Always tell the sender we received it (double-grey) —
-            // only tell them we read it if read receipts are enabled (double-blue).
-            typingChannelRef.current?.send({ type: "broadcast", event: "delivered", payload: { reader_id: user.id, message_ids: [newMsg.id], chat_id: activeChatId, delivered_at: _rtNow } });
             if (chatPrefs.read_receipts) {
               typingChannelRef.current?.send({ type: "broadcast", event: "read", payload: { reader_id: user.id, message_ids: [newMsg.id], chat_id: activeChatId, read_at: _rtNow } });
             }
@@ -4644,23 +4640,6 @@ function ChatScreen() {
       }
     };
 
-    const handleDeliveredEvent = (payload: any) => {
-      const { reader_id, message_ids, delivered_at: rawDeliveredAt } = (payload.payload || {}) as { reader_id: string; message_ids: string[]; delivered_at?: string };
-      if (!reader_id || reader_id === user?.id || !Array.isArray(message_ids)) return;
-      const deliveredSet = new Set(message_ids);
-      const deliveredAt = rawDeliveredAt || new Date().toISOString();
-      void Promise.all(message_ids.map((messageId) => markMessageDelivered(messageId, deliveredAt)));
-      setMessages((prev) =>
-        prev.map((m) => {
-          if (m.sender_id !== user?.id || !deliveredSet.has(m.id)) return m;
-          const nextDeliveredAt = latestReceiptTime(m.delivered_at, deliveredAt);
-          const nextStatus = m.status === "read" || m.read_at ? "read" : "delivered";
-          if (nextDeliveredAt === m.delivered_at && nextStatus === m.status) return m;
-          return { ...m, status: nextStatus, delivered_at: nextDeliveredAt };
-        })
-      );
-    };
-
     const handleReadEvent = (payload: any) => {
       const { reader_id, message_ids, read_at: rawReadAt } = (payload.payload || {}) as { reader_id: string; message_ids: string[]; read_at?: string };
       if (!reader_id || reader_id === user?.id || !Array.isArray(message_ids)) return;
@@ -4691,10 +4670,6 @@ function ChatScreen() {
           if ((payload.payload?.chat_id ?? id) !== id) return;
           handleTypingEvent(payload);
         })
-        .on("broadcast", { event: "delivered" }, (payload: any) => {
-          if ((payload.payload?.chat_id ?? id) !== id) return;
-          handleDeliveredEvent(payload);
-        })
         .on("broadcast", { event: "read" }, (payload: any) => {
           if ((payload.payload?.chat_id ?? id) !== id) return;
           handleReadEvent(payload);
@@ -4708,7 +4683,6 @@ function ChatScreen() {
       receiveChannel = supabase.channel(`typing:${id}`, { config: { broadcast: { self: false } } });
       receiveChannel
         .on("broadcast", { event: "typing" }, handleTypingEvent)
-        .on("broadcast", { event: "delivered" }, handleDeliveredEvent)
         .on("broadcast", { event: "read" }, handleReadEvent)
         .subscribe();
       typingChannelRef.current = receiveChannel;

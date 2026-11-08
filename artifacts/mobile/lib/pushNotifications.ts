@@ -4,6 +4,9 @@ import * as Device from "expo-device";
 import { supabase } from "@/lib/supabase";
 import { getActiveChatId } from "@/lib/chatVisited";
 import { isExpoGo } from "@/lib/expoEnvironment";
+import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
+import { enqueue } from "@/lib/storage/syncQueue";
+import { isOnline } from "@/lib/offlineStore";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
@@ -102,21 +105,54 @@ function getTarget(response: PushResponse) {
 async function markRead(response: PushResponse, userId: string) {
   const { chatId, messageId } = getTarget(response);
   if (!chatId && !messageId) return;
-  const now = new Date().toISOString();
-  if (messageId) {
-    await supabase.from("message_status").upsert(
-      { message_id: messageId, user_id: userId, delivered_at: now, read_at: now },
-      { onConflict: "message_id,user_id" },
-    );
+  let messageIds = messageId ? [messageId] : [];
+  if (!messageIds.length && chatId) {
+    const { data } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("chat_id", chatId)
+      .neq("sender_id", userId)
+      .limit(200);
+    messageIds = (data ?? []).map((message) => message.id);
+  }
+  if (!messageIds.length) return;
+
+  if (!isOnline()) {
+    await enqueue("mark_read", {
+      chat_id: chatId,
+      user_id: userId,
+      message_ids: messageIds,
+      read_receipts: true,
+    }).catch(() => {});
     return;
   }
-  const { data } = await supabase.from("messages").select("id").eq("chat_id", chatId).neq("sender_id", userId).limit(200);
-  if (data?.length) {
-    await supabase.from("message_status").upsert(
-      data.map((message) => ({ message_id: message.id, user_id: userId, delivered_at: now, read_at: now })),
-      { onConflict: "message_id,user_id" },
-    );
+
+  await acknowledgeMessagesDelivered(messageIds, userId);
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("message_status").upsert(
+    messageIds.map((id) => ({ message_id: id, user_id: userId, read_at: now })),
+    { onConflict: "message_id,user_id" },
+  );
+  if (error) {
+    await enqueue("mark_read", {
+      chat_id: chatId,
+      user_id: userId,
+      message_ids: messageIds,
+      read_receipts: true,
+    }).catch(() => {});
   }
+}
+
+export async function acknowledgeNotificationDelivery(
+  notification: PushResponse,
+  userId: string,
+) {
+  const { categoryId, messageId } = getTarget(notification);
+  if (
+    !messageId ||
+    (categoryId !== null && categoryId !== PUSH_CATEGORY_MESSAGE)
+  ) return;
+  await acknowledgeMessagesDelivered([messageId], userId);
 }
 
 async function markNotificationRead(response: PushResponse, userId: string) {
@@ -243,22 +279,28 @@ function defineBackgroundTask() {
   try {
     const TaskManager = require("expo-task-manager") as typeof import("expo-task-manager");
     TaskManager.defineTask(PUSH_BACKGROUND_TASK, async ({ data, error }: any) => {
-      if (error || !data || !data.actionIdentifier) return;
-      if (
-        data.actionIdentifier !== PUSH_ACTION_REPLY &&
-        data.actionIdentifier !== PUSH_ACTION_MUTE &&
-        data.actionIdentifier !== PUSH_ACTION_MARK_READ &&
-        data.actionIdentifier !== PUSH_ACTION_DECLINE_CALL
-      ) return;
+      if (error || !data) return;
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id;
-      if (userId) await handleNotificationResponse(data as PushResponse, userId);
+      if (!userId) return;
+      if (typeof data.actionIdentifier === "string") {
+        if (
+          data.actionIdentifier === PUSH_ACTION_REPLY ||
+          data.actionIdentifier === PUSH_ACTION_MUTE ||
+          data.actionIdentifier === PUSH_ACTION_MARK_READ ||
+          data.actionIdentifier === PUSH_ACTION_DECLINE_CALL
+        ) {
+          await handleNotificationResponse(data as PushResponse, userId);
+        }
+        await acknowledgeNotificationDelivery(data as PushResponse, userId);
+        return;
+      }
+      await acknowledgeNotificationDelivery(data as PushResponse, userId);
     });
 
-    // Defining a task is not enough: Expo only delivers background action
-    // responses to tasks that have also been registered with the notifications
-    // module. Keep this registration idempotent because this module can be
-    // imported by both the root layout and a notification manager.
+    // Register once for both incoming background notifications and their
+    // action responses. This module can be imported by the root layout and
+    // notification manager, so registration must remain idempotent.
     const notifications = getNotifications();
     if (notifications?.registerTaskAsync) {
       backgroundTaskRegistration = notifications.registerTaskAsync(PUSH_BACKGROUND_TASK)
@@ -362,6 +404,10 @@ export async function registerPushToken(): Promise<string | null> {
 
 export function addNotificationResponseListener(listener: (response: PushResponse) => void) {
   return getNotifications()?.addNotificationResponseReceivedListener(listener as any) ?? null;
+}
+
+export function addNotificationReceivedListener(listener: (notification: any) => void) {
+  return getNotifications()?.addNotificationReceivedListener(listener) ?? null;
 }
 
 export async function getLastNotificationResponse() {

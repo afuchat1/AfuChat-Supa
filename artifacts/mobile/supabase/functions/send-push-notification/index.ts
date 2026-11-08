@@ -227,6 +227,17 @@ Deno.serve(async (request) => {
               // actions to the system notification.
             },
           },
+          apns: {
+            headers: {
+              "apns-push-type": "alert",
+              "apns-priority": "10",
+            },
+            payload: {
+              aps: {
+                "content-available": 1,
+              },
+            },
+          },
         },
       }),
     });

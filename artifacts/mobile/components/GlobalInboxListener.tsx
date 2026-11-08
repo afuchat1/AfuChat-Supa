@@ -12,7 +12,8 @@
  *  3. Auto-reconnects on CLOSED / CHANNEL_ERROR with exponential backoff
  *     (max 15 s) so the ~20 ms fast path survives network hiccups.
  *
- * The listener only delivers messages to the in-app event bus.
+ * Each accepted inbox message is also acknowledged to Supabase as delivered.
+ * This remains distinct from the recipient opening or reading the chat.
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -21,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { emitIncomingMessage, IncomingMessage } from "@/lib/globalMessageEvents";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
 
 export function GlobalInboxListener() {
   const { user, isAuthenticated } = useAuth();
@@ -42,6 +44,11 @@ export function GlobalInboxListener() {
       evictionTimers.current.delete(msg.id);
     }, 15_000);
     evictionTimers.current.set(msg.id, timer);
+
+    const recipientId = userIdRef.current;
+    if (recipientId) {
+      void acknowledgeMessagesDelivered([msg.id], recipientId);
+    }
 
     // Emit to global event bus → chat/[id].tsx fast path picks it up
     emitIncomingMessage(msg);

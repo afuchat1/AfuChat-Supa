@@ -4,6 +4,8 @@ import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import {
   addNotificationResponseListener,
+  addNotificationReceivedListener,
+  acknowledgeNotificationDelivery,
   clearLastNotificationResponse,
   configurePushNotifications,
   dismissChatNotifications,
@@ -78,6 +80,9 @@ export default function PushNotificationManager() {
     const responseSubscription = addNotificationResponseListener((response) => {
       void handleResponse(response);
     });
+    const deliverySubscription = addNotificationReceivedListener((notification) => {
+      void acknowledgeNotificationDelivery({ notification } as any, user.id);
+    });
     getLastNotificationResponse().then((response) => {
       if (response) void handleResponse(response);
     }).catch(() => {});
@@ -95,6 +100,7 @@ export default function PushNotificationManager() {
       clearTimeout(timer);
       subscription.remove();
       responseSubscription?.remove();
+      deliverySubscription?.remove();
     };
   }, [
     isAuthenticated,

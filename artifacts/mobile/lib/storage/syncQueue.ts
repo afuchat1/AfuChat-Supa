@@ -15,6 +15,7 @@ export type QueueActionType =
   | "follow_user"
   | "unfollow_user"
   | "add_reaction"
+  | "mark_delivered"
   | "mark_read"
   | "delete_message";
 
@@ -174,16 +175,30 @@ async function executeAction(
           ? payload.message_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
           : [];
         if (messageIds.length === 0) return true;
+        const { error: deliveryError } = await supabase.rpc("acknowledge_message_delivery", {
+          p_message_ids: messageIds,
+        });
+        if (deliveryError) return false;
+        if (payload.read_receipts === false) return true;
         const now = new Date().toISOString();
         const rows = messageIds.map((messageId) => ({
           message_id: messageId,
           user_id: payload.user_id,
-          delivered_at: now,
-          ...(payload.read_receipts !== false ? { read_at: now } : {}),
+          read_at: now,
         }));
         const { error } = await supabase
           .from("message_status")
           .upsert(rows, { onConflict: "message_id,user_id" });
+        return !error;
+      }
+      case "mark_delivered": {
+        const messageIds = Array.isArray(payload.message_ids)
+          ? payload.message_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+          : [];
+        if (messageIds.length === 0) return true;
+        const { error } = await supabase.rpc("acknowledge_message_delivery", {
+          p_message_ids: messageIds,
+        });
         return !error;
       }
       case "add_reaction": {
