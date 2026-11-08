@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { getCachedUserId } from "@/lib/offlineStore";
@@ -8,10 +8,8 @@ import { storage, KEYS } from "@/lib/storage/mmkv";
 import { safeRouter } from "@/lib/navUtils";
 import { handleIncomingUrl, isAfuChatDeepLink } from "@/lib/deepLinkHandler";
 import { LANGUAGE_PREFERENCE_KEY } from "@/context/LanguageContext";
-import { useTheme } from "@/hooks/useTheme";
 
 export default function IndexScreen() {
-  const { colors } = useTheme();
   const { session, profile, loading, user } = useAuth();
   const redirected = useRef(false);
   const knownIdentityRef = useRef(false);
@@ -185,26 +183,8 @@ export default function IndexScreen() {
     return () => clearTimeout(timeout);
   }, [handle, loading, user?.id, initialUrlChecked, initialDeepLinkPending, languageChecked, languageSelected]);
 
-  // This route is only a navigation handoff. Returning users are routed from
-  // the synchronous local identity cache, so never show an account-restoring
-  // or loading message while background auth work continues.
-  return (
-    <View style={[styles.boot, { backgroundColor: colors.background }]}>
-      <ActivityIndicator size="small" />
-      <Text style={styles.bootLabel}>Loading AfuChat…</Text>
-    </View>
-  );
+  // This route is only a navigation handoff. Keep it visually empty while
+  // the redirect effects resolve; never show a branded loader or block the
+  // destination with a separate loading screen.
+  return null;
 }
-
-const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  bootLabel: {
-    color: "#64748b",
-    fontSize: 14,
-  },
-});
