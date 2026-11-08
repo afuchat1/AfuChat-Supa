@@ -228,12 +228,14 @@ export default function AfuPayApp({
       const [
         { data: xpSent },
         { data: xpReceived },
+        { data: xpActivity },
         { data: acoinTx },
         { data: musicTx },
         { data: settings },
       ] = await Promise.all([
         supabase.from("xp_transfers").select("id,amount,created_at,status,receiver_id,profiles!xp_transfers_receiver_id_fkey(handle)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(40),
         supabase.from("xp_transfers").select("id,amount,created_at,status,sender_id,profiles!xp_transfers_sender_id_fkey(handle)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(40),
+        supabase.from("xp_activity_log").select("id,activity_type,xp_amount,created_at,metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(80),
         supabase.from("acoin_transactions").select("id,amount,transaction_type,created_at,metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(60),
         supabase.from("music_transactions").select("id,track_id,buyer_id,creator_id,amount_acoin,created_at").or(`buyer_id.eq.${user.id},creator_id.eq.${user.id}`).order("created_at", { ascending: false }).limit(60),
         supabase.from("currency_settings").select("nexa_to_acoin_rate,conversion_fee_percent").limit(1).single(),
@@ -276,6 +278,36 @@ export default function AfuPayApp({
       (xpReceived || []).forEach((t: any) => {
         const p = t.profiles;
         all.push({ id: t.id, type: "nexa_received", label: "Nexa Received", icon: "arrow-down-circle", color: Colors.brand, amount: t.amount, currency: "nexa", created_at: t.created_at, counterparty: p ? `@${p.handle}` : undefined, status: t.status || "completed" });
+      });
+      (xpActivity || []).forEach((t: any) => {
+        const amount = Number(t.xp_amount) || 0;
+        const activityType = String(t.activity_type || "");
+        const alreadyInTransfers = activityType === "nexa_transfer_received" && (xpReceived || []).some((transfer: any) =>
+          (t.metadata?.from_user_id
+            ? transfer.sender_id === t.metadata.from_user_id
+            : t.metadata?.from_handle
+              ? String(transfer.profiles?.handle || "").toLowerCase() === String(t.metadata.from_handle).replace(/^@/, "").toLowerCase()
+              : true) &&
+          Number(transfer.amount) === amount &&
+          Math.abs(new Date(transfer.created_at).getTime() - new Date(t.created_at).getTime()) < 120_000
+        );
+        if (alreadyInTransfers) return;
+        const label = activityType === "nexa_transfer_received"
+          ? "Nexa Received"
+          : activityType === "nexa_transfer_rollback"
+            ? "Nexa Refund"
+            : `${activityType.replace(/_/g, " ").replace(/\b\w/g, (letter: string) => letter.toUpperCase()) || "Activity"} Reward`;
+        all.push({
+          id: `xp-activity-${t.id}`,
+          type: `nexa_${activityType || "activity_reward"}`,
+          label,
+          icon: activityType.startsWith("nexa_transfer") ? "arrow-down-circle" : "trophy",
+          color: amount >= 0 ? Colors.brand : "#FF9500",
+          amount,
+          currency: "nexa",
+          created_at: t.created_at,
+          status: "completed",
+        });
       });
       (acoinTx || []).forEach((t: any) => {
         const m = acoinLabels[t.transaction_type];
@@ -340,9 +372,11 @@ export default function AfuPayApp({
     if (!user) return;
     const ch = supabase.channel(`afupay:${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_activity_log", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "music_transactions", filter: `buyer_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "music_transactions", filter: `creator_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "xp_transfers", filter: `sender_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "money_requests", filter: `target_id=eq.${user.id}` }, () => loadPendingCount())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
