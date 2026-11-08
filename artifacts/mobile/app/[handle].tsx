@@ -38,6 +38,11 @@ const RESERVED_ROUTES = new Set([
   "collections", "language-settings", "device-security",
   "phone-contacts", "user-discovery", "username-market", "digital-events",
   "file-manager", "business", "business-verification", "paid-communities", "help",
+  // Every top-level app route is reserved before the public-handle resolver.
+  // This prevents valid feature paths from being mistaken for usernames.
+  "account-deletion", "app", "apps", "call", "chat-info", "child-safety",
+  "football", "id", "language-select", "privacy", "profile-not-found",
+  "profile-private", "report", "share", "terms",
 ]);
 
 type ResolvedTarget =
