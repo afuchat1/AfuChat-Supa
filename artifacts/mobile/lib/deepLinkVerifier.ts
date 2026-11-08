@@ -40,11 +40,11 @@ type NavTest = {
 
 const WORD_ROUTES = [
   // a–c
-  "about", "achievements", "ai", "article",
+  "about", "achievements", "ai", "app", "apps", "article",
   "business", "channel", "chat", "collections", "company", "contact",
   // f–j
-  "followers", "freelance", "games", "gifts", "group",
-  "help", "id", "join", "login",
+  "call", "football", "followers", "freelance", "games", "gifts", "group",
+  "help", "id", "join", "login", "share",
   // m–r
   "match", "moments", "onboarding", "p", "post", "premium", "prestige",
   "privacy", "profile", "register", "report",
@@ -54,9 +54,9 @@ const WORD_ROUTES = [
 ] as const;
 
 const HYPHEN_ROUTES = [
-  "business-verification", "chat-info",
+  "account-deletion", "business-verification", "chat-info", "child-safety",
   "create-post", "device-security", "digital-events", "digital-id",
-  "file-manager", "language-settings", "mini-programs",
+  "file-manager", "language-select", "language-settings", "mini-programs",
   "my-posts", "paid-communities", "phone-contacts", "profile-not-found",
   "profile-private", "qr-scanner", "red-envelope", "reset-password",
   "saved-posts", "update-password", "user-discovery", "username-market",
