@@ -315,9 +315,39 @@ function WebGlobalStyles() {
         height: 100%;
         margin: 0;
       }
+      /* Keep every React Native Web text style on the same bundled
+         Inter family, with a consistent sans-serif fallback while it loads. */
+      @font-face {
+        font-family: "Inter_400Regular";
+        src: local("Inter"), local("Roboto"), local("Arial");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Inter_500Medium";
+        src: local("Inter Medium"), local("Roboto Medium"), local("Arial");
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Inter_600SemiBold";
+        src: local("Inter Semi Bold"), local("Roboto Medium"), local("Arial");
+        font-style: normal;
+        font-weight: 600;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: "Inter_700Bold";
+        src: local("Inter Bold"), local("Roboto Bold"), local("Arial");
+        font-style: normal;
+        font-weight: 700;
+        font-display: swap;
+      }
       body {
         overflow: hidden;
-        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: "Inter_400Regular", sans-serif;
         direction: ltr;
         text-align: left;
       }
