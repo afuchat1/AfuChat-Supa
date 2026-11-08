@@ -1,3 +1,4 @@
+- [AfuFootball data provider](afufootball-data-provider.md) — API-Football Free is limited to 100 requests/day, so keep provider calls server-side, shared, and cached.
 - [AfuSearch results policy](afusearch-results-policy.md) — Use a flat mixed-content feed and one history/trending overlay; keep image search scoped to public AfuChat posts.
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
 - [Expo Go QR verification](expo-go-qr-verification.md) — If the managed tunnel is unavailable, use the installed ngrok provider and verify the Android bundle before sharing its QR.
