@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -155,35 +155,14 @@ function SubHeader({ title, onBack, colors }: { title: string; onBack: () => voi
 function WalletHeader({ colors, insets, onBack }: { colors: any; insets: { top: number }; onBack: () => void }) {
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 18) : insets.top;
   return (
-    <View style={[s.walletHeader, { backgroundColor: "#FFFEFA", paddingTop: topInset }]}>
+    <View style={[s.walletHeader, { backgroundColor: colors.background, paddingTop: topInset }]}>
       <View style={s.walletHeaderRow}>
         <GlassBackButton onPress={onBack} accessibilityLabel="Go back" />
         <View style={s.walletHeaderTitleWrap}>
-          <Text style={[s.walletHeaderTitle, { color: "#171717" }]}>钱包</Text>
-          <Text style={[s.walletHeaderSubtitle, { color: "#66645D" }]}>Money 和 services in one place</Text>
+          <Text style={[s.walletHeaderTitle, { color: colors.text }]}>AfuPay</Text>
+          <Text style={[s.walletHeaderSubtitle, { color: colors.textMuted }]}>Your money, in one place</Text>
         </View>
         <View style={s.walletHeaderRightSpacer} />
-      </View>
-    </View>
-  );
-}
-
-function WalletBottomNav({ view, setView, insets }: { view: AppView; setView: (view: AppView) => void; insets: { bottom: number } }) {
-  return (
-    <View style={[s.bottomNavDock, { bottom: Math.max(insets.bottom, Platform.OS === "web" ? 10 : 8) }]}>
-      <View style={s.bottomNavPill}>
-        {([
-          { key: "home", label: "Overview", icon: "wallet-outline", active: view === "home", action: () => setView("home") },
-          { key: "history", label: "Activity", icon: "receipt-outline", active: view === "history", action: () => setView("history") },
-          { key: "topup", label: "Top up", icon: "add-circle-outline", active: view === "topup", action: () => setView("topup") },
-          { key: "requests", label: "Requests", icon: "arrow-down-circle-outline", active: view === "requests", action: () => setView("requests") },
-          { key: "services", label: "Services", icon: "grid-outline", active: view === "services", action: () => setView("services") },
-        ] as const).map((item) => (
-          <TouchableOpacity key={item.key} onPress={item.action} activeOpacity={0.78} style={[s.bottomNavItem, item.active && s.bottomNavItemActive]}>
-            <Ionicons name={item.icon as any} size={24} color={item.active ? "#2525C4" : "#66645B"} />
-            <Text numberOfLines={1} style={[s.bottomNavLabel, { color: item.active ? "#2525C4" : "#66645B" }]}>{item.label}</Text>
-          </TouchableOpacity>
-        ))}
       </View>
     </View>
   );
@@ -210,12 +189,19 @@ export default function AfuPayApp({
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
   useEffect(() => {
-    if (initialRecipientId) setView("send");
-    else if (initialView) setView(initialView);
+    setView(initialRecipientId ? "send" : initialView ?? "home");
   }, [initialRecipientId, initialView]);
 
   const acoin = profile?.acoin ?? 0;
   const nexa = profile?.xp ?? 0;
+  const navigateToView = useCallback((nextView: AppView) => {
+    setView(nextView);
+    const href = nextView === "home" ? "/app/afupay" : `/app/afupay?section=${nextView}`;
+    safeRouter.replace(href as any);
+  }, []);
+  const openMoneyRequest = useCallback(() => {
+    safeRouter.push("/app/afupay?section=request" as any);
+  }, []);
   const handleHomeBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else safeRouter.replace("/apps" as any);
@@ -386,69 +372,107 @@ export default function AfuPayApp({
     : txFilter === "gifts" ? transactions.filter(t => ["gift_sent", "gift_received", "red_envelope_sent", "red_envelope_claimed"].includes(t.type))
     : transactions.filter(t => t.currency === txFilter);
 
-  if (view === "history") return <View style={[s.walletRoot, { flex: 1 }]}><HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
-  if (view === "topup") return <View style={[s.walletRoot, { flex: 1 }]}><TopUpView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
-  if (view === "send") return <View style={[s.walletRoot, { flex: 1 }]}><SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
-  if (view === "receive") return <View style={[s.walletRoot, { flex: 1 }]}><ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
-  if (view === "exchange") return <View style={[s.walletRoot, { flex: 1 }]}><ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
-  if (view === "requests") return <View style={[s.walletRoot, { flex: 1 }]}><RequestsView colors={colors} insets={insets} user={user} onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
-  if (view === "services") return <View style={[s.walletRoot, { flex: 1 }]}><AfuServicesApp embedded onBack={() => setView("home")} /><WalletBottomNav view={view} setView={setView} insets={insets} /></View>;
+  if (view === "history") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => navigateToView("home")} /></View>;
+  if (view === "topup") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><TopUpView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} /></View>;
+  if (view === "send") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
+  if (view === "receive") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} /></View>;
+  if (view === "exchange") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
+  if (view === "requests") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><RequestsView colors={colors} insets={insets} user={user} onBack={() => navigateToView("home")} /></View>;
+  if (view === "services") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><AfuServicesApp embedded onBack={() => navigateToView("home")} /></View>;
 
   const recentTx = transactions.slice(0, 6);
 
   return (
-    <View style={[s.root, s.walletRoot]}>
+    <View style={[s.root, s.walletRoot, { backgroundColor: colors.background }]}>
       <WalletHeader colors={colors} insets={insets} onBack={handleHomeBack} />
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 112 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); refreshProfile?.(); }} />}
       >
-        <LinearGradient colors={["#073B2B", "#022D21"]} style={s.heroCard}>
+        <LinearGradient colors={[Colors.brand, Colors.brandDark]} style={s.heroCard}>
+          <View pointerEvents="none" style={s.heroOrbitLarge} />
+          <View pointerEvents="none" style={s.heroOrbitSmall} />
           <View style={s.heroTopLine}>
             <View style={s.heroCoinMark}>
-              <Text style={s.heroCoinGlyph}>A</Text>
+              <Ionicons name="diamond" size={15} color={Colors.brandDark} />
             </View>
             <Text style={s.heroLabel}>ACoin Balance</Text>
             <View style={{ flex: 1 }} />
             <View style={s.heroNexaLabel}>
-              <Ionicons name="layers-outline" size={15} color="#A8C9B8" />
+              <Ionicons name="flash" size={15} color={Colors.gold} />
               <Text style={s.heroLabel}>Nexa (XP)</Text>
             </View>
           </View>
           <View style={s.heroRow}>
             <View style={{ flex: 1 }}>
               <Text style={s.heroAmount}>{fmtAmt(acoin)} <Text style={s.heroCurrency}>AC</Text></Text>
-              
             </View>
             <View style={s.heroRight}>
               <Text style={s.heroNexaAmount}>{fmtAmt(nexa)}</Text>
-              
             </View>
           </View>
           <View style={s.heroDivider} />
           <View style={s.heroFooter}>
-            <View style={s.heroTrustItem}><Ionicons name="shield-checkmark" size={15} color="#57E2C0" /><Text style={s.heroTrustText}>AfuPay</Text></View>
-            <View style={s.heroTrustItem}><Text style={s.heroTrustText}>· Secure</Text></View>
-            <View style={s.heroTrustItem}><Text style={s.heroTrustText}>· Fast</Text></View>
-            <View style={s.heroTrustItem}><Text style={s.heroTrustText}>· Global</Text></View>
+            <View style={s.heroTrustItem}><Ionicons name="shield-checkmark" size={15} color={Colors.gold} /><Text style={s.heroTrustText}>AfuPay wallet</Text></View>
+            <Text style={s.heroTrustText}>Secure · Fast · Global</Text>
           </View>
         </LinearGradient>
 
+        <View style={[s.promoCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={s.promoCopy}>
+            <View style={s.promoEyebrow}>
+              <Ionicons name="sparkles" size={13} color={Colors.gold} />
+              <Text style={[s.promoEyebrowText, { color: colors.textMuted }]}>WALLET SPOTLIGHT</Text>
+            </View>
+            <Text style={[s.promoTitle, { color: colors.text }]}>The popular pack</Text>
+            <Text style={[s.promoDescription, { color: colors.textMuted }]}>2,000 ACoin · $20</Text>
+            <TouchableOpacity
+              style={[s.promoButton, { backgroundColor: colors.accent }]}
+              onPress={() => navigateToView("topup")}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel="Buy 2,000 ACoin for 20 US dollars"
+            >
+              <Text style={s.promoButtonText}>Get ACoin</Text>
+              <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+          <Image
+            source={require("@/assets/illustrations/wallet.webp")}
+            style={s.promoArtwork}
+            resizeMode="contain"
+            accessible={false}
+          />
+        </View>
+
         <View style={s.actionsGrid}>
           {[
-            { icon: "add" as const, label: "Buy", color: "#25B95D", bg: "#E0EBD9", view: "topup" as AppView },
-            { icon: "paper-plane" as const, label: "Send", color: "#F39A13", bg: "#F6E8CE", view: "send" as AppView },
-            { icon: "qr-code" as const, label: "Receive", color: "#2926C9", bg: "#E2DFEA", view: "receive" as AppView },
-            { icon: "swap-horizontal" as const, label: "Convert", color: "#8C68DC", bg: "#E8E0EB", view: "exchange" as AppView },
-            { icon: "receipt-outline" as const, label: "Requests", color: "#B65BD1", bg: "#EBDDEB", view: "requests" as AppView },
-            { icon: "time-outline" as const, label: "History", color: "#E77D4D", bg: "#F4E1D4", view: "history" as AppView },
+            { icon: "add" as const, label: "Top up", color: Colors.gold, view: "topup" as AppView },
+            { icon: "paper-plane" as const, label: "Send", color: colors.accent, view: "send" as AppView },
+            { icon: "qr-code" as const, label: "Receive", color: colors.success, view: "receive" as AppView },
+            { icon: "swap-horizontal" as const, label: "Convert", color: colors.warning, view: "exchange" as AppView },
+            { icon: "arrow-down-circle-outline" as const, label: "Request", color: Colors.gold, route: "request" as const },
+            { icon: "receipt-outline" as const, label: "Requests", color: colors.accent, view: "requests" as AppView },
+            { icon: "time-outline" as const, label: "Activity", color: colors.textSecondary, view: "history" as AppView },
+            { icon: "grid-outline" as const, label: "Services", color: colors.success, view: "services" as AppView },
           ].map((a) => {
             const badge = a.label === "Requests" && pendingRequestCount > 0 ? pendingRequestCount : 0;
             return (
-              <TouchableOpacity key={a.label} style={[s.actionTile, { backgroundColor: colors.cardSurface }]} onPress={() => { Haptics.selectionAsync(); setView(a.view); }} activeOpacity={0.78}>
+              <TouchableOpacity
+                key={a.label}
+                style={[s.actionTile, { backgroundColor: colors.cardSurface }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  if ("route" in a) openMoneyRequest();
+                  else navigateToView(a.view);
+                }}
+                activeOpacity={0.78}
+                accessibilityRole="button"
+                accessibilityLabel={a.label === "Request" ? "Request money" : a.label}
+              >
                 <View style={{ position: "relative" }}>
-                  <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
+                  <View style={[s.actionIcon, { backgroundColor: a.color + "18" }]}>
                     <Ionicons name={a.icon} size={25} color={a.color} />
                   </View>
                   {badge > 0 && (
@@ -469,15 +493,14 @@ export default function AfuPayApp({
           <View style={s.section}>
             <View style={s.sectionRow}>
               <View style={s.activityHeading}>
-                <View style={s.activityAccent} />
-                <Text style={[s.activityTitle, { color: "#55534C" }]}>RECENT ACTIVITY</Text>
+                <Text style={[s.activityTitle, { color: colors.text }]}>Recent activity</Text>
               </View>
-              <TouchableOpacity onPress={() => setView("history")} hitSlop={8}>
-                <Text style={[s.seeAll, { color: "#2524B9" }]}>查看全部</Text>
+              <TouchableOpacity onPress={() => navigateToView("history")} hitSlop={8}>
+                <Text style={[s.seeAll, { color: colors.accent }]}>See all</Text>
               </TouchableOpacity>
             </View>
             {recentTx.length > 0 ? (
-              <View style={[s.txCard, { backgroundColor: "#FFFEFA", borderColor: "transparent" }]}>
+              <View style={[s.txCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
                 {recentTx.map((tx, i) => (
                   <View key={tx.id}>
                     {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -498,10 +521,10 @@ export default function AfuPayApp({
               </View>
             ) : (
               <View style={[s.emptyActivity, { backgroundColor: colors.cardSurface }]}>
-                <View style={s.emptyActivityIcon}><Ionicons name="receipt-outline" size={24} color={Colors.brand} /></View>
+                <View style={[s.emptyActivityIcon, { backgroundColor: colors.accent + "18" }]}><Ionicons name="receipt-outline" size={24} color={colors.accent} /></View>
                 <Text style={[s.emptyActivityTitle, { color: colors.text }]}>No activity yet</Text>
                 <Text style={[s.emptyActivityText, { color: colors.textMuted }]}>Your wallet transactions will appear here.</Text>
-                <TouchableOpacity style={s.emptyActivityButton} onPress={() => setView("topup")}>
+                <TouchableOpacity style={[s.emptyActivityButton, { backgroundColor: colors.accent }]} onPress={() => navigateToView("topup")}>
                   <Text style={s.emptyActivityButtonText}>Top up wallet</Text>
                 </TouchableOpacity>
               </View>
@@ -511,7 +534,6 @@ export default function AfuPayApp({
 
         
       </ScrollView>
-      <WalletBottomNav view={view} setView={setView} insets={insets} />
     </View>
   );
 }
@@ -528,7 +550,7 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
           </TouchableOpacity>
         ))}
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> :
           txs.length === 0 ? (
             <View style={s.emptyWrap}>
@@ -666,12 +688,12 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Buy ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Balance pill ── */}
-        <View style={[s.balancePill2, { backgroundColor: "#0A2E1F", borderColor: Colors.brand + "40", marginBottom: 20 }]}>
-          <Ionicons name="diamond" size={14} color={Colors.brand} />
-          <Text style={[s.balancePill2Text, { color: Colors.brand }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
+        <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 20 }]}>
+          <Ionicons name="diamond" size={14} color={Colors.gold} />
+          <Text style={[s.balancePill2Text, { color: colors.text }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
         </View>
 
         {/* ── Package list ── */}
@@ -741,15 +763,15 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
         {selectedPack === null && acoinAmt >= 50 && (
           <View style={[s.previewBox, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "30", marginTop: 10 }]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{fmtAmt(acoinAmt)} ACoin</Text>
+              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{fmtAmt(acoinAmt)} ACoin</Text>
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 }}>${price}</Text>
+                <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 16 }}>${price}</Text>
                 {!!localLine(parseFloat(price), country) && (
-                  <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontFamily: "Inter_400Regular" }}>{localLine(parseFloat(price), country)}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>{localLine(parseFloat(price), country)}</Text>
                 )}
               </View>
             </View>
-            <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>Mobile money · Card · Bank · Powered by Pesapal</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>Mobile money · Card · Bank · Powered by Pesapal</Text>
           </View>
         )}
 
@@ -864,7 +886,7 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Send" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }}>
         <View style={s.currToggle}>
           {(["acoin", "nexa"] as const).map(c => (
             <TouchableOpacity key={c} style={[s.currToggleBtn, { flex: 1, backgroundColor: currency === c ? (c === "acoin" ? "#34C759" : "#FF9500") : colors.inputBg, borderColor: currency === c ? (c === "acoin" ? "#34C759" : "#FF9500") : colors.border }]} onPress={() => setCurrency(c)}>
@@ -933,7 +955,7 @@ function ReceiveView({ colors, insets, profile, onBack }: any) {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Receive" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ alignItems: "center", padding: 24, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView contentContainerStyle={{ alignItems: "center", padding: 24, paddingBottom: insets.bottom + 104 }}>
         <Text style={[s.receiveNote, { color: colors.textSecondary }]}>
           Show this QR code or share your AfuPay ID to receive ACoin or Nexa
         </Text>
@@ -1008,7 +1030,7 @@ function ExchangeView({ colors, insets, user, profile, currSettings, onBack, onS
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Convert Nexa → ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }}>
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
           <View style={[s.balancePill2, { flex: 1, backgroundColor: "#FF950018", borderColor: "#FF950030" }]}>
             <Ionicons name="flash" size={13} color="#FF9500" />
@@ -1105,7 +1127,7 @@ function RequestsView({ colors, insets, user, onBack }: any) {
           </TouchableOpacity>
         ))}
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }}>
         {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> :
           shown.length === 0 ? (
             <View style={s.emptyWrap}>
@@ -1132,17 +1154,10 @@ function RequestsView({ colors, insets, user, onBack }: any) {
   );
 }
 
-const W = Dimensions.get("window").width;
 const s = StyleSheet.create({
   root: { flex: 1 },
-  walletRoot: { flex: 1, width: "100%", backgroundColor: "#F0ECDF", position: "relative" },
-  bottomNavDock: { position: "absolute", left: 0, right: 0, alignItems: "center", paddingHorizontal: 22, zIndex: 20, ...(Platform.OS === "web" ? { position: "fixed" as any, bottom: 10 } : {}) },
-  bottomNavPill: { width: "100%", height: 50, borderRadius: 28, backgroundColor: "#FFFEFA", flexDirection: "row", alignItems: "center", justifyContent: "space-around", paddingHorizontal: 5, elevation: 18, shadowColor: "#1C251B", shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } },
-  bottomNavItem: { flex: 1, height: 44, borderRadius: 24, alignItems: "center", justifyContent: "center", gap: 1, minWidth: 0 },
-  bottomNavItemActive: { backgroundColor: "#E7E6FA" },
-  bottomNavLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  walletRoot: { flex: 1, width: "100%", position: "relative" },
   walletHeaderRightSpacer: { width: 56 },
-  heroCoinGlyph: { color: "#0B5133", fontSize: 17, fontFamily: "Inter_700Bold" },
 
   walletHeader: { borderBottomWidth: 0 },
   walletHeaderRow: { height: 53, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
@@ -1151,20 +1166,19 @@ const s = StyleSheet.create({
   walletHeaderSubtitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 3 },
   walletHeaderMark: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#E8F2FF", alignItems: "center", justifyContent: "center" },
   heroTopLine: { flexDirection: "row", alignItems: "center" },
-  heroCoinMark: { width: 27, height: 27, borderRadius: 14, backgroundColor: "#F7C94B", alignItems: "center", justifyContent: "center" },
+  heroCoinMark: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.gold, alignItems: "center", justifyContent: "center" },
   heroNexaLabel: { flexDirection: "row", alignItems: "center" },
-  heroNexaAmount: { color: "#F39A12", fontSize: 27, fontFamily: "Inter_700Bold", marginTop: 4 },
+  heroNexaAmount: { color: Colors.gold, fontSize: 27, fontFamily: "Inter_700Bold", marginTop: 4 },
   heroNexaCaption: { color: "rgba(255,255,255,0.68)", fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textAlign: "right" },
-  heroFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   heroTrustItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   heroTrustText: { color: "rgba(255,255,255,0.58)", fontSize: 11, fontFamily: "Inter_500Medium" },
-  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 25, justifyContent: "space-between", marginBottom: 10 },
-  actionTile: { width: "31.5%", minHeight: 76, alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 5, borderRadius: 18, backgroundColor: "transparent" },
+  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, justifyContent: "space-between", marginBottom: 8, gap: 8 },
+  actionTile: { width: "22.5%", minHeight: 82, alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 18 },
   actionBadge: { position: "absolute", top: -5, right: -6, backgroundColor: "#E53935", borderRadius: 10, minWidth: 19, height: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   actionBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  activityHeading: { flexDirection: "row", alignItems: "center", gap: 10 },
-  activityAccent: { width: 4, height: 25, borderRadius: 2, backgroundColor: Colors.brand },
-  activityTitle: { fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  activityHeading: { flexDirection: "row", alignItems: "center" },
+  activityTitle: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
   securityBanner: { marginHorizontal: 16, marginTop: 18, marginBottom: 18, padding: 14, borderRadius: 20, backgroundColor: "#EAF3FF", flexDirection: "row", alignItems: "center", gap: 12 },
   securityIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#D5E8FF", alignItems: "center", justifyContent: "center" },
   securityTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
@@ -1176,18 +1190,27 @@ const s = StyleSheet.create({
   emptyActivityButton: { marginTop: 15, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14, backgroundColor: Colors.brand },
   emptyActivityButtonText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   walletBackGlyph: { fontSize: 34, lineHeight: 34, fontFamily: "Inter_400Regular", marginTop: -2 },
-  heroCard: { marginHorizontal: 17, marginTop: 17, marginBottom: 22, borderRadius: 24, paddingHorizontal: 22, paddingTop: 20, paddingBottom: 17, overflow: "hidden" },
+  heroCard: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, borderRadius: 25, paddingHorizontal: 20, paddingTop: 19, paddingBottom: 16, overflow: "hidden" },
+  heroOrbitLarge: { position: "absolute", right: -38, top: -70, width: 210, height: 210, borderRadius: 105, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
+  heroOrbitSmall: { position: "absolute", right: 11, top: -25, width: 130, height: 130, borderRadius: 65, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)" },
   heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  heroLabel: { color: "rgba(255,255,255,0.72)", fontSize: 13, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
-  heroAmount: { color: "#fff", fontSize: 31, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
+  heroLabel: { color: "rgba(255,255,255,0.84)", fontSize: 12, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
+  heroAmount: { color: "#fff", fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
   heroCurrency: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  heroRight: { alignItems: "flex-end", paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.2)" },
-  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 18, marginBottom: 14 },
+  heroRight: { alignItems: "flex-end", paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.24)" },
+  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 16, marginBottom: 13 },
   heroSub: { color: "rgba(255,255,255,0.72)", fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 },
-  actionsRow: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 8, gap: 8, justifyContent: "space-around", marginBottom: 8 },
-  actionItem: { alignItems: "center", gap: 5, width: (W - 32) / 3, marginBottom: 4, paddingVertical: 4 },
-  actionIcon: { width: 55, height: 55, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  actionIcon: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  promoCard: { minHeight: 143, marginHorizontal: 16, marginBottom: 16, borderRadius: 22, overflow: "hidden", flexDirection: "row", alignItems: "center", paddingLeft: 17, paddingRight: 8 },
+  promoCopy: { flex: 1, minWidth: 0, zIndex: 1, paddingVertical: 15 },
+  promoEyebrow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7 },
+  promoEyebrowText: { fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  promoTitle: { fontSize: 17, lineHeight: 21, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
+  promoDescription: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 4 },
+  promoButton: { minHeight: 34, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 12, marginTop: 12 },
+  promoButtonText: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_700Bold" },
+  promoArtwork: { width: 138, height: 145, marginLeft: -4, alignSelf: "flex-end" },
   section: { paddingHorizontal: 17, marginTop: 18 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   sectionTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },

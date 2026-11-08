@@ -88,6 +88,8 @@ export function getAppNav(appId: FullAppId) {
 }
 
 export function normalizeAppNavKey(section?: string) {
+  if (section === "request") return "requests";
+  if (["send", "receive", "exchange"].includes(section ?? "")) return "home";
   if (section === "apply-seller") return "sell";
   if (section === "apply" || section === "manage" || section === "storefront" || section === "product" || section === "order") return "browse";
   if (section === "post-gig") return "post-gig";
