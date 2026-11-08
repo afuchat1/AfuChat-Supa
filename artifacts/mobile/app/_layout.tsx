@@ -30,20 +30,16 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 
-// The offline web preview can leave Expo's font observer pending until its
-// 12-second rejection. WebGlobalStyles already provides a system-font fallback,
-// so do not start the native font loader on web. Native builds still load the
-// bundled Inter files normally.
-const APP_FONTS = (
-  Platform.OS === "web"
-    ? {}
-    : {
-        Inter_400Regular,
-        Inter_500Medium,
-        Inter_600SemiBold,
-        Inter_700Bold,
-      }
-) as Parameters<typeof Font.useFonts>[0];
+// Use the same bundled Inter family on every platform. Font loading is
+// non-blocking for the web UI; native keeps the branded splash visible briefly
+// so the complete app switches to Inter together rather than rendering pages
+// with a mixture of loaded and fallback font faces.
+const APP_FONTS = {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} as Parameters<typeof Font.useFonts>[0];
 
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CallProvider } from "@/context/CallContext";
@@ -349,20 +345,6 @@ function WebGlobalStyles() {
   return null;
 }
 
-function WebFontGate({
-  ready,
-  children,
-}: {
-  ready: boolean;
-  children: React.ReactNode;
-}) {
-  const { colors } = useTheme();
-  if (Platform.OS === "web" && !ready) {
-    return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.background }} />;
-  }
-  return <>{children}</>;
-}
-
 function LanguageDirectionShell({ children }: { children: React.ReactNode }) {
   return <View style={styles.directionShell}>{children}</View>;
 }
@@ -481,7 +463,6 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
 export default function RootLayout() {
   const rootNavigationState = useRootNavigationState();
   const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
-  const [webFontTimeout, setWebFontTimeout] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
@@ -512,24 +493,16 @@ export default function RootLayout() {
     }
   }, [fontError]);
 
-  // Expo's offline web asset resolver can leave useFonts pending without
-  // returning an error. Do not block the entire app in that state; the browser
-  // can render the layout with its normal font fallback.
-  useEffect(() => {
-    if (Platform.OS !== "web" || fontsLoaded || fontError) return;
-    const timeout = setTimeout(() => setWebFontTimeout(true), 1500);
-    return () => clearTimeout(timeout);
-  }, [fontsLoaded, fontError]);
-
-  // A broken or unusually slow font/asset load must never leave users behind
-  // the native splash forever in a production build. The normal path still
-  // waits for fonts and the short fade; this is only a bounded escape hatch.
+  // Fonts are bundled with the app, so they normally load locally. Keep the
+  // native splash wait bounded: if an asset fails or the device is unusually
+  // slow, open the app with the platform sans-serif fallback rather than
+  // holding every route behind a blank/loading screen.
   useEffect(() => {
     if (Platform.OS === "web" || splashDone) return;
     const timeout = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
       setSplashDone(true);
-    }, 5000);
+    }, 2500);
     return () => clearTimeout(timeout);
   }, [splashDone]);
 
@@ -622,8 +595,7 @@ export default function RootLayout() {
             <ThemeProvider>
               <ThemedRoot>
                 <WebGlobalStyles />
-                <WebFontGate ready={fontsLoaded || !!fontError || webFontTimeout}>
-                  <AppAccentProvider>
+                <AppAccentProvider>
                 <ThemedStatusBar />
                 {/* OOM guard: cancels all animations on app-background / memory-pressure */}
                 <AnimationGuardInit />
@@ -660,8 +632,7 @@ export default function RootLayout() {
                     </CallProvider>
                   </AuthProvider>
                 </DataModeProvider>
-                  </AppAccentProvider>
-                </WebFontGate>
+                </AppAccentProvider>
               </ThemedRoot>
             </ThemeProvider>
           </SafeAreaProvider>
