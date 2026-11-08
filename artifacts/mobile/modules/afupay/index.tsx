@@ -386,7 +386,7 @@ export default function AfuPayApp({
     <View style={[s.root, s.walletRoot, { backgroundColor: colors.background }]}>
       <WalletHeader colors={colors} insets={insets} onBack={handleHomeBack} />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 112 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); refreshProfile?.(); }} />}
       >
@@ -550,7 +550,7 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
           </TouchableOpacity>
         ))}
       </View>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> :
           txs.length === 0 ? (
             <View style={s.emptyWrap}>
@@ -688,7 +688,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Buy ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Balance pill ── */}
         <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 20 }]}>
@@ -886,7 +886,7 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Send" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
         <View style={s.currToggle}>
           {(["acoin", "nexa"] as const).map(c => (
             <TouchableOpacity key={c} style={[s.currToggleBtn, { flex: 1, backgroundColor: currency === c ? (c === "acoin" ? "#34C759" : "#FF9500") : colors.inputBg, borderColor: currency === c ? (c === "acoin" ? "#34C759" : "#FF9500") : colors.border }]} onPress={() => setCurrency(c)}>
@@ -955,7 +955,7 @@ function ReceiveView({ colors, insets, profile, onBack }: any) {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Receive" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ alignItems: "center", padding: 24, paddingBottom: insets.bottom + 104 }}>
+      <ScrollView contentContainerStyle={{ alignItems: "center", padding: 24, paddingBottom: insets.bottom + 32 }}>
         <Text style={[s.receiveNote, { color: colors.textSecondary }]}>
           Show this QR code or share your AfuPay ID to receive ACoin or Nexa
         </Text>
@@ -1030,7 +1030,7 @@ function ExchangeView({ colors, insets, user, profile, currSettings, onBack, onS
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Convert Nexa → ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
           <View style={[s.balancePill2, { flex: 1, backgroundColor: "#FF950018", borderColor: "#FF950030" }]}>
             <Ionicons name="flash" size={13} color="#FF9500" />
@@ -1127,7 +1127,7 @@ function RequestsView({ colors, insets, user, onBack }: any) {
           </TouchableOpacity>
         ))}
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 104 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
         {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> :
           shown.length === 0 ? (
             <View style={s.emptyWrap}>

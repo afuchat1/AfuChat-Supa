@@ -150,7 +150,7 @@ export default function FullAppRoute() {
   ) as Record<string, string>;
   if (!rawId || !isFullAppId(rawId)) return <Redirect href="/apps" />;
   return (
-    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)}>
+    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afupay"}>
       <AppContent appId={rawId} section={section} params={routeParams} />
     </AppPageShell>
   );
