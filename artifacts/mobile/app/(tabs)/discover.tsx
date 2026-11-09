@@ -53,7 +53,7 @@ import PostUploadBanner from "@/components/ui/PostUploadBanner";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getNetworkProfile } from "@/lib/networkQuality";
 import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
-import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments } from "@/lib/offlineStore";
+import { getCachedFeedTab, getCachedMoments, cacheMoments } from "@/lib/offlineStore";
 import { timeAgo as formatRelative, formatPostDate } from "@/lib/timeAgo";
 import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, getSeenPostIds, markPostsSeen, weightedSample, type FeedSignals } from "@/lib/feedAlgorithm";
@@ -1681,7 +1681,7 @@ export default function DiscoverScreen() {
       const FOLLOWING_IDS_TTL = 5 * 60 * 1000;
       let followingIds: string[];
       const _fidCache = followingIdsCacheRef.current;
-      if (_fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
+      if (!isRefresh && _fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
         followingIds = _fidCache.ids;
       } else {
         const { data: followData } = await supabase
@@ -1706,6 +1706,11 @@ export default function DiscoverScreen() {
         : null;
       // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
       const followNewerThan = isRefresh ? await getNewestFeedPostDate("following") : null;
+      // Small overlap catches posts sharing a timestamp with the newest cached row;
+      // local ID deduplication prevents duplicates in the visible feed.
+      const followDeltaSince = followNewerThan
+        ? new Date(Math.max(0, Date.parse(followNewerThan) - 1000)).toISOString()
+        : null;
       const followBaseQ = supabase
         .from("posts")
         .select(`
@@ -1721,7 +1726,7 @@ export default function DiscoverScreen() {
       const { data } = await (followOlderThan
         ? followBaseQ.lt("created_at", followOlderThan).limit(pageSize)
         : followNewerThan
-          ? followBaseQ.gt("created_at", followNewerThan).limit(pageSize)
+          ? followBaseQ.gt("created_at", followDeltaSince).limit(100)
           : followBaseQ.limit(pageSize));
 
       if (data) {
@@ -1771,7 +1776,6 @@ export default function DiscoverScreen() {
         if (isRefresh) {
           tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
-          cacheFeedTab(activeTab, mapped);
           saveFeedPosts(mapped, activeTab as LocalFeedTab).catch(() => {});
           // Delta sync: prepend new posts to existing local posts (don't wipe them)
           if (background) {
@@ -1844,6 +1848,11 @@ export default function DiscoverScreen() {
 
     // Delta sync: on refresh, only fetch posts NEWER than newest stored
     const fyNewerThan = isRefresh ? await getNewestFeedPostDate("for_you") : null;
+    // Overlap by one second so equal-timestamp posts are not skipped. IDs are
+    // deduplicated before rendering, while SQLite metadata is safely upserted.
+    const fyDeltaSince = fyNewerThan
+      ? new Date(Math.max(0, Date.parse(fyNewerThan) - 1000)).toISOString()
+      : null;
 
     // On refresh, reset all stream offsets to new random positions so every
     // session surfaces a completely different combination of content.
@@ -1859,12 +1868,14 @@ export default function DiscoverScreen() {
       .order("created_at", { ascending: false });
     if (fyOlderThan) {
       fyQ = fyQ.lt("created_at", fyOlderThan);
-    } else if (fyNewerThan) {
-      fyQ = fyQ.gt("created_at", fyNewerThan);
+    } else if (fyDeltaSince) {
+      fyQ = fyQ.gt("created_at", fyDeltaSince);
     } else {
       fyQ = fyQ.gte("created_at", fourDaysAgo);
     }
-    fyQ = fyQ.limit(RECENT_SIZE);
+    // New-post delta can be larger than the normal first-page sample.
+    // Fetch a generous metadata batch so bursts of posts are not silently skipped.
+    fyQ = fyQ.limit(fyDeltaSince ? 100 : RECENT_SIZE);
 
     // ── Stream 2: Mid posts (4–30 days old, random window) ──
     const mdOffset = midOffsetRef.current;
@@ -2198,7 +2209,6 @@ export default function DiscoverScreen() {
       if (isRefresh) {
         tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
-        cacheFeedTab(activeTab, merged);
         cacheMoments(merged);
         saveFeedPosts(merged, activeTab as LocalFeedTab).catch(() => {});
         if (background) {
