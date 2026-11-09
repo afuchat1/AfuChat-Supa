@@ -22,10 +22,13 @@ function countryRegion(value: unknown): CountryCode | undefined {
   if (typeof value !== "string" || !value.trim()) return undefined;
   const normalized = value.trim();
   const code = normalized.toUpperCase();
-  if (/^[A-Z]{2}$/.test(code)) return code as CountryCode;
+  // Accept only regions in the bundled country table; language tags such as
+  // "en" must never be mistaken for a country.
+  const countryByCode = COUNTRIES.find((item) => item.code === code);
+  if (countryByCode) return countryByCode.code as CountryCode;
 
   // AfuChat stores the user's selected country as its display name. Resolve
-  // both that form and ISO codes locally so this works without connectivity.
+  // that form locally so this works without connectivity.
   const country = COUNTRIES.find(
     (item) => item.name.toLocaleLowerCase() === normalized.toLocaleLowerCase(),
   );
@@ -53,9 +56,11 @@ export function resolveDefaultPhoneRegion(profileCountry?: string | null): Count
 
   for (const candidate of localeCandidates) {
     if (typeof candidate !== "string") continue;
-    const match = candidate.match(/(?:^|[-_])([A-Za-z]{2})(?:$|[-_])/);
-    const region = countryRegion(match?.[1]);
-    if (region) return region;
+    const localeParts = candidate.split(/[-_]/).reverse();
+    for (const part of localeParts) {
+      const region = countryRegion(part);
+      if (region) return region;
+    }
   }
   return undefined;
 }
