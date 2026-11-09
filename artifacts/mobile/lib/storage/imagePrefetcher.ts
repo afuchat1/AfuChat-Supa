@@ -31,6 +31,8 @@ function enqueue(item: PrefetchItem) {
   if (network.type !== "wifi" || network.connected === false || network.expensive === true) return;
   if (!item.url || !item.url.startsWith("http")) return;
   if (_seen.has(item.url)) return;
+  // Bound the in-memory de-duplication index for long-running sessions.
+  if (_seen.size >= 2_000) _seen.clear();
   _seen.add(item.url);
   // Avatars go to the front of the queue
   if (item.type === "avatar") {
