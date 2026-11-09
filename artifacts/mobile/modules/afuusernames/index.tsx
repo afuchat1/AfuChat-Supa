@@ -609,7 +609,7 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
       const [listingResult, ownedResult, featuredResult] = await Promise.all([
         query,
         user?.id
-          ? supabase.from("owned_usernames").select("handle, owner_id").eq("owner_id", user.id).order("handle")
+          ? supabase.from("owned_usernames").select("handle, owner_id").eq("owner_id", user.id).not("acquired_at", "is", null).order("handle")
           : Promise.resolve({ data: [], error: null }),
         supabase.from("username_featured_listings").select("id, listing_id, amount, ends_at").gt("ends_at", new Date().toISOString()).order("ends_at", { ascending: false }).limit(12),
       ]);
