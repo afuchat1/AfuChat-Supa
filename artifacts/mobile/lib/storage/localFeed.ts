@@ -153,48 +153,58 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
   if (!posts.length) return;
   try {
     const db = await getDB();
+    // Bound writes as well as retained rows. Feed UI only needs a compact,
+    // newest-first offline window; media bytes remain in Expo Image's cache.
+    const boundedPosts = [...posts]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .slice(0, 200);
     const now = Date.now();
-    for (const item of posts) {
-      const p = mapPost(item, tab);
+    await db.execAsync("BEGIN IMMEDIATE");
+    try {
+      for (const item of boundedPosts) {
+        const p = mapPost(item, tab);
+        await db.runAsync(
+          `INSERT INTO feed_posts
+           (id, author_id, content, image_url, images, video_url, post_type, article_title,
+            created_at, like_count, reply_count, view_count, liked, bookmarked,
+            author_name, author_handle, author_avatar, is_verified, is_org_verified,
+            tab, score, stored_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id, tab) DO UPDATE SET
+            author_id=excluded.author_id, content=excluded.content,
+            image_url=excluded.image_url, images=excluded.images,
+            video_url=excluded.video_url, post_type=excluded.post_type,
+            article_title=excluded.article_title, like_count=excluded.like_count,
+            reply_count=excluded.reply_count, view_count=excluded.view_count,
+            liked=excluded.liked, bookmarked=excluded.bookmarked,
+            author_name=excluded.author_name, author_handle=excluded.author_handle,
+            author_avatar=excluded.author_avatar, is_verified=excluded.is_verified,
+            is_org_verified=excluded.is_org_verified,
+            score=excluded.score, stored_at=excluded.stored_at`,
+          [
+            p.id, p.author_id, p.content, p.image_url,
+            JSON.stringify(p.images), p.video_url, p.post_type, p.article_title,
+            p.created_at, p.like_count, p.reply_count, p.view_count,
+            p.liked ? 1 : 0, p.bookmarked ? 1 : 0,
+            p.author_name, p.author_handle, p.author_avatar,
+            p.is_verified ? 1 : 0, p.is_org_verified ? 1 : 0,
+            p.tab, p.score, now,
+          ],
+        );
+      }
       await db.runAsync(
-        `INSERT INTO feed_posts
-         (id, author_id, content, image_url, images, video_url, post_type, article_title,
-          created_at, like_count, reply_count, view_count, liked, bookmarked,
-          author_name, author_handle, author_avatar, is_verified, is_org_verified,
-          tab, score, stored_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-         ON CONFLICT(id, tab) DO UPDATE SET
-          author_id=excluded.author_id, content=excluded.content,
-          image_url=excluded.image_url, images=excluded.images,
-          video_url=excluded.video_url, post_type=excluded.post_type,
-          article_title=excluded.article_title, like_count=excluded.like_count,
-          reply_count=excluded.reply_count, view_count=excluded.view_count,
-          liked=excluded.liked, bookmarked=excluded.bookmarked,
-          author_name=excluded.author_name, author_handle=excluded.author_handle,
-          author_avatar=excluded.author_avatar, is_verified=excluded.is_verified,
-          is_org_verified=excluded.is_org_verified,
-          score=excluded.score, stored_at=excluded.stored_at`,
-        [
-          p.id, p.author_id, p.content, p.image_url,
-          JSON.stringify(p.images), p.video_url, p.post_type, p.article_title,
-          p.created_at, p.like_count, p.reply_count, p.view_count,
-          p.liked ? 1 : 0, p.bookmarked ? 1 : 0,
-          p.author_name, p.author_handle, p.author_avatar,
-          p.is_verified ? 1 : 0, p.is_org_verified ? 1 : 0,
-          p.tab, p.score, now,
-        ],
+        `DELETE FROM feed_posts
+         WHERE tab = ? AND id NOT IN (
+           SELECT id FROM feed_posts WHERE tab = ?
+           ORDER BY created_at DESC LIMIT 200
+         )`,
+        [tab, tab],
       );
+      await db.execAsync("COMMIT");
+    } catch (error) {
+      try { await db.execAsync("ROLLBACK"); } catch {}
+      throw error;
     }
-    // Keep the offline feed useful but bounded: retain only the newest 200
-    // lightweight post records per tab. Image/video bytes are never copied here.
-    await db.runAsync(
-      `DELETE FROM feed_posts
-       WHERE tab = ? AND id NOT IN (
-         SELECT id FROM feed_posts WHERE tab = ?
-         ORDER BY created_at DESC LIMIT 200
-       )`,
-      [tab, tab],
-    );
   } catch {}
 }
 
