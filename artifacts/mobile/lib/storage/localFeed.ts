@@ -4,8 +4,8 @@
 // Already-stored posts are never re-downloaded.
 //
 // RULES:
-//   • INSERT OR IGNORE — a post stored once is never overwritten/re-fetched
-//   • No TTL, no auto-trim — posts accumulate until user clears storage
+//   • Upsert metadata so edited posts and engagement counts stay current
+//   • Store feed records only; media bytes remain in expo-image managed cache
 //   • getNewestFeedPostDate(tab) → cursor for delta sync (only fetch newer)
 //   • updateLocalPost* helpers update reactive state (likes, bookmarks) without re-fetching
 
@@ -146,8 +146,8 @@ export async function getLocalFeedPost(id: string): Promise<LocalPost | null> {
 // ─── Writes ─────────────────────────────────────────────────────────────────────
 
 /**
- * Save posts permanently. INSERT OR IGNORE ensures a post already on device
- * is never overwritten — it was already downloaded, no need to do it again.
+ * Upsert lightweight post data. Repeated syncs update changed text, URLs,
+ * profile details and counters without downloading media bytes into SQLite.
  */
 export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
   if (!posts.length) return;
@@ -157,12 +157,23 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
     for (const item of posts) {
       const p = mapPost(item, tab);
       await db.runAsync(
-        `INSERT OR IGNORE INTO feed_posts
+        `INSERT INTO feed_posts
          (id, author_id, content, image_url, images, video_url, post_type, article_title,
           created_at, like_count, reply_count, view_count, liked, bookmarked,
           author_name, author_handle, author_avatar, is_verified, is_org_verified,
           tab, score, stored_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET
+          author_id=excluded.author_id, content=excluded.content,
+          image_url=excluded.image_url, images=excluded.images,
+          video_url=excluded.video_url, post_type=excluded.post_type,
+          article_title=excluded.article_title, like_count=excluded.like_count,
+          reply_count=excluded.reply_count, view_count=excluded.view_count,
+          liked=excluded.liked, bookmarked=excluded.bookmarked,
+          author_name=excluded.author_name, author_handle=excluded.author_handle,
+          author_avatar=excluded.author_avatar, is_verified=excluded.is_verified,
+          is_org_verified=excluded.is_org_verified, tab=excluded.tab,
+          score=excluded.score, stored_at=excluded.stored_at`,
         [
           p.id, p.author_id, p.content, p.image_url,
           JSON.stringify(p.images), p.video_url, p.post_type, p.article_title,
