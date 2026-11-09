@@ -240,7 +240,7 @@ export default function ArticleDetailScreen() {
 
               {/* Floating action row over the hero */}
               <View style={[st.heroActions, { paddingTop: insets.top + 8 }]}>
-                <GlassBackButton onPress={() => router.back()} style={st.heroBtn} color="#fff" />
+                <GlassBackButton onPress={() => router.back()} style={st.heroBtn} />
                 <TouchableOpacity
                   onPress={() => sharePost({ postId: article.id, authorName: article.profile.display_name, content: article.article_title || article.content })}
                   hitSlop={10}
