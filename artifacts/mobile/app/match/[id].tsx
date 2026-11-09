@@ -289,7 +289,7 @@ export default function MatchConversationScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <LinearGradient colors={[BRAND, "#FF375F"]} style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton onPress={() => router.back()} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} />
         <Pressable
           style={styles.headerProfile}
           onPress={() => router.push({ pathname: "/app/afumatch", params: { section: "view-profile", userId: otherProfile?.user_id } } as any)}
