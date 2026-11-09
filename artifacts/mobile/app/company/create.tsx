@@ -7,12 +7,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -253,7 +252,9 @@ export default function CreateCompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -282,7 +283,9 @@ export default function CreateCompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -362,10 +365,9 @@ export default function CreateCompanyPageScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Nav */}
       <View style={[styles.nav, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <GlassBackButton
-          onPress={step === 1 ? () => router.back() : () => setStep((s) => s - 1)}
-          icon="chevron-back"
-        />
+        <TouchableOpacity onPress={step === 1 ? () => router.back() : () => setStep((s) => s - 1)} hitSlop={12}>
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
+        </TouchableOpacity>
         <Text style={[styles.navTitle, { color: colors.text }]}>Create Page</Text>
         <Text style={[styles.stepCounter, { color: colors.textMuted }]}>{step}/{TOTAL_STEPS}</Text>
       </View>
@@ -409,7 +411,7 @@ export default function CreateCompanyPageScreen() {
               </View>
 
               {/* ── Registry Search ── */}
-              <View style={[styles.registryCard, { backgroundColor: colors.cardSurface, borderColor: colors.accent + "40" }]}>
+              <View style={[styles.registryCard, { backgroundColor: colors.surface, borderColor: colors.accent + "40" }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <View style={[styles.registryIconWrap, { backgroundColor: colors.accent + "14" }]}>
                     <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
@@ -434,7 +436,6 @@ export default function CreateCompanyPageScreen() {
                 <View style={[styles.regSearchRow, { backgroundColor: isDark ? colors.background : "#f5f5f7", borderColor: colors.border }]}>
                   <Ionicons name="search" size={16} color={colors.textMuted} />
                   <TextInput
-                    appearance="embedded"
                     style={[styles.regSearchInput, { color: colors.text }]}
                     placeholder="Type registered company name…"
                     placeholderTextColor={colors.textMuted}
@@ -565,7 +566,7 @@ export default function CreateCompanyPageScreen() {
                       <TouchableOpacity
                         key={t.label}
                         style={[styles.typeCard, {
-                          backgroundColor: sel ? colors.accent + "14" : colors.cardSurface,
+                          backgroundColor: sel ? colors.accent + "14" : colors.surface,
                           borderColor: sel ? colors.accent : colors.border,
                         }]}
                         onPress={() => set("org_type", t.label)}
@@ -832,12 +833,14 @@ export default function CreateCompanyPageScreen() {
       {/* Bottom action bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12, backgroundColor: colors.surface, borderTopColor: colors.border }]}>
         {step > 1 && (
-          <GlassBackButton
+          <TouchableOpacity
             style={[styles.backBtn, { borderColor: colors.border }]}
             onPress={() => setStep((s) => s - 1)}
-            icon="chevron-back"
-            label="Back"
-          />
+            activeOpacity={0.75}
+          >
+            <Ionicons name="chevron-back" size={18} color={colors.accent} />
+            <Text style={[styles.backBtnText, { color: colors.text }]}>Back</Text>
+          </TouchableOpacity>
         )}
         <TouchableOpacity
           style={[styles.nextBtn, { backgroundColor: colors.accent, opacity: submitting ? 0.7 : 1, flex: step === 1 ? 1 : undefined }]}

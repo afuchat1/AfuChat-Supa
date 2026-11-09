@@ -10,16 +10,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -48,7 +46,7 @@ export default function CreateArticleScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
-  const bodyRef = useRef<TextInputInstance>(null);
+  const bodyRef = useRef<AfuNativeRef.TextInput>(null);
 
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -147,7 +145,9 @@ export default function CreateArticleScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <GlassBackButton onPress={() => router.back()} style={styles.headerBtn} icon="close" accessibilityLabel="Close" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn} hitSlop={8}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>New Article</Text>
         </View>

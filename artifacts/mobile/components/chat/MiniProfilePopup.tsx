@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -10,7 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -19,7 +20,6 @@ import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { setProfileCache } from "@/lib/profileCache";
-import { openExternalLink } from "@/lib/openExternalLink";
 
 const AVATAR_SIZE   = 68;
 const BANNER_H      = 130;
@@ -268,7 +268,7 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
                     onPress={() => {
                       const url = /^https?:\/\//i.test(profile.website_url!)
                         ? profile.website_url! : `https://${profile.website_url!}`;
-                      openExternalLink(url).catch(() => {});
+                      Linking.openURL(url).catch(() => {});
                     }}>
                     <Ionicons name="link" size={12} color={accent} />
                     <Text style={[st.metaText, { color: accent }]} numberOfLines={1}>

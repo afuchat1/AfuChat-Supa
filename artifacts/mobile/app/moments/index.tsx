@@ -10,7 +10,6 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -190,7 +189,7 @@ export default function MomentsScreen() {
   const renderItem = useCallback(
     ({ item }: { item: StoryUser }) => (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.cardSurface }]}
+        style={[styles.card, { backgroundColor: colors.surface }]}
         onPress={() =>
           router.push({
             pathname: "/stories/view",
@@ -243,7 +242,12 @@ export default function MomentsScreen() {
     >
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         {(
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={styles.backBtn} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backBtn}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.accent} />
+          </TouchableOpacity>
         )}
         <Text style={[styles.headerTitle, { color: colors.text }]}>
           Moments
@@ -283,7 +287,6 @@ export default function MomentsScreen() {
         </View>
       ) : (
         <FlatList
-          removeClippedSubviews={false}
           data={storyUsers}
           keyExtractor={(item) => item.userId}
           renderItem={renderItem}

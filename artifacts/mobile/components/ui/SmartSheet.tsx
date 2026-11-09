@@ -15,6 +15,7 @@ import React, {
 } from "react";
 import {
   Animated,
+  Easing,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -24,11 +25,11 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
-  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
-import { T } from "@/constants/theme";
+import { BlurView } from "expo-blur";
+import { GLASS, glassTokens } from "@/constants/glass";
 
 type Props = {
   visible: boolean;
@@ -49,7 +50,8 @@ export function SmartSheet({
   handleColor,
 }: Props) {
   const { colors, isDark } = useTheme();
-  const resolvedBg = backgroundColor ?? colors.surface;
+  const glass = glassTokens(isDark);
+  const resolvedBg = backgroundColor ?? glass.fillStrong;
   const resolvedHandle = handleColor ?? (isDark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.18)");
   const { height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -76,7 +78,7 @@ export function SmartSheet({
   const isFullRef = useRef(false);
 
   const scrollYRef = useRef(0);
-  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollRef = useRef<AfuNativeRef.ScrollView>(null);
 
   // ─── Snap functions (stored in refs so PanResponder can always call the latest) ─
 
@@ -87,9 +89,10 @@ export function SmartSheet({
   snapToFullRef.current = () => {
     isFullRef.current = true;
     setIsFull(true);
-    Animated.spring(sheetH, {
+    Animated.timing(sheetH, {
       toValue: fullHRef.current,
-      ...T.motion.spring.gentle,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   };
@@ -98,9 +101,10 @@ export function SmartSheet({
     isFullRef.current = false;
     setIsFull(false);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-    Animated.spring(sheetH, {
+    Animated.timing(sheetH, {
       toValue: peekHRef.current,
-      ...T.motion.spring.gentle,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   };
@@ -108,9 +112,9 @@ export function SmartSheet({
   dismissRef.current = () => {
     isFullRef.current = false;
     setIsFull(false);
-    Animated.spring(sheetH, {
+    Animated.timing(sheetH, {
       toValue: 0,
-      ...T.motion.spring.snappy,
+      duration: 220,
       useNativeDriver: false,
     }).start(() => {
       sheetH.setValue(0);
@@ -128,9 +132,10 @@ export function SmartSheet({
       isFullRef.current = true;
       setIsFull(true);
     }
-    Animated.spring(sheetH, {
+    Animated.timing(sheetH, {
       toValue: contentPeekH,
-      ...T.motion.spring.gentle,
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
     }).start();
   }, [contentH, contentPeekH, fullH, visible]);
@@ -141,9 +146,10 @@ export function SmartSheet({
        setIsFull(false);
        setContentH(0);
       sheetH.setValue(0);
-      Animated.spring(sheetH, {
+      Animated.timing(sheetH, {
          toValue: peekHRef.current,
-        ...T.motion.spring.gentle,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start();
     }
@@ -242,7 +248,7 @@ export function SmartSheet({
         style={[
           StyleSheet.absoluteFill,
           {
-            backgroundColor: "rgba(0,0,0,0.72)",
+            backgroundColor: "#000",
             opacity: backdropOpacity,
             pointerEvents: "none",
           } as any,
@@ -251,9 +257,31 @@ export function SmartSheet({
 
       {/* The sheet itself — panHandlers on the whole view */}
       <Animated.View
-        style={[styles.sheet, { height: sheetH, backgroundColor: resolvedBg, paddingBottom: insets.bottom }]}
+        style={[
+          styles.sheet,
+          {
+            height: sheetH,
+            backgroundColor: "transparent",
+            borderTopColor: glass.border,
+            paddingBottom: insets.bottom,
+          },
+        ]}
         {...panResponder.panHandlers}
       >
+        <BlurView
+          pointerEvents="none"
+          intensity={GLASS.blur.heavy}
+          tint={isDark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: resolvedBg }]}
+        />
+        <View
+          pointerEvents="none"
+          style={[styles.sheetHighlight, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.58)" }]}
+        />
         {/* Drag handle indicator */}
         <View style={styles.handleBar}>
           <View style={[styles.handle, { backgroundColor: resolvedHandle }]} />
@@ -297,8 +325,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: T.radius.xl,
-    borderTopRightRadius: T.radius.xl,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
     ...Platform.select({
       web: {
@@ -312,6 +341,13 @@ const styles = StyleSheet.create({
         elevation: 20,
       },
     }),
+  },
+  sheetHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 1,
   },
   handleBar: {
     alignItems: "center",

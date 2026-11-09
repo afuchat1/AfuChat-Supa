@@ -258,7 +258,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
           </View>
 
           {isScanning ? (
-            <View style={[styles.scannerWrap, { backgroundColor: colors.background }]}>
+            <View style={styles.scannerWrap}>
               <CameraView
                 style={styles.camera}
                 facing="back"
@@ -279,7 +279,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
               showsVerticalScrollIndicator={false}
               scrollEnabled={step !== "send-offer" && step !== "show-answer"}
             >
-              <View style={[styles.networkCard, { backgroundColor: colors.cardSurface }]}>
+              <View style={[styles.networkCard, { backgroundColor: colors.surface }]}>
                 <Ionicons
                   name={networkLabel === "Wi-Fi connected" ? "wifi" : "wifi-outline"}
                   size={22}
@@ -309,7 +309,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
                     </View>
                   </View>
                   {file ? (
-                    <View style={[styles.fileCard, { backgroundColor: colors.cardSurface }]}>
+                    <View style={[styles.fileCard, { backgroundColor: colors.surface }]}>
                       <Ionicons name="document-outline" size={25} color={colors.accent} />
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>{file.name}</Text>
@@ -362,7 +362,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
                       <Text style={[styles.primaryText, { color: colors.background }]}>Scan receiver answer</Text>
                     </Pressable>
                   ) : (
-                    <View style={[styles.waitCard, { backgroundColor: colors.cardSurface }]}>
+                    <View style={[styles.waitCard, { backgroundColor: colors.surface }]}>
                       <ActivityIndicator color={colors.accent} />
                       <Text style={[styles.waitText, { color: colors.textMuted }]}>Waiting for the sender to connect…</Text>
                     </View>
@@ -372,7 +372,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
 
               {step === "confirm-receive" && pendingOffer && (
                 <View>
-                  <View style={[styles.confirmCard, { backgroundColor: colors.cardSurface }]}>
+                  <View style={[styles.confirmCard, { backgroundColor: colors.surface }]}>
                     <View style={[styles.confirmIcon, { backgroundColor: colors.accent + "1A" }]}>
                       <Ionicons name="document-text-outline" size={29} color={colors.accent} />
                     </View>
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   errorText: { color: "#FF3B30", flex: 1, fontSize: 12, lineHeight: 17, fontFamily: "Inter_500Medium" },
   textButton: { alignItems: "center", paddingVertical: 13 },
   textButtonText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  scannerWrap: { height: 430, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  scannerWrap: { height: 430, backgroundColor: "#000", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   camera: { ...StyleSheet.absoluteFill },
   scanFrame: { width: 250, height: 250, position: "relative" },
   corner: { width: 30, height: 30, position: "absolute", borderWidth: 3 },

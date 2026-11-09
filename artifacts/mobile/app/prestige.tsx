@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -244,7 +243,9 @@ export default function PrestigeScreen() {
         >
           {/* Nav */}
           <View style={s.heroNav}>
-            <GlassBackButton style={s.navBtn} onPress={() => router.back()} icon="chevron-back" />
+            <TouchableOpacity style={s.navBtn} onPress={() => router.back()} hitSlop={12}>
+              <Ionicons name="chevron-back" size={22} color="#fff" />
+            </TouchableOpacity>
             <Text style={s.navTitle}>Prestige</Text>
             <TouchableOpacity style={s.navBtn} onPress={() => router.push("/app/afupay")} hitSlop={12}>
               <Ionicons name="wallet" size={20} color="#fff" />
@@ -316,7 +317,7 @@ export default function PrestigeScreen() {
               >
                 <Text style={{ fontSize: 14 }}>{nextTier.emoji}</Text>
                 <Text style={[s.tierUnlockHintText, { color: nextTier.color }]}>
-                  {`Unlock ${nextTier.label}: ${nextTier.perks[0]?.text}`}
+                  Unlock {nextTier.label}: {nextTier.perks[0]?.text}
                 </Text>
                 <Ionicons name="chevron-forward" size={13} color={nextTier.color} />
               </TouchableOpacity>
@@ -376,21 +377,21 @@ export default function PrestigeScreen() {
         {/* ── OVERVIEW ────────────────────────────────────────────────────── */}
         {activeTab === "overview" && (
           <View style={s.section}>
-            <View style={[s.valueCard, { backgroundColor: colors.cardSurface, borderColor: tier.color + "45" }]}>
+            <View style={[s.valueCard, { backgroundColor: colors.surface, borderColor: tier.color + "45" }]}>
               <View style={[s.valueIcon, { backgroundColor: tier.color + "18" }]}>
                 <Ionicons name="star-outline" size={20} color={tier.color} />
               </View>
-              <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+              <View style={{ flex: 1, gap: 3 }}>
                 <Text style={[s.valueTitle, { color: colors.text }]}>Make your activity count</Text>
                 <Text style={[s.valueBody, { color: colors.textSecondary }]}>
-                  {"ACoin is AfuChat's reward currency. Use it to unlock status goods, show your progress and make your presence your own."}
+                  ACoin is AfuChat's reward currency. Use it to unlock status goods, show your progress and make your presence your own.
                 </Text>
               </View>
             </View>
 
             {/* Your tier perks */}
             <SectionHeader title={`${tier.emoji} ${tier.label.toUpperCase()} PERKS`} subtitle="Active benefits you have right now" colors={colors} />
-            <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {tier.perks.map((perk, i) => (
                 <View key={i}>
                   {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -409,7 +410,7 @@ export default function PrestigeScreen() {
             {nextTier && (
               <>
                 <SectionHeader title={`${nextTier.emoji} ${nextTier.label.toUpperCase()} UNLOCKS`} subtitle={`${(nextTier.minAcoin - acoin).toLocaleString()} AC away`} colors={colors} />
-                <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: nextTier.color + "40" }]}>
+                <View style={[s.card, { backgroundColor: colors.surface, borderColor: nextTier.color + "40" }]}>
                   {nextTier.perks.map((perk, i) => (
                     <View key={i}>
                       {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -432,11 +433,11 @@ export default function PrestigeScreen() {
               const isActive   = t.id === tier.id;
               const isUnlocked = acoin >= t.minAcoin;
               return (
-                <View key={t.id} style={[s.tierRow, { backgroundColor: colors.cardSurface, borderColor: isActive ? t.color + "55" : colors.border, opacity: isUnlocked ? 1 : 0.55 }]}>
+                <View key={t.id} style={[s.tierRow, { backgroundColor: colors.surface, borderColor: isActive ? t.color + "55" : colors.border, opacity: isUnlocked ? 1 : 0.55 }]}>
                   <View style={[s.tierRowLeft, { backgroundColor: t.color + "18" }]}>
                     <Text style={s.tierRowEmoji}>{t.emoji}</Text>
                   </View>
-                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                       <Text style={[s.tierRowName, { color: isActive ? t.color : colors.text }]}>{t.label}</Text>
                       {isActive && <View style={[s.youPill, { backgroundColor: t.color + "22", borderColor: t.color + "44" }]}><Text style={[s.youText, { color: t.color }]}>You</Text></View>}
@@ -455,7 +456,7 @@ export default function PrestigeScreen() {
 
             {/* How to earn */}
             <SectionHeader title="EARN MORE ACOIN" subtitle="Climb the tiers faster" colors={colors} />
-            <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {[
                 { emoji: "💳", label: "Top-Up ACoin",         sub: "Buy AC directly from your wallet",            action: "/app/afupay?section=topup" },
                 { emoji: "🔄", label: "Convert Nexa → ACoin", sub: "Turn your XP into spendable ACoins",          action: "/app/afupay?section=exchange" },
@@ -470,7 +471,7 @@ export default function PrestigeScreen() {
                     activeOpacity={row.action ? 0.7 : 1}
                   >
                     <Text style={{ fontSize: 26 }}>{row.emoji}</Text>
-                    <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flex: 1 }}>
                       <Text style={[s.earnLabel, { color: colors.text }]}>{row.label}</Text>
                       <Text style={[s.earnSub, { color: colors.textMuted }]}>{row.sub}</Text>
                     </View>
@@ -534,7 +535,7 @@ export default function PrestigeScreen() {
                         <View
                           key={item.id}
                           style={[s.shopCard, {
-                            backgroundColor: colors.cardSurface,
+                            backgroundColor: colors.surface,
                             borderColor: owned ? itemTier.color + "66" : tierUnlocked ? colors.border : colors.border,
                             opacity: tierUnlocked ? 1 : 0.5,
                           }]}
@@ -544,7 +545,7 @@ export default function PrestigeScreen() {
                             <View style={[s.shopCardEmojiBox, { backgroundColor: itemTier.color + "18" }]}>
                               <Text style={s.shopCardEmoji}>{item.emoji}</Text>
                             </View>
-                            <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                            <View style={{ flex: 1, gap: 3 }}>
                               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                                 <Text style={[s.shopCardName, { color: colors.text }]}>{item.name}</Text>
                                 {owned && <View style={[s.shopOwnedChip, { backgroundColor: itemTier.color + "22" }]}><Text style={[s.shopOwnedText, { color: itemTier.color }]}>Owned</Text></View>}
@@ -563,7 +564,7 @@ export default function PrestigeScreen() {
                               <Text style={[s.tierRequiredText, { color: itemTier.color }]}>{itemTier.emoji} {itemTier.label}+</Text>
                             </View>
                             <Text style={[s.shopCardPrice, { color: Colors.gold }]}>
-                              {"🪙 "}{fmtAcoin(item.acoin)}
+                              🪙 {fmtAcoin(item.acoin)}
                             </Text>
 
                             {owned && ownedPurchase ? (
@@ -616,7 +617,7 @@ export default function PrestigeScreen() {
                   <Text style={[s.myRankTotal, { color: colors.textMuted }]}>of {totalUsers.toLocaleString()}</Text>
                 </View>
                 <Avatar uri={profile?.avatar_url} name={profile?.display_name || ""} size={40} />
-                <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flex: 1 }}>
                   <Text style={[s.myRankName, { color: equippedGoods.has('sg4') ? Colors.gold : colors.text }]}>{profile?.display_name}</Text>
                   <Text style={[s.myRankAcoin, { color: Colors.gold }]}>{fmtAcoin(acoin)} 🪙</Text>
                 </View>
@@ -646,7 +647,7 @@ export default function PrestigeScreen() {
               </View>
             ) : (
               <>
-                <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+                <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                   {richList.slice(3).map((u, idx) => {
                     const uTier = getPrestigeTier(u.acoin || 0);
                     const isMe  = u.id === user?.id;
@@ -661,7 +662,7 @@ export default function PrestigeScreen() {
                         >
                           <Text style={[s.richRank, { color: rank <= 10 ? Colors.gold : colors.textMuted, fontFamily: rank <= 10 ? "Inter_700Bold" : "Inter_400Regular" }]}>#{rank}</Text>
                           <Avatar uri={u.avatar_url} name={u.display_name} size={40} />
-                              <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+                          <View style={{ flex: 1, gap: 1 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                               <Text style={[s.richName, { color: isMe ? tier.color : colors.text }]} numberOfLines={1}>{u.display_name}</Text>
                               {isMe && <View style={[s.youPill, { backgroundColor: tier.color + "22", borderColor: tier.color + "44" }]}><Text style={[s.youText, { color: tier.color }]}>You</Text></View>}
@@ -682,7 +683,7 @@ export default function PrestigeScreen() {
                 {nearYou.length > 0 && (
                   <>
                     <SectionHeader title="NEAR YOUR RANK" subtitle={`Users close to your position #${myRank}`} colors={colors} />
-                    <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+                    <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       {nearYou.map((u, idx) => {
                         const uTier = getPrestigeTier(u.acoin || 0);
                         const uRank = richList.findIndex((r) => r.id === u.id) + 1;
@@ -697,7 +698,7 @@ export default function PrestigeScreen() {
                             >
                               <Text style={[s.richRank, { color: colors.textMuted }]}>#{uRank}</Text>
                               <Avatar uri={u.avatar_url} name={u.display_name} size={38} />
-                              <View style={{ flex: 1, minWidth: 0 }}>
+                              <View style={{ flex: 1 }}>
                                 <Text style={[s.richName, { color: colors.text }]} numberOfLines={1}>{u.display_name}</Text>
                                 <Text style={[s.richHandle, { color: colors.textMuted }]}>@{u.handle}</Text>
                               </View>
@@ -733,7 +734,7 @@ export default function PrestigeScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+              <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 {transactions.map((tx, i) => (
                   <View key={tx.id}>
                     {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -741,7 +742,7 @@ export default function PrestigeScreen() {
                       <View style={[s.txIcon, { backgroundColor: tx.color + "20" }]}>
                         <Ionicons name={tx.icon as any} size={18} color={tx.color} />
                       </View>
-                      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+                      <View style={{ flex: 1, gap: 1 }}>
                         <Text style={[s.txLabel, { color: colors.text }]} numberOfLines={1}>{tx.label}</Text>
                         <Text style={[s.txTime, { color: colors.textMuted }]}>
                           {new Date(tx.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
@@ -841,7 +842,7 @@ const s = StyleSheet.create({
   progressTrack: { height: 7, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.35)", overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 4 },
   tierUnlockHint: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, marginTop: 2 },
-  tierUnlockHintText: { flex: 1, minWidth: 0, fontSize: 12, fontFamily: "Inter_500Medium", textAlign: "left" },
+  tierUnlockHintText: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium" },
 
   maxBadge: { borderRadius: 14, paddingHorizontal: 18, paddingVertical: 10, alignSelf: "center" },
   maxText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FFD700", textAlign: "center" },
@@ -865,8 +866,8 @@ const s = StyleSheet.create({
   section: { paddingHorizontal: 14, paddingTop: 14, gap: 12 },
   valueCard: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1 },
   valueIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  valueTitle: { width: "100%", fontSize: 15, fontFamily: "Inter_700Bold", textAlign: "left" },
-  valueBody: { width: "100%", fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular", textAlign: "left" },
+  valueTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  valueBody: { fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular" },
   sectionTitle: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.9 },
   sectionSub: { fontSize: 11, fontFamily: "Inter_400Regular" },
   card: { borderRadius: 16, borderWidth: 0.5, overflow: "hidden" },
@@ -875,30 +876,30 @@ const s = StyleSheet.create({
   // Perk rows
   perkRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
   perkIconBox: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  perkText: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, textAlign: "left" },
+  perkText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 
   // Tier rows
   tierRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 0.5 },
   tierRowLeft: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   tierRowEmoji: { fontSize: 22 },
-  tierRowName: { fontSize: 15, fontFamily: "Inter_700Bold", textAlign: "left" },
-  tierRowMin: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "left" },
+  tierRowName: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  tierRowMin: { fontSize: 12, fontFamily: "Inter_400Regular" },
   tierRowNeed: { fontSize: 11, fontFamily: "Inter_500Medium" },
 
   // Earn rows
   earnRow: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14 },
-  earnLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "left" },
-  earnSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2, textAlign: "left" },
+  earnLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  earnSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
 
   // Shop cards
   shopCard: { borderRadius: 16, borderWidth: 0.5, padding: 14, gap: 12 },
   shopCardTop: { flexDirection: "row", gap: 12 },
   shopCardEmojiBox: { width: 56, height: 56, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   shopCardEmoji: { fontSize: 30 },
-  shopCardName: { fontSize: 15, fontFamily: "Inter_700Bold", textAlign: "left" },
+  shopCardName: { fontSize: 15, fontFamily: "Inter_700Bold" },
   whereRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  shopCardWhere: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "left" },
-  shopCardDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17, textAlign: "left" },
+  shopCardWhere: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  shopCardDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
   shopOwnedChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
   shopOwnedText: { fontSize: 10, fontFamily: "Inter_700Bold" },
   shopCardBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -918,8 +919,8 @@ const s = StyleSheet.create({
   myRankLeft: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, alignItems: "center" },
   myRankNum: { fontSize: 22, fontFamily: "Inter_800ExtraBold" },
   myRankTotal: { fontSize: 10, fontFamily: "Inter_400Regular" },
-  myRankName: { fontSize: 15, fontFamily: "Inter_700Bold", textAlign: "left" },
-  myRankAcoin: { fontSize: 12, fontFamily: "Inter_600SemiBold", textAlign: "left" },
+  myRankName: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  myRankAcoin: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   myRankTierLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
 
   // Leaderboard
@@ -936,8 +937,8 @@ const s = StyleSheet.create({
 
   richRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   richRank: { width: 32, fontSize: 13, textAlign: "center" },
-  richName: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "left" },
-  richHandle: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "left" },
+  richName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  richHandle: { fontSize: 12, fontFamily: "Inter_400Regular" },
   richAcoin: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
   youPill: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, borderWidth: 1 },
@@ -946,8 +947,8 @@ const s = StyleSheet.create({
   // Tx history
   txRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 13 },
   txIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  txLabel: { fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "left" },
-  txTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1, textAlign: "left" },
+  txLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  txTime: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   txAmount: { fontSize: 15, fontFamily: "Inter_700Bold" },
   txUnit: { fontSize: 10, fontFamily: "Inter_400Regular" },
 

@@ -8,7 +8,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "@/context/LanguageContext";
@@ -21,7 +20,7 @@ const FLAG: Record<string, string> = {
   ar: "🇸🇦", hi: "🇮🇳", pt: "🇧🇷", ru: "🇷🇺",
   ja: "🇯🇵", de: "🇩🇪", sw: "🇰🇪", ko: "🇰🇷",
   it: "🇮🇹", tr: "🇹🇷",
-  am: "🇪🇹", rw: "🇷🇼", lg: "🇺🇬",
+  am: "🇪🇹", rw: "🇷🇼",
 };
 
 const LANG_LIST = BUNDLED_UI_LANGUAGES.map((code) => ({
@@ -45,7 +44,9 @@ export default function LanguageSettingsScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={styles.backBtn} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+          <Ionicons name="chevron-back" size={26} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>{t("Language")}</Text>
         <View style={styles.backBtn} />
       </View>

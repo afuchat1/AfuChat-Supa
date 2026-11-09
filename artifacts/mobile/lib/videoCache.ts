@@ -1,16 +1,18 @@
 import * as FileSystem from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getDB } from "./storage/db";
+import { storage } from "./storage/mmkv";
+import { isCellular } from "./networkQuality";
 
-// ─── Explicit offline-video store ───────────────────────────────────────────────
-// Viewing a video never downloads it for offline use. Only an explicit user
-// save writes media to documentDirectory (Android app-private User data).
+// ─── Video Stores ───────────────────────────────────────────────────────────────
+// Watched videos are kept in documentDirectory so the user can use them
+// offline. Prefetches use cacheDirectory instead and may be removed by the OS.
 //
 // RULES:
-//   • Network media is streamed; it is not automatically downloaded to disk
-//   • Explicitly saved videos survive app restarts and OS cache cleanup
-//   • Saved videos are removed only by explicit user action
-//   • Refuse new saves at the storage limit rather than deleting older saves
+//   • Watched videos have a TTL and bounded size/count
+//   • Prefetches are disposable and are never part of the offline registry
+//   • getCachedVideoUri() returns local path instantly if already on device
+//   • markVideoWatched() is idempotent — calling it twice does nothing extra
 //
 // documentDirectory:
 //   Android → /data/data/<pkg>/files/
@@ -21,7 +23,9 @@ import { getDB } from "./storage/db";
 // Permanent watched-video store — bounded and user-visible in storage settings.
 // FileSystem.documentDirectory is always a non-null string on Android.
 const VIDEO_DIR = (FileSystem.documentDirectory ?? "") + "afuchat_videos/";
-const VIDEO_STAGING_DIR = (FileSystem.cacheDirectory ?? "") + "afuchat_video_staging/";
+// Prefetches are disposable. Keeping them outside documentDirectory prevents
+// scrolling through a feed from permanently consuming user storage.
+const PREFETCH_DIR = (FileSystem.cacheDirectory ?? VIDEO_DIR) + "afuchat_video_prefetch/";
 
 const MAX_VIDEO_CACHE_BYTES = 512 * 1024 * 1024;
 const MAX_VIDEO_CACHE_ENTRIES = 50;
@@ -47,6 +51,7 @@ export type OfflineVideoEntry = {
 // ─── In-memory maps ────────────────────────────────────────────────────────────
 
 const memoryMap = new Map<string, string>();      // url → local path
+const inProgress = new Map<string, Promise<string | null>>();
 const saveInProgress = new Set<string>();
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,32 +145,51 @@ async function dbGetRecent(sinceMs: number): Promise<OfflineVideoEntry[]> {
 }
 
 async function dbSaveEntry(entry: OfflineVideoEntry): Promise<void> {
-  const db = await getDB();
-  const now = Date.now();
-  await db.runAsync(
-    `INSERT INTO video_registry
-       (post_id, url, file_uri, file_size, title, thumbnail, stored_at, watched_at,
-        author_id, author_handle, author_name, author_avatar)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(post_id) DO UPDATE SET
-       url           = excluded.url,
-       file_uri      = excluded.file_uri,
-       file_size     = excluded.file_size,
-       title         = excluded.title,
-       thumbnail     = excluded.thumbnail,
-       watched_at    = excluded.watched_at,
-       author_id     = COALESCE(excluded.author_id, author_id),
-       author_handle = COALESCE(excluded.author_handle, author_handle),
-       author_name   = COALESCE(excluded.author_name, author_name),
-       author_avatar = COALESCE(excluded.author_avatar, author_avatar)`,
-    [
-      entry.postId, entry.url, entry.fileUri, entry.fileSize,
-      entry.title, entry.thumbnail, entry.cachedAt || now,
-      entry.watchedAt || now,
-      entry.authorId ?? null, entry.authorHandle ?? null,
-      entry.authorName ?? null, entry.authorAvatar ?? null,
-    ],
-  );
+  try {
+    const db = await getDB();
+    const now = Date.now();
+    await db.runAsync(
+      `INSERT INTO video_registry
+         (post_id, url, file_uri, file_size, title, thumbnail, stored_at, watched_at,
+          author_id, author_handle, author_name, author_avatar)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(post_id) DO UPDATE SET
+         url          = excluded.url,
+         file_uri     = excluded.file_uri,
+         file_size    = excluded.file_size,
+         title        = excluded.title,
+         thumbnail    = excluded.thumbnail,
+         watched_at   = ?,
+         author_id    = COALESCE(excluded.author_id, author_id),
+         author_handle= COALESCE(excluded.author_handle, author_handle),
+         author_name  = COALESCE(excluded.author_name, author_name),
+         author_avatar= COALESCE(excluded.author_avatar, author_avatar)`,
+      [
+        entry.postId, entry.url, entry.fileUri, entry.fileSize,
+        entry.title, entry.thumbnail, now, now,
+        entry.authorId ?? null, entry.authorHandle ?? null,
+        entry.authorName ?? null, entry.authorAvatar ?? null,
+        now, // ON CONFLICT watched_at = ?
+      ],
+    );
+  } catch {
+    // Fallback: simple upsert without ON CONFLICT syntax (older SQLite)
+    try {
+      const db2 = await getDB();
+      await db2.runAsync(
+        `INSERT OR REPLACE INTO video_registry
+           (post_id, url, file_uri, file_size, title, thumbnail, stored_at, watched_at,
+            author_id, author_handle, author_name, author_avatar)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.postId, entry.url, entry.fileUri, entry.fileSize,
+          entry.title, entry.thumbnail, entry.cachedAt || Date.now(), Date.now(),
+          entry.authorId ?? null, entry.authorHandle ?? null,
+          entry.authorName ?? null, entry.authorAvatar ?? null,
+        ],
+      );
+    } catch {}
+  }
 }
 
 async function dbDeleteEntry(postId: string): Promise<void> {
@@ -209,23 +233,53 @@ export async function getCachedVideoUri(url: string): Promise<string | null> {
   return null;
 }
 
-/** Video prefetch is intentionally disabled; feed videos stream when played. */
-export function cacheVideo(_url: string): Promise<string | null> {
-  return Promise.resolve(null);
+/**
+ * Pre-fetch a video to local storage (e.g. for the next video in the feed).
+ * Returns immediately if already on device — no duplicate download.
+ * On cellular connections this is skipped entirely — videos stream instead
+ * of being downloaded, saving significant mobile data.
+ */
+export function cacheVideo(url: string): Promise<string | null> {
+  if (!url) return Promise.resolve(null);
+  // Never pre-download on cellular — stream only to protect mobile data
+  if (isCellular()) return Promise.resolve(null);
+  if (memoryMap.has(url)) return Promise.resolve(memoryMap.get(url)!);
+  if (inProgress.has(url)) return inProgress.get(url)!;
+
+  const task = (async (): Promise<string | null> => {
+    try {
+      await ensureDir(PREFETCH_DIR);
+      const localPath = PREFETCH_DIR + urlToFilename(url);
+      const existing = await FileSystem.getInfoAsync(localPath);
+      if (existing.exists && (existing as any).size > 0) {
+        memoryMap.set(url, localPath);
+        return localPath;
+      }
+      const result = await FileSystem.downloadAsync(url, localPath);
+      const check = await FileSystem.getInfoAsync(result.uri);
+      if (check.exists && (check as any).size > 0) {
+        memoryMap.set(url, result.uri);
+        return result.uri;
+      }
+    } catch {}
+    return null;
+  })().finally(() => inProgress.delete(url));
+
+  inProgress.set(url, task);
+  return task;
 }
 
-// ─── User-controlled offline saves ──────────────────────────────────────────────
+// ─── Watch → Permanent Store ───────────────────────────────────────────────────
 
 /**
- * Save a video only after an explicit user action. Downloads first to the
- * OS-clearable staging directory, then moves it into persistent app storage
- * after it passes the storage limit check and its registry row is committed.
+ * Called when a user watches a video. Saves it permanently to device storage.
+ * Idempotent — if already stored, updates metadata only (no extra download).
+ * The video is NEVER re-downloaded if already on device.
+ *
+ * Works on both WiFi and cellular — once a video is watched it should always
+ * be available offline. Pre-fetching (cacheVideo) still skips cellular.
  */
-export type SaveOfflineVideoResult =
-  | { success: true; alreadySaved: boolean }
-  | { success: false; reason: "invalid_video" | "already_saving" | "download_failed" | "storage_limit" | "storage_failed" };
-
-export async function saveVideoForOffline(
+export async function markVideoWatched(
   postId: string,
   url: string,
   meta: {
@@ -236,107 +290,111 @@ export async function saveVideoForOffline(
     authorName?: string;
     authorAvatar?: string | null;
   },
-): Promise<SaveOfflineVideoResult> {
-  if (!url || !postId) return { success: false, reason: "invalid_video" };
-  if (saveInProgress.has(postId)) return { success: false, reason: "already_saving" };
+): Promise<void> {
+  if (!url || !postId) return;
+  if (saveInProgress.has(postId)) return;
   saveInProgress.add(postId);
 
-  let stagedPath: string | null = null;
-  let movedPath: string | null = null;
   try {
-    const oldEntry = await dbGetEntry(postId);
-    if (oldEntry?.url === url) {
-      const existing = await FileSystem.getInfoAsync(oldEntry.fileUri);
-      if (existing.exists && (existing as any).size > 0) {
-        await dbSaveEntry({
-          ...oldEntry,
-          title: meta.title,
-          thumbnail: meta.thumbnail,
-          authorId: meta.authorId ?? oldEntry.authorId,
-          authorHandle: meta.authorHandle ?? oldEntry.authorHandle,
-          authorName: meta.authorName ?? oldEntry.authorName,
-          authorAvatar: meta.authorAvatar ?? oldEntry.authorAvatar,
-          watchedAt: Date.now(),
-        });
-        memoryMap.set(url, oldEntry.fileUri);
-        return { success: true, alreadySaved: true };
+    await ensureDir(VIDEO_DIR);
+    const filename = urlToFilename(url);
+    const localPath = VIDEO_DIR + filename;
+
+    // Check if already on device (in either the watched store or a prefetch).
+    const existing = await FileSystem.getInfoAsync(localPath);
+    if (existing.exists && (existing as any).size > 0) {
+      // Already stored — just update metadata in registry, no download
+      memoryMap.set(url, localPath);
+      await dbSaveEntry({
+        postId, url, fileUri: localPath,
+        fileSize: (existing as any).size ?? 0,
+        cachedAt: Date.now(),
+        title: meta.title,
+        thumbnail: meta.thumbnail,
+        authorId: meta.authorId,
+        authorHandle: meta.authorHandle,
+        authorName: meta.authorName,
+        authorAvatar: meta.authorAvatar,
+      });
+      await trimVideoCache();
+      return;
+    }
+
+    // Not yet on device — if a download is in progress, reuse it
+    let fileUri = localPath;
+    let fileSize = 0;
+
+    const prefetchedPath = memoryMap.get(url);
+    if (prefetchedPath && prefetchedPath !== localPath) {
+      try {
+        await FileSystem.copyAsync({ from: prefetchedPath, to: localPath });
+        const info = await FileSystem.getInfoAsync(localPath);
+        fileSize = (info as any).size ?? 0;
+      } catch {}
+    } else if (inProgress.has(url)) {
+      const result = await inProgress.get(url)!;
+      if (result) {
+        // Copy from wherever it landed to our permanent path (if different)
+        if (result !== localPath) {
+          try {
+            await FileSystem.copyAsync({ from: result, to: localPath });
+            const info = await FileSystem.getInfoAsync(localPath);
+            fileSize = (info as any).size ?? 0;
+          } catch {
+            fileUri = result;
+            const info = await FileSystem.getInfoAsync(result);
+            fileSize = (info as any).size ?? 0;
+          }
+        } else {
+          const info = await FileSystem.getInfoAsync(result);
+          fileSize = (info as any).size ?? 0;
+        }
       }
     }
 
-    await ensureDir(VIDEO_STAGING_DIR);
-    const filename = urlToFilename(url);
-    const safePostId = postId.replace(/[^a-zA-Z0-9_-]/g, "_");
-    stagedPath = `${VIDEO_STAGING_DIR}${safePostId}_${Date.now()}_${filename}`;
-    const result = await FileSystem.downloadAsync(url, stagedPath);
-    if (result.status < 200 || result.status >= 400) {
-      return { success: false, reason: "download_failed" };
-    }
-    const info = await FileSystem.getInfoAsync(result.uri);
-    if (!info.exists || (info as any).size === 0) {
-      return { success: false, reason: "download_failed" };
-    }
-    const fileSize = (info as any).size ?? 0;
-
-    const entries = await dbGetAll();
-    const remaining = entries.filter((entry) => entry.postId !== postId);
-    const storedBytes = remaining.reduce((total, entry) => total + Math.max(0, entry.fileSize || 0), 0);
-    if (remaining.length >= MAX_VIDEO_CACHE_ENTRIES || storedBytes + fileSize > MAX_VIDEO_CACHE_BYTES) {
-      return { success: false, reason: "storage_limit" };
+    if (fileSize === 0) {
+      // Download fresh directly to permanent location
+      const result = await FileSystem.downloadAsync(url, localPath);
+      const info = await FileSystem.getInfoAsync(result.uri);
+      if (!info.exists || (info as any).size === 0) return;
+      fileUri = result.uri;
+      fileSize = (info as any).size ?? 0;
     }
 
-    await ensureDir(VIDEO_DIR);
-    const fileUri = VIDEO_DIR + filename;
-    const finalExists = await FileSystem.getInfoAsync(fileUri);
-    if (finalExists.exists && (finalExists as any).size > 0) {
-      await FileSystem.deleteAsync(stagedPath, { idempotent: true });
-    } else {
-      await FileSystem.moveAsync({ from: stagedPath, to: fileUri });
-      movedPath = fileUri;
-    }
-
-    const finalInfo = await FileSystem.getInfoAsync(fileUri);
-    if (!finalInfo.exists || (finalInfo as any).size === 0) {
-      return { success: false, reason: "download_failed" };
-    }
+    memoryMap.set(url, fileUri);
     await dbSaveEntry({
-      postId, url, fileUri, fileSize: (finalInfo as any).size ?? fileSize,
-      cachedAt: Date.now(), watchedAt: Date.now(),
-      title: meta.title, thumbnail: meta.thumbnail,
+      postId, url, fileUri, fileSize,
+      cachedAt: Date.now(), title: meta.title, thumbnail: meta.thumbnail,
       authorId: meta.authorId,
       authorHandle: meta.authorHandle,
       authorName: meta.authorName,
       authorAvatar: meta.authorAvatar,
     });
-    memoryMap.set(url, fileUri);
-    if (oldEntry?.fileUri && oldEntry.fileUri !== fileUri) {
-      await FileSystem.deleteAsync(oldEntry.fileUri, { idempotent: true }).catch(() => {});
-    }
-    return { success: true, alreadySaved: false };
+    await trimVideoCache();
   } catch {
-    if (movedPath) await FileSystem.deleteAsync(movedPath, { idempotent: true }).catch(() => {});
-    return { success: false, reason: "storage_failed" };
   } finally {
-    if (stagedPath) await FileSystem.deleteAsync(stagedPath, { idempotent: true }).catch(() => {});
     saveInProgress.delete(postId);
   }
 }
 
-/** Watching a saved video updates its timestamp; it never downloads media. */
-export async function markVideoWatched(
-  postId: string,
-  _url: string,
-  _meta: {
-    title: string;
-    thumbnail: string | null;
-    authorId?: string;
-    authorHandle?: string;
-    authorName?: string;
-    authorAvatar?: string | null;
-  },
-): Promise<void> {
+/**
+ * Enforce hard bounds on the user-visible offline video store.
+ * The oldest watched entries are removed first until both limits are met.
+ */
+async function trimVideoCache(): Promise<void> {
   try {
-    const db = await getDB();
-    await db.runAsync("UPDATE video_registry SET watched_at = ? WHERE post_id = ?", [Date.now(), postId]);
+    const entries = await dbGetAll();
+    let totalBytes = entries.reduce((sum, entry) => sum + Math.max(0, entry.fileSize || 0), 0);
+    let kept = entries.length;
+
+    for (let i = entries.length - 1; i >= 0 && (kept > MAX_VIDEO_CACHE_ENTRIES || totalBytes > MAX_VIDEO_CACHE_BYTES); i--) {
+      const entry = entries[i];
+      await FileSystem.deleteAsync(entry.fileUri, { idempotent: true }).catch(() => {});
+      await dbDeleteEntry(entry.postId);
+      memoryMap.delete(entry.url);
+      totalBytes -= Math.max(0, entry.fileSize || 0);
+      kept--;
+    }
   } catch {}
 }
 
@@ -375,6 +433,8 @@ export async function clearAllOfflineVideos(): Promise<void> {
   await dbDeleteAll();
   memoryMap.clear();
   await FileSystem.deleteAsync(VIDEO_DIR, { idempotent: true }).catch(() => {});
+  // Also clear any in-progress downloads
+  inProgress.clear();
   // No-op for any entry whose file doesn't exist
   for (const e of entries) {
     await FileSystem.deleteAsync(e.fileUri, { idempotent: true }).catch(() => {});
@@ -392,14 +452,54 @@ export async function removeOfflineVideo(postId: string): Promise<void> {
   }
 }
 
-// Kept as a compatibility export for older settings screens. Offline saves are
-// user data now; they must not be deleted by age or a background maintenance job.
+// ─── TTL-based auto-expiry ─────────────────────────────────────────────────────
+
+const VIDEO_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const PURGE_LAST_RAN_KEY = "video_purge_last_ran_at";
+
+/**
+ * Deletes every cached video whose `stored_at` timestamp is older than 24 hours.
+ * Removes the file from disk, clears the memory map, and removes the SQLite row.
+ * Returns the number of entries removed.
+ */
 export async function clearExpiredOfflineVideos(): Promise<number> {
-  return 0;
+  try {
+    const db = await getDB();
+    const cutoff = Date.now() - VIDEO_TTL_MS;
+    const expired = await db.getAllAsync<{ post_id: string; file_uri: string; url: string }>(
+      "SELECT post_id, file_uri, url FROM video_registry WHERE stored_at < ?",
+      [cutoff],
+    );
+    if (expired.length === 0) return 0;
+
+    for (const row of expired) {
+      // Remove file from disk
+      await FileSystem.deleteAsync(row.file_uri, { idempotent: true }).catch(() => {});
+      // Clear in-memory map entry
+      memoryMap.delete(row.url);
+      // Remove SQLite row
+      await db.runAsync("DELETE FROM video_registry WHERE post_id = ?", [row.post_id]);
+    }
+    await trimVideoCache();
+    return expired.length;
+  } catch {
+    return 0;
+  }
 }
 
-/** @deprecated Offline videos are removed only by explicit user action. */
+/**
+ * Called once at app startup. Runs `clearExpiredOfflineVideos` at most once
+ * per 24-hour window, gated by a MMKV timestamp so it is a no-op on every
+ * subsequent cold start within the same window.
+ */
 export async function runScheduledVideoPurge(): Promise<void> {
+  try {
+    const lastRan = storage.getNumber(PURGE_LAST_RAN_KEY) ?? 0;
+    if (Date.now() - lastRan < VIDEO_TTL_MS) return; // already ran within 24 h
+    storage.setNumber(PURGE_LAST_RAN_KEY, Date.now());
+    await clearExpiredOfflineVideos();
+    await trimVideoCache();
+  } catch {}
 }
 
 /** Migrate old AsyncStorage registry entries into SQLite. Safe to call repeatedly. */
@@ -437,4 +537,4 @@ export async function clearVideoCache(): Promise<void> {
   await clearAllOfflineVideos();
 }
 
-export const OFFLINE_TTL_MS_EXPORT = 0;
+export const OFFLINE_TTL_MS_EXPORT = VIDEO_TTL_MS;

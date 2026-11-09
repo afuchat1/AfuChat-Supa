@@ -5,16 +5,15 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import { router, Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useTheme } from "@/hooks/useTheme";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/env";
 
@@ -204,11 +203,17 @@ export default function StatusPage() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
-      <StatusBar style="light" />
+      <StatusBar barStyle="light-content" />
 
       {/* Hero banner */}
       <View style={[styles.hero, { backgroundColor: overallCfg.bg, paddingTop: insets.top + 8 }]}>
-        <GlassBackButton onPress={() => router.back()} style={styles.backBtn} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={12}
+        >
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
         <View style={styles.heroContent}>
           {loading ? (
             <ActivityIndicator color="#fff" size="large" />

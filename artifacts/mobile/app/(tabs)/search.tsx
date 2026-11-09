@@ -1,29 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
-import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import * as ImageManipulator from "expo-image-manipulator";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
+import { GlassInputSurface } from "@/components/ui/GlassInputSurface";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { navigateToKnownProfile } from "@/lib/navigateToProfile";
+import { router, useLocalSearchParams } from "expo-router";
+import { navigateToProfile } from "@/lib/navigateToProfile";
 import * as Haptics from "@/lib/haptics";
 import { safeRouter } from "@/lib/navUtils";
 
@@ -32,23 +27,14 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase } from "@/lib/supabase";
-import { getEdgeFnBase, edgeHeadersWithAuth } from "@/lib/aiHelper";
+import { purchaseMusicTrack, searchMusicTracks } from "@/lib/afuMusic";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
+import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
+import type { AfuMusicTrack } from "@/modules/afumusic";
+import { showAlert } from "@/lib/alert";
+import { getEdgeFnBase, edgeHeaders } from "@/lib/aiHelper";
 import { getEngagera } from "@/lib/engagera";
-import { buildNavigationContext, detectNavIntent } from "@/lib/platformKnowledge";
-import { isValidInternalRoute } from "@/lib/routeCatalog";
-import {
-  getRankedSearchSuggestions,
-  getSearchProfileSuggestions,
-  getPlatformSearchSuggestions,
-  type PlatformSearchSuggestion,
-  getSimilarSearchTerms,
-  recordSearchResultEngagement,
-  recordSearchSubmission,
-  recordSearchSuggestionSelection,
-  type RankedSearchTerm,
-  type SearchProfileSuggestion,
-} from "@/lib/searchEngine";
-import { normalizeSearchTerm } from "@/lib/searchNormalization";
+import { detectNavIntent, PLATFORM_NAV_MAP, PLATFORM_FEATURES_GUIDE } from "@/lib/platformKnowledge";
 import {
   getSearchHistory,
   addToHistory,
@@ -61,19 +47,14 @@ import {
 import { trackEvent } from "@/lib/activityTracker";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
 import { Avatar } from "@/components/ui/Avatar";
-import { Skeleton } from "@/components/ui/Skeleton";
 import UserName from "@/components/ui/UserName";
-import { RichText } from "@/components/ui/RichText";
-import { getPersonalizedTags } from "@/lib/personalization";
+import { getPersonalizedTags, getSearchSuggestions } from "@/lib/personalization";
 import Colors from "@/constants/colors";
-import { searchMusicTracksByIds, getMusicPlaybackUri, listMusicTracks } from "@/lib/afuMusic";
-import type { AfuMusicTrack } from "@/modules/afumusic";
-import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
-import { getFootballData } from "@/lib/afuFootball";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BRAND   = Colors.brand;
+const CORAL   = "#F06451";
 const PURPLE  = "#8B5CF6";
 const GOLD    = "#D4A853";
 const SUCCESS = "#34C759";
@@ -93,24 +74,21 @@ const FALLBACK_TAGS = [
   "business", "sports", "movies", "food", "nature", "education",
 ];
 
-type SearchTab = "all" | "images" | "people" | "posts" | "videos" | "music" | "channels" | "events" | "gifts" | "market" | "jobs" | "football";
-type FootballSearchResult = { id: string; kind: "team" | "competition" | "player"; name: string; subtitle: string; logo: string | null };
+type SearchTab = "all" | "people" | "posts" | "music" | "videos" | "channels" | "events" | "gifts" | "market" | "jobs";
 type SortMode  = "relevance" | "recent" | "popular";
 type DateRange = "all" | "24h" | "7d" | "30d";
 
 const TABS: { id: SearchTab; label: string; icon: string }[] = [
   { id: "all",      label: "All",      icon: "apps" },
-  { id: "images",   label: "Images",   icon: "images" },
   { id: "people",   label: "People",   icon: "people" },
   { id: "posts",    label: "Posts",    icon: "document-text" },
-  { id: "videos",   label: "Videos",   icon: "play-circle" },
   { id: "music",    label: "Music",    icon: "musical-notes" },
+  { id: "videos",   label: "Videos",   icon: "play-circle" },
   { id: "channels", label: "Channels", icon: "megaphone" },
   { id: "events",   label: "Events",   icon: "calendar" },
   { id: "jobs",     label: "Jobs",     icon: "briefcase" },
   { id: "gifts",    label: "Gifts",    icon: "gift" },
   { id: "market",   label: "Market",   icon: "storefront" },
-  { id: "football", label: "Football", icon: "football" },
 ];
 
 // CATEGORIES is computed inside SearchScreen so gradients pick up the
@@ -118,7 +96,7 @@ const TABS: { id: SearchTab; label: string; icon: string }[] = [
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PersonResult  = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; show_bio_publicly?:boolean; is_private?:boolean; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number; kind:"profile" };
+type PersonResult  = { id:string; handle:string; display_name:string; avatar_url:string|null; bio:string|null; is_verified:boolean; is_organization_verified:boolean; current_grade:string; country:string|null; xp?:number; kind:"profile" };
 type OrgPageResult = { id:string; name:string; slug:string; logo_url:string|null; description:string|null; kind:"org" };
 type PostResult    = { id:string; content:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; post_type:string; article_title:string|null };
 type VideoResult   = { id:string; content:string; video_url:string; image_url:string|null; author_id:string; author_handle:string; author_name:string; author_avatar:string|null; view_count:number; created_at:string; audio_name:string|null; duration_seconds:number|null };
@@ -129,43 +107,19 @@ type GiftResult    = { id:string; name:string; emoji:string; base_xp_cost:number
 type MarketResult  = { id:string; kind:"product"|"freelance"|"community"; title:string; desc:string|null; emoji:string|null; image_url:string|null; price:number; badge:string|null; seller_name:string; route:string };
 type JobResult     = { id:string; title:string; job_type:string|null; location:string|null; description:string|null; apply_url:string|null; created_at:string; company_name:string; company_logo:string|null; company_slug:string|null };
 type AiInsight = { summary:string; suggestions:string[]; intent:string; bestCategory:string; keyTerms:string[]; explanation:string; actions:string[]; navigateTo?:string; navigateLabel?:string; directAnswer?:string };
-type DidYouMeanState = { original: string; suggested: string };
-type SearchSuggestionItem =
-  | { kind: "term"; term: string; score: number; growth: number; engagementRate: number; exactMatch: boolean }
-  | { kind: "profile"; profile: SearchProfileSuggestion }
-  | { kind: "content"; content: PlatformSearchSuggestion };
-type VisualMatch = {
-  postId: string;
-  imageUrl: string | null;
-  content: string;
-  createdAt: string;
-  distance: number;
-  similarity: number;
-  matchType?: "visual" | "text" | "caption" | "visual+text" | "content-text";
-  sourceType?: string;
-};
-type ImageSearchTileData = {
-  key: string;
-  imageUrl: string;
-  title: string;
-  metadata: string;
-  label?: string;
-  accessibilityLabel: string;
-  onPress: () => void;
-};
 type LensResult = {
   title: string;
   description: string;
-  matches: VisualMatch[];
-  indexedThisRequest?: number;
-  algorithm?: string;
-  indexing?: boolean;
+  facts?: string[];
+  category?: string;
+  confidence?: "high" | "medium" | "low";
+  answer?: string;
 };
-type SearchIndexRow = { source_type: string; source_id: string; score: number };
 
 type AllResults = {
   people:   (PersonResult|OrgPageResult)[];
   posts:    PostResult[];
+  music:    AfuMusicTrack[];
   videos:   VideoResult[];
   channels: ChannelResult[];
   groups:   GroupResult[];
@@ -173,10 +127,9 @@ type AllResults = {
   gifts:    GiftResult[];
   market:   MarketResult[];
   jobs:     JobResult[];
-  music:    AfuMusicTrack[];
 };
 
-const EMPTY: AllResults = { people:[], posts:[], videos:[], channels:[], groups:[], events:[], gifts:[], market:[], jobs:[], music:[] };
+const EMPTY: AllResults = { people:[], posts:[], music:[], videos:[], channels:[], groups:[], events:[], gifts:[], market:[], jobs:[] };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -200,110 +153,6 @@ function dateRangeCutoff(range: DateRange): string | null {
   if (range === "all") return null;
   const ms = range === "24h" ? 86400000 : range === "7d" ? 604800000 : 2592000000;
   return new Date(Date.now() - ms).toISOString();
-}
-
-function buildSearchTermSuggestions(query: string, candidates: string[]): string[] {
-  const trimmed = query.trim();
-  const normalizedQuery = trimmed.toLowerCase();
-  if (normalizedQuery.length < 2) return [];
-
-  const hashtagQuery = normalizedQuery.startsWith("#");
-  const needle = normalizedQuery.replace(/^#+/, "");
-  if (!needle) return [];
-
-  const prefixMatches: string[] = [];
-  const wordMatches: string[] = [];
-  const seen = new Set<string>();
-
-  for (const rawCandidate of candidates) {
-    const raw = rawCandidate.trim();
-    if (!raw) continue;
-    const value = hashtagQuery
-      ? `#${raw.replace(/^#+/, "")}`
-      : raw.replace(/^#+/, "");
-    const key = value.toLowerCase();
-    const comparable = key.replace(/^#+/, "");
-    if (!comparable || comparable === needle || seen.has(key)) continue;
-
-    const isPrefix = comparable.startsWith(needle);
-    const isWordPrefix = comparable.split(/[\s_#]+/).some((word) => word.startsWith(needle));
-    if (hashtagQuery && !isPrefix) continue;
-    if (!isPrefix && !isWordPrefix) continue;
-
-    seen.add(key);
-    (isPrefix ? prefixMatches : wordMatches).push(value);
-  }
-
-  return [...prefixMatches, ...wordMatches].slice(0, 5);
-}
-
-const SEARCH_STOP_WORDS = new Set([
-  "about", "after", "again", "also", "because", "before", "being", "could",
-  "from", "have", "here", "into", "just", "like", "more", "most", "only",
-  "other", "over", "some", "such", "than", "that", "their", "them", "there",
-  "these", "they", "this", "those", "through", "under", "very", "what",
-  "when", "where", "which", "while", "with", "would", "your", "https", "www",
-]);
-
-function extractSearchableTerms(values: Array<string | null | undefined>): string[] {
-  const terms = new Set<string>();
-  for (const value of values) {
-    if (!value) continue;
-    const words = value.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || [];
-    for (const word of words) {
-      if (!SEARCH_STOP_WORDS.has(word)) terms.add(word);
-    }
-  }
-  return Array.from(terms);
-}
-
-function editDistanceWithin(a: string, b: string, limit: number): number {
-  if (Math.abs(a.length - b.length) > limit) return limit + 1;
-  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const current = [i];
-    let rowMinimum = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      current[j] = Math.min(
-        current[j - 1] + 1,
-        previous[j] + 1,
-        previous[j - 1] + cost,
-      );
-      rowMinimum = Math.min(rowMinimum, current[j]);
-    }
-    if (rowMinimum > limit) return limit + 1;
-    previous = current;
-  }
-  return previous[b.length];
-}
-
-function findRelatedSearchQuery(query: string, candidates: string[]): string | null {
-  const parts = query.trim().split(/\s+/);
-  let best: { index: number; prefix: string; suffix: string; term: string; score: number } | null = null;
-
-  for (let index = 0; index < parts.length; index++) {
-    const match = parts[index].match(/^([#@]*)([\p{L}\p{N}]+)(.*)$/u);
-    if (!match) continue;
-    const originalWord = match[2].toLowerCase();
-    if (originalWord.length < 4) continue;
-
-    const maxDistance = originalWord.length < 8 ? 1 : 2;
-    for (const candidate of candidates) {
-      const term = candidate.toLowerCase();
-      if (term === originalWord || term.length < 4 || Math.abs(term.length - originalWord.length) > maxDistance) continue;
-      const distance = editDistanceWithin(originalWord, term, maxDistance);
-      const score = 1 - distance / Math.max(originalWord.length, term.length);
-      if (distance > maxDistance || score < 0.72) continue;
-      if (!best || score > best.score) {
-        best = { index, prefix: match[1], suffix: match[3], term, score };
-      }
-    }
-  }
-
-  if (!best) return null;
-  parts[best.index] = `${best.prefix}${best.term}${best.suffix}`;
-  return parts.join(" ");
 }
 
 // ─── AI Insight Fetcher ───────────────────────────────────────────────────────
@@ -336,7 +185,9 @@ async function fetchAiInsight(query: string): Promise<AiInsight | null> {
             role: "system" as const,
             content: `You are AfuChat's intelligent search and navigation assistant. Analyze the user's query in context of the AfuChat platform and return a JSON object that helps them find what they need OR navigate directly to the right screen.
 
-${buildNavigationContext()}
+${PLATFORM_NAV_MAP}
+
+${PLATFORM_FEATURES_GUIDE}
 
 AfuChat search categories (for content search):
 - people: user profiles, @handles, bios, organisations
@@ -367,13 +218,6 @@ Reply ONLY with a single JSON object — no markdown, no code fences, no explana
     const raw: string = aiRes.content ?? "";
     const parsed = parseAiJson(raw);
     if (!parsed) return navIntent ? { summary: `Navigate to ${navIntent.label}`, intent: "navigation", bestCategory: "all", keyTerms: [], suggestions: [], explanation: "", actions: [], navigateTo: navIntent.route, navigateLabel: navIntent.label } : null;
-    const modelRoute =
-      typeof parsed.navigateTo === "string" &&
-      parsed.navigateTo &&
-      isValidInternalRoute(parsed.navigateTo)
-        ? parsed.navigateTo
-        : undefined;
-    const destination = modelRoute ?? navIntent?.route;
     return {
       summary:       typeof parsed.summary       === "string" ? parsed.summary       : "",
       intent:        typeof parsed.intent         === "string" ? parsed.intent         : "mixed",
@@ -382,10 +226,8 @@ Reply ONLY with a single JSON object — no markdown, no code fences, no explana
       suggestions:   Array.isArray(parsed.suggestions)  ? parsed.suggestions  : [],
       explanation:   typeof parsed.explanation    === "string" ? parsed.explanation    : "",
       actions:       Array.isArray(parsed.actions)     ? parsed.actions     : [],
-      navigateTo:    destination,
-      navigateLabel: modelRoute
-        ? (typeof parsed.navigateLabel === "string" && parsed.navigateLabel ? parsed.navigateLabel : undefined)
-        : (destination ? navIntent?.label : undefined),
+      navigateTo:    typeof parsed.navigateTo     === "string" && parsed.navigateTo ? parsed.navigateTo : (navIntent?.route || undefined),
+      navigateLabel: typeof parsed.navigateLabel  === "string" && parsed.navigateLabel ? parsed.navigateLabel : (navIntent?.label || undefined),
       directAnswer:  typeof parsed.directAnswer   === "string" && parsed.directAnswer ? parsed.directAnswer : undefined,
     } as AiInsight;
   } catch {
@@ -435,13 +277,13 @@ function AvatarPlaceholder({ name, size, color }: { name: string; size: number; 
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
 
-function RowSkeleton() {
+function RowSkeleton({ bg }: { bg: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 }}>
-      <Skeleton width={48} height={48} borderRadius={24} />
+      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: bg, opacity: 0.5 }} />
       <View style={{ flex: 1, gap: 8 }}>
-        <Skeleton width="60%" height={13} borderRadius={6} />
-        <Skeleton width="40%" height={11} borderRadius={6} />
+        <View style={{ width: "60%", height: 13, borderRadius: 6, backgroundColor: bg, opacity: 0.5 }} />
+        <View style={{ width: "40%", height: 11, borderRadius: 6, backgroundColor: bg, opacity: 0.4 }} />
       </View>
     </View>
   );
@@ -449,101 +291,68 @@ function RowSkeleton() {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function SearchScreen({
-  title = "AfuSearch",
-  initialTab,
-  hasAppBottomNav = true,
-}: {
-  title?: string;
-  initialTab?: SearchTab;
-  hasAppBottomNav?: boolean;
-} = {}) {
-  const { playMusic } = useGlobalMusicPlayer();
-  const { user } = useAuth();
-  const { colors: themeColors, isDark: themeIsDark } = useTheme();
+export function SearchScreen({ title = "Search", initialTab }: { title?: string; initialTab?: SearchTab } = {}) {
+  const { user, profile } = useAuth();
+  const musicPlayer = useAfuMusicPlayer();
+  const { colors, isDark } = useTheme();
   // Shadow the module-level BRAND constant so every reference inside this
   // component (and all its inner functions) uses the user's chosen accent.
-  const isAfuSearch = title === "AfuSearch";
-  const colors = themeColors;
-  const isDark = themeIsDark;
   const BRAND = colors.accent;
+  const glassBarText = colors.glassBarText;
+  const glassBarMuted = colors.glassBarMuted;
 
   const CATEGORIES = [
     { id: "people",   label: "People",   icon: "people",        gradient: [BRAND,  Colors.brandDark]   as [string,string] },
     { id: "posts",    label: "Posts",    icon: "document-text", gradient: [BRAND, Colors.status.info] as [string,string] },
+    { id: "music",    label: "Music",    icon: "musical-notes", gradient: [CORAL, "#F7BB75"] as [string,string] },
     { id: "videos",   label: "Videos",   icon: "play-circle",   gradient: [RED,    "#FF6B6B"]   as [string,string] },
     { id: "channels", label: "Channels", icon: "megaphone",     gradient: [PURPLE, "#A855F7"]   as [string,string] },
     { id: "events",   label: "Events",   icon: "calendar",      gradient: [WARN,   "#FFCC00"]   as [string,string] },
     { id: "jobs",     label: "Jobs",     icon: "briefcase",     gradient: [SUCCESS,"#30D158"]   as [string,string] },
     { id: "gifts",    label: "Gifts",    icon: "gift",          gradient: [GOLD,   "#F59E0B"]   as [string,string] },
     { id: "market",   label: "Market",   icon: "storefront",    gradient: [INDIGO, "#7986CB"]   as [string,string] },
-    { id: "football", label: "Football", icon: "football",      gradient: ["#247A4B", "#69A85D"] as [string,string] },
   ];
 
   const insets = useSafeAreaInsets();
   const { width: SW } = useWindowDimensions();
-  const { tag: incomingTag, q: incomingQ, imageUrl: incomingImageUrl } = useLocalSearchParams<{ tag?: string; q?: string; imageUrl?: string }>();
+  const { tag: incomingTag, q: incomingQ } = useLocalSearchParams<{ tag?: string; q?: string }>();
   const handledTagRef = useRef<string | null>(null);
   const handledQRef   = useRef<string | null>(null);
-  const handledImageRef = useRef<string | null>(null);
 
-  const scrollPB = insets.bottom + (hasAppBottomNav ? 90 : 16);
+  const scrollPB = insets.bottom + 90;
 
-  const inputRef    = useRef<TextInputInstance>(null);
-  const overlayInputRef = useRef<TextInputInstance>(null);
+  const inputRef    = useRef<AfuNativeRef.TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const searchIdRef = useRef(0);
-  const suggestionRequestRef = useRef(0);
-  const suggestionAbortRef = useRef<AbortController | null>(null);
-  const searchEngagementSentRef = useRef(new Map<string, number>());
 
   const [query,        setQuery]        = useState("");
-  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
   const [tab,          setTab]          = useState<SearchTab>(initialTab ?? "all");
-  const sortMode: SortMode = "relevance";
-  const dateRange: DateRange = "all";
-  const verifiedOnly = false;
+  const [sortMode,     setSortMode]     = useState<SortMode>("relevance");
+  const [dateRange,    setDateRange]    = useState<DateRange>("all");
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [loading,     setLoading]     = useState(false);
   const [results,     setResults]     = useState<AllResults>(EMPTY);
-  const [footballResults, setFootballResults] = useState<FootballSearchResult[]>([]);
-  const [footballNotice, setFootballNotice] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [totalCount,  setTotalCount]  = useState(0);
 
-  function cancelActiveSuggestionRequest() {
-    suggestionAbortRef.current?.abort();
-    suggestionAbortRef.current = null;
-  }
   const [history,          setHistory]          = useState<string[]>([]);
   const [saved,            setSaved]            = useState<SavedSearch[]>([]);
   const [personalizedTags, setPersonalizedTags] = useState<string[]>([]);
-  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestionItem[]>([]);
-  const relatedTermsRef = useRef({ all: [] as string[], posts: [] as string[], people: [] as string[], videos: [] as string[] });
-  const relatedIndexReadyRef = useRef<Promise<void> | null>(null);
-  const [didYouMean, setDidYouMean] = useState<DidYouMeanState | null>(null);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
-  useEffect(() => {
-    if (!searchOverlayOpen || !isAfuSearch) return;
-    const timer = setTimeout(() => overlayInputRef.current?.focus(), Platform.OS === "web" ? 40 : 120);
-    return () => clearTimeout(timer);
-  }, [searchOverlayOpen, isAfuSearch]);
-
-  const [trendingPosts,    setTrendingPosts]    = useState<PostResult[]>([]);
   const [trendingPeople,   setTrendingPeople]   = useState<PersonResult[]>([]);
   const [trendingHashtags, setTrendingHashtags] = useState<{ tag: string; count: number }[]>([]);
   const [trendingVideos,   setTrendingVideos]   = useState<VideoResult[]>([]);
-  const [trendingMusic,    setTrendingMusic]    = useState<AfuMusicTrack[]>([]);
-  const [trendingSearches, setTrendingSearches] = useState<RankedSearchTerm[]>([]);
 
   const [lensResult, setLensResult] = useState<LensResult | null>(null);
   const [lensImageUri, setLensImageUri] = useState<string | null>(null);
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
-  const isVisualSearchActive = Boolean(lensImageUri || lensLoading || lensResult);
-  const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
+
 
   useEffect(() => {
     if (incomingTag && incomingTag !== handledTagRef.current) {
@@ -563,173 +372,41 @@ export function SearchScreen({
   }, [incomingQ]);
 
   useEffect(() => {
-    if (incomingImageUrl && incomingImageUrl !== handledImageRef.current) {
-      handledImageRef.current = incomingImageUrl;
-      void searchImageUri(incomingImageUrl);
-    }
-  }, [incomingImageUrl]);
-
-  useEffect(() => {
     loadInitial();
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      cancelActiveSuggestionRequest();
-      suggestionRequestRef.current += 1;
     };
   }, []);
 
   async function loadInitial() {
-    const postIndexLoad = loadTrendingHashtags();
-    if (isAfuSearch) {
-      relatedIndexReadyRef.current = postIndexLoad.then(() => {}).catch(() => {});
-      getRankedSearchSuggestions("", 8)
-        .then(setTrendingSearches)
-        .catch((error) => console.warn("[AfuSearch] Could not load shared trends:", error?.message || error));
-      void loadTrendingVideos();
-      if (user) {
-        void listMusicTracks()
-          .then((tracks) => setTrendingMusic([...tracks].sort((a, b) => (b.plays || 0) - (a.plays || 0)).slice(0, 6)))
-          .catch((error) => console.warn("[AfuSearch] Could not load music discovery:", error?.message || error));
-      }
-    } else {
-      const peopleLoad = loadTrendingPeople();
-      relatedIndexReadyRef.current = Promise.all([peopleLoad, postIndexLoad])
-        .then(() => {})
-        .catch(() => {});
-      loadTrendingVideos();
-      getPersonalizedTags(14).then((tags) => { if (tags.length > 0) setPersonalizedTags(tags); }).catch(() => {});
-    }
-
     const [h, s] = await Promise.all([getSearchHistory(), getSavedSearches()]);
     setHistory(h); setSaved(s);
-  }
-
-  function localSuggestionsFor(text: string, recentTerms: string[] = []): string[] {
-    if (isAfuSearch && text.trim().startsWith("#")) {
-      const tagCandidates = [
-        ...recentTerms.filter((term) => term.trim().startsWith("#")),
-        ...history.filter((term) => term.trim().startsWith("#")),
-        ...personalizedTags.map((tag) => `#${tag.replace(/^#+/, "")}`),
-        ...trendingHashtags.map(({ tag }) => `#${tag}`),
-      ];
-      return buildSearchTermSuggestions(text, tagCandidates);
-    }
-
-    const candidates = [
-      ...recentTerms,
-      ...history,
-      ...personalizedTags,
-      ...(isAfuSearch ? [] : FALLBACK_TAGS),
-      ...trendingHashtags.map(({ tag }) => tag),
-      ...trendingPeople.flatMap((person) => [person.display_name, `@${person.handle}`]),
-      ...(isAfuSearch
-        ? [
-            ...relatedTermsRef.current.posts,
-            ...relatedTermsRef.current.videos,
-            ...relatedTermsRef.current.people,
-          ]
-        : []),
-    ];
-    return buildSearchTermSuggestions(text, candidates);
-  }
-
-  function mergeSuggestionItems(
-    text: string,
-    rankedTerms: RankedSearchTerm[],
-    profiles: SearchProfileSuggestion[],
-    contentSuggestions: PlatformSearchSuggestion[],
-    localTerms: string[],
-  ): SearchSuggestionItem[] {
-    const normalizedQuery = normalizeSearchTerm(text);
-    const profileQuery = normalizedQuery.replace(/^@+/, "");
-    const orderedProfiles = [...profiles].sort((a, b) => {
-      const aExact = normalizeSearchTerm(a.handle) === profileQuery
-        || normalizeSearchTerm(a.display_name) === normalizedQuery;
-      const bExact = normalizeSearchTerm(b.handle) === profileQuery
-        || normalizeSearchTerm(b.display_name) === normalizedQuery;
-      return Number(bExact) - Number(aExact);
-    });
-    const exactProfiles = orderedProfiles.filter((profile) =>
-      normalizeSearchTerm(profile.handle) === profileQuery
-      || normalizeSearchTerm(profile.display_name) === normalizedQuery,
-    );
-    const partialProfiles = orderedProfiles.filter((profile) => !exactProfiles.includes(profile));
-    const items: SearchSuggestionItem[] = [
-      // Shared, completed-search trends always lead the list.
-      ...rankedTerms.slice(0, 3).map((row) => ({
-        kind: "term" as const,
-        term: row.term,
-        score: row.score,
-        growth: row.growth,
-        engagementRate: row.engagementRate,
-        exactMatch: row.exactMatch,
-      })),
-      ...contentSuggestions.slice(0, 4).map((content) => ({ kind: "content" as const, content })),
-      ...exactProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
-      ...partialProfiles.slice(0, 2).map((profile) => ({ kind: "profile" as const, profile })),
-      ...localTerms.map((term) => ({
-        kind: "term" as const,
-        term,
-        score: 0,
-        growth: 0,
-        engagementRate: 0,
-        exactMatch: false,
-      })),
-    ];
-    const seen = new Set<string>();
-    return items.filter((item) => {
-      const key = item.kind === "profile"
-        ? `profile:${item.profile.profile_id}`
-        : item.kind === "content"
-          ? `content:${item.content.source_type}:${item.content.source_id}`
-          : `term:${normalizeSearchTerm(item.term)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).slice(0, 8);
-  }
-
-  function updateRelatedTerms(scope: "posts" | "people" | "videos", values: Array<string | null | undefined>) {
-    relatedTermsRef.current[scope] = extractSearchableTerms(values).slice(0, 1500);
-    relatedTermsRef.current.all = Array.from(new Set([
-      ...relatedTermsRef.current.posts,
-      ...relatedTermsRef.current.videos,
-      ...relatedTermsRef.current.people,
-    ])).slice(0, 3000);
+    loadTrendingPeople();
+    loadTrendingHashtags();
+    loadTrendingVideos();
+    getPersonalizedTags(14).then((tags) => { if (tags.length > 0) setPersonalizedTags(tags); }).catch(() => {});
   }
 
   async function loadTrendingPeople() {
     const { data } = await supabase
       .from("profiles")
-        .select("id, handle, display_name, avatar_url, bio, show_bio_publicly, is_verified, is_organization_verified, current_grade, country, xp")
+      .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country, xp")
       .eq("is_verified", true)
       .or("hide_from_search.is.null,hide_from_search.eq.false")
       .order("xp", { ascending: false })
       .limit(12);
-    if (data) {
-      setTrendingPeople(data.map((p: any) => ({
-        ...p,
-        bio: p.show_bio_publicly === false ? null : p.bio,
-        kind: "profile",
-      })));
-      updateRelatedTerms("people", data.flatMap((p: any) => [p.display_name, p.handle]));
-    }
+    if (data) setTrendingPeople(data.map((p: any) => ({ ...p, kind: "profile" })));
   }
 
   async function loadTrendingHashtags() {
     try {
       const { data } = await supabase.from("posts")
-        .select("id, content, article_title, post_type, view_count, image_url, author_id, created_at")
+        .select("content, view_count")
+        .ilike("content", "%#%")
         .eq("visibility", "public")
         .order("created_at", { ascending: false })
-        .limit(80);
+        .limit(500);
       if (!data) return;
-      updateRelatedTerms("posts", data
-        .filter((post: any) => post.post_type !== "video")
-        .flatMap((post: any) => [post.content, post.article_title]));
-      updateRelatedTerms("videos", data
-        .filter((post: any) => post.post_type === "video")
-        .map((post: any) => post.content));
       const RE = /#(\w{2,30})/g;
       const scores: Record<string, number> = {};
       for (const p of data) {
@@ -747,36 +424,7 @@ export function SearchScreen({
           .slice(0, 20)
           .map(([tag, score]) => ({ tag, count: Math.max(1, Math.round(score)) }))
       );
-      const featured = data
-        .filter((post: any) => post.post_type !== "video" && (post.content || post.article_title))
-        .sort((a: any, b: any) => (b.view_count || 0) - (a.view_count || 0))
-        .slice(0, 5);
-      if (featured.length > 0) void loadFeaturedPosts(featured).catch(() => {});
     } catch {}
-  }
-
-  async function loadFeaturedPosts(posts: any[]) {
-    const authorIds = [...new Set(posts.map((post) => post.author_id).filter(Boolean))] as string[];
-    const { data: profiles } = authorIds.length
-      ? await supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", authorIds)
-      : { data: [] as any[] };
-    const profileById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
-    setTrendingPosts(posts.map((post) => {
-      const author = profileById.get(post.author_id) || {} as any;
-      return {
-        id: post.id,
-        content: post.content || post.article_title || "",
-        image_url: post.image_url || null,
-        author_id: post.author_id,
-        author_handle: author.handle || "",
-        author_name: author.display_name || "",
-        author_avatar: author.avatar_url || null,
-        view_count: post.view_count || 0,
-        created_at: post.created_at,
-        post_type: post.post_type || "text",
-        article_title: post.article_title || null,
-      };
-    }));
   }
 
   async function loadTrendingVideos() {
@@ -793,7 +441,7 @@ export function SearchScreen({
       const ids = [...new Set(data.map((v: any) => v.author_id))] as string[];
       const { data: profiles } = await supabase.from("profiles").select("id, display_name, handle, avatar_url").in("id", ids);
       const pm = new Map((profiles || []).map((p: any) => [p.id, p]));
-      const videos: VideoResult[] = data.map((v: any) => {
+      setTrendingVideos(data.map((v: any) => {
         const a = pm.get(v.author_id) || {} as any;
         return {
           id: v.id, content: v.content || "", video_url: v.video_url,
@@ -802,190 +450,148 @@ export function SearchScreen({
           author_avatar: a.avatar_url || null, view_count: v.view_count || 0,
           created_at: v.created_at, audio_name: v.audio_name || null, duration_seconds: null,
         };
-      });
-      setTrendingVideos(videos);
-      updateRelatedTerms("videos", videos.flatMap((video) => [video.content, video.audio_name]));
+      }));
     } catch {}
   }
 
   // ── Main search ─────────────────────────────────────────────────────────────
 
-  const performSearch = useCallback(async function runSearch(
-    q: string,
-    currentTab: SearchTab,
-    vOnly: boolean,
-    sort: SortMode,
-    dr: DateRange,
-    allowDidYouMean = true,
-    fallbackFor?: DidYouMeanState,
-    recordExplicitSubmission = false,
-  ): Promise<void> {
+  const performSearch = useCallback(async (
+    q: string, currentTab: SearchTab, vOnly: boolean, sort: SortMode, dr: DateRange,
+  ) => {
     const trimmed = q.trim();
-    if (!fallbackFor) setDidYouMean(null);
-    if (trimmed.length < 1 && currentTab !== "videos" && currentTab !== "jobs") {
-      setResults(EMPTY); setFootballResults([]); setFootballNotice(null); setHasSearched(false); setDidYouMean(null); return;
+    if (trimmed.length < 1 && currentTab !== "videos" && currentTab !== "jobs" && currentTab !== "music") {
+      setResults(EMPTY); setHasSearched(false); setTotalCount(0); return;
     }
 
     const id = ++searchIdRef.current;
     setLoading(true); setHasSearched(true);
+    const pat = `%${trimmed}%`;
+    // Handles are stored without the leading @, but users commonly search
+    // for them as @username. Keep the original query for text content and use
+    // the normalized value for every handle lookup.
+    const handleQuery = trimmed.replace(/^@+/, "").trim();
+    const handlePat = handleQuery ? `%${handleQuery}%` : pat;
     const all = currentTab === "all";
     const cutoff = dateRangeCutoff(dr);
 
     try {
       const wantsPeople   = all || currentTab === "people";
-      const wantsPosts    = all || currentTab === "posts" || currentTab === "images";
+      const wantsPosts    = all || currentTab === "posts";
+      const wantsMusic    = all || currentTab === "music";
       const wantsVideos   = all || currentTab === "videos";
       const wantsChannels = all || currentTab === "channels";
       const wantsEvents   = all || currentTab === "events";
       const wantsGifts    = all || currentTab === "gifts";
       const wantsMarket   = all || currentTab === "market";
       const wantsJobs     = all || currentTab === "jobs";
-      const wantsMusic    = all || currentTab === "music";
 
-      const requestedTypes: string[] = [];
-      if (wantsPeople) requestedTypes.push("profile", "organization_page");
-      if (wantsPosts) requestedTypes.push("post");
-      if (wantsVideos) requestedTypes.push("video");
-      if (wantsChannels) requestedTypes.push("channel");
-      if (wantsChannels && trimmed.length > 0) requestedTypes.push("group");
-      if (wantsEvents) requestedTypes.push("event");
-      if (wantsGifts) requestedTypes.push("gift");
-      if (wantsJobs) requestedTypes.push("job");
-      if (wantsMarket) requestedTypes.push("product", "freelance", "paid_community");
-      if (wantsMusic && trimmed.length > 0) requestedTypes.push("music");
-
-      const { data: indexData, error: indexError } = await supabase.rpc("search_public_content", {
-        p_query: trimmed,
-        p_types: requestedTypes,
-        p_limit_per_type: all ? 6 : 30,
-        p_since: cutoff,
-        p_verified_only: vOnly,
-        p_sort_mode: sort,
-      });
-      if (indexError) throw indexError;
-      const indexRows: SearchIndexRow[] = Array.isArray(indexData) ? indexData : [];
-      const idsFor = (type: string) => indexRows
-        .filter((row) => row.source_type === type && typeof row.source_id === "string")
-        .map((row) => row.source_id);
-      const sortBySearchRank = <T extends { id: string }>(rows: T[], type: string): T[] => {
-        const rank = new Map(idsFor(type).map((sourceId, index) => [sourceId, index]));
-        return rows.slice().sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
-      };
-
-      const [peopleRes, orgPageRes, postsRes, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes, musicRes] =
+      const [peopleRes, orgPageRes, postsRes, musicTracks, videosRes, channelsRes, groupsRes, eventsRes, giftsRes, jobsRes] =
         await Promise.all([
           wantsPeople
-            ? supabase.rpc("get_public_search_profiles", {
-                p_ids: idsFor("profile"),
-              })
+            ? (() => {
+                let pq = supabase.from("profiles")
+                  .select("id, handle, display_name, avatar_url, bio, is_verified, is_organization_verified, current_grade, country, xp")
+                  .or(`handle.ilike.${handlePat},display_name.ilike.${pat},bio.ilike.${pat}`)
+                  .or("hide_from_search.is.null,hide_from_search.eq.false");
+                if (vOnly) pq = pq.eq("is_verified", true);
+                pq = pq.order("xp", { ascending: false });
+                return pq.limit(all ? 5 : 25);
+              })()
             : Promise.resolve({ data: [] }),
 
           wantsPeople
-            ? idsFor("organization_page").length
-              ? supabase.from("organization_pages")
+            ? supabase.from("organization_pages")
                 .select("id, name, slug, logo_url, description")
-                .in("id", idsFor("organization_page"))
-              : Promise.resolve({ data: [] })
+                .or(`name.ilike.${pat},description.ilike.${pat}`)
+                .limit(all ? 3 : 10)
             : Promise.resolve({ data: [] }),
 
           wantsPosts
-            ? idsFor("post").length
-              ? (() => {
+            ? (() => {
                 let pq = supabase.from("posts")
                   .select("id, content, image_url, author_id, view_count, created_at, post_type, article_title")
-                  .in("id", idsFor("post"))
+                  .ilike("content", pat)
                   .eq("visibility", "public")
-                  .or("is_blocked.is.null,is_blocked.eq.false")
                   .neq("post_type", "video");
                 if (cutoff) pq = pq.gte("created_at", cutoff);
-                return pq;
+                pq = sort === "popular" ? pq.order("view_count", { ascending: false }) : pq.order("created_at", { ascending: false });
+                return pq.limit(all ? 5 : 30);
               })()
-              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
+          wantsMusic
+            ? searchMusicTracks(trimmed).catch((error) => {
+                console.warn("[AfuSearch] Music results unavailable:", error);
+                return [] as AfuMusicTrack[];
+              })
+            : Promise.resolve([] as AfuMusicTrack[]),
+
           wantsVideos
-            ? idsFor("video").length
-              ? (() => {
+            ? (() => {
                 let vq = supabase.from("posts")
                   .select("id, content, video_url, image_url, author_id, view_count, created_at, audio_name, video_assets(duration_seconds)")
-                  .in("id", idsFor("video"))
                   .eq("post_type", "video")
                   .eq("visibility", "public")
-                  .or("is_blocked.is.null,is_blocked.eq.false")
                   .not("video_url", "is", null);
+                if (trimmed.length > 0) vq = vq.ilike("content", pat);
                 if (cutoff) vq = vq.gte("created_at", cutoff);
-                return vq;
+                vq = sort === "recent" ? vq.order("created_at", { ascending: false }) : vq.order("view_count", { ascending: false });
+                return vq.limit(all ? 4 : 30);
               })()
-              : Promise.resolve({ data: [] })
             : Promise.resolve({ data: [] }),
 
           wantsChannels
-            ? idsFor("channel").length
-              ? supabase.from("channels")
+            ? supabase.from("channels")
                 .select("id, name, handle, description, avatar_url, subscriber_count")
-                .in("id", idsFor("channel"))
+                .or(`name.ilike.${pat},handle.ilike.${handlePat},description.ilike.${pat}`)
                 .eq("is_public", true)
-              : Promise.resolve({ data: [] })
+                .order("subscriber_count", { ascending: false })
+                .limit(all ? 4 : 20)
             : Promise.resolve({ data: [] }),
 
           wantsChannels && trimmed.length >= 1
-            ? idsFor("group").length
-              ? supabase.from("chats")
+            ? supabase.from("chats")
                 .select("id, name, handle, description, avatar_url, chat_members(count)")
-                .in("id", idsFor("group"))
                 .eq("is_group", true)
-                .eq("is_private", false)
-                .or("is_channel.is.null,is_channel.eq.false")
-              : Promise.resolve({ data: [] })
+                .or("is_private.is.null,is_private.eq.false")
+                .or(`name.ilike.${pat},handle.ilike.${handlePat}`)
+                .limit(all ? 4 : 20)
             : Promise.resolve({ data: [] }),
 
           wantsEvents
-            ? idsFor("event").length
-              ? supabase.from("digital_events")
+            ? supabase.from("digital_events")
                 .select("id, title, description, emoji, price, event_date, capacity, tickets_sold, creator_id, category, profiles!digital_events_creator_id_fkey(display_name, handle)")
-                .in("id", idsFor("event"))
-                .eq("is_active", true)
+                .or(`title.ilike.${pat},description.ilike.${pat}`)
                 .gte("event_date", new Date().toISOString())
-              : Promise.resolve({ data: [] })
+                .order("event_date", { ascending: true })
+                .limit(all ? 3 : 20)
             : Promise.resolve({ data: [] }),
 
           wantsGifts
-            ? idsFor("gift").length
-              ? supabase.from("gifts")
+            ? supabase.from("gifts")
                 .select("id, name, emoji, base_xp_cost, rarity, description")
-                .in("id", idsFor("gift"))
-              : Promise.resolve({ data: [] })
+                .or(`name.ilike.${pat},description.ilike.${pat}`)
+                .order("base_xp_cost", { ascending: true })
+                .limit(all ? 6 : 30)
             : Promise.resolve({ data: [] }),
 
           wantsJobs
-            ? idsFor("job").length
-              ? supabase.from("org_page_jobs")
+            ? supabase.from("org_page_jobs")
                 .select("id, title, job_type, location, description, apply_url, created_at, organization_pages!org_page_jobs_page_id_fkey(name, logo_url, slug)")
-                .in("id", idsFor("job"))
                 .eq("is_active", true)
-              : Promise.resolve({ data: [] })
+                .or(trimmed.length > 0 ? `title.ilike.${pat},description.ilike.${pat}` : "id.neq.00000000-0000-0000-0000-000000000000")
+                .order("created_at", { ascending: false })
+                .limit(all ? 4 : 25)
             : Promise.resolve({ data: [] }),
-
-          wantsMusic && trimmed.length > 0
-            ? searchMusicTracksByIds(idsFor("music")).catch(() => [] as AfuMusicTrack[])
-            : Promise.resolve([] as AfuMusicTrack[]),
         ]);
 
       let marketItems: MarketResult[] = [];
       if (wantsMarket && trimmed.length > 0) {
-        const productIds = idsFor("product");
-        const freelanceIds = idsFor("freelance");
-        const communityIds = idsFor("paid_community");
         const [prods, frees, comms] = await Promise.all([
-          productIds.length
-            ? supabase.from("shop_products").select("id, name, description, images, price_acoin, seller_id").in("id", productIds).eq("is_available", true)
-            : Promise.resolve({ data: [] }),
-          freelanceIds.length
-            ? supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, profiles!freelance_listings_seller_id_fkey(display_name, handle)").in("id", freelanceIds).eq("is_active", true)
-            : Promise.resolve({ data: [] }),
-          communityIds.length
-            ? supabase.from("paid_communities").select("id, name, description, emoji, price, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").in("id", communityIds).eq("is_active", true)
-            : Promise.resolve({ data: [] }),
+          supabase.from("shop_products").select("id, name, description, images, price_acoin, seller_id").ilike("name", pat).eq("is_available", true).limit(all ? 3 : 15),
+          supabase.from("freelance_listings").select("id, title, description, price, emoji, seller_id, profiles!freelance_listings_seller_id_fkey(display_name, handle)").or(`title.ilike.${pat},description.ilike.${pat}`).eq("is_active", true).limit(all ? 3 : 15),
+          supabase.from("paid_communities").select("id, name, description, emoji, price, creator_id, profiles!paid_communities_creator_id_fkey(display_name, handle)").or(`name.ilike.${pat},description.ilike.${pat}`).limit(all ? 2 : 10),
         ]);
         if (prods.data) marketItems.push(...prods.data.map((p: any) => ({
           id: p.id, kind: "product" as const, title: p.name, desc: p.description,
@@ -1004,12 +610,6 @@ export function SearchScreen({
           badge: "Community", seller_name: (p.profiles as any)?.display_name || "",
           route: `/paid-communities`,
         })));
-        const marketRank = new Map(
-          [...productIds, ...freelanceIds, ...communityIds].map((sourceId, index) => [sourceId, index]),
-        );
-        marketItems.sort((a, b) =>
-          (marketRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (marketRank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-        );
       }
 
       if (id !== searchIdRef.current) return;
@@ -1025,19 +625,16 @@ export function SearchScreen({
       }
 
       const people: (PersonResult | OrgPageResult)[] = [
-        ...sortBySearchRank((peopleRes.data || []) as any[], "profile").map((p: any) => ({ ...p, kind: "profile" as const })),
-        ...sortBySearchRank((orgPageRes.data || []) as any[], "organization_page").map((o: any) => ({ ...o, kind: "org" as const })),
+        ...((peopleRes.data || []) as any[]).map((p: any) => ({ ...p, kind: "profile" as const })),
+        ...((orgPageRes.data || []) as any[]).map((o: any) => ({ ...o, kind: "org" as const })),
       ];
 
-      const searchedPosts: PostResult[] = sortBySearchRank((postsRes.data || []) as any[], "post").map((p: any) => {
+      const posts: PostResult[] = ((postsRes.data || []) as any[]).map((p: any) => {
         const a = profiles2Map.get(p.author_id) || {};
         return { ...p, author_handle: a.handle || "", author_name: a.display_name || "", author_avatar: a.avatar_url || null };
       });
-      const posts = currentTab === "images"
-        ? searchedPosts.filter((post) => Boolean(post.image_url))
-        : searchedPosts;
 
-      const videos: VideoResult[] = sortBySearchRank((videosRes.data || []) as any[], "video").map((v: any) => {
+      const videos: VideoResult[] = ((videosRes.data || []) as any[]).map((v: any) => {
         const a = profiles2Map.get(v.author_id) || {};
         const dur = (v.video_assets as any[] | null)?.[0]?.duration_seconds ?? null;
         return {
@@ -1057,7 +654,7 @@ export function SearchScreen({
             .in("channel_id", channelIds)
         : { data: [] as any[] };
       const subscribedChannelIds = new Set((channelSubscriptions || []).map((row: any) => row.channel_id));
-      const channels: ChannelResult[] = sortBySearchRank((channelsRes.data || []) as any[], "channel").map((ch: any) => {
+      const channels: ChannelResult[] = ((channelsRes.data || []) as any[]).map((ch: any) => {
         return {
           id: ch.id,
           name: ch.name,
@@ -1069,7 +666,7 @@ export function SearchScreen({
         };
       });
 
-      const groups: GroupResult[] = sortBySearchRank((groupsRes.data || []) as any[], "group").map((c: any) => {
+      const groups: GroupResult[] = ((groupsRes.data || []) as any[]).map((c: any) => {
         const countArr = c.chat_members;
         const member_count = Array.isArray(countArr) && countArr[0]?.count != null ? Number(countArr[0].count) : 0;
         return {
@@ -1082,7 +679,7 @@ export function SearchScreen({
         };
       });
 
-      const events: EventResult[] = sortBySearchRank((eventsRes.data || []) as any[], "event").map((e: any) => {
+      const events: EventResult[] = ((eventsRes.data || []) as any[]).map((e: any) => {
         const cr = (e.profiles as any) || {};
         return {
           id: e.id, title: e.title, description: e.description, emoji: e.emoji || "🎟️",
@@ -1092,9 +689,9 @@ export function SearchScreen({
         };
       });
 
-      const gifts: GiftResult[] = sortBySearchRank((giftsRes.data || []) as any[], "gift") as any[];
+      const gifts: GiftResult[] = (giftsRes.data || []) as any[];
 
-      const jobs: JobResult[] = sortBySearchRank((jobsRes.data || []) as any[], "job").map((j: any) => {
+      const jobs: JobResult[] = ((jobsRes.data || []) as any[]).map((j: any) => {
         const op = (j.organization_pages as any) || {};
         return {
           id: j.id, title: j.title, job_type: j.job_type || null, location: j.location || null,
@@ -1103,716 +700,162 @@ export function SearchScreen({
         };
       });
 
-      const music = sortBySearchRank((musicRes || []) as AfuMusicTrack[], "music");
-      // Football search consumes three provider requests and has a separate
-      // results tab. Keep ordinary AfuSearch queries entirely within AfuChat.
-      const wantsFootball = currentTab === "football" && trimmed.length >= 2;
-      let footballRows: FootballSearchResult[] = [];
-      let providerNotice: string | null = null;
-      if (wantsFootball) {
-        const providerSearches = await Promise.all([
-          getFootballData<Record<string, any>>("searchTeams", { search: trimmed })
-            .then((data) => ({ data, error: null as string | null }))
-            .catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Football search is unavailable." })),
-          getFootballData<Record<string, any>>("searchCompetitions", { search: trimmed })
-            .then((data) => ({ data, error: null as string | null }))
-            .catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Football search is unavailable." })),
-          getFootballData<Record<string, any>>("searchPlayers", { search: trimmed })
-            .then((data) => ({ data, error: null as string | null }))
-            .catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Football search is unavailable." })),
-        ]);
-        const [teamData, leagueData, playerData] = providerSearches;
-        providerNotice = teamData.error ?? leagueData.error ?? playerData.error
-          ?? teamData.data?.warning ?? leagueData.data?.warning ?? playerData.data?.warning ?? null;
-        footballRows = [
-          ...(teamData.data?.response ?? []).map((item) => {
-            const team = item.team ?? item;
-            return { id: String(team.id), kind: "team" as const, name: team.name ?? "Team", subtitle: item.country ?? item.venue?.city ?? "Team", logo: team.logo ?? null };
-          }),
-          ...(leagueData.data?.response ?? []).map((item) => {
-            const league = item.league ?? item;
-            return { id: String(league.id), kind: "competition" as const, name: league.name ?? "Competition", subtitle: [league.country ?? item.country, league.season].filter(Boolean).join(" · ") || "Competition", logo: league.logo ?? null };
-          }),
-          ...(playerData.data?.response ?? []).map((item) => {
-            const player = item.player ?? item;
-            const statistics = item.statistics?.[0];
-            return { id: String(player.id), kind: "player" as const, name: player.name ?? "Player", subtitle: [statistics?.team?.name, statistics?.league?.name].filter(Boolean).join(" · ") || "Player", logo: player.photo ?? null };
-          }),
-        ];
-      }
-      const finalResults: AllResults = { people, posts, videos, channels, groups, events, gifts, market: marketItems, jobs, music };
+      const finalResults: AllResults = { people, posts, music: musicTracks, videos, channels, groups, events, gifts, market: marketItems, jobs };
       if (id !== searchIdRef.current) return;
 
-      const total = people.length + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length + music.length + footballRows.length;
-      const publicResultCount = people.filter((item) =>
-        item.kind === "org" || (item as PersonResult).is_private !== true,
-      ).length
-        + posts.length + videos.length + channels.length + groups.length
-        + events.length + gifts.length + marketItems.length + jobs.length + music.length + footballRows.length;
-      if (recordExplicitSubmission && trimmed.length > 0) {
-        addToHistory(trimmed).then(setHistory).catch(() => {});
-      }
-      if (total === 0 && title === "AfuSearch" && allowDidYouMean && trimmed.length >= 4) {
-        await relatedIndexReadyRef.current?.catch(() => {});
-        if (id !== searchIdRef.current) return;
-        const localCandidates = currentTab === "people"
-          ? relatedTermsRef.current.people
-          : currentTab === "posts" || currentTab === "images"
-            ? relatedTermsRef.current.posts
-            : currentTab === "videos"
-              ? relatedTermsRef.current.videos
-              : currentTab === "all"
-                ? relatedTermsRef.current.all
-                : [];
-        const similarTerms = await getSimilarSearchTerms(trimmed, 12).catch((error) => {
-          console.warn("[AfuSearch] Could not load related search terms:", error?.message || error);
-          return [] as RankedSearchTerm[];
-        });
-        const candidates = [
-          ...localCandidates,
-          ...similarTerms.map((item) => item.term),
-        ];
-        const suggested = findRelatedSearchQuery(trimmed, candidates);
-        if (suggested && suggested.toLowerCase() !== trimmed.toLowerCase()) {
-          await runSearch(suggested, currentTab, vOnly, sort, dr, false, { original: trimmed, suggested }, false);
-          return;
-        }
-      }
-
       setResults(finalResults);
-      setFootballResults(footballRows);
-      setFootballNotice(providerNotice);
+      const total = people.length + posts.length + musicTracks.length + videos.length + channels.length + groups.length
+        + events.length + gifts.length + marketItems.length + jobs.length;
+      setTotalCount(total);
       setLoading(false);
-      if (fallbackFor) setDidYouMean(total > 0 ? fallbackFor : null);
-      if (recordExplicitSubmission && trimmed.length > 0 && publicResultCount > 0 && user) {
-        void recordSearchSubmission(trimmed, publicResultCount)
-          .then((submission) => {
-            if (submission.analytics_enabled) {
-              trackEvent("search", { query: trimmed, tab: currentTab, results_count: total });
-            }
-          })
-          .catch((error) => {
-            console.warn("[AfuSearch] Could not record submitted search:", error?.message || error);
-          });
+      if (trimmed.length > 0) {
+        addToHistory(trimmed).then(setHistory);
+        trackEvent("search", { query: trimmed, tab: currentTab, results_count: total });
       }
     } catch {
-      if (id === searchIdRef.current) {
-        setLoading(false);
-        if (fallbackFor) {
-          setDidYouMean(null);
-          setResults(EMPTY);
-        }
-      }
+      if (id === searchIdRef.current) setLoading(false);
     }
-  }, [user, title]);
+  }, []);
 
   // ── Event handlers ───────────────────────────────────────────────────────────
 
-  function openSearchOverlay() {
-    if (!isAfuSearch) {
-      inputRef.current?.focus();
-      return;
-    }
-    setSearchOverlayOpen(true);
-  }
-
-  function closeSearchOverlay(resetDraft = false) {
-    setSearchOverlayOpen(false);
-    overlayInputRef.current?.blur();
-    if (resetDraft && !hasSearched) {
-      setQuery("");
-      setSearchSuggestions([]);
-      setDidYouMean(null);
-    }
-  }
-
-  function AfuSearchBackButton({ style }: { style?: any } = {}) {
-    return (
-      <TouchableOpacity
-        onPress={() => safeRouter.back("/apps")}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        style={[
-          { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: colors.surface },
-          style,
-        ]}
-      >
-        <Ionicons name="arrow-back" size={18} color={themeIsDark ? "#FFFFFF" : "#000000"} />
-      </TouchableOpacity>
-    );
-  }
-
-  function trackSearchClick() {
-    if (!user || !query.trim()) return;
-    const normalizedQuery = normalizeSearchTerm(query);
-    const key = `${user.id}:${normalizedQuery}`;
-    const now = Date.now();
-    const previous = searchEngagementSentRef.current.get(key);
-    if (previous && now - previous < 24 * 60 * 60 * 1000) return;
-    searchEngagementSentRef.current.set(key, now);
-    for (const [sentKey, sentAt] of searchEngagementSentRef.current) {
-      if (now - sentAt >= 24 * 60 * 60 * 1000) searchEngagementSentRef.current.delete(sentKey);
-    }
-    void recordSearchResultEngagement(query).catch((error) => {
-      if (searchEngagementSentRef.current.get(key) === now) searchEngagementSentRef.current.delete(key);
-      console.warn("[AfuSearch] Could not record result engagement:", error?.message || error);
-    });
-  }
-
-  function clearLensResults() {
-    setLensResult(null);
-    setLensImageUri(null);
-    setLensError(null);
-    lensRetryImageRef.current = null;
-  }
-
   function onChangeText(t: string) {
-    clearLensResults();
     setQuery(t);
-    setDidYouMean(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    cancelActiveSuggestionRequest();
-    searchIdRef.current += 1;
-    setResults(EMPTY);
-    setHasSearched(false);
-    setLoading(false);
     if (t.trim().length === 0) {
-      suggestionRequestRef.current += 1;
+      setResults(EMPTY); setHasSearched(false); setTotalCount(0);
       setSearchSuggestions([]); return;
     }
-    const requestId = ++suggestionRequestRef.current;
-    setSearchSuggestions(mergeSuggestionItems(t, [], [], [], localSuggestionsFor(t)));
-    if (t.trim().length >= 2) {
-      debounceRef.current = setTimeout(async () => {
-        const controller = new AbortController();
-        suggestionAbortRef.current = controller;
-        const [rankedTerms, profileSuggestions, contentSuggestions] = await Promise.all([
-          getRankedSearchSuggestions(t, 6, false, controller.signal).catch((error) => {
-            if (!controller.signal.aborted) console.warn("[AfuSearch] Ranked suggestions unavailable:", error?.message || error);
-            return [] as RankedSearchTerm[];
-          }),
-          getSearchProfileSuggestions(t, user?.id, 4, controller.signal).catch((error) => {
-            if (!controller.signal.aborted) console.warn("[AfuSearch] Profile suggestions unavailable:", error?.message || error);
-            return [] as SearchProfileSuggestion[];
-          }),
-          isAfuSearch
-            ? getPlatformSearchSuggestions(t, 8, controller.signal).catch((error) => {
-                if (!controller.signal.aborted) console.warn("[AfuSearch] Content suggestions unavailable:", error?.message || error);
-                return [] as PlatformSearchSuggestion[];
-              })
-            : Promise.resolve([] as PlatformSearchSuggestion[]),
-        ]);
-        if (suggestionAbortRef.current === controller) suggestionAbortRef.current = null;
-        if (controller.signal.aborted || requestId !== suggestionRequestRef.current) return;
-        setSearchSuggestions(mergeSuggestionItems(
-          t,
-          rankedTerms,
-          profileSuggestions,
-          contentSuggestions,
-          localSuggestionsFor(t),
-        ));
-      }, 220);
-    }
+    getSearchSuggestions(t).then(setSearchSuggestions).catch(() => {});
+    debounceRef.current = setTimeout(() => {
+      performSearch(t, tab, verifiedOnly, sortMode, dateRange);
+    }, 520);
   }
 
   function onSubmit() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    cancelActiveSuggestionRequest();
-    suggestionRequestRef.current += 1;
-    setSearchSuggestions([]);
-    clearLensResults();
-    closeSearchOverlay();
-    performSearch(query, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+    performSearch(query, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
-  }
-
-  function trackSuggestionSelection(sourceType: string) {
-    const submittedText = query.trim();
-    if (!submittedText) return;
-    void recordSearchSuggestionSelection(submittedText, sourceType).catch((error) => {
-      console.warn("[AfuSearch] Could not record suggestion selection:", error?.message || error);
-    });
-  }
-
-  function onSuggestionPress(suggestion: SearchSuggestionItem) {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    cancelActiveSuggestionRequest();
-    suggestionRequestRef.current += 1;
-    setSearchSuggestions([]);
-    clearLensResults();
-    closeSearchOverlay();
-    if (suggestion.kind === "profile") {
-      trackSuggestionSelection("profile");
-      const profile = suggestion.profile;
-      setQuery(profile.display_name || `@${profile.handle}`);
-      inputRef.current?.blur();
-      navigateToKnownProfile({
-        id: profile.profile_id,
-        handle: profile.handle,
-        display_name: profile.display_name,
-        avatar_url: profile.avatar_url,
-      });
-      return;
-    }
-    if (suggestion.kind === "content") {
-      const content = suggestion.content;
-      trackSuggestionSelection(content.source_type);
-      if (content.source_type === "feature" && content.target_path?.startsWith("/")) {
-        inputRef.current?.blur();
-        router.push(content.target_path as any);
-        return;
-      }
-      const targetTab: SearchTab = content.source_type === "music" ? "music"
-        : content.source_type === "post" ? "posts"
-        : content.source_type === "video" ? "videos"
-        : content.source_type === "gift" ? "gifts"
-        : content.source_type === "event" ? "events"
-        : content.source_type === "job" ? "jobs"
-        : ["product", "freelance", "paid_community"].includes(content.source_type) ? "market"
-        : ["channel", "group"].includes(content.source_type) ? "channels"
-        : "all";
-      setQuery(content.title);
-      setTab(targetTab);
-      performSearch(content.title, targetTab, verifiedOnly, sortMode, dateRange, true, undefined, false);
-      inputRef.current?.blur();
-      return;
-    }
-    trackSuggestionSelection("search_term");
-    setQuery(suggestion.term);
-    performSearch(suggestion.term, tab, verifiedOnly, sortMode, dateRange, true, undefined, false);
-    inputRef.current?.blur();
-  }
-
-  function renderSuggestionRow(suggestion: SearchSuggestionItem, index: number) {
-    const profile = suggestion.kind === "profile" ? suggestion.profile : null;
-    const content = suggestion.kind === "content" ? suggestion.content : null;
-    const term = suggestion.kind === "term" ? suggestion.term : "";
-    const label = suggestion.kind === "profile"
-      ? suggestion.profile.display_name || `@${suggestion.profile.handle}`
-      : suggestion.kind === "content"
-        ? suggestion.content.title
-        : suggestion.term;
-    const isTrending = suggestion.kind === "term" && suggestion.growth > 0.35;
-    const contentIcon: Record<string, string> = {
-      music: "musical-notes",
-      organization_page: "business-outline",
-      post: "document-text-outline",
-      video: "play-circle-outline",
-      gift: "gift-outline",
-      feature: "apps-outline",
-      channel: "megaphone-outline",
-      group: "people-outline",
-      event: "calendar-outline",
-      job: "briefcase-outline",
-      product: "storefront-outline",
-      freelance: "briefcase-outline",
-      paid_community: "people-outline",
-    };
-    const icon = profile
-      ? "person-outline"
-      : content
-        ? contentIcon[content.source_type] || "search-outline"
-        : term.startsWith("#")
-          ? "pricetag-outline"
-          : isTrending
-            ? "trending-up"
-            : "search-outline";
-
-    return (
-      <TouchableOpacity
-        key={`${suggestion.kind}-${suggestion.kind === "profile" ? suggestion.profile.profile_id : suggestion.kind === "content" ? `${suggestion.content.source_type}:${suggestion.content.source_id}` : normalizeSearchTerm(suggestion.term)}-${index}`}
-        testID={`search-suggestion-${index}`}
-        onPress={() => onSuggestionPress(suggestion)}
-        style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 }}
-        activeOpacity={0.72}
-        accessibilityRole="button"
-        accessibilityLabel={profile || content?.source_type === "feature" ? `Open ${label}` : `Search for ${label}`}
-      >
-        {profile ? (
-          <Avatar uri={profile.avatar_url} name={label} size={32} userId={profile.profile_id} />
-        ) : (
-          <Ionicons name={icon as any} size={18} color={isTrending ? BRAND : colors.textMuted} />
-        )}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
-            {label}
-          </Text>
-          {profile ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-              @{profile.handle}
-            </Text>
-          ) : content ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-              {content.subtitle}
-            </Text>
-          ) : null}
-        </View>
-        {profile?.is_verified && (
-          <Ionicons name="checkmark-circle" size={15} color={profile.is_organization_verified ? GOLD : BRAND} />
-        )}
-        <Ionicons name="arrow-forward-outline" size={16} color={colors.textMuted} />
-      </TouchableOpacity>
-    );
-  }
-
-  function renderAfuSearchOverlayList() {
-    const hasPopularContent = trendingPosts.length > 0 || trendingVideos.length > 0 || trendingMusic.length > 0;
-    return (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: scrollPB }}
-        keyboardShouldPersistTaps="always"
-        showsVerticalScrollIndicator={false}
-      >
-        {history.length > 0 && (
-          <View style={{ paddingBottom: 10 }}>
-            <View style={{ minHeight: 36, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Recent searches</Text>
-              <TouchableOpacity
-                onPress={() => { void clearHistory().then(() => setHistory([])); }}
-                accessibilityRole="button"
-                accessibilityLabel="Clear search history"
-                hitSlop={8}
-              >
-                <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Clear history</Text>
-              </TouchableOpacity>
-            </View>
-            {history.map((term) => (
-              <View key={`overlay-history-${term}`} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <TouchableOpacity
-                  onPress={() => onHistoryPress(term)}
-                  style={{ flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}
-                  activeOpacity={0.72}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Search again for ${term}`}
-                >
-                  <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>
-                    <Ionicons name="time-outline" size={17} color={colors.textMuted} />
-                  </View>
-                  <Text style={{ flex: 1, color: colors.text, fontSize: 15 }} numberOfLines={1}>{term}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => { void removeFromHistory(term).then(setHistory); }}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${term} from search history`}
-                >
-                  <Ionicons name="close" size={17} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {(trendingSearches.length > 0 || hasPopularContent) && (
-          <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold", paddingTop: history.length ? 8 : 6, paddingBottom: 4 }}>
-            {history.length ? "Trending searches" : "Popular searches"}
-          </Text>
-        )}
-        {trendingSearches.slice(0, 8).map((item) => (
-          <TouchableOpacity
-            key={`overlay-trend-${item.term}`}
-            onPress={() => onSuggestionPress({
-              kind: "term",
-              term: item.term,
-              score: item.score,
-              growth: item.growth,
-              engagementRate: item.engagementRate,
-              exactMatch: item.exactMatch,
-            })}
-            style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}
-            activeOpacity={0.72}
-            accessibilityRole="button"
-            accessibilityLabel={`Search for ${item.term}`}
-          >
-            <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>
-              <Ionicons name={item.growth > 0.35 ? "trending-up" : "search-outline"} size={17} color={item.growth > 0.35 ? BRAND : colors.textMuted} />
-            </View>
-            <Text style={{ flex: 1, color: colors.text, fontSize: 15 }} numberOfLines={1}>{item.term}</Text>
-            <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
-          </TouchableOpacity>
-        ))}
-
-        {trendingPosts.length > 0 && (
-          <View style={{ gap: 8, paddingTop: 10 }}>
-            {trendingPosts.slice(0, 4).map((post, index) => <PostCard key={`overlay-post-${post.id}`} p={post} i={index} />)}
-          </View>
-        )}
-        {trendingVideos.slice(0, 3).map((video) => (
-          <View key={`overlay-video-${video.id}`} style={{ paddingTop: 8 }}>
-            <DiscoveryVideoRow video={video} />
-          </View>
-        ))}
-        {trendingMusic.slice(0, 4).map((track) => (
-          <View key={`overlay-music-${track.id}`} style={{ paddingTop: 8 }}>
-            <DiscoveryMusicRow track={track} queue={trendingMusic} />
-          </View>
-        ))}
-
-        {history.length === 0 && trendingSearches.length === 0 && !hasPopularContent && (
-          <View style={{ alignItems: "center", paddingTop: 44, paddingHorizontal: 20 }}>
-            <Ionicons name="search-outline" size={28} color={colors.textMuted} />
-            <Text style={{ color: colors.textSecondary, fontSize: 14, marginTop: 10, textAlign: "center" }}>Popular searches will appear here.</Text>
-          </View>
-        )}
-      </ScrollView>
-    );
-  }
-
-  function renderAfuSearchOverlay() {
-    if (!isAfuSearch || !searchOverlayOpen) return null;
-    return (
-      <Modal
-        visible
-        animationType="fade"
-        onRequestClose={() => closeSearchOverlay(true)}
-        statusBarTranslucent={false}
-      >
-        <View style={{ flex: 1, backgroundColor: colors.backgroundSecondary }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingTop: insets.top + 6, paddingBottom: 10, backgroundColor: colors.surface }}>
-            <TouchableOpacity
-              onPress={() => closeSearchOverlay(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Close search"
-              hitSlop={8}
-              style={{ width: 34, height: 42, alignItems: "center", justifyContent: "center" }}
-            >
-              <Ionicons name="arrow-back" size={22} color={colors.text} />
-            </TouchableOpacity>
-            <AfuInputSurface style={[ss.searchBar, { flex: 1, height: 48, marginBottom: 0 }]}>
-              <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
-              <TextInput
-                ref={overlayInputRef}
-                appearance="embedded"
-                style={[ss.searchInput, { color: colors.text }]}
-                placeholder="Search AfuChat"
-                placeholderTextColor={colors.textMuted}
-                value={query}
-                onChangeText={onChangeText}
-                onSubmitEditing={onSubmit}
-                returnKeyType="search"
-                numberOfLines={1}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-              {query.length > 0 && (
-                <TouchableOpacity onPress={() => onChangeText("")} hitSlop={8} accessibilityLabel="Clear search text">
-                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-              )}
-            </AfuInputSurface>
-            <TouchableOpacity
-              onPress={() => { closeSearchOverlay(); void openLens(); }}
-              accessibilityRole="button"
-              accessibilityLabel="Search with an image"
-              hitSlop={8}
-              style={{ width: 34, height: 42, alignItems: "center", justifyContent: "center" }}
-            >
-              <Ionicons name="scan" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          {query.trim().length > 0 ? renderSuggestionPage() : renderAfuSearchOverlayList()}
-        </View>
-      </Modal>
-    );
   }
 
   function clearSearch() {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    cancelActiveSuggestionRequest();
-    suggestionRequestRef.current += 1;
     setQuery(""); setResults(EMPTY); setHasSearched(false);
-    setSearchSuggestions([]); setDidYouMean(null);
-    clearLensResults();
-    if (isAfuSearch) openSearchOverlay();
-    else inputRef.current?.focus();
+    setTotalCount(0);
+    inputRef.current?.focus();
   }
 
   function onHistoryPress(term: string) {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    cancelActiveSuggestionRequest();
-    suggestionRequestRef.current += 1;
-    setSearchSuggestions([]);
-    clearLensResults();
-    closeSearchOverlay();
     setQuery(term);
-    performSearch(term, tab, verifiedOnly, sortMode, dateRange, true, undefined, true);
+    performSearch(term, tab, verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
 
   function onTagPress(tag: string) {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    cancelActiveSuggestionRequest();
-    suggestionRequestRef.current += 1;
-    setSearchSuggestions([]);
-    clearLensResults();
-    closeSearchOverlay();
     const q = `#${tag}`;
     setQuery(q); setTab("posts");
-    performSearch(q, "posts", verifiedOnly, sortMode, dateRange, true, undefined, true);
+    performSearch(q, "posts", verifiedOnly, sortMode, dateRange);
     inputRef.current?.blur();
   }
 
   function onTabPress(t: SearchTab) {
     Haptics.selectionAsync();
     setTab(t);
-    if (isVisualSearchActive) return;
     if (hasSearched) performSearch(query, t, verifiedOnly, sortMode, dateRange);
-    else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
+    else if (t === "videos" || t === "jobs" || t === "music") performSearch("", t, verifiedOnly, "popular", "all");
   }
-
 
   async function openLens() {
     if (lensLoading) return;
     Haptics.selectionAsync();
     setLensError(null);
-    if (Platform.OS === "web") {
-      await openLensWithSource("gallery");
-      return;
-    }
-    Alert.alert("Search with an image", "Choose where to get the image.", [
-      { text: "Take photo", onPress: () => { void openLensWithSource("camera"); } },
-      { text: "Choose from gallery", onPress: () => { void openLensWithSource("gallery"); } },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  }
 
-  async function openLensWithSource(source: "camera" | "gallery") {
-    if (lensLoading) return;
-    setLensError(null);
-    lensRetryImageRef.current = null;
     try {
-      const permission = source === "camera"
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setLensError(source === "camera"
-          ? "Allow camera access to search with a photo."
-          : "Allow photo access to search with an image.");
-        return;
+      let permission;
+      let pickerResult;
+      if (Platform.OS === "web") {
+        permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setLensError("Allow photo access to search with an image.");
+          return;
+        }
+        pickerResult = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"] as any,
+          allowsEditing: false,
+          quality: 0.75,
+          base64: true,
+        });
+      } else {
+        permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setLensError("Allow camera access to search with an image.");
+          return;
+        }
+        pickerResult = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"] as any,
+          allowsEditing: false,
+          quality: 0.75,
+          base64: true,
+        });
       }
-      const options = { mediaTypes: ["images"] as any, allowsEditing: false, quality: 0.75 as const, base64: false };
-      const pickerResult = source === "camera"
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
+
       if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
       const asset = pickerResult.assets[0];
-      // Normalize camera/gallery inputs so both pixel matching and OCR receive
-      // a predictable format, regardless of the source image encoding.
-      const normalized = await ImageManipulator.manipulateAsync(
-        asset.uri,
-        [{ resize: { width: 512 } }],
-        { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-      );
-      if (!normalized.base64) throw new Error("That image could not be read. Please try another photo.");
-      await analyzeLensImage(asset.uri, normalized.base64, "image/jpeg");
-    } catch (error: any) {
-      setLensError(error?.message || "Image search is unavailable right now. Please try again.");
-    }
-  }
-
-  async function searchImageUri(uri: string) {
-    if (lensLoading) return;
-    setLensError(null);
-    lensRetryImageRef.current = null;
-    try {
-      const response = await fetch(uri);
-      if (!response.ok) throw new Error("This image could not be loaded for visual search.");
-      const blob = await response.blob();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const dataUrl = typeof reader.result === "string" ? reader.result : "";
-          const comma = dataUrl.indexOf(",");
-          if (comma < 0) reject(new Error("This image could not be read for visual search."));
-          else resolve(dataUrl.slice(comma + 1));
-        };
-        reader.onerror = () => reject(new Error("This image could not be read for visual search."));
-        reader.readAsDataURL(blob);
-      });
-      await analyzeLensImage(uri, base64, blob.type || "image/jpeg");
-    } catch (error: any) {
-      setLensError(error?.message || "Could not search this image. Try another image.");
-    }
-  }
-
-  async function analyzeLensImage(uri: string, imageBase64: string, mimeType: string) {
-    if (lensLoading) return;
-    lensRetryImageRef.current = { uri, imageBase64, mimeType };
-    searchIdRef.current += 1;
-    setLoading(false);
-    setLensImageUri(uri);
-    setLensResult(null);
-    setLensLoading(true);
-    setLensError(null);
-    setTab("all");
-    setResults(EMPTY);
-    setDidYouMean(null);
-    setHasSearched(true);
-    const requestController = new AbortController();
-    let requestTimeout: ReturnType<typeof setTimeout> | undefined;
-    const timeoutError = new Error("Visual and text search did not finish within 30 seconds. Please try again.");
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) {
-        throw new Error("Please sign in again to search images.");
+      if (!asset.base64) {
+        setLensError("That image could not be read. Please try another photo.");
+        return;
       }
 
-      // Start the 3-second budget only when the actual request is about to begin.
-      // Session restoration must not consume the network search timeout.
-      requestTimeout = setTimeout(() => {
-        requestController.abort();
-      }, 30_000);
-      const response = await fetch(`${getEdgeFnBase()}/visual-image-search`, {
+      setLensImageUri(asset.uri);
+      setLensLoading(true);
+      const response = await fetch(`${getEdgeFnBase()}/ai-lens`, {
         method: "POST",
-        headers: edgeHeadersWithAuth(session.access_token),
-        signal: requestController.signal,
-        body: JSON.stringify({ imageBase64, mimeType, imageUrl: uri, queryText: query.trim() }),
+        headers: { "Content-Type": "application/json", ...edgeHeaders() },
+        body: JSON.stringify({ imageBase64: asset.base64, mimeType: asset.mimeType || "image/jpeg" }),
       });
       const payload = await response.json().catch(() => null);
-      if (requestController.signal.aborted) throw timeoutError;
-      if (!response.ok || !payload) throw new Error(payload?.error || "Visual image search failed.");
-      const matches: VisualMatch[] = Array.isArray(payload.matches)
-        ? payload.matches.filter((match: any) =>
-            typeof match?.postId === "string" &&
-            (typeof match?.imageUrl === "string" || match?.imageUrl === null) &&
-            typeof match?.distance === "number"
-          )
-        : [];
+      if (!response.ok || !payload) {
+        throw new Error(payload?.error || "Image search failed");
+      }
       setLensResult({
-        title: matches.length
-          ? "Visual search matches"
-          : "No results found",
-        description: String(payload.message || "AfuSearch combines traditional image matching with OCR text search."),
-        matches,
-        indexedThisRequest: Number(payload.indexedThisRequest) || 0,
-        algorithm: String(payload.algorithm || "dhash"),
-        indexing: Boolean(payload.indexing),
+        title: payload.title || payload.name || "Image result",
+        description: payload.description || payload.answer || "AfuSearch found information about this image.",
+        facts: Array.isArray(payload.facts) ? payload.facts : [],
+        category: payload.category,
+        confidence: payload.confidence,
+        answer: payload.answer,
       });
-      if (matches.length || !payload.indexing) lensRetryImageRef.current = null;
-    } catch (error: any) {
-      lensRetryImageRef.current = null;
-      setLensError(requestController.signal.aborted
-        ? timeoutError.message
-        : error?.message || "Visual image search failed. Please try again.");
+    } catch {
+      setLensError("Image search is unavailable right now. Please try again.");
     } finally {
-      if (requestTimeout) clearTimeout(requestTimeout);
       setLensLoading(false);
     }
   }
 
+  function onSortPress(s: SortMode) {
+    setSortMode(s);
+    if (hasSearched) performSearch(query, tab, verifiedOnly, s, dateRange);
+  }
+
+  function onDatePress(dr: DateRange) {
+    setDateRange(dr);
+    if (hasSearched) performSearch(query, tab, verifiedOnly, sortMode, dr);
+  }
+
   // ─── Section header ──────────────────────────────────────────────────────────
 
-  function SectionHeader({ icon, label, color, onSeeAll }: {
-    icon: string; label: string; color: string; onSeeAll?: () => void;
+  function SectionHeader({ icon, label, color, count, onSeeAll }: {
+    icon: string; label: string; color: string; count: number; onSeeAll?: () => void;
   }) {
+    if (count === 0) return null;
     return (
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingTop: 22, paddingBottom: 8, gap: 8 }}>
         <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: color + "1A", alignItems: "center", justifyContent: "center" }}>
           <Ionicons name={icon as any} size={14} color={color} />
         </View>
         <Text style={{ flex: 1, fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: 0.1 }}>{label}</Text>
+        <View style={{ backgroundColor: color + "1A", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 }}>
+          <Text style={{ color, fontSize: 11, fontFamily: "Inter_700Bold" }}>{count}</Text>
+        </View>
         {onSeeAll && (
           <TouchableOpacity onPress={onSeeAll} style={{ flexDirection: "row", alignItems: "center", gap: 2, marginLeft: 2 }}>
             <Text style={{ color, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>See all</Text>
@@ -1830,7 +873,7 @@ export function SearchScreen({
       const o = p as OrgPageResult;
       return (
         <View >
-          <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => { trackSearchClick(); router.push(`/company/${o.slug}` as any); }} activeOpacity={0.75}>
+          <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push(`/company/${o.slug}` as any)} activeOpacity={0.75}>
             <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: GOLD + "1A", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {o.logo_url ? <ExpoImage source={{ uri: o.logo_url }} style={{ width: 48, height: 48, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" /> : <Ionicons name="business" size={22} color={GOLD} />}
             </View>
@@ -1851,7 +894,7 @@ export function SearchScreen({
     const per = p as PersonResult;
     return (
       <View >
-        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => { trackSearchClick(); navigateToKnownProfile(per); }} activeOpacity={0.75}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => navigateToProfile(per.handle, true).catch(() => {})} activeOpacity={0.75}>
           <View style={{ position: "relative" }}>
             <Avatar uri={per.avatar_url} name={per.display_name} size={48} square={per.is_organization_verified} userId={per.id} />
             {per.is_verified && (
@@ -1863,7 +906,7 @@ export function SearchScreen({
           <View style={{ flex: 1, gap: 2 }}>
             <UserName userId={per.id} name={per.display_name} style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1} />
             <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>@{per.handle}{per.country ? ` · ${per.country}` : ""}</Text>
-            {per.show_bio_publicly !== false && per.bio ? <Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{per.bio}</Text> : null}
+            {per.bio ? <Text style={{ fontSize: 12, color: colors.textSecondary, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{per.bio}</Text> : null}
           </View>
           <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
         </TouchableOpacity>
@@ -1874,46 +917,19 @@ export function SearchScreen({
   // ─── PostCard ────────────────────────────────────────────────────────────────
 
   function PostCard({ p, i }: { p: PostResult; i: number }) {
-    const showSideImage = isAfuSearch && Boolean(p.image_url);
     return (
       <View >
-        <TouchableOpacity
-          style={[ss.contentCard, { backgroundColor: colors.cardSurface }]}
-          activeOpacity={0.82}
-          onPress={() => {
-            trackSearchClick();
-            router.push((p.post_type === "article" ? `/article/${p.id}` : `/post/${p.id}`) as any);
-          }}
-        >
-          {showSideImage ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7 }}>
-                  {p.author_avatar
-                    ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 24, height: 24, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" />
-                    : <AvatarPlaceholder name={p.author_name} size={24} color={BRAND} />}
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{p.author_name || p.author_handle}</Text>
-                  <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(p.created_at)}</Text>
-                </View>
-                {p.article_title && <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 4 }} numberOfLines={2}>{p.article_title}</Text>}
-                <RichText style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }} numberOfLines={3} plainMentions>{p.content}</RichText>
-              </View>
-              <ExpoImage source={{ uri: p.image_url! }} style={{ width: 88, height: 88, borderRadius: 10, backgroundColor: colors.inputBg }} contentFit="cover" cachePolicy="memory-disk" />
-            </View>
-          ) : (
-            <>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                {p.author_avatar
-                  ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 28, height: 28, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
-                  : <AvatarPlaceholder name={p.author_name} size={28} color={BRAND} />}
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>{p.author_name || p.author_handle}</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(p.created_at)}</Text>
-              </View>
-              {p.article_title && <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 5 }} numberOfLines={2}>{p.article_title}</Text>}
-              <RichText style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }} numberOfLines={3} plainMentions>{p.content}</RichText>
-              {p.image_url && <ExpoImage source={{ uri: p.image_url }} style={ss.postImage} contentFit="cover" cachePolicy="memory-disk" />}
-            </>
-          )}
+        <View style={[ss.contentCard, { backgroundColor: colors.surface }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            {p.author_avatar
+              ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 28, height: 28, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
+              : <AvatarPlaceholder name={p.author_name} size={28} color={BRAND} />}
+            <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>@{p.author_handle}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(p.created_at)}</Text>
+          </View>
+          {p.article_title && <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 5 }} numberOfLines={2}>{p.article_title}</Text>}
+          <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }} numberOfLines={3}>{p.content}</Text>
+          {p.image_url && <ExpoImage source={{ uri: p.image_url }} style={ss.postImage} contentFit="cover" cachePolicy="memory-disk" />}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <Ionicons name="eye" size={12} color={colors.textMuted} />
@@ -1925,98 +941,8 @@ export function SearchScreen({
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </View>
       </View>
-    );
-  }
-
-  async function openDiscoveryTrack(track: AfuMusicTrack, queue: AfuMusicTrack[]) {
-    if (track.price > 0 && !track.isOwned) {
-      safeRouter.push("/app/afumusic" as any);
-      return;
-    }
-    try {
-      const uri = await getMusicPlaybackUri(track);
-      if (uri) {
-        const playableQueue = queue.filter((item) => item.isOwned || item.price === 0);
-        playMusic(track, uri, playableQueue, getMusicPlaybackUri);
-      } else {
-        safeRouter.push("/app/afumusic" as any);
-      }
-    } catch {
-      safeRouter.push("/app/afumusic" as any);
-    }
-  }
-
-  function DiscoveryVideoRow({ video }: { video: VideoResult }) {
-    return (
-      <TouchableOpacity
-        onPress={() => router.push(`/video/${video.id}` as any)}
-        activeOpacity={0.78}
-        accessibilityRole="button"
-        accessibilityLabel={`Open video by ${video.author_name || video.author_handle}`}
-        style={{
-          minHeight: 104,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          padding: 12,
-          borderRadius: 14,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-          <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14, lineHeight: 19 }} numberOfLines={3}>
-            {video.content || "Video"}
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {video.author_avatar
-              ? <ExpoImage source={{ uri: video.author_avatar }} style={{ width: 18, height: 18, borderRadius: 9 }} contentFit="cover" cachePolicy="memory-disk" />
-              : <AvatarPlaceholder name={video.author_name || video.author_handle} size={18} color={RED} />}
-            <Text style={{ flex: 1, color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-              {video.author_name || video.author_handle} · {fmtNum(video.view_count)} views
-            </Text>
-          </View>
-        </View>
-        <View style={{ width: 92, height: 78, borderRadius: 10, overflow: "hidden", backgroundColor: colors.inputBg }}>
-          <VideoThumbnailImage videoUrl={video.video_url} imageUrl={video.image_url} style={{ width: "100%", height: "100%" }} />
-          <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" } as any}>
-            <View style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "#00000088" }}>
-              <Ionicons name="play" size={13} color="#fff" style={{ marginLeft: 2 }} />
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }
-
-  function DiscoveryMusicRow({ track, queue }: { track: AfuMusicTrack; queue: AfuMusicTrack[] }) {
-    const action = track.price > 0 && !track.isOwned ? "Unlock" : "Play";
-    return (
-      <TouchableOpacity
-        onPress={() => void openDiscoveryTrack(track, queue)}
-        activeOpacity={0.78}
-        accessibilityRole="button"
-        accessibilityLabel={`${action} ${track.title} by ${track.artist}`}
-        style={{
-          minHeight: 82,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          padding: 12,
-          borderRadius: 14,
-          backgroundColor: colors.surface,
-        }}
-      >
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-          <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14 }} numberOfLines={1}>{track.title}</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>{track.artist} · {track.genre}</Text>
-          <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>{action}</Text>
-        </View>
-        <View style={{ width: 58, height: 58, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: track.coverColor || "#19172F" }}>
-          <Ionicons name="musical-notes" size={22} color={track.accentColor || BRAND} />
-        </View>
-      </TouchableOpacity>
     );
   }
 
@@ -2043,7 +969,7 @@ export function SearchScreen({
     return (
       <TouchableOpacity
         style={{ width: VID_W, height: VID_H, borderRadius: 12, overflow: "hidden", backgroundColor: isDark ? "#1a1a2e" : "#f0f0f0" }}
-        onPress={() => { trackSearchClick(); router.push(`/video/${v.id}` as any); }}
+        onPress={() => router.push(`/video/${v.id}` as any)}
         activeOpacity={0.88}
       >
         {/* Gradient background always present as base layer */}
@@ -2072,7 +998,7 @@ export function SearchScreen({
             {v.author_name ? (
               <>
                 <Text style={{ color: "#ffffff55", fontSize: 10 }}>·</Text>
-                <Text style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1}>{v.author_name || v.author_handle}</Text>
+                <Text style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1}>@{v.author_handle || v.author_name}</Text>
               </>
             ) : null}
           </View>
@@ -2090,7 +1016,7 @@ export function SearchScreen({
   function GroupCard({ gr, i }: { gr: GroupResult; i: number }) {
     return (
       <View >
-        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => { trackSearchClick(); router.push(`/group/${gr.id}` as any); }} activeOpacity={0.75}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push(`/group/${gr.id}` as any)} activeOpacity={0.75}>
           <View style={{ width: 48, height: 48, borderRadius: 14, overflow: "hidden" }}>
             {gr.avatar_url
               ? <ExpoImage source={{ uri: gr.avatar_url }} style={{ width: 48, height: 48 }} contentFit="cover" cachePolicy="memory-disk" />
@@ -2111,6 +1037,87 @@ export function SearchScreen({
     );
   }
 
+  function MusicResultCard({ track }: { track: AfuMusicTrack }) {
+    const owned = track.price === 0 || !!track.isOwned;
+    const balance = Math.max(0, Math.floor(Number(profile?.acoin ?? 0)));
+
+    const startPlayback = (nextTrack: AfuMusicTrack) => {
+      musicPlayer.play(nextTrack, [nextTrack], "AfuSearch", { showPlayer: true }).catch((error) => {
+        showAlert("Playback unavailable", error);
+      });
+    };
+
+    const activate = () => {
+      if (!user) {
+        router.push("/(auth)/login" as any);
+        return;
+      }
+      if (owned) {
+        startPlayback(track);
+        return;
+      }
+      const actions = balance >= track.price
+        ? [
+            { text: "Cancel", style: "cancel" as const },
+            {
+              text: `Buy for ${track.price} ACoin`,
+              onPress: async () => {
+                try {
+                  await purchaseMusicTrack(track.id);
+                  const ownedTrack = { ...track, isOwned: true };
+                  setResults((current) => ({
+                    ...current,
+                    music: current.music.map((item) => item.id === track.id ? ownedTrack : item),
+                  }));
+                  startPlayback(ownedTrack);
+                } catch (error) {
+                  showAlert("Purchase could not be completed", error);
+                }
+              },
+            },
+          ]
+        : [
+            { text: "Not now", style: "cancel" as const },
+            { text: "Open AfuPay", onPress: () => router.push("/app/afupay" as any) },
+          ];
+      showAlert(
+        "Unlock this track",
+        `${track.title} by ${track.artist}\nPrice: ${track.price} ACoin · Your balance: ${balance} ACoin`,
+        actions,
+      );
+    };
+
+    return (
+      <TouchableOpacity
+        onPress={activate}
+        activeOpacity={0.82}
+        style={[ss.listRow, { marginHorizontal: 12, marginBottom: 8, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.surface }]}
+      >
+        <AfuMusicArtwork
+          uri={track.coverArtUrl}
+          size={48}
+          radius={13}
+          iconColor={CORAL}
+          backgroundColor={colors.surface}
+          accessibilityLabel={`${track.title} cover art`}
+        />
+        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+          <Text style={[ss.rowTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
+          <Text style={[ss.rowSub, { color: colors.textMuted }]} numberOfLines={1}>{track.artist} · {track.genre}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: owned ? SUCCESS + "1A" : CORAL + "1A" }}>
+              <Text style={{ color: owned ? SUCCESS : CORAL, fontSize: 10, fontFamily: "Inter_700Bold" }}>
+                {owned ? (track.price === 0 ? "FREE" : "IN LIBRARY") : `${track.price} ACoin`}
+              </Text>
+            </View>
+            {!owned ? <Text style={{ color: colors.textMuted, fontSize: 10 }}>Tap to unlock</Text> : null}
+          </View>
+        </View>
+        <Ionicons name={owned ? "play-circle" : "lock-closed"} size={23} color={owned ? CORAL : colors.textMuted} />
+      </TouchableOpacity>
+    );
+  }
+
   // ─── ChannelCard ─────────────────────────────────────────────────────────────
 
   function ChannelCard({ ch, i }: { ch: ChannelResult; i: number }) {
@@ -2118,21 +1125,18 @@ export function SearchScreen({
       <View >
         <TouchableOpacity
           style={[ss.listRow, { backgroundColor: colors.surface }]}
-          onPress={() => {
-            trackSearchClick();
-            router.push({
-              pathname: "/chat/[id]",
-              params: {
-                id: ch.id,
-                isChannel: "true",
-                channelRole: ch.is_subscriber ? "member" : "",
-                chatName: ch.name,
-                chatAvatar: ch.avatar_url || "",
-                channelHandle: ch.handle || "",
-                channelDescription: ch.description || "",
-              },
-            } as any);
-          }}
+          onPress={() => router.push({
+            pathname: "/chat/[id]",
+            params: {
+              id: ch.id,
+              isChannel: "true",
+              channelRole: ch.is_subscriber ? "member" : "",
+              chatName: ch.name,
+              chatAvatar: ch.avatar_url || "",
+              channelHandle: ch.handle || "",
+              channelDescription: ch.description || "",
+            },
+          } as any)}
           activeOpacity={0.75}
         >
           <View style={{ width: 48, height: 48, borderRadius: 14, overflow: "hidden" }}>
@@ -2164,7 +1168,7 @@ export function SearchScreen({
     const sold = ev.capacity > 0 ? Math.round((ev.tickets_sold / ev.capacity) * 100) : 0;
     return (
       <View >
-        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => { trackSearchClick(); router.push("/app/afuevents" as any); }} activeOpacity={0.75}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push("/app/afuevents" as any)} activeOpacity={0.75}>
           <View style={{ width: 48, height: 52, borderRadius: 12, backgroundColor: WARN + "1A", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: WARN, fontSize: 9, fontFamily: "Inter_700Bold" }}>{d.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}</Text>
             <Text style={{ color: WARN, fontSize: 20, fontFamily: "Inter_700Bold", lineHeight: 24 }}>{d.getDate()}</Text>
@@ -2196,7 +1200,7 @@ export function SearchScreen({
           const rc = RARITY_COLORS[g.rarity] || "#9E9E9E";
           return (
             <View key={g.id} >
-              <TouchableOpacity onPress={() => { trackSearchClick(); router.push("/app/afugifts?section=marketplace" as any); }} activeOpacity={0.8} style={{ width: GIFT_W, backgroundColor: colors.surface, borderRadius: 14, padding: 10, alignItems: "center", gap: 4, borderWidth: isAfuSearch ? 0 : 1, borderColor: rc + "30" }}>
+              <TouchableOpacity onPress={() => router.push("/app/afugifts?section=marketplace" as any)} activeOpacity={0.8} style={{ width: GIFT_W, backgroundColor: colors.surface, borderRadius: 14, padding: 10, alignItems: "center", gap: 4, borderWidth: 1, borderColor: rc + "30" }}>
                 <Text style={{ fontSize: 26 }}>{g.emoji}</Text>
                 <Text style={{ fontSize: 10, fontFamily: "Inter_600SemiBold", color: colors.text, textAlign: "center" }} numberOfLines={2}>{g.name}</Text>
                 <View style={{ backgroundColor: rc + "1A", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
@@ -2217,7 +1221,7 @@ export function SearchScreen({
     const c = s.kind === "product" ? BRAND : s.kind === "freelance" ? PURPLE : SUCCESS;
     return (
       <View >
-        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => { trackSearchClick(); router.push(s.route as any); }} activeOpacity={0.75}>
+        <TouchableOpacity style={[ss.listRow, { backgroundColor: colors.surface }]} onPress={() => router.push(s.route as any)} activeOpacity={0.75}>
           <View style={{ width: 48, height: 48, borderRadius: 12, overflow: "hidden", backgroundColor: c + "1A", alignItems: "center", justifyContent: "center" }}>
             {s.image_url
               ? <ExpoImage source={{ uri: s.image_url }} style={{ width: 48, height: 48 }} contentFit="cover" cachePolicy="memory-disk" />
@@ -2249,9 +1253,8 @@ export function SearchScreen({
     return (
       <View >
         <TouchableOpacity
-          style={[ss.contentCard, { backgroundColor: colors.cardSurface }]}
+          style={[ss.contentCard, { backgroundColor: colors.surface }]}
           onPress={() => {
-            trackSearchClick();
             Haptics.selectionAsync();
             if (j.apply_url) openLink(j.apply_url);
             else if (j.company_slug) router.push(`/company/${j.company_slug}` as any);
@@ -2294,311 +1297,51 @@ export function SearchScreen({
     );
   }
 
-  function ImageSearchGrid({ items }: { items: ImageSearchTileData[] }) {
-    const tileWidth = (SW - 32 - 10) / 2;
-    const rows: ImageSearchTileData[][] = [];
-    for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
-
-    return (
-      <View style={{ paddingHorizontal: 16, gap: 14 }}>
-        {rows.map((row, rowIndex) => (
-          <View key={`image-row-${rowIndex}`} style={{ flexDirection: "row", gap: 10 }}>
-            {row.map((item) => (
-              <TouchableOpacity
-                key={item.key}
-                style={{ width: tileWidth }}
-                onPress={item.onPress}
-                activeOpacity={0.82}
-                accessibilityRole="button"
-                accessibilityLabel={item.accessibilityLabel}
-              >
-                <View style={{ width: tileWidth, height: tileWidth * 1.04, overflow: "hidden", borderRadius: 13, backgroundColor: colors.inputBg }}>
-                  <ExpoImage
-                    source={{ uri: item.imageUrl }}
-                    style={{ width: "100%", height: "100%" }}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
-                  {!!item.label && (
-                    <View style={{ position: "absolute", left: 7, bottom: 7, maxWidth: "88%", borderRadius: 6, backgroundColor: "rgba(0,0,0,0.68)", paddingHorizontal: 7, paddingVertical: 4 }}>
-                      <Text numberOfLines={1} style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" }}>{item.label}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text numberOfLines={2} style={{ color: colors.text, fontSize: 12, lineHeight: 16, marginTop: 6 }}>
-                  {item.title || "AfuChat post"}
-                </Text>
-                <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 10, marginTop: 3 }}>
-                  {item.metadata}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            {row.length === 1 && <View style={{ width: tileWidth }} />}
-          </View>
-        ))}
-      </View>
-    );
-  }
-
-  function PostImageGrid({ posts }: { posts: PostResult[] }) {
-    const items: ImageSearchTileData[] = posts
-      .filter((post) => Boolean(post.image_url))
-      .map((post) => ({
-        key: `post-image:${post.id}`,
-        imageUrl: post.image_url!,
-        title: post.article_title || post.content || "AfuChat post",
-        metadata: `${post.author_handle ? `@${post.author_handle} · ` : ""}${timeAgo(post.created_at)}`,
-        accessibilityLabel: `Open AfuChat image post by ${post.author_name || post.author_handle}`,
-        onPress: () => {
-          trackSearchClick();
-          router.push((post.post_type === "article" ? `/article/${post.id}` : `/post/${post.id}`) as any);
-        },
-      }));
-
-    return <ImageSearchGrid items={items} />;
-  }
-
   // ─── Lens result card ─────────────────────────────────────────────────────────
 
   function LensCard() {
-    const matches = lensResult?.matches ?? [];
-    const imageMatches = matches.filter((match) => Boolean(match.imageUrl));
-    const contentMatches = Array.from(
-      new Map(matches.map((match) => [match.postId, match] as const)).values(),
-    );
-
-    const matchLabel = (match: VisualMatch) => match.matchType === "text"
-      ? "TEXT IN IMAGE"
-      : match.matchType === "content-text"
-        ? "POST TEXT"
-        : match.matchType === "visual+text"
-          ? "VISUAL + TEXT"
-          : match.matchType === "caption"
-            ? "RELATED POST"
-            : match.distance <= 3 ? "CLOSE IMAGE MATCH" : "IMAGE MATCH";
-
-    const openMatch = (match: VisualMatch) => {
-      trackSearchClick();
-      if (!match.sourceType || match.sourceType === "post" || match.sourceType === "video") {
-        router.push({ pathname: "/post/[id]", params: { id: match.postId } } as any);
-      } else {
-        router.push({ pathname: "/app/afusearch", params: { q: match.content.slice(0, 100) } } as any);
-      }
-    };
-
     if (lensLoading) {
       return (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 18 }}>
+        <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: BRAND + "0A" }]}>
           <ActivityIndicator size="small" color={BRAND} />
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 }}>
-            Searching public AfuChat posts for matching images and content…
+            Looking for matches in this image…
           </Text>
         </View>
       );
     }
-    if (!lensResult) {
-      if (!lensError || !lensImageUri) return null;
-      return (
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 16, paddingVertical: 18 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_700Bold" }}>Image search could not finish</Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 4 }}>{lensError}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              clearLensResults();
-              setHasSearched(false);
-              setResults(EMPTY);
-              setTab("all");
-            }}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close image search results"
-          >
-            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    const imageItems: ImageSearchTileData[] = imageMatches.map((match) => ({
-      key: `${match.sourceType ?? "post"}:${match.postId}:${match.imageUrl}`,
-      imageUrl: match.imageUrl!,
-      title: match.content || "AfuChat post",
-      metadata: `${match.sourceType === "video" ? "AfuChat video" : "AfuChat post"} · ${timeAgo(match.createdAt)}`,
-      label: matchLabel(match),
-      accessibilityLabel: `Open matching AfuChat content: ${match.content || matchLabel(match)}`,
-      onPress: () => openMatch(match),
-    }));
+    if (!lensResult) return null;
     return (
-      <View style={{ paddingTop: 16 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 16, paddingBottom: 16 }}>
-          {lensImageUri ? (
-            <ExpoImage source={{ uri: lensImageUri }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: colors.inputBg }} contentFit="cover" />
-          ) : (
-            <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: BRAND + "12", alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="scan-outline" size={22} color={BRAND} />
+      <View style={[ss.lensCard, { borderColor: BRAND + "35", backgroundColor: colors.surface }]}>
+        {lensImageUri && <ExpoImage source={{ uri: lensImageUri }} style={ss.lensImage} contentFit="cover" />}
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 5 }}>
+            <Ionicons name="scan-outline" size={16} color={BRAND} />
+            <Text style={{ color: BRAND, fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.7 }}>LENS RESULT</Text>
+          </View>
+          <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 4 }}>{lensResult.title}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>{lensResult.description}</Text>
+          {!!lensResult.facts?.length && (
+            <View style={{ marginTop: 9, gap: 5 }}>
+              {lensResult.facts.slice(0, 3).map((fact, i) => (
+                <View key={`${fact}-${i}`} style={{ flexDirection: "row", gap: 6 }}>
+                  <Text style={{ color: BRAND, fontSize: 13 }}>•</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17, flex: 1 }}>{fact}</Text>
+                </View>
+              ))}
             </View>
           )}
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: BRAND, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.55, marginBottom: 3 }}>
-              AFUSEARCH · PUBLIC POSTS
-            </Text>
-            <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_700Bold" }} numberOfLines={1}>
-              {lensResult.title}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={2}>
-              {lensResult.description}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              clearLensResults();
-              setHasSearched(false);
-              setResults(EMPTY);
-              setTab("all");
-            }}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close image search results"
-          >
-            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
         </View>
-
-        {tab === "images" ? (
-          imageItems.length ? (
-            <ImageSearchGrid items={imageItems} />
-          ) : (
-            <View style={{ paddingHorizontal: 16, paddingVertical: 18 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-                No matching images. Switch to All to see related AfuChat posts and text matches.
-              </Text>
-            </View>
-          )
-        ) : (
-          <>
-            {imageItems.length > 0 && (
-              <>
-                <SectionHeader icon="images" label="Matching images" color={BRAND} />
-                <ImageSearchGrid items={imageItems} />
-              </>
-            )}
-            {contentMatches.length > 0 && (
-              <>
-                <SectionHeader icon="document-text" label="Related AfuChat posts" color={BLUE} />
-                <View style={{ paddingHorizontal: 16 }}>
-                  {contentMatches.map((match) => (
-                    <TouchableOpacity
-                      key={`content-match:${match.postId}`}
-                      onPress={() => openMatch(match)}
-                      activeOpacity={0.76}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open matching AfuChat content: ${match.content || matchLabel(match)}`}
-                      style={{ flexDirection: "row", alignItems: "flex-start", gap: 11, paddingVertical: 12, borderBottomWidth: isAfuSearch ? 0 : StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
-                    >
-                      {match.imageUrl ? (
-                        <ExpoImage source={{ uri: match.imageUrl }} style={{ width: 54, height: 54, borderRadius: 9, backgroundColor: colors.inputBg }} contentFit="cover" cachePolicy="memory-disk" />
-                      ) : (
-                        <View style={{ width: 54, height: 54, borderRadius: 9, backgroundColor: BRAND + "12", alignItems: "center", justifyContent: "center" }}>
-                          <Ionicons name={match.sourceType === "video" ? "play-circle-outline" : "document-text-outline"} size={22} color={BRAND} />
-                        </View>
-                      )}
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                          <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_600SemiBold", flex: 1 }}>
-                            {match.sourceType === "video" ? "AFUCHAT VIDEO" : "AFUCHAT POST"}
-                          </Text>
-                          <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(match.createdAt)}</Text>
-                        </View>
-                        <Text style={{ color: colors.text, fontSize: 13, lineHeight: 18 }} numberOfLines={3}>
-                          {match.content || "Open matching AfuChat post"}
-                        </Text>
-                        <Text style={{ color: BRAND, fontSize: 10, fontFamily: "Inter_600SemiBold", marginTop: 5 }}>
-                          {matchLabel(match)}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-            {!imageItems.length && !contentMatches.length && (
-              <View style={{ paddingHorizontal: 16, paddingVertical: 18 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 19 }}>
-                  No public AfuChat posts matched this image.
-                </Text>
-              </View>
-            )}
-          </>
-        )}
+        <TouchableOpacity onPress={() => { setLensResult(null); setLensImageUri(null); }} hitSlop={10}>
+          <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
     );
   }
+
   // ─── No Results ──────────────────────────────────────────────────────────────
 
   function NoResults() {
-    if (isAfuSearch) {
-      return (
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 18, paddingBottom: scrollPB }}
-          showsVerticalScrollIndicator={false}
-        >
-          {(lensResult || lensLoading) && <View style={{ marginBottom: 16 }}><LensCard /></View>}
-          {!!query.trim() && (
-            <Text style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>
-              No results for <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>"{query.trim()}"</Text>
-            </Text>
-          )}
-          {trendingSearches.length > 0 && (
-            <View style={{ marginTop: 18 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 4 }}>
-                Trending searches
-              </Text>
-              {trendingSearches.slice(0, 5).map((item) => (
-                <TouchableOpacity
-                  key={item.term}
-                  onPress={() => onSuggestionPress({
-                    kind: "term",
-                    term: item.term,
-                    score: item.score,
-                    growth: item.growth,
-                    engagementRate: item.engagementRate,
-                    exactMatch: item.exactMatch,
-                  })}
-                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10 }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name={item.growth > 0.35 ? "trending-up" : "search-outline"} size={16} color={item.growth > 0.35 ? BRAND : colors.textMuted} />
-                  <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>{item.term}</Text>
-                  <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          {trendingSearches.length === 0 && trendingHashtags.length > 0 && (
-            <View style={{ marginTop: 18 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 4 }}>
-                Topics in public posts
-              </Text>
-              {trendingHashtags.slice(0, 4).map(({ tag }) => (
-                <TouchableOpacity
-                  key={tag}
-                  onPress={() => onTagPress(tag)}
-                  style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 10 }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} />
-                  <Text style={{ flex: 1, color: colors.text, fontSize: 14, fontFamily: "Inter_500Medium" }}>#{tag}</Text>
-                  <Ionicons name="arrow-forward-outline" size={15} color={colors.textMuted} />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      );
-    }
-
     const tags = trendingHashtags.length > 0
       ? trendingHashtags.slice(0, 8)
       : (personalizedTags.length > 0 ? personalizedTags : FALLBACK_TAGS).slice(0, 8).map(t => ({ tag: t, count: 0 }));
@@ -2634,7 +1377,7 @@ export function SearchScreen({
             </View>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {tags.map(({ tag }) => (
-                <TouchableOpacity key={tag} style={{ backgroundColor: BRAND + "12", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: isAfuSearch ? 0 : 1, borderColor: BRAND + "25" }} onPress={() => onTagPress(tag)} activeOpacity={0.7}>
+                <TouchableOpacity key={tag} style={{ backgroundColor: BRAND + "12", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: BRAND + "25" }} onPress={() => onTagPress(tag)} activeOpacity={0.7}>
                   <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_500Medium" }}>#{tag}</Text>
                 </TouchableOpacity>
               ))}
@@ -2649,197 +1392,91 @@ export function SearchScreen({
   // ─── Results view ────────────────────────────────────────────────────────────
 
   function renderResults() {
-    const showLens = isVisualSearchActive;
-    const showImages = !isVisualSearchActive && tab === "images" && results.posts.length > 0;
     const showPeople   = (tab === "all" || tab === "people")   && results.people.length > 0;
     const showPosts    = (tab === "all" || tab === "posts")    && results.posts.length > 0;
-    const showVideos   = (tab === "all" || tab === "videos")   && results.videos.length > 0;
     const showMusic    = (tab === "all" || tab === "music")    && results.music.length > 0;
+    const showVideos   = (tab === "all" || tab === "videos")   && results.videos.length > 0;
     const showChannels = (tab === "all" || tab === "channels") && results.channels.length > 0;
     const showEvents   = (tab === "all" || tab === "events")   && results.events.length > 0;
     const showGifts    = (tab === "all" || tab === "gifts")    && results.gifts.length > 0;
     const showMarket   = (tab === "all" || tab === "market")   && results.market.length > 0;
     const showJobs     = (tab === "all" || tab === "jobs")     && results.jobs.length > 0;
-    const showFootball = tab === "football" && footballResults.length > 0;
-    const any = showLens || showImages || showPeople || showPosts || showVideos || showMusic || showChannels || showEvents || showGifts || showMarket || showJobs || showFootball || ((tab === "football" || tab === "all") && !!footballNotice && !footballResults.length);
+    const any = showPeople || showPosts || showMusic || showVideos || showChannels || showEvents || showGifts || showMarket || showJobs;
 
     if (!any) return <NoResults />;
 
     return (
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: scrollPB }}>
-        {didYouMean && (
-          <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: colors.surface, borderBottomWidth: isAfuSearch ? 0 : 0.5, borderBottomColor: colors.border }}>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>No exact match for "{didYouMean.original}". Did you mean</Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`Use suggested keyword ${didYouMean.suggested}`}
-                onPress={() => {
-                  const suggested = didYouMean.suggested;
-                  setQuery(suggested);
-                  setDidYouMean(null);
-                  performSearch(suggested, tab, verifiedOnly, sortMode, dateRange, false, undefined, true);
-                }}
-              >
-                <Text style={{ color: BRAND, fontSize: 13, fontFamily: "Inter_700Bold" }}>"{didYouMean.suggested}"?</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={`Search for ${didYouMean.original} instead`}
-              onPress={() => {
-                const original = didYouMean.original;
-                setDidYouMean(null);
-                performSearch(original, tab, verifiedOnly, sortMode, dateRange, false, undefined, true);
-              }}
-              style={{ alignSelf: "flex-start", paddingTop: 6 }}
-            >
-              <Text style={{ color: BRAND, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Search for "{didYouMean.original}" instead</Text>
-            </TouchableOpacity>
+        {/* Results summary */}
+        <View style={[ss.resultsBanner, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="search" size={13} color={BRAND} />
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              <Text style={{ fontFamily: "Inter_700Bold", color: colors.text }}>{totalCount}</Text>{" "}results for{" "}
+              <Text style={{ fontFamily: "Inter_600SemiBold", color: BRAND }}>"{query.trim()}"</Text>
+            </Text>
           </View>
-        )}
+        </View>
 
-        {showLens && <LensCard />}
-
-        {showImages && (
-          <View>
-            <SectionHeader icon="images" label="Images" color={BRAND} />
-            <PostImageGrid posts={results.posts} />
-          </View>
-        )}
+        {(lensResult || lensLoading) && <View style={{ paddingHorizontal: 14, paddingTop: 14 }}><LensCard /></View>}
 
         {showPeople && (
           <View>
-            <SectionHeader icon="people" label="People & Organizations" color={BRAND} onSeeAll={tab === "all" && results.people.length >= 5 ? () => onTabPress("people") : undefined} />
+            <SectionHeader icon="people" label="People & Organizations" color={BRAND} count={results.people.length} onSeeAll={tab === "all" && results.people.length >= 5 ? () => onTabPress("people") : undefined} />
             {results.people.map((p, i) => <PersonCard key={`${(p as any).kind}-${p.id}`} p={p} i={i} />)}
           </View>
         )}
         {showPosts && (
           <View>
-            <SectionHeader icon="document-text" label="Posts & Articles" color={BLUE} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
+            <SectionHeader icon="document-text" label="Posts & Articles" color={BLUE} count={results.posts.length} onSeeAll={tab === "all" && results.posts.length >= 5 ? () => onTabPress("posts") : undefined} />
             <View style={{ paddingHorizontal: 12, gap: 10 }}>
               {results.posts.map((p, i) => <PostCard key={p.id} p={p} i={i} />)}
             </View>
           </View>
         )}
-        {showVideos && (
-          <View>
-            <SectionHeader icon="play-circle" label="Videos" color={RED} onSeeAll={tab === "all" && results.videos.length >= 4 ? () => onTabPress("videos") : undefined} />
-            <VideoGrid videos={tab === "all" ? results.videos.slice(0, 4) : results.videos} />
-          </View>
-        )}
         {showMusic && (
           <View>
-            <SectionHeader icon="musical-notes" label="Music" color={BRAND} onSeeAll={tab === "all" && results.music.length >= 4 ? () => onTabPress("music") : undefined} />
-            <View style={{ paddingHorizontal: 12 }}>
-              {results.music.slice(0, tab === "all" ? 4 : results.music.length).map((track) => (
-                <TouchableOpacity
-                  key={track.id}
-                  activeOpacity={0.75}
-                  onPress={async () => {
-                    trackSearchClick();
-                    if (track.price > 0 && !track.isOwned) {
-                      safeRouter.push("/app/afumusic" as any);
-                      return;
-                    }
-                    try {
-                      const uri = await getMusicPlaybackUri(track);
-                      if (uri) {
-                        const playableQueue = results.music.filter((item) => item.isOwned || item.price === 0);
-                        playMusic(track, uri, playableQueue, getMusicPlaybackUri);
-                      }
-                    } catch {
-                      safeRouter.push("/app/afumusic" as any);
-                    }
-                  }}
-                  style={[ss.musicResultRow, { borderBottomColor: colors.border, borderBottomWidth: isAfuSearch ? 0 : StyleSheet.hairlineWidth }]}
-                >
-                  <View style={[ss.musicResultArt, { backgroundColor: track.coverColor || "#19172F" }]}>
-                    <Ionicons name="musical-notes" size={19} color={track.accentColor || BRAND} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{track.title}</Text>
-                    <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 11, marginTop: 3 }}>{track.artist} · {track.genre}</Text>
-                  </View>
-                  <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
-                    {track.price > 0 && !track.isOwned ? "Unlock" : "Play"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <SectionHeader icon="musical-notes" label="Music" color={CORAL} count={results.music.length} onSeeAll={tab === "all" && results.music.length >= 5 ? () => onTabPress("music") : undefined} />
+            <View style={{ paddingTop: 8, paddingBottom: 3 }}>
+              {results.music.map((track) => <MusicResultCard key={track.id} track={track} />)}
             </View>
+          </View>
+        )}
+        {showVideos && (
+          <View>
+            <SectionHeader icon="play-circle" label="Videos" color={RED} count={results.videos.length} onSeeAll={tab === "all" && results.videos.length >= 4 ? () => onTabPress("videos") : undefined} />
+            <VideoGrid videos={tab === "all" ? results.videos.slice(0, 4) : results.videos} />
           </View>
         )}
         {showJobs && (
           <View>
-            <SectionHeader icon="briefcase" label="Jobs & Opportunities" color={SUCCESS} onSeeAll={tab === "all" && results.jobs.length >= 4 ? () => onTabPress("jobs") : undefined} />
+            <SectionHeader icon="briefcase" label="Jobs & Opportunities" color={SUCCESS} count={results.jobs.length} onSeeAll={tab === "all" && results.jobs.length >= 4 ? () => onTabPress("jobs") : undefined} />
             <View style={{ paddingHorizontal: 12, gap: 10 }}>
               {results.jobs.map((j, i) => <JobCard key={j.id} j={j} i={i} />)}
             </View>
           </View>
         )}
-        {showFootball && (
-          <View>
-            <SectionHeader icon="football" label="Football" color="#247A4B" />
-            <View style={{ paddingHorizontal: 12, gap: 8 }}>
-              {footballResults.map((item) => (
-                <TouchableOpacity
-                  key={`${item.kind}-${item.id}`}
-                  onPress={() => {
-                    if (item.kind === "team") safeRouter.push(`/football/team/${item.id}`);
-                    else if (item.kind === "competition") safeRouter.push(`/football/league/${item.id}`);
-                  }}
-                  disabled={item.kind === "player"}
-                  activeOpacity={0.76}
-                  accessibilityRole={item.kind === "player" ? undefined : "button"}
-                  accessibilityLabel={`${item.kind} ${item.name}`}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 11, padding: 12, borderRadius: 16, backgroundColor: colors.surface }}
-                >
-                  <View style={{ width: 42, height: 42, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "#247A4B18", overflow: "hidden" }}>
-                    {item.logo ? <ExpoImage source={{ uri: item.logo }} style={{ width: 30, height: 30 }} contentFit="contain" /> : <Ionicons name={item.kind === "player" ? "person-outline" : item.kind === "competition" ? "trophy-outline" : "football-outline"} size={19} color="#247A4B" />}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{item.name}</Text>
-                    <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 3 }}>{item.subtitle}</Text>
-                  </View>
-                  {item.kind === "player" ? <Text style={{ color: colors.textMuted, fontSize: 10 }}>Player</Text> : <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-        {tab === "football" && footballNotice && footballResults.length === 0 ? (
-          <View style={{ marginHorizontal: 16, marginTop: 12, padding: 15, borderRadius: 17, backgroundColor: colors.surface, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-            <Ionicons name="cloud-offline-outline" size={20} color={colors.textMuted} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }}>Football provider connection</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>{footballNotice}</Text>
-              <TouchableOpacity onPress={() => performSearch(query, "football", verifiedOnly, sortMode, dateRange)} style={{ alignSelf: "flex-start", paddingTop: 8 }}>
-                <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Try again</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
         {showChannels && (
           <View>
-            <SectionHeader icon="megaphone" label="Channels" color={PURPLE} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />
+            <SectionHeader icon="megaphone" label="Channels" color={PURPLE} count={results.channels.length} onSeeAll={tab === "all" && results.channels.length >= 4 ? () => onTabPress("channels") : undefined} />
             {results.channels.map((ch, i) => <ChannelCard key={ch.id} ch={ch} i={i} />)}
           </View>
         )}
         {showEvents && (
           <View>
-            <SectionHeader icon="calendar" label="Events" color={WARN} onSeeAll={tab === "all" && results.events.length >= 3 ? () => onTabPress("events") : undefined} />
+            <SectionHeader icon="calendar" label="Events" color={WARN} count={results.events.length} onSeeAll={tab === "all" && results.events.length >= 3 ? () => onTabPress("events") : undefined} />
             {results.events.map((ev, i) => <EventCard key={ev.id} ev={ev} i={i} />)}
           </View>
         )}
         {showGifts && (
           <View>
-            <SectionHeader icon="gift" label="Gifts" color={GOLD} onSeeAll={tab === "all" && results.gifts.length >= 6 ? () => onTabPress("gifts") : undefined} />
+            <SectionHeader icon="gift" label="Gifts" color={GOLD} count={results.gifts.length} onSeeAll={tab === "all" && results.gifts.length >= 6 ? () => onTabPress("gifts") : undefined} />
             <GiftGrid gifts={results.gifts} />
           </View>
         )}
         {showMarket && (
           <View>
-            <SectionHeader icon="storefront" label="Marketplace" color={INDIGO} onSeeAll={tab === "all" && results.market.length >= 5 ? () => onTabPress("market") : undefined} />
+            <SectionHeader icon="storefront" label="Marketplace" color={INDIGO} count={results.market.length} onSeeAll={tab === "all" && results.market.length >= 5 ? () => onTabPress("market") : undefined} />
             {results.market.map((s, i) => <MarketCard key={`${s.kind}-${s.id}`} s={s} i={i} />)}
           </View>
         )}
@@ -2853,102 +1490,6 @@ export function SearchScreen({
     const displayTags = trendingHashtags.length > 0
       ? trendingHashtags.slice(0, 10)
       : (personalizedTags.length > 0 ? personalizedTags : FALLBACK_TAGS).slice(0, 10).map(t => ({ tag: t, count: 0 }));
-
-    if (isAfuSearch) {
-      const feedRows: Array<
-        | { kind: "post"; item: PostResult }
-        | { kind: "video"; item: VideoResult }
-        | { kind: "music"; item: AfuMusicTrack }
-      > = [];
-      const rowCount = Math.max(trendingPosts.length, trendingVideos.length, trendingMusic.length);
-      for (let index = 0; index < rowCount; index++) {
-        if (trendingPosts[index]) feedRows.push({ kind: "post", item: trendingPosts[index] });
-        if (trendingVideos[index]) feedRows.push({ kind: "video", item: trendingVideos[index] });
-        if (trendingMusic[index]) feedRows.push({ kind: "music", item: trendingMusic[index] });
-      }
-
-      return (
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: scrollPB }}
-        >
-          <View style={{ paddingHorizontal: 16, paddingTop: insets.top + 6 }}>
-            <View style={{ height: 48, alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <AfuSearchBackButton style={{ position: "absolute", left: 0 }} />
-              <Text style={{ color: colors.text, fontSize: 32, fontFamily: "Inter_700Bold", letterSpacing: -1.2 }}>AfuSearch</Text>
-            </View>
-
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
-              <TouchableOpacity
-                testID="afusearch-home-search"
-                onPress={openSearchOverlay}
-                activeOpacity={0.78}
-                accessibilityRole="button"
-                accessibilityLabel="Open AfuSearch"
-                style={[ss.searchBar, { flex: 1, height: 54, marginBottom: 0, paddingHorizontal: 17, backgroundColor: colors.inputBg, borderColor: colors.border, borderWidth: 0 }]}
-              >
-                <Ionicons name="search" size={20} color={colors.textMuted} />
-                <Text style={{ flex: 1, color: colors.textMuted, fontSize: 16, fontFamily: "Inter_400Regular" }}>Search AfuChat</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={openLens}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel="Search with an image"
-                style={{ width: 50, height: 50, alignItems: "center", justifyContent: "center", borderRadius: 25, backgroundColor: colors.surface }}
-              >
-                {lensLoading ? <ActivityIndicator size="small" color={BRAND} /> : <Ionicons name="scan" size={22} color={BRAND} />}
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 8, paddingTop: 12, paddingBottom: 8 }}>
-              {([
-                { id: "all", label: "All", icon: "apps-outline" },
-                { id: "posts", label: "Posts", icon: "document-text-outline" },
-                { id: "videos", label: "Videos", icon: "play-circle-outline" },
-                { id: "music", label: "Music", icon: "musical-notes-outline" },
-              ] as const).map((category) => (
-                <TouchableOpacity
-                  key={category.id}
-                  onPress={() => { setTab(category.id); openSearchOverlay(); }}
-                  style={{ flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 6, borderRadius: 20, backgroundColor: tab === category.id ? BRAND + "18" : colors.surface }}
-                  activeOpacity={0.75}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Search ${category.label.toLowerCase()}`}
-                >
-                  <Ionicons name={category.icon as any} size={14} color={tab === category.id ? BRAND : colors.textMuted} />
-                  <Text style={{ color: tab === category.id ? BRAND : colors.textSecondary, fontSize: 11, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
-                    {category.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Ionicons name="sparkles" size={16} color={BRAND} />
-            <Text style={{ color: colors.text, fontSize: 17, fontFamily: "Inter_700Bold" }}>For you</Text>
-          </View>
-
-          {feedRows.length > 0 ? (
-            <View style={{ paddingHorizontal: 12, gap: 9 }}>
-              {feedRows.map((row, index) => row.kind === "post"
-                ? <PostCard key={`post-${row.item.id}`} p={row.item} i={index} />
-                : row.kind === "video"
-                  ? <DiscoveryVideoRow key={`video-${row.item.id}`} video={row.item} />
-                  : <DiscoveryMusicRow key={`music-${row.item.id}`} track={row.item} queue={trendingMusic} />)}
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", paddingHorizontal: 24, paddingVertical: 42 }}>
-              <Ionicons name="search-outline" size={28} color={colors.textMuted} />
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 15, marginTop: 10 }}>Nothing to explore yet</Text>
-              <Text style={{ color: colors.textMuted, fontSize: 13, textAlign: "center", marginTop: 4 }}>Posts, videos, and music will appear here as they’re available.</Text>
-            </View>
-          )}
-        </ScrollView>
-      );
-    }
 
     const G = 10;
     const PH = 16;
@@ -2987,7 +1528,7 @@ export function SearchScreen({
             {/* Label + sub */}
             <View>
               <Text style={{ fontSize: h > 105 ? 16 : 13, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -0.2 }}>{cat.label}</Text>
-              {h > 105 && !isAfuSearch && (
+              {h > 105 && (
                 <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.78)", fontFamily: "Inter_400Regular", marginTop: 2 }} numberOfLines={1}>
                   {CAT_SUB[cat.id]}
                 </Text>
@@ -2997,40 +1538,6 @@ export function SearchScreen({
         </TouchableOpacity>
       );
     }
-
-    const browseGrid = (
-      <View style={{ paddingTop: 22, paddingHorizontal: PH }}>
-        <View style={{ flexDirection: "row", alignItems: "flex-end", marginBottom: 16 }}>
-          <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, flex: 1, letterSpacing: -0.5 }}>
-            {isAfuSearch ? "Explore content" : "Browse"}
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: "row", gap: G }}>
-          {CATEGORIES.slice(0, 2).map((cat) => (
-            <View key={cat.id}>
-              <BrowseCard cat={cat} w={half} h={130} iconSz={30} />
-            </View>
-          ))}
-        </View>
-
-        <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
-          {CATEGORIES.slice(2, 5).map((cat) => (
-            <View key={cat.id}>
-              <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
-            </View>
-          ))}
-        </View>
-
-        <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
-          {CATEGORIES.slice(5, 8).map((cat) => (
-            <View key={cat.id}>
-              <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
-            </View>
-          ))}
-        </View>
-      </View>
-    );
 
     return (
       <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scrollPB }}>
@@ -3049,7 +1556,7 @@ export function SearchScreen({
               {history.slice(0, 8).map((term, i) => (
                 <TouchableOpacity
                   key={`h-${i}`}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 0.5, borderColor: colors.border }}
                   onPress={() => onHistoryPress(term)}
                   activeOpacity={0.7}
                 >
@@ -3075,7 +1582,7 @@ export function SearchScreen({
               {saved.slice(0, 6).map((s) => (
                 <TouchableOpacity
                   key={s.id}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: GOLD + "14", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: isAfuSearch ? 0 : 1, borderColor: GOLD + "30" }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: GOLD + "14", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: GOLD + "30" }}
                   onPress={() => onHistoryPress(s.query)}
                   activeOpacity={0.7}
                 >
@@ -3087,20 +1594,39 @@ export function SearchScreen({
           </View>
         )}
 
-        {/* AfuSearch leads with live discovery content; categories stay available below. */}
-        {!isAfuSearch && browseGrid}
-
-        {isAfuSearch && trendingPosts.length > 0 && (
-          <View style={{ paddingTop: 24 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: PH, marginBottom: 12 }}>
-              <Ionicons name="document-text" size={18} color={BRAND} />
-              <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: -0.5 }}>Posts to explore</Text>
-            </View>
-            <View style={{ paddingHorizontal: 12, gap: 10 }}>
-              {trendingPosts.map((post, index) => <PostCard key={post.id} p={post} i={index} />)}
-            </View>
+        {/* ── Browse — Bento grid ── */}
+        <View style={{ paddingTop: 22, paddingHorizontal: PH }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-end", marginBottom: 16 }}>
+            <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: colors.text, flex: 1, letterSpacing: -0.5 }}>Browse</Text>
           </View>
-        )}
+
+          {/* Row 1: 2 large tall cards */}
+          <View style={{ flexDirection: "row", gap: G }}>
+            {CATEGORIES.slice(0, 2).map((cat, i) => (
+              <View key={cat.id} >
+                <BrowseCard cat={cat} w={half} h={130} iconSz={30} />
+              </View>
+            ))}
+          </View>
+
+          {/* Row 2: 3 medium cards */}
+          <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
+            {CATEGORIES.slice(2, 5).map((cat, i) => (
+              <View key={cat.id} >
+                <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
+              </View>
+            ))}
+          </View>
+
+          {/* Row 3: 3 medium cards */}
+          <View style={{ flexDirection: "row", gap: G, marginTop: G }}>
+            {CATEGORIES.slice(5, 8).map((cat, i) => (
+              <View key={cat.id} >
+                <BrowseCard cat={cat} w={third} h={100} iconSz={24} />
+              </View>
+            ))}
+          </View>
+        </View>
 
         {/* ── Trending hashtags — 2-col ranked grid ── */}
         {displayTags.length > 0 && (
@@ -3120,7 +1646,7 @@ export function SearchScreen({
                   <TouchableOpacity
                     onPress={() => onTagPress(tag)}
                     activeOpacity={0.72}
-                    style={{ width: half, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13, borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
+                    style={{ width: half, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 0.5, borderColor: colors.border }}
                   >
                     <Text style={{ fontSize: 22, fontFamily: "Inter_700Bold", color: i < 3 ? RED : colors.textMuted, width: 30, textAlign: "center", letterSpacing: -1 }}>{i + 1}</Text>
                     <View style={{ flex: 1, gap: 2 }}>
@@ -3148,15 +1674,15 @@ export function SearchScreen({
               {trendingPeople.slice(0, 10).map((p) => (
                 <TouchableOpacity
                   key={p.id}
-                  style={{ width: 148, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
-                  onPress={() => navigateToKnownProfile(p)}
+                  style={{ width: 148, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: 0.5, borderColor: colors.border }}
+                  onPress={() => navigateToProfile(p.handle, true).catch(() => {})}
                   activeOpacity={0.8}
                 >
                   {/* Gradient top band */}
                   <LinearGradient colors={[BRAND + "44", BRAND + "08"]} style={{ height: 52, alignItems: "center" }} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                     <View style={{ position: "absolute", bottom: -28, alignItems: "center" }}>
                       {p.avatar_url
-                        ? <ExpoImage source={{ uri: p.avatar_url }} style={{ width: 56, height: 56, borderRadius: 28, borderWidth: isAfuSearch ? 0 : 3, borderColor: colors.surface }} contentFit="cover" cachePolicy="memory-disk" />
+                        ? <ExpoImage source={{ uri: p.avatar_url }} style={{ width: 56, height: 56, borderRadius: 28, borderWidth: 3, borderColor: colors.surface }} contentFit="cover" cachePolicy="memory-disk" />
                         : <AvatarPlaceholder name={p.display_name || p.handle} size={56} color={BRAND} />
                       }
                       {(p.is_verified || p.is_organization_verified) && (
@@ -3203,7 +1729,7 @@ export function SearchScreen({
                 return (
                   <View key={v.id} >
                     <TouchableOpacity
-                      style={{ width: vw, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: isAfuSearch ? 0 : 0.5, borderColor: colors.border }}
+                      style={{ width: vw, backgroundColor: colors.surface, borderRadius: 22, overflow: "hidden", borderWidth: 0.5, borderColor: colors.border }}
                       onPress={() => router.push(`/video/${v.id}` as any)}
                       activeOpacity={0.82}
                     >
@@ -3231,7 +1757,7 @@ export function SearchScreen({
                         </LinearGradient>
                         {/* Play button */}
                         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-                          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.52)", alignItems: "center", justifyContent: "center", borderWidth: isAfuSearch ? 0 : 1.5, borderColor: "rgba(255,255,255,0.5)" }}>
+                          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.52)", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" }}>
                             <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 3 }} />
                           </View>
                         </View>
@@ -3245,7 +1771,7 @@ export function SearchScreen({
                             ? <ExpoImage source={{ uri: v.author_avatar }} style={{ width: 18, height: 18, borderRadius: 9 }} contentFit="cover" cachePolicy="memory-disk" />
                             : <AvatarPlaceholder name={v.author_name || v.author_handle} size={18} color={RED} />
                           }
-                <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_500Medium" }} numberOfLines={1}>{v.author_name || v.author_handle}</Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_500Medium" }} numberOfLines={1}>@{v.author_handle}</Text>
                         </View>
                       </View>
                     </TouchableOpacity>
@@ -3256,40 +1782,7 @@ export function SearchScreen({
           </View>
         )}
 
-        {isAfuSearch && browseGrid}
         <View style={{ height: 24 }} />
-      </ScrollView>
-    );
-  }
-
-  function renderSuggestionPage() {
-    const normalizedQuery = normalizeSearchTerm(query);
-    const suggestions = searchSuggestions.filter((suggestion) =>
-      suggestion.kind !== "term" || normalizeSearchTerm(suggestion.term) !== normalizedQuery,
-    );
-
-    return (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 16, paddingTop: 6, paddingBottom: scrollPB }}
-        keyboardShouldPersistTaps="always"
-        showsVerticalScrollIndicator={false}
-      >
-        <TouchableOpacity
-          onPress={onSubmit}
-          style={{ minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8 }}
-          activeOpacity={0.72}
-          accessibilityRole="button"
-          accessibilityLabel={`Search for ${query.trim()}`}
-          testID="search-submit-suggestion"
-        >
-          <Ionicons name="search-outline" size={18} color={BRAND} />
-          <Text style={{ flex: 1, color: colors.text, fontSize: 15, fontFamily: "Inter_500Medium" }} numberOfLines={1}>
-            Search for “{query.trim()}”
-          </Text>
-          <Ionicons name="arrow-forward-outline" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        {suggestions.map(renderSuggestionRow)}
       </ScrollView>
     );
   }
@@ -3298,89 +1791,59 @@ export function SearchScreen({
   return (
     <View style={[ss.root, { backgroundColor: colors.backgroundSecondary }]}>
 
-      {/* Keep AfuSearch's home hero inside its feed; the compact header is for search results and other search pages. */}
-      {(!isAfuSearch || hasSearched) && (
+      {/* Header */}
       <View style={[ss.header, { paddingTop: insets.top + 8, backgroundColor: colors.surface + "CC", borderBottomColor: colors.border }]}>
 
         {/* Title + image search */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-            {isAfuSearch
-              ? <AfuSearchBackButton style={{ marginRight: 6 }} />
-              : <GlassBackButton
-                  onPress={() => safeRouter.back("/(tabs)/discover")}
-                  style={{ marginRight: 6 }}
-                  accessibilityLabel="Go back"
-                />}
+            <TouchableOpacity onPress={() => safeRouter.back(title === "AfuSearch" ? "/apps" : "/(tabs)/discover")} hitSlop={10} style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", marginRight: 6 }} accessibilityRole="button" accessibilityLabel="Go back">
+              <Ionicons name="arrow-back" size={22} color={colors.text} />
+            </TouchableOpacity>
             <Text style={{ fontSize: 24, fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: -0.3 }}>{title}</Text>
           </View>
         </View>
 
         {/* Search bar */}
-        {isAfuSearch ? (
-          <View style={[ss.searchBar, { backgroundColor: colors.inputBg, borderColor: query.length > 0 ? BRAND + "66" : colors.border, borderWidth: 0 }]}>
-            <TouchableOpacity
-              onPress={openSearchOverlay}
-              style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 9 }}
-              accessibilityRole="button"
-              accessibilityLabel="Edit AfuSearch query"
-            >
-              <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
-              <Text style={{ flex: 1, color: query ? colors.text : colors.textMuted, fontSize: 15 }} numberOfLines={1}>
-                {query || "Search AfuChat"}
-              </Text>
-            </TouchableOpacity>
-            {query.length > 0 && <TouchableOpacity onPress={clearSearch} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></TouchableOpacity>}
-            <TouchableOpacity
-              onPress={openLens}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Search AfuChat with an image"
-              hitSlop={8}
-              style={[ss.lensInlineButton, { backgroundColor: colors.text + "18" }]}
-            >
-              {lensLoading ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name="scan" size={22} color={colors.text} />}
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <AfuInputSurface style={ss.searchBar}>
-            <TouchableOpacity
-              onPress={onSubmit}
-              accessibilityRole="button"
-              accessibilityLabel="Submit search"
-              hitSlop={8}
-            >
-              <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : colors.textMuted} />
-            </TouchableOpacity>
-            <TextInput
-              ref={inputRef}
-              appearance="embedded"
-              style={[ss.searchInput, { color: colors.text }]}
-              placeholder="Search…"
-              placeholderTextColor={colors.textMuted}
-              value={query}
-              onChangeText={onChangeText}
-              onSubmitEditing={onSubmit}
-              returnKeyType="search"
-              numberOfLines={1}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {query.length > 0
-              ? <TouchableOpacity onPress={clearSearch} hitSlop={8}><Ionicons name="close-circle" size={17} color={colors.textMuted} /></TouchableOpacity>
-              : null}
-            <TouchableOpacity
-              onPress={openLens}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Search AfuChat with an image"
-              hitSlop={8}
-              style={[ss.lensInlineButton, { backgroundColor: colors.text + "18" }]}
-            >
-              {lensLoading ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name="scan" size={22} color={colors.text} />}
-            </TouchableOpacity>
-          </AfuInputSurface>
-        )}
+        <GlassInputSurface
+          style={ss.searchBar}
+          borderColor={query.length > 0 ? BRAND + "88" : undefined}
+        >
+          <Ionicons name="search" size={17} color={query.length > 0 ? BRAND : glassBarMuted} />
+          <TextInput
+            ref={inputRef}
+            style={[ss.searchInput, { color: glassBarText }]}
+            placeholder="Search…"
+            placeholderTextColor={glassBarMuted}
+            value={query}
+            onChangeText={onChangeText}
+            onSubmitEditing={onSubmit}
+            returnKeyType="search"
+            numberOfLines={1}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {query.length > 0
+            ? <TouchableOpacity onPress={clearSearch} hitSlop={8}><Ionicons name="close-circle" size={17} color={glassBarMuted} /></TouchableOpacity>
+            : null}
+          <TouchableOpacity
+            onPress={openLens}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={Platform.OS === "web" ? "Search with an image" : "Search with camera"}
+            hitSlop={8}
+            style={[
+              ss.lensInlineButton,
+              {
+                backgroundColor: isDark ? colors.glassButtonBg : colors.text + "18",
+              },
+            ]}
+          >
+            {lensLoading
+              ? <ActivityIndicator size="small" color={colors.text} />
+              : <Ionicons name="scan" size={22} color={glassBarText} />}
+          </TouchableOpacity>
+        </GlassInputSurface>
         {!!lensError && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 4, paddingTop: 6 }}>
             <Ionicons name="alert-circle-outline" size={15} color={RED} />
@@ -3391,15 +1854,70 @@ export function SearchScreen({
           </View>
         )}
 
+        {/* Inline search suggestions — appear while typing, before submitting */}
+        {query.length > 1 && !hasSearched && searchSuggestions.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={{ gap: 6, paddingVertical: 6 }}
+          >
+            {searchSuggestions.map((s) => (
+              <TouchableOpacity
+                key={s}
+                onPress={() => { setQuery(s); setSearchSuggestions([]); performSearch(s, tab, verifiedOnly, sortMode, dateRange); inputRef.current?.blur(); }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.inputBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.border }}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="time" size={13} color={colors.textMuted} />
+                <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_400Regular" }} numberOfLines={1}>{s}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Filter pills — only shown when actively searching */}
+        {(query.length > 0 || hasSearched) && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 6 }}>
+          <TouchableOpacity
+            style={[ss.filterPill, verifiedOnly && { backgroundColor: BRAND, borderColor: BRAND }]}
+            onPress={() => { const nv = !verifiedOnly; setVerifiedOnly(nv); if (hasSearched) performSearch(query, tab, nv, sortMode, dateRange); }}
+          >
+            <Ionicons name="checkmark-circle" size={12} color={verifiedOnly ? "#fff" : colors.textMuted} />
+            <Text style={{ color: verifiedOnly ? "#fff" : colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>Verified</Text>
+          </TouchableOpacity>
+          {(["relevance", "recent", "popular"] as SortMode[]).map(s => (
+            <TouchableOpacity key={s} style={[ss.filterPill, sortMode === s && { backgroundColor: BRAND + "18", borderColor: BRAND + "44" }]} onPress={() => onSortPress(s)}>
+              <Ionicons name={s === "relevance" ? "flash" : s === "recent" ? "time" : "trending-up"} size={12} color={sortMode === s ? BRAND : colors.textMuted} />
+              <Text style={{ color: sortMode === s ? BRAND : colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", textTransform: "capitalize" }}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+          {(["all", "24h", "7d", "30d"] as DateRange[]).map(dr => (
+            <TouchableOpacity key={dr} style={[ss.filterPill, dateRange === dr && dr !== "all" && { backgroundColor: BRAND + "18", borderColor: BRAND + "44" }]} onPress={() => onDatePress(dr)}>
+              <Text style={{ color: dateRange === dr && dr !== "all" ? BRAND : colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium" }}>{dr}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        )}
+
       </View>
-      )}
 
       {/* Tab bar — only shown when results are present */}
       {hasSearched && !loading && (
         <View style={[ss.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4, paddingHorizontal: 12 }}>
-            {(isVisualSearchActive ? TABS.filter((item) => item.id === "all" || item.id === "images") : TABS).map((t) => {
+            {TABS.map((t) => {
               const active = tab === t.id;
+              const cnt = t.id === "all" ? totalCount
+                : t.id === "people" ? results.people.length
+                : t.id === "posts" ? results.posts.length
+                : t.id === "music" ? results.music.length
+                : t.id === "videos" ? results.videos.length
+                : t.id === "channels" ? results.channels.length
+                : t.id === "events" ? results.events.length
+                : t.id === "gifts" ? results.gifts.length
+                : t.id === "market" ? results.market.length
+                : results.jobs.length;
               return (
                 <TouchableOpacity
                   key={t.id}
@@ -3409,6 +1927,11 @@ export function SearchScreen({
                 >
                   <Ionicons name={t.icon as any} size={13} color={active ? "#fff" : colors.textMuted} />
                   <Text style={{ color: active ? "#fff" : colors.textSecondary, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>{t.label}</Text>
+                  {cnt > 0 && (
+                    <View style={{ backgroundColor: active ? "#ffffff33" : BRAND + "18", borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 }}>
+                      <Text style={{ color: active ? "#fff" : BRAND, fontSize: 10, fontFamily: "Inter_700Bold" }}>{cnt > 99 ? "99+" : cnt}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -3425,27 +1948,22 @@ export function SearchScreen({
       {/* Content area */}
       {loading
         ? <View style={{ flex: 1 }}>
-            {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} />)}
+            {[1, 2, 3, 4, 5, 6].map(i => <RowSkeleton key={i} bg={colors.inputBg} />)}
           </View>
         : hasSearched
           ? renderResults()
           : renderDiscovery()}
-      {renderAfuSearchOverlay()}
     </View>
   );
 }
 
 export default function SearchRoute() {
-  const params = useLocalSearchParams<{ tag?: string; q?: string; imageUrl?: string; section?: string }>();
-  // Keep old links working without rendering a second search experience.
-  return <Redirect href={{ pathname: "/app/afusearch", params } as any} />;
+  return <SearchScreen />;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const ss = StyleSheet.create({
-  musicResultRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  musicResultArt: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   root: { flex: 1 },
 
   header: {
@@ -3490,6 +2008,17 @@ const ss = StyleSheet.create({
     borderRadius: 16,
   },
 
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+
   tabBar: {
     paddingVertical: 8,
   },
@@ -3500,6 +2029,28 @@ const ss = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 20,
+  },
+
+  resultsBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+
+  lensCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  lensImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 10,
   },
 
   listRow: {

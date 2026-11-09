@@ -23,7 +23,6 @@ import VideoPreview from "@/components/ui/VideoPreview";
 import NearbyTransferSheet from "@/components/nearby/NearbyTransferSheet";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
-import AppBottomNav, { type AppNavItem } from "@/components/superapp/AppBottomNav";
 import { showAlert } from "@/lib/alert";
 import { isExpoGo } from "@/lib/expoEnvironment";
 
@@ -73,57 +72,79 @@ function FileManagerBottomNav({
   onFilterChange: (filter: Filter) => void;
   onTransfer: () => void;
 }) {
+  const { colors } = useTheme();
   const { t } = useLanguage();
-  const items: AppNavItem[] = [
-    {
-      key: "all",
-      label: t("Library"),
-      icon: "folder-outline",
-      activeIcon: "folder",
-      onPress: () => onFilterChange("all"),
-      testID: "file-manager-nav-all",
-    },
-    {
-      key: "image",
-      label: t("Images"),
-      icon: "images-outline",
-      activeIcon: "images",
-      onPress: () => onFilterChange("image"),
-      testID: "file-manager-nav-image",
-    },
-    {
-      key: "video",
-      label: t("Videos"),
-      icon: "videocam-outline",
-      activeIcon: "videocam",
-      onPress: () => onFilterChange("video"),
-      testID: "file-manager-nav-video",
-    },
-    {
-      key: "audio",
-      label: t("Audio"),
-      icon: "musical-notes-outline",
-      activeIcon: "musical-notes",
-      onPress: () => onFilterChange("audio"),
-      testID: "file-manager-nav-audio",
-    },
+  const insets = useSafeAreaInsets();
+  const bottom = Math.max(insets.bottom, 8) + 6;
+  const activeColor = colors.accent;
+  const inactiveColor = colors.textSecondary;
+
+  const items: Array<{
+    key: Filter | "transfer";
+    label: string;
+    icon: keyof typeof Ionicons.glyphMap;
+  }> = [
+    { key: "all", label: "Library", icon: "folder" },
+    { key: "image", label: "Images", icon: "images" },
+    { key: "video", label: "Videos", icon: "videocam" },
+    { key: "audio", label: "Audio", icon: "musical-notes" },
     ...(showTransfer
-      ? [{
-          key: "transfer",
-          label: t("Transfer"),
-          icon: "swap-horizontal-outline" as const,
-          activeIcon: "swap-horizontal" as const,
-          onPress: onTransfer,
-          testID: "file-manager-nav-transfer",
-        }]
+      ? [{ key: "transfer" as const, label: "Transfer", icon: "swap-horizontal" as const }]
       : []),
   ];
 
   return (
-    <AppBottomNav
-      items={items}
-      activeKey={transferOpen ? "transfer" : filter}
-    />
+    <View style={[styles.fmNavWrap, { bottom }]}>
+      <View
+        style={[
+          styles.fmNav,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        {items.map((item) => {
+          const active = item.key === "transfer"
+            ? transferOpen
+            : !transferOpen && filter === item.key;
+          const iconColor = active ? colors.bubbleText : inactiveColor;
+          const labelColor = active ? activeColor : inactiveColor;
+          return (
+            <Pressable
+              key={item.key}
+              testID={`file-manager-nav-${item.key}`}
+              accessibilityRole="button"
+              accessibilityLabel={t(item.label)}
+              accessibilityState={{ selected: active }}
+              onPress={() => {
+                if (item.key === "transfer") {
+                  onTransfer();
+                } else {
+                  onFilterChange(item.key);
+                }
+              }}
+              style={styles.fmNavTab}
+            >
+              <View style={styles.fmNavIcon}>
+                {active && (
+                  <View
+                    style={[
+                      styles.fmNavActiveOval,
+                      { backgroundColor: activeColor, pointerEvents: "none" },
+                    ]}
+                  />
+                )}
+                <Ionicons name={item.icon} size={21} color={iconColor} />
+              </View>
+              <Text style={[styles.fmNavLabel, { color: labelColor }]} numberOfLines={1}>
+                {t(item.label)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -422,7 +443,7 @@ export default function FileManagerScreen() {
                 <Pressable
                   testID={`file-tile-${item.id}`}
                   onPress={() => setPreviewFile(item)}
-                  style={({ pressed }) => [styles.gridTile, { backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.82 : 1 }]}
+                  style={({ pressed }) => [styles.gridTile, { opacity: pressed ? 0.82 : 1 }]}
                 >
                   {item.type === "image" ? (
                     <Image source={{ uri: item.uri }} style={styles.gridImage} />
@@ -490,7 +511,7 @@ export default function FileManagerScreen() {
           >
             <Ionicons name="share-outline" size={19} color={colors.accent} />
             <Text style={[styles.sendBarText, { color: colors.accent }]}>
-              {"Share "}{selectedFiles.length > 1 ? `${selectedFiles.length} files` : "file"}
+              Share {selectedFiles.length > 1 ? `${selectedFiles.length} files` : "file"}
             </Text>
           </Pressable>
           <Pressable
@@ -520,7 +541,7 @@ export default function FileManagerScreen() {
         animationType="fade"
         onRequestClose={() => setPreviewFile(null)}
       >
-        <View style={[styles.previewRoot, { backgroundColor: colors.background }]}>
+        <View style={styles.previewRoot}>
           <View style={styles.previewHeader}>
             <Pressable
               onPress={() => setPreviewFile(null)}
@@ -594,11 +615,11 @@ const styles = StyleSheet.create({
   fileRow: { minHeight: 72, marginHorizontal: 12, marginBottom: 8, paddingHorizontal: 14, borderRadius: 16, flexDirection: "row", alignItems: "center", gap: 13 },
   thumbnail: { width: 48, height: 48, borderRadius: 13, backgroundColor: "rgba(128,128,128,0.15)" },
   fileIcon: { width: 43, height: 43, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  fileCopy: { flex: 1, minWidth: 0 },
-  fileName: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "left" },
-  fileMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "left" },
+  fileCopy: { flex: 1 },
+  fileName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  fileMeta: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
   gridRow: { gap: 2 },
-  gridTile: { flex: 1, aspectRatio: 1, margin: 1, position: "relative", overflow: "hidden", borderRadius: 4 },
+  gridTile: { flex: 1, aspectRatio: 1, margin: 1, position: "relative", overflow: "hidden", borderRadius: 4, backgroundColor: "#222" },
   gridImage: { width: "100%", height: "100%" },
   gridVideo: { flex: 1, alignItems: "center", justifyContent: "center" },
   gridVideoShade: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.24)" },
@@ -606,7 +627,13 @@ const styles = StyleSheet.create({
   sendBar: { flex: 1, minHeight: 52, borderRadius: 17, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 12, gap: 9 },
   sendBarText: { fontSize: 14, fontFamily: "Inter_700Bold" },
   sendBarHint: { marginLeft: "auto", fontSize: 11, fontFamily: "Inter_500Medium" },
-  previewRoot: { flex: 1, alignItems: "center", justifyContent: "center" },
+  fmNavWrap: { position: "absolute", left: 20, right: 20, zIndex: 100, alignItems: "center" },
+  fmNav: { height: 56, width: "100%", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, flexDirection: "row", alignItems: "center", overflow: "hidden" },
+  fmNavTab: { flex: 1, minWidth: 0, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
+  fmNavIcon: { width: 44, height: 30, alignItems: "center", justifyContent: "center", position: "relative" },
+  fmNavActiveOval: { ...StyleSheet.absoluteFill, borderRadius: 9999 },
+  fmNavLabel: { width: "100%", fontSize: 9, lineHeight: 10, fontFamily: "Inter_700Bold", fontWeight: "700", textAlign: "center", marginTop: 0, includeFontPadding: false },
+  previewRoot: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
   previewHeader: { position: "absolute", top: 50, left: 16, right: 16, zIndex: 2, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   previewClose: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   previewTitle: { flex: 1, color: "#fff", textAlign: "center", fontSize: 15, fontFamily: "Inter_600SemiBold", paddingHorizontal: 12 },

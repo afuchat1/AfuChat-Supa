@@ -13,7 +13,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -308,7 +307,7 @@ function AlmostThere({ achievements, onPress }: { achievements: Achievement[]; o
           const pct = Math.round((a.progress! / a.total!) * 100);
           const color = RARITY_COLOR[a.rarity];
           return (
-            <TouchableOpacity key={a.id} style={[at.card, { backgroundColor: colors.cardSurface }]} onPress={() => onPress(a)} activeOpacity={0.8}>
+            <TouchableOpacity key={a.id} style={[at.card, { backgroundColor: colors.surface }]} onPress={() => onPress(a)} activeOpacity={0.8}>
               <View style={[at.iconWrap, { backgroundColor: color + "20" }]}>
                 <Ionicons name={a.icon as any} size={22} color={color} />
               </View>
@@ -578,7 +577,9 @@ export default function AchievementsScreen() {
       {/* Header */}
       {(
         <View style={[sc.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={sc.backBtn} />
+          <TouchableOpacity onPress={() => router.back()} style={sc.backBtn}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[sc.headerTitle, { color: colors.text }]}>Achievements</Text>
           <View style={{ width: 40 }} />
         </View>

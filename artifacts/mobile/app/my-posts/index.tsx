@@ -52,7 +52,7 @@ function MyPostCard({ item, profile, onDelete }: { item: PostItem; profile: any;
   const allImages = item.images.length > 0 ? item.images : item.image_url ? [item.image_url] : [];
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.cardSurface }]}
+      style={[styles.card, { backgroundColor: colors.surface }]}
       onPress={() => {
         if (item.post_type === "video")   return router.push({ pathname: "/video/[id]",   params: { id: item.id } } as any);
         if (item.post_type === "article") return router.push({ pathname: "/article/[id]", params: { id: item.id } } as any);

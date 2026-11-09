@@ -250,7 +250,7 @@ export default function CommunitiesScreen() {
     return (
       <View>
         <TouchableOpacity
-          style={[ss.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
+          style={[ss.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => joinOrOpenGroup(item)}
           activeOpacity={0.75}
         >
@@ -309,7 +309,7 @@ export default function CommunitiesScreen() {
     return (
       <View>
         <TouchableOpacity
-          style={[ss.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
+          style={[ss.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => subscribeOrOpenChannel(item)}
           activeOpacity={0.75}
         >

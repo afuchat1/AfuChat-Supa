@@ -10,8 +10,9 @@
  * causing an OutOfMemoryError FATAL EXCEPTION on the next vsync tick.
  *
  * ── Solution ─────────────────────────────────────────────────────────────────
- * 1. Explicit registry — animated values are held only while their owning
- *    component is mounted. The hooks unregister them on unmount.
+ * 1. WeakRef registry — every animated value the app creates is registered here.
+ *    Using WeakRef means registration NEVER prevents GC; dead refs are pruned on
+ *    the next sweep so the registry never leaks memory itself.
  *
  * 2. AppState listener — when the app transitions to `inactive` or `background`
  *    (home-button press, incoming call, screen-off) every registered animation
@@ -20,7 +21,11 @@
  * 3. iOS MemoryWarning — if the OS sends a low-memory signal, we cancel
  *    immediately without waiting for a background transition.
  *
- * 4. Three value types supported:
+ * 4. Periodic dead-ref pruning — while the app is active, sweep dead WeakRefs
+ *    every PRUNE_INTERVAL_MS so the registry stays small even when components
+ *    mount/unmount at high frequency (e.g. scrolling feeds).
+ *
+ * 5. Three value types supported:
  *    • Reanimated SharedValue  (react-native-reanimated v4+)
  *    • Legacy Animated.Value   (React Native core Animated API)
  *    • CompositeAnimation      (Animated.loop / Animated.sequence refs)
@@ -34,7 +39,6 @@
 import {
   AppState,
   Platform,
-  type AppStateStatus,
   type NativeEventSubscription,
 } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
@@ -58,22 +62,26 @@ export type GuardedValue =
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
+/** Dead-ref GC sweep interval while the app is foregrounded (ms). */
+const PRUNE_INTERVAL_MS = 30_000;
+
 const DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
 const TAG = "[AnimationGuard]";
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
-/** Mounted animation values; hook cleanups remove entries deterministically. */
-const registry = new Set<GuardedValue>();
+/** WeakRef registry — never holds strong references to animated values. */
+const registry = new Set<WeakRef<GuardedValue>>();
 
 let appStateListener: NativeEventSubscription | null = null;
 let memWarningListener: NativeEventSubscription | null = null;
+let pruneTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Lazily loaded cancelAnimation from Reanimated — avoids import at module eval time. */
 let _cancelAnimFn: ((v: SharedValue<unknown>) => void) | null = null;
 
 let initialized = false;
-let previousState: string = AppState.currentState ?? "active";
+let previousState: string | null | undefined = AppState.currentState;
 
 // ── Diagnostics (dev / crash-reporter) ───────────────────────────────────────
 
@@ -131,14 +139,23 @@ function getCancelAnimation(): ((v: SharedValue<unknown>) => void) | null {
 
 /**
  * Cancel every registered animation. Runs in O(n) where n = registry size.
+ * Dead WeakRefs found during the sweep are pruned immediately.
  * All cancellations are wrapped in try/catch — a buggy value can never abort
  * the sweep and leave other animations running.
  */
 function cancelAll(reason: string): void {
   const cancelAnim = getCancelAnimation();
+  const dead: Array<WeakRef<GuardedValue>> = [];
   let cancelled = 0;
 
-  for (const value of registry) {
+  for (const ref of registry) {
+    const value = ref.deref();
+
+    if (value === undefined) {
+      dead.push(ref);
+      continue;
+    }
+
     try {
       if (isSharedValue(value) && cancelAnim) {
         cancelAnim(value as SharedValue<unknown>);
@@ -155,27 +172,64 @@ function cancelAll(reason: string): void {
     }
   }
 
+  // Batch-delete dead refs found during this sweep
+  for (const ref of dead) {
+    registry.delete(ref);
+  }
+
   _totalCancelled += cancelled;
   _sweepCount++;
 
   if (DEV) {
     console.log(
       `${TAG} sweep[${_sweepCount}] reason="${reason}" ` +
-      `cancelled=${cancelled} ` +
+      `cancelled=${cancelled} pruned=${dead.length} ` +
       `remaining=${registry.size} totalCancelled=${_totalCancelled}`
     );
   }
 }
 
+// ── Dead-ref pruning ──────────────────────────────────────────────────────────
+
+function pruneDeadRefs(): void {
+  let pruned = 0;
+  for (const ref of registry) {
+    if (ref.deref() === undefined) {
+      registry.delete(ref);
+      pruned++;
+    }
+  }
+  if (DEV && pruned > 0) {
+    console.log(`${TAG} prune: removed ${pruned} dead refs, ${registry.size} active`);
+  }
+}
+
+// ── Prune timer ───────────────────────────────────────────────────────────────
+
+function startPruneTimer(): void {
+  if (pruneTimer !== null) return;
+  pruneTimer = setInterval(pruneDeadRefs, PRUNE_INTERVAL_MS);
+}
+
+function stopPruneTimer(): void {
+  if (pruneTimer === null) return;
+  clearInterval(pruneTimer);
+  pruneTimer = null;
+}
+
 // ── AppState handler ──────────────────────────────────────────────────────────
 
-function handleAppStateChange(next: AppStateStatus): void {
+function handleAppStateChange(next: string): void {
   const wasActive  = previousState === "active";
   const goingBack  = next === "background" || next === "inactive";
+  const comingFront = previousState !== "active" && next === "active";
 
   if (wasActive && goingBack) {
     _lastBgAt = Date.now();
     cancelAll(`appState:${next}`);
+    stopPruneTimer();
+  } else if (comingFront) {
+    startPruneTimer();
   }
 
   previousState = next;
@@ -192,7 +246,7 @@ export function initAnimationGuard(): void {
   if (initialized) return;
   initialized = true;
 
-  previousState = AppState.currentState ?? "active";
+  previousState = AppState.currentState;
   appStateListener = AppState.addEventListener("change", handleAppStateChange);
 
   // iOS: subscribe to OS memory-pressure events.
@@ -210,10 +264,14 @@ export function initAnimationGuard(): void {
     }
   }
 
+  if (AppState.currentState === "active") {
+    startPruneTimer();
+  }
+
   if (DEV) {
     console.log(
       `${TAG} initialized — platform=${Platform.OS} ` +
-      `appState=${AppState.currentState}`
+      `appState=${AppState.currentState} pruneInterval=${PRUNE_INTERVAL_MS}ms`
     );
   }
 }
@@ -221,8 +279,10 @@ export function initAnimationGuard(): void {
 /**
  * Register a single animated value with the guard.
  *
- * Holds a value until its owner calls the returned cleanup function. Hooks
- * register that cleanup with their unmount effect.
+ * Uses WeakRef — registration does NOT prevent GC.
+ * Returns an unregister function for explicit cleanup on unmount (also done
+ * automatically via WeakRef GC on the next prune sweep, but explicit cleanup
+ * keeps the registry smaller and is preferred).
  *
  * @param value  An Animated.Value, Reanimated SharedValue, or CompositeAnimation
  * @returns      Cleanup function — call on component unmount
@@ -232,14 +292,15 @@ export function registerAnimation(value: GuardedValue): () => void {
 
   // Deduplicate: if this exact object is already registered, return its cleanup.
   for (const existing of registry) {
-    if (existing === value) {
+    if (existing.deref() === value) {
       return () => registry.delete(existing);
     }
   }
 
-  registry.add(value);
+  const ref = new WeakRef(value);
+  registry.add(ref);
 
-  return () => registry.delete(value);
+  return () => registry.delete(ref);
 }
 
 /**

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
+  Dimensions,
   Modal,
   Platform,
   Pressable,
@@ -10,20 +10,18 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { transferAcoin } from "@/lib/acoinTransfers";
 import { SUPABASE_EDGE_URL } from "@/lib/env";
 import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
@@ -145,7 +143,9 @@ function SubHeader({ title, onBack, colors }: { title: string; onBack: () => voi
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   return (
     <View style={[s.subHeader, { borderBottomColor: colors.border, paddingTop: topInset + 8 }]}>
-      <GlassBackButton onPress={onBack} icon="chevron-back" />
+      <TouchableOpacity onPress={onBack} hitSlop={12} style={s.backBtn}>
+        <Ionicons name="chevron-back" size={22} color={colors.text} />
+      </TouchableOpacity>
       <Text style={[s.subHeaderTitle, { color: colors.text }]}>{title}</Text>
       <View style={{ width: 36 }} />
     </View>
@@ -153,16 +153,24 @@ function SubHeader({ title, onBack, colors }: { title: string; onBack: () => voi
 }
 
 function WalletHeader({ colors, insets, onBack }: { colors: any; insets: { top: number }; onBack: () => void }) {
-  const topInset = Platform.OS === "web" ? Math.max(insets.top, 18) : insets.top;
+  const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   return (
-    <View style={[s.walletHeader, { backgroundColor: colors.background, paddingTop: topInset }]}>
+    <View style={[s.walletHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: topInset }]}>
       <View style={s.walletHeaderRow}>
-        <GlassBackButton onPress={onBack} accessibilityLabel="Go back" />
+        <TouchableOpacity
+          onPress={onBack}
+          hitSlop={12}
+          style={s.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text style={[s.walletBackGlyph, { color: colors.text }]}>‹</Text>
+        </TouchableOpacity>
         <View style={s.walletHeaderTitleWrap}>
-          <Text style={[s.walletHeaderTitle, { color: colors.text }]}>AfuPay</Text>
-          <Text style={[s.walletHeaderSubtitle, { color: colors.textMuted }]}>Your money, in one place</Text>
+          <Text style={[s.walletHeaderTitle, { color: colors.text }]}>Wallet</Text>
+           <Text style={[s.walletHeaderSubtitle, { color: colors.textMuted }]}>Money and services in one place</Text>
         </View>
-        <View style={s.walletHeaderRightSpacer} />
+        <View style={s.backBtn} />
       </View>
     </View>
   );
@@ -189,19 +197,12 @@ export default function AfuPayApp({
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
   useEffect(() => {
-    setView(initialRecipientId ? "send" : initialView ?? "home");
+    if (initialRecipientId) setView("send");
+    else if (initialView) setView(initialView);
   }, [initialRecipientId, initialView]);
 
   const acoin = profile?.acoin ?? 0;
   const nexa = profile?.xp ?? 0;
-  const navigateToView = useCallback((nextView: AppView) => {
-    setView(nextView);
-    const href = nextView === "home" ? "/app/afupay" : `/app/afupay?section=${nextView}`;
-    safeRouter.replace(href as any);
-  }, []);
-  const openMoneyRequest = useCallback(() => {
-    safeRouter.push("/app/afupay?section=request" as any);
-  }, []);
   const handleHomeBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else safeRouter.replace("/apps" as any);
@@ -214,35 +215,16 @@ export default function AfuPayApp({
       const [
         { data: xpSent },
         { data: xpReceived },
-        { data: xpActivity },
         { data: acoinTx },
-        { data: musicTx },
         { data: settings },
       ] = await Promise.all([
         supabase.from("xp_transfers").select("id,amount,created_at,status,receiver_id,profiles!xp_transfers_receiver_id_fkey(handle)").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(40),
         supabase.from("xp_transfers").select("id,amount,created_at,status,sender_id,profiles!xp_transfers_sender_id_fkey(handle)").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(40),
-        supabase.from("xp_activity_log").select("id,activity_type,xp_amount,created_at,metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(80),
         supabase.from("acoin_transactions").select("id,amount,transaction_type,created_at,metadata").eq("user_id", user.id).order("created_at", { ascending: false }).limit(60),
-        supabase.from("music_transactions").select("id,track_id,buyer_id,creator_id,amount_acoin,created_at").or(`buyer_id.eq.${user.id},creator_id.eq.${user.id}`).order("created_at", { ascending: false }).limit(60),
         supabase.from("currency_settings").select("nexa_to_acoin_rate,conversion_fee_percent").limit(1).single(),
       ]);
       if (settings) setCurrSettings(settings as any);
       const all: Tx[] = [];
-      const musicRows = musicTx || [];
-      const musicCounterpartyIds = [...new Set(musicRows.map((t: any) => t.buyer_id === user.id ? t.creator_id : t.buyer_id))];
-      const musicTrackIds = [...new Set(musicRows.map((t: any) => t.track_id).filter(Boolean))];
-      const [{ data: musicProfiles }, { data: musicTracks }] = musicRows.length
-        ? await Promise.all([
-            musicCounterpartyIds.length
-              ? supabase.from("profiles").select("id,handle,display_name").in("id", musicCounterpartyIds)
-              : Promise.resolve({ data: [] }),
-            musicTrackIds.length
-              ? supabase.from("music_tracks").select("id,title").in("id", musicTrackIds)
-              : Promise.resolve({ data: [] }),
-          ])
-        : [{ data: [] }, { data: [] }];
-      const musicProfileMap = new Map((musicProfiles || []).map((p: any) => [p.id, p]));
-      const musicTrackMap = new Map((musicTracks || []).map((t: any) => [t.id, t.title]));
       const acoinLabels: Record<string, { label: string; icon: string }> = {
         conversion: { label: "Nexa → ACoin", icon: "swap-horizontal" },
         subscription: { label: "Premium Subscription", icon: "diamond" },
@@ -251,6 +233,8 @@ export default function AfuPayApp({
         acoin_transfer_received: { label: "ACoin Received", icon: "arrow-down-circle" },
         marketplace_purchase: { label: "Marketplace Purchase", icon: "cart" },
         marketplace_sale: { label: "Marketplace Sale", icon: "storefront" },
+        music_purchase: { label: "AfuMusic Purchase", icon: "musical-notes" },
+        music_sale: { label: "AfuMusic Sale", icon: "musical-notes" },
         game_purchase: { label: "Game Purchase", icon: "game-controller" },
         game_reward: { label: "Game Reward", icon: "trophy" },
         red_envelope_sent: { label: "Red Envelope Sent", icon: "gift" },
@@ -265,72 +249,13 @@ export default function AfuPayApp({
         const p = t.profiles;
         all.push({ id: t.id, type: "nexa_received", label: "Nexa Received", icon: "arrow-down-circle", color: Colors.brand, amount: t.amount, currency: "nexa", created_at: t.created_at, counterparty: p ? `@${p.handle}` : undefined, status: t.status || "completed" });
       });
-      (xpActivity || []).forEach((t: any) => {
-        const amount = Number(t.xp_amount) || 0;
-        const activityType = String(t.activity_type || "");
-        const alreadyInTransfers = activityType === "nexa_transfer_received" && (xpReceived || []).some((transfer: any) =>
-          (t.metadata?.from_user_id
-            ? transfer.sender_id === t.metadata.from_user_id
-            : t.metadata?.from_handle
-              ? String(transfer.profiles?.handle || "").toLowerCase() === String(t.metadata.from_handle).replace(/^@/, "").toLowerCase()
-              : true) &&
-          Number(transfer.amount) === amount &&
-          Math.abs(new Date(transfer.created_at).getTime() - new Date(t.created_at).getTime()) < 120_000
-        );
-        if (alreadyInTransfers) return;
-        const label = activityType === "nexa_transfer_received"
-          ? "Nexa Received"
-          : activityType === "nexa_transfer_rollback"
-            ? "Nexa Refund"
-            : `${activityType.replace(/_/g, " ").replace(/\b\w/g, (letter: string) => letter.toUpperCase()) || "Activity"} Reward`;
-        all.push({
-          id: `xp-activity-${t.id}`,
-          type: `nexa_${activityType || "activity_reward"}`,
-          label,
-          icon: activityType.startsWith("nexa_transfer") ? "arrow-down-circle" : "trophy",
-          color: amount >= 0 ? Colors.brand : "#FF9500",
-          amount,
-          currency: "nexa",
-          created_at: t.created_at,
-          status: "completed",
-        });
-      });
       (acoinTx || []).forEach((t: any) => {
         const m = acoinLabels[t.transaction_type];
-        const username = t.metadata?.item_type === "username" ? String(t.metadata?.username || "") : "";
-        const isUsernamePurchase = username && t.transaction_type === "marketplace_purchase";
-        const isUsernameSale = username && t.transaction_type === "marketplace_sale";
-        all.push({
-          id: t.id,
-          type: t.transaction_type,
-          label: isUsernamePurchase ? "Username Purchase" : isUsernameSale ? "Username Sale" : m?.label || t.transaction_type.replace(/_/g, " "),
-          icon: isUsernamePurchase ? "at" : isUsernameSale ? "at" : m?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"),
-          color: t.amount > 0 ? "#34C759" : "#FF9500",
-          amount: t.amount,
-          currency: "acoin",
-          created_at: t.created_at,
-          counterparty: username ? `@${username}` : undefined,
-          status: "completed",
-        });
-      });
-      musicRows.forEach((t: any) => {
-        const isBuyer = t.buyer_id === user.id;
-        const otherId = isBuyer ? t.creator_id : t.buyer_id;
-        const other = musicProfileMap.get(otherId) as any;
-        const title = musicTrackMap.get(t.track_id);
-        const amount = Math.max(0, Number(t.amount_acoin) || 0);
-        all.push({
-          id: `music-${t.id}`,
-          type: isBuyer ? "music_purchase" : "music_sale",
-          label: isBuyer ? "Music Purchase" : "Music Sale",
-          icon: isBuyer ? "musical-notes" : "musical-notes",
-          color: isBuyer ? "#FF9500" : "#34C759",
-          amount: isBuyer ? -amount : amount,
-          currency: "acoin",
-          created_at: t.created_at,
-          counterparty: `${other?.handle ? `@${other.handle}` : other?.display_name || "AfuMusic"}${title ? ` · ${title}` : ""}`,
-          status: "completed",
-        });
+        const trackTitle = typeof t.metadata?.track_title === "string" ? t.metadata.track_title.trim() : "";
+        const label = trackTitle && ["music_purchase", "music_sale"].includes(t.transaction_type)
+          ? `${m?.label || "AfuMusic"} · ${trackTitle}`
+          : m?.label || t.transaction_type.replace(/_/g, " ");
+        all.push({ id: t.id, type: t.transaction_type, label, icon: m?.icon || (t.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"), color: t.amount > 0 ? "#34C759" : "#FF9500", amount: t.amount, currency: "acoin", created_at: t.created_at, status: "completed" });
       });
       all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setTransactions(all);
@@ -358,11 +283,7 @@ export default function AfuPayApp({
     if (!user) return;
     const ch = supabase.channel(`afupay:${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "acoin_transactions", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_activity_log", filter: `user_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "music_transactions", filter: `buyer_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "music_transactions", filter: `creator_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "xp_transfers", filter: `sender_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "xp_transfers", filter: `receiver_id=eq.${user.id}` }, () => { loadTransactions(); refreshProfile?.(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "money_requests", filter: `target_id=eq.${user.id}` }, () => loadPendingCount())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -372,116 +293,58 @@ export default function AfuPayApp({
     : txFilter === "gifts" ? transactions.filter(t => ["gift_sent", "gift_received", "red_envelope_sent", "red_envelope_claimed"].includes(t.type))
     : transactions.filter(t => t.currency === txFilter);
 
-  if (view === "history") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => navigateToView("home")} /></View>;
-  if (view === "topup") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><TopUpView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} /></View>;
-  if (view === "send") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
-  if (view === "receive") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} /></View>;
-  if (view === "exchange") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
-  if (view === "requests") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><RequestsView colors={colors} insets={insets} user={user} onBack={() => navigateToView("home")} /></View>;
-  if (view === "services") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><AfuServicesApp embedded onBack={() => navigateToView("home")} /></View>;
+  if (view === "history") return <HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => setView("home")} />;
+  if (view === "topup") return <TopUpView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} />;
+  if (view === "send") return <SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} />;
+  if (view === "receive") return <ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => setView("home")} />;
+  if (view === "exchange") return <ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => setView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); setView("home"); }} />;
+  if (view === "requests") return <RequestsView colors={colors} insets={insets} user={user} onBack={() => setView("home")} />;
+  if (view === "services") return <AfuServicesApp embedded onBack={() => setView("home")} />;
 
   const recentTx = transactions.slice(0, 6);
 
   return (
-    <View style={[s.root, s.walletRoot, { backgroundColor: colors.background }]}>
+    <View style={[s.root, { backgroundColor: colors.background }]}>
       <WalletHeader colors={colors} insets={insets} onBack={handleHomeBack} />
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); refreshProfile?.(); }} />}
-      >
-        <LinearGradient colors={[Colors.brand, Colors.brandDark]} style={s.heroCard}>
-          <View pointerEvents="none" style={s.heroOrbitLarge} />
-          <View pointerEvents="none" style={s.heroOrbitSmall} />
-          <View style={s.heroTopLine}>
-            <View style={s.heroCoinMark}>
-              <Ionicons name="diamond" size={15} color={Colors.brandDark} />
-            </View>
-            <Text style={s.heroLabel}>ACoin Balance</Text>
-            <View style={{ flex: 1 }} />
-            <View style={s.heroNexaLabel}>
-              <Ionicons name="flash" size={15} color={Colors.gold} />
-              <Text style={s.heroLabel}>Nexa (XP)</Text>
-            </View>
-          </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 96 }} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); refreshProfile?.(); }} />}>
+        <LinearGradient colors={["#0A2E1F", "#062218"]} style={s.heroCard}>
           <View style={s.heroRow}>
-            <View style={{ flex: 1 }}>
+            <View>
+              <Text style={s.heroLabel}>ACoin Balance</Text>
               <Text style={s.heroAmount}>{fmtAmt(acoin)} <Text style={s.heroCurrency}>AC</Text></Text>
             </View>
             <View style={s.heroRight}>
-              <Text style={s.heroNexaAmount}>{fmtAmt(nexa)}</Text>
+              <Text style={[s.heroLabel, { textAlign: "right" }]}>Nexa (XP)</Text>
+              <Text style={[s.heroAmount, { color: "#FF9500", fontSize: 22 }]}>{fmtAmt(nexa)}</Text>
             </View>
           </View>
-          <View style={s.heroDivider} />
-          <View style={s.heroFooter}>
-            <View style={s.heroTrustItem}><Ionicons name="shield-checkmark" size={15} color={Colors.gold} /><Text style={s.heroTrustText}>AfuPay wallet</Text></View>
-            <Text style={s.heroTrustText}>Secure · Fast · Global</Text>
-          </View>
+          <View style={[s.heroDivider, { backgroundColor: "rgba(255,255,255,0.12)" }]} />
+          <Text style={s.heroSub}>AfuPay · Secure · Fast · Global</Text>
         </LinearGradient>
 
-        <View style={[s.promoCard, { backgroundColor: colors.cardSurface }]}>
-          <View style={s.promoCopy}>
-            <View style={s.promoEyebrow}>
-              <Ionicons name="sparkles" size={13} color={Colors.gold} />
-              <Text style={[s.promoEyebrowText, { color: colors.textMuted }]}>WALLET SPOTLIGHT</Text>
-            </View>
-            <Text style={[s.promoTitle, { color: colors.text }]}>The popular pack</Text>
-            <Text style={[s.promoDescription, { color: colors.textMuted }]}>2,000 ACoin · $20</Text>
-            <TouchableOpacity
-              style={[s.promoButton, { backgroundColor: colors.accent }]}
-              onPress={() => navigateToView("topup")}
-              activeOpacity={0.82}
-              accessibilityRole="button"
-              accessibilityLabel="Buy 2,000 ACoin for 20 US dollars"
-            >
-              <Text style={s.promoButtonText}>Get ACoin</Text>
-              <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-          <Image
-            source={require("@/assets/illustrations/wallet.webp")}
-            style={s.promoArtwork}
-            resizeMode="contain"
-            accessible={false}
-          />
-        </View>
-
-        <View style={s.actionsGrid}>
+        <View style={s.actionsRow}>
           {[
-            { icon: "add" as const, label: "Top up", color: Colors.gold, view: "topup" as AppView },
-            { icon: "paper-plane" as const, label: "Send", color: colors.accent, view: "send" as AppView },
-            { icon: "qr-code" as const, label: "Receive", color: colors.success, view: "receive" as AppView },
-            { icon: "swap-horizontal" as const, label: "Convert", color: colors.warning, view: "exchange" as AppView },
-            { icon: "arrow-down-circle-outline" as const, label: "Request", color: Colors.gold, route: "request" as const },
-            { icon: "receipt-outline" as const, label: "Requests", color: colors.accent, view: "requests" as AppView },
-            { icon: "time-outline" as const, label: "Activity", color: colors.textSecondary, view: "history" as AppView },
-            { icon: "grid-outline" as const, label: "Services", color: colors.success, view: "services" as AppView },
+            { icon: "add-circle" as const, label: "Buy", color: "#34C759", view: "topup" as AppView },
+            { icon: "paper-plane" as const, label: "Send", color: "#FF9500", view: "send" as AppView },
+            { icon: "qr-code" as const, label: "Receive", color: Colors.brand, view: "receive" as AppView },
+            { icon: "swap-horizontal" as const, label: "Convert", color: "#7B61FF", view: "exchange" as AppView },
+            { icon: "receipt-outline" as const, label: "Requests", color: "#AF52DE", view: "requests" as AppView },
+            { icon: "time-outline" as const, label: "History", color: "#FF6B35", view: "history" as AppView },
           ].map((a) => {
             const badge = a.label === "Requests" && pendingRequestCount > 0 ? pendingRequestCount : 0;
             return (
-              <TouchableOpacity
-                key={a.label}
-                style={[s.actionTile, { backgroundColor: colors.cardSurface }]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  if ("route" in a) openMoneyRequest();
-                  else navigateToView(a.view);
-                }}
-                activeOpacity={0.78}
-                accessibilityRole="button"
-                accessibilityLabel={a.label === "Request" ? "Request money" : a.label}
-              >
+              <TouchableOpacity key={a.label} style={s.actionItem} onPress={() => { Haptics.selectionAsync(); setView(a.view); }} activeOpacity={0.75}>
                 <View style={{ position: "relative" }}>
                   <View style={[s.actionIcon, { backgroundColor: a.color + "18" }]}>
-                    <Ionicons name={a.icon} size={25} color={a.color} />
+                    <Ionicons name={a.icon} size={22} color={a.color} />
                   </View>
                   {badge > 0 && (
-                    <View style={s.actionBadge}>
-                      <Text style={s.actionBadgeText}>{badge > 99 ? "99+" : badge}</Text>
+                    <View style={{ position: "absolute", top: -4, right: -4, backgroundColor: "#FF3B30", borderRadius: 8, minWidth: 16, height: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}>
+                      <Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_700Bold" }}>{badge > 99 ? "99+" : badge}</Text>
                     </View>
                   )}
                 </View>
-                <Text style={[s.actionLabel, { color: colors.text }]}>{a.label}</Text>
+                <Text style={[s.actionLabel, { color: colors.textSecondary }]}>{a.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -489,50 +352,43 @@ export default function AfuPayApp({
 
         {txLoading && transactions.length === 0 ? (
           <ActivityIndicator color={Colors.brand} style={{ marginTop: 32 }} />
-        ) : (
+        ) : recentTx.length > 0 ? (
           <View style={s.section}>
             <View style={s.sectionRow}>
-              <View style={s.activityHeading}>
-                <Text style={[s.activityTitle, { color: colors.text }]}>Recent activity</Text>
-              </View>
-              <TouchableOpacity onPress={() => navigateToView("history")} hitSlop={8}>
-                <Text style={[s.seeAll, { color: colors.accent }]}>See all</Text>
+              <Text style={[s.sectionTitle, { color: colors.textSecondary }]}>RECENT ACTIVITY</Text>
+              <TouchableOpacity onPress={() => setView("history")}>
+                <Text style={[s.seeAll, { color: Colors.brand }]}>See all</Text>
               </TouchableOpacity>
             </View>
-            {recentTx.length > 0 ? (
-              <View style={[s.txCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
-                {recentTx.map((tx, i) => (
-                  <View key={tx.id}>
-                    {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
-                    <View style={s.txRow}>
-                      <View style={[s.txIcon, { backgroundColor: tx.color + "18" }]}>
-                        <Ionicons name={tx.icon as any} size={18} color={tx.color} />
-                      </View>
-                      <View style={s.txInfo}>
-                        <Text style={[s.txLabel, { color: colors.text }]} numberOfLines={1}>{tx.label}</Text>
-                        <Text style={[s.txSub, { color: colors.textMuted }]}>{tx.counterparty ? `${tx.counterparty} · ` : ""}{timeAgo(tx.created_at)}</Text>
-                      </View>
-                      <Text style={[s.txAmt, { color: tx.amount > 0 ? "#16A765" : "#E5484D" }]}>
-                        {tx.amount > 0 ? "+" : ""}{fmtAmt(Math.abs(tx.amount))} {tx.currency === "acoin" ? "AC" : tx.currency === "nexa" ? "XP" : ""}
-                      </Text>
+            <View style={[s.txCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {recentTx.map((tx, i) => (
+                <View key={tx.id}>
+                  {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
+                  <View style={s.txRow}>
+                    <View style={[s.txIcon, { backgroundColor: tx.color + "18" }]}>
+                      <Ionicons name={tx.icon as any} size={16} color={tx.color} />
                     </View>
+                    <View style={s.txInfo}>
+                      <Text style={[s.txLabel, { color: colors.text }]} numberOfLines={1}>{tx.label}</Text>
+                      <Text style={[s.txSub, { color: colors.textMuted }]}>{tx.counterparty ? `${tx.counterparty} · ` : ""}{timeAgo(tx.created_at)}</Text>
+                    </View>
+                    <Text style={[s.txAmt, { color: tx.amount > 0 ? "#34C759" : "#FF3B30" }]}>
+                      {tx.amount > 0 ? "+" : ""}{fmtAmt(Math.abs(tx.amount))} {tx.currency === "acoin" ? "AC" : tx.currency === "nexa" ? "NX" : ""}
+                    </Text>
                   </View>
-                ))}
-              </View>
-            ) : (
-              <View style={[s.emptyActivity, { backgroundColor: colors.cardSurface }]}>
-                <View style={[s.emptyActivityIcon, { backgroundColor: colors.accent + "18" }]}><Ionicons name="receipt-outline" size={24} color={colors.accent} /></View>
-                <Text style={[s.emptyActivityTitle, { color: colors.text }]}>No activity yet</Text>
-                <Text style={[s.emptyActivityText, { color: colors.textMuted }]}>Your wallet transactions will appear here.</Text>
-                <TouchableOpacity style={[s.emptyActivityButton, { backgroundColor: colors.accent }]} onPress={() => navigateToView("topup")}>
-                  <Text style={s.emptyActivityButtonText}>Top up wallet</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
+          <View style={s.emptyWrap}>
+            <Ionicons name="wallet-outline" size={48} color={colors.textMuted} />
+            <Text style={[s.emptyText, { color: colors.textMuted }]}>No transactions yet</Text>
+            <TouchableOpacity style={[s.emptyBtn, { backgroundColor: Colors.brand }]} onPress={() => setView("topup")}>
+              <Text style={s.emptyBtnText}>Buy ACoin to get started</Text>
+            </TouchableOpacity>
           </View>
         )}
-
-        
       </ScrollView>
     </View>
   );
@@ -550,7 +406,7 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
           </TouchableOpacity>
         ))}
       </View>
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> :
           txs.length === 0 ? (
             <View style={s.emptyWrap}>
@@ -558,7 +414,7 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
               <Text style={[s.emptyText, { color: colors.textMuted }]}>No transactions</Text>
             </View>
           ) : (
-            <View style={[s.txCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+            <View style={[s.txCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {txs.map((tx: Tx, i: number) => (
                 <View key={tx.id}>
                   {i > 0 && <View style={[s.sep, { backgroundColor: colors.border }]} />}
@@ -688,12 +544,12 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Buy ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Balance pill ── */}
-        <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 20 }]}>
-          <Ionicons name="diamond" size={14} color={Colors.gold} />
-          <Text style={[s.balancePill2Text, { color: colors.text }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
+        <View style={[s.balancePill2, { backgroundColor: "#0A2E1F", borderColor: Colors.brand + "40", marginBottom: 20 }]}>
+          <Ionicons name="diamond" size={14} color={Colors.brand} />
+          <Text style={[s.balancePill2Text, { color: Colors.brand }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
         </View>
 
         {/* ── Package list ── */}
@@ -763,15 +619,15 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
         {selectedPack === null && acoinAmt >= 50 && (
           <View style={[s.previewBox, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "30", marginTop: 10 }]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{fmtAmt(acoinAmt)} ACoin</Text>
+              <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{fmtAmt(acoinAmt)} ACoin</Text>
               <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 16 }}>${price}</Text>
+                <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 }}>${price}</Text>
                 {!!localLine(parseFloat(price), country) && (
-                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>{localLine(parseFloat(price), country)}</Text>
+                  <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, fontFamily: "Inter_400Regular" }}>{localLine(parseFloat(price), country)}</Text>
                 )}
               </View>
             </View>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>Mobile money · Card · Bank · Powered by Pesapal</Text>
+            <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>Mobile money · Card · Bank · Powered by Pesapal</Text>
           </View>
         )}
 
@@ -787,7 +643,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
             : <>
                 <Ionicons name="lock-closed" size={16} color="#fff" />
                 <Text style={s.primaryBtnText}>
-                  {`Pay ${acoinAmt >= 50 ? `$${price} · ${fmtAmt(acoinAmt)} AC` : "Select a package"}`}
+                  Pay {acoinAmt >= 50 ? `$${price} · ${fmtAmt(acoinAmt)} AC` : "Select a package"}
                 </Text>
               </>
           }
@@ -836,7 +692,7 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
   }, [initialRecipientId]);
 
   async function send() {
-    if (sending || (!initialRecipientId && !handle.trim()) || !amount.trim() || !user) return;
+    if ((!initialRecipientId && !handle.trim()) || !amount.trim() || !user) return;
     const amt = parseInt(amount);
     if (isNaN(amt) || amt <= 0) { showAlert("Invalid", "Enter a valid amount."); return; }
     const balance = currency === "acoin" ? (profile?.acoin || 0) : (profile?.xp || 0);
@@ -866,12 +722,17 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
         showAlert("Error", "The transfer could not be recorded. Your Nexa was restored."); setSending(false); return;
       }
     } else {
-      const result = await transferAcoin(recipient.id, amt, note);
-      if (result.status !== "sent") {
-        showAlert(result.status === "unknown" ? "Transfer not confirmed" : "Transfer failed", result.message);
-        setSending(false);
-        return;
+      const { error: deductErr } = await supabase.rpc("deduct_acoin", { p_user_id: user.id, p_amount: amt }).maybeSingle();
+      if (deductErr) { showAlert("Error", "Could not deduct ACoin."); setSending(false); return; }
+      const { error: creditErr } = await supabase.rpc("credit_acoin", { p_user_id: recipient.id, p_amount: amt });
+      if (creditErr) {
+        await supabase.rpc("credit_acoin", { p_user_id: user.id, p_amount: amt }).then(null, () => {});
+        showAlert("Error", "Could not credit recipient. Your balance has been restored."); setSending(false); return;
       }
+      await Promise.all([
+        supabase.from("acoin_transactions").insert({ user_id: user.id, amount: -amt, transaction_type: "acoin_transfer_sent", metadata: { to_handle: handle.trim().toLowerCase(), message: note.trim() || null } }),
+        supabase.from("acoin_transactions").insert({ user_id: recipient.id, amount: amt, transaction_type: "acoin_transfer_received", metadata: { from_handle: profile?.handle, message: note.trim() || null } }),
+      ]).catch(() => {});
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showAlert("Sent!", `${fmtAmt(amt)} ${currency === "acoin" ? "ACoin" : "Nexa"} sent to ${recipient.display_name}`);
@@ -886,7 +747,7 @@ function SendView({ initialRecipientId, paymentReference, colors, insets, user, 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Send" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
         <View style={s.currToggle}>
           {(["acoin", "nexa"] as const).map(c => (
             <TouchableOpacity key={c} style={[s.currToggleBtn, { flex: 1, backgroundColor: currency === c ? (c === "acoin" ? "#34C759" : "#FF9500") : colors.inputBg, borderColor: currency === c ? (c === "acoin" ? "#34C759" : "#FF9500") : colors.border }]} onPress={() => setCurrency(c)}>
@@ -978,7 +839,7 @@ function ReceiveView({ colors, insets, profile, onBack }: any) {
 
         {/* AfuPay ID card with copy */}
         <TouchableOpacity
-          style={[s.idCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
+          style={[s.idCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={copyId}
           activeOpacity={0.7}
         >
@@ -1030,7 +891,7 @@ function ExchangeView({ colors, insets, user, profile, currSettings, onBack, onS
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader title="Convert Nexa → ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
           <View style={[s.balancePill2, { flex: 1, backgroundColor: "#FF950018", borderColor: "#FF950030" }]}>
             <Ionicons name="flash" size={13} color="#FF9500" />
@@ -1135,7 +996,7 @@ function RequestsView({ colors, insets, user, onBack }: any) {
               <Text style={[s.emptyText, { color: colors.textMuted }]}>No {tab} requests</Text>
             </View>
           ) : shown.map(r => (
-            <View key={r.id} style={[s.requestCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+            <View key={r.id} style={[s.requestCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={[s.txLabel, { color: colors.text }]}>
                   {tab === "incoming" ? "From" : "To"} @{(tab === "incoming" ? r.requester : r.target)?.handle || "unknown"}
@@ -1154,75 +1015,39 @@ function RequestsView({ colors, insets, user, onBack }: any) {
   );
 }
 
+const W = Dimensions.get("window").width;
 const s = StyleSheet.create({
   root: { flex: 1 },
-  walletRoot: { flex: 1, width: "100%", position: "relative" },
-  walletHeaderRightSpacer: { width: 56 },
-
-  walletHeader: { borderBottomWidth: 0 },
-  walletHeaderRow: { height: 53, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
-  walletHeaderTitleWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  walletHeaderTitle: { fontSize: 19, fontFamily: "Inter_700Bold", letterSpacing: -0.6 },
-  walletHeaderSubtitle: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 3 },
-  walletHeaderMark: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#E8F2FF", alignItems: "center", justifyContent: "center" },
-  heroTopLine: { flexDirection: "row", alignItems: "center" },
-  heroCoinMark: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.gold, alignItems: "center", justifyContent: "center" },
-  heroNexaLabel: { flexDirection: "row", alignItems: "center" },
-  heroNexaAmount: { color: Colors.gold, fontSize: 27, fontFamily: "Inter_700Bold", marginTop: 4 },
-  heroNexaCaption: { color: "rgba(255,255,255,0.68)", fontSize: 10, fontFamily: "Inter_500Medium", marginTop: 2, textAlign: "right" },
-  heroFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  heroTrustItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-  heroTrustText: { color: "rgba(255,255,255,0.58)", fontSize: 11, fontFamily: "Inter_500Medium" },
-  actionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, justifyContent: "space-between", marginBottom: 8, gap: 8 },
-  actionTile: { width: "22.5%", minHeight: 82, alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 18 },
-  actionBadge: { position: "absolute", top: -5, right: -6, backgroundColor: "#E53935", borderRadius: 10, minWidth: 19, height: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
-  actionBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  activityHeading: { flexDirection: "row", alignItems: "center" },
-  activityTitle: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
-  securityBanner: { marginHorizontal: 16, marginTop: 18, marginBottom: 18, padding: 14, borderRadius: 20, backgroundColor: "#EAF3FF", flexDirection: "row", alignItems: "center", gap: 12 },
-  securityIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: "#D5E8FF", alignItems: "center", justifyContent: "center" },
-  securityTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
-  securityCaption: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3 },
-  emptyActivity: { borderRadius: 22, padding: 24, alignItems: "center", marginTop: 2 },
-  emptyActivityIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: "#E8F2FF", alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  emptyActivityTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  emptyActivityText: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 5, textAlign: "center" },
-  emptyActivityButton: { marginTop: 15, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 14, backgroundColor: Colors.brand },
-  emptyActivityButtonText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  walletHeader: { borderBottomWidth: 0.5 },
+  walletHeaderRow: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
+  walletHeaderTitleWrap: { alignItems: "center" },
+  walletHeaderTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  walletHeaderSubtitle: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 1 },
   walletBackGlyph: { fontSize: 34, lineHeight: 34, fontFamily: "Inter_400Regular", marginTop: -2 },
-  heroCard: { marginHorizontal: 16, marginTop: 8, marginBottom: 16, borderRadius: 25, paddingHorizontal: 20, paddingTop: 19, paddingBottom: 16, overflow: "hidden" },
-  heroOrbitLarge: { position: "absolute", right: -38, top: -70, width: 210, height: 210, borderRadius: 105, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
-  heroOrbitSmall: { position: "absolute", right: 11, top: -25, width: 130, height: 130, borderRadius: 65, borderWidth: 1, borderColor: "rgba(255,255,255,0.10)" },
-  heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  heroLabel: { color: "rgba(255,255,255,0.84)", fontSize: 12, fontFamily: "Inter_600SemiBold", marginLeft: 7 },
-  heroAmount: { color: "#fff", fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -1.2 },
-  heroCurrency: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  heroRight: { alignItems: "flex-end", paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.24)" },
-  heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 16, marginBottom: 13 },
-  heroSub: { color: "rgba(255,255,255,0.72)", fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 },
-  actionIcon: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  promoCard: { minHeight: 143, marginHorizontal: 16, marginBottom: 16, borderRadius: 22, overflow: "hidden", flexDirection: "row", alignItems: "center", paddingLeft: 17, paddingRight: 8 },
-  promoCopy: { flex: 1, minWidth: 0, zIndex: 1, paddingVertical: 15 },
-  promoEyebrow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7 },
-  promoEyebrowText: { fontSize: 9, fontFamily: "Inter_700Bold", letterSpacing: 1 },
-  promoTitle: { fontSize: 17, lineHeight: 21, fontFamily: "Inter_700Bold", letterSpacing: -0.3 },
-  promoDescription: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 4 },
-  promoButton: { minHeight: 34, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, borderRadius: 12, marginTop: 12 },
-  promoButtonText: { color: "#FFFFFF", fontSize: 11, fontFamily: "Inter_700Bold" },
-  promoArtwork: { width: 138, height: 145, marginLeft: -4, alignSelf: "flex-end" },
-  section: { paddingHorizontal: 17, marginTop: 18 },
+  heroCard: { margin: 16, borderRadius: 20, padding: 20 },
+  heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  heroLabel: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_500Medium", marginBottom: 4 },
+  heroAmount: { color: "#fff", fontSize: 30, fontFamily: "Inter_700Bold" },
+  heroCurrency: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  heroRight: { alignItems: "flex-end" },
+  heroDivider: { height: 1, marginVertical: 14 },
+  heroSub: { color: "rgba(255,255,255,0.5)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  actionsRow: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 8, gap: 8, justifyContent: "space-around", marginBottom: 8 },
+  actionItem: { alignItems: "center", gap: 5, width: (W - 32) / 3, marginBottom: 4, paddingVertical: 4 },
+  actionIcon: { width: 50, height: 50, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  section: { paddingHorizontal: 16, marginTop: 16 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   sectionTitle: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
   seeAll: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  txCard: { borderRadius: 22, borderWidth: 0, overflow: "hidden", paddingHorizontal: 3, elevation: 1, shadowColor: "#13294B", shadowOpacity: 0.04, shadowRadius: 12, shadowOffset: { width: 0, height: 3 } },
-  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 14, gap: 11 },
-  txIcon: { width: 39, height: 39, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  txCard: { borderRadius: 16, borderWidth: 0.5, overflow: "hidden" },
+  txRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 12, gap: 12 },
+  txIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   txInfo: { flex: 1 },
-  txLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 3 },
+  txLabel: { fontSize: 14, fontFamily: "Inter_500Medium", marginBottom: 2 },
   txSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  txAmt: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  sep: { height: StyleSheet.hairlineWidth, marginLeft: 64 },
+  txAmt: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sep: { height: 0.5, marginLeft: 62 },
   emptyWrap: { alignItems: "center", paddingVertical: 40, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
   emptyBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, marginTop: 4 },
@@ -1252,7 +1077,7 @@ const s = StyleSheet.create({
   previewBox: { borderRadius: 12, borderWidth: 1, padding: 14 },
   previewRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   primaryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 15 },
-  primaryBtnText: { flexShrink: 1, minWidth: 0, color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "left" },
+  primaryBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   currToggle: { flexDirection: "row", gap: 10 },
   currToggleBtn: { alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
   currToggleText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },

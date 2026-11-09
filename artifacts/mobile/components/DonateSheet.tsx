@@ -12,10 +12,10 @@ import {
   Modal,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -297,7 +297,6 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
           ]}>
             <Text style={[s.customCurrency, { color: colors.textMuted }]}>$</Text>
             <TextInput
-              appearance="embedded"
               style={[s.customInputText, { color: colors.text }]}
               value={customAmt}
               onChangeText={(t) => { setCustomAmt(t.replace(/[^0-9.]/g, "")); setError(null); }}

@@ -14,19 +14,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
-  type FlatListInstance,
-  type ScrollViewInstance,
 } from "react-native";
-import { runAfterIdle } from "@/lib/runAfterIdle";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
-import type PagerViewInstance from "react-native-pager-view";
+import { scheduleAfterInteractions } from "@/lib/scheduleAfterInteractions";
 
 import AfuLogo from "@/components/ui/AfuLogo";
-import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import Image from "@/components/ui/OptimizedImage";
 const SafeFlashList: any = Platform.OS === "web"
   ? FlatList
@@ -55,17 +50,8 @@ import { ChatRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import OfflineBanner from "@/components/ui/OfflineBanner";
 import { HomeBanner } from "@/components/ui/HomeBanner";
-import { beginDataSync, isOnline, onConnectivityChange, getCachedUserId } from "@/lib/offlineStore";
-import {
-  getLocalConversations,
-  saveConversations,
-  deleteLocalConversation,
-  pruneConversations,
-  clearUnread,
-  updateConversationFlags,
-  updateConversationLastMessage,
-  incrementUnread,
-} from "@/lib/storage/localConversations";
+import { isOnline, onConnectivityChange, getCachedUserId } from "@/lib/offlineStore";
+import { getLocalConversations, saveConversations, deleteLocalConversation, pruneConversations, clearUnread, updateConversationFlags } from "@/lib/storage/localConversations";
 import {
   getLocalNotesConversation,
   isLocalNotesId,
@@ -99,8 +85,6 @@ import { usePhonebookNames } from "@/hooks/usePhonebookNames";
 import { setTotalUnread } from "@/lib/chatUnreadEvents";
 import { prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { updateNativeShareShortcuts } from "@/lib/nativeShareShortcuts";
-import { cacheChatListRows } from "@/lib/chatListSnapshot";
-import { chatActivityLabel, normalizeChatActivity, type ChatActivity } from "@/lib/chatActivity";
 
 
 function stripMdPreview(s: string): string {
@@ -272,7 +256,8 @@ function ChatRow({
   item,
   onPress,
   onAction,
-  activity,
+  isActive,
+  isTyping,
   phonebookName,
   selectMode = false,
   isSelected = false,
@@ -285,7 +270,8 @@ function ChatRow({
     action: "togglePin" | "toggleArchive" | "delete" | "open" | "mute" | "unmute",
     item: ChatItem,
   ) => void;
-  activity?: ChatActivity;
+  isActive?: boolean;
+  isTyping?: boolean;
   phonebookName?: string;
   selectMode?: boolean;
   isSelected?: boolean;
@@ -306,7 +292,7 @@ function ChatRow({
   return (
     <View>
     <TouchableOpacity
-      style={styles.row}
+      style={[styles.row, { backgroundColor: isSelected ? colors.accent + "18" : isActive ? colors.backgroundSecondary : colors.surface }]}
       // Selection is intentionally avatar-only. The row itself always keeps
       // its normal navigation behavior, matching the New Chat contact picker.
       onPress={onPress}
@@ -398,23 +384,12 @@ function ChatRow({
           </View>
         </View>
         <View style={styles.rowBottom}>
-          {activity ? (
-            <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 4 }}>
-              {activity === "recording" && (
-                <Ionicons name="mic" size={13} color={colors.accent} />
-              )}
-              {activity === "sending_image" && (
-                <Ionicons name="image" size={13} color={colors.accent} />
-              )}
-              <Text
-                style={[styles.preview, { flexShrink: 1, color: colors.accent, fontFamily: "Inter_500Medium", textAlign: "left" }]}
-                numberOfLines={1}
-              >
-                {chatActivityLabel(activity)}
+          {isTyping ? (
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={[styles.preview, { color: colors.accent, fontFamily: "Inter_500Medium" }]}>
+                typing
               </Text>
-              {(activity === "typing" || activity === "sending_image") && (
-                <TypingDots color={colors.accent} />
-              )}
+              <TypingDots color={colors.accent} />
             </View>
           ) : item.draft ? (
             <Text style={[styles.preview, { flex: 1 }]} numberOfLines={1}>
@@ -462,10 +437,10 @@ function StoryUploadBanner({ colors }: { colors: any }) {
           <Ionicons
             name={isDone ? "checkmark-circle" : isFailed ? "alert-circle" : "camera"}
             size={16}
-            color={colors.accent}
+            color={isDone ? "#22C55E" : isFailed ? "#EF4444" : colors.accent}
           />
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flex: 1 }}>
           <Text style={[uploadBannerStyles.label, { color: colors.text }]}>
             {isDone ? "Story posted!" : isFailed ? "Story upload failed" : "Posting your story…"}
           </Text>
@@ -566,6 +541,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const pathname = usePathname() || "/";
+  const activeChatMatch = pathname.match(/^\/chat\/([^/]+)/);
+  const activeChatId = activeChatMatch ? activeChatMatch[1] : null;
 
   // Phone-book name overrides: show the name the user saved in their contacts
   // inside chat rows instead of the registered display_name.
@@ -586,11 +563,10 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchAnim = useRef(new Animated.Value(0)).current;
-  const searchInputRef = useRef<TextInputInstance>(null);
+  const searchInputRef = useRef<AfuNativeRef.TextInput>(null);
   const [tabFilter, setTabFilter] = useState<ChatTabKey>("all");
-  const [chatActivities, setChatActivities] = useState<Record<string, ChatActivity>>({});
-  const chatActivitiesBySenderRef = useRef<Map<string, Map<string, ChatActivity>>>(new Map());
-  const activityTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [typingChatIds, setTypingChatIds] = useState<Record<string, boolean>>({});
+  const typingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const realtimeReconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatLoadInFlightRef = useRef<Promise<void> | null>(null);
   const lastChatLoadAtRef = useRef(0);
@@ -606,41 +582,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const { prefs: chatPrefs } = useChatPreferences();
   const { features: advancedFeatures } = useAdvancedFeatures();
   const { width: windowWidth } = useWindowDimensions();
-
-  const updateChatActivity = useCallback((chatId: string, senderId: string, activity: ChatActivity | null) => {
-    const timerKey = `${chatId}:${senderId}`;
-    if (activityTimersRef.current[timerKey]) {
-      clearTimeout(activityTimersRef.current[timerKey]);
-      delete activityTimersRef.current[timerKey];
-    }
-    const bySender = chatActivitiesBySenderRef.current.get(chatId) ?? new Map<string, ChatActivity>();
-    if (activity) {
-      bySender.set(senderId, activity);
-      activityTimersRef.current[timerKey] = setTimeout(() => {
-        updateChatActivity(chatId, senderId, null);
-      }, 6500);
-      chatActivitiesBySenderRef.current.set(chatId, bySender);
-    } else {
-      bySender.delete(senderId);
-      if (bySender.size === 0) chatActivitiesBySenderRef.current.delete(chatId);
-    }
-    const values = [...bySender.values()];
-    const nextActivity = values.includes("sending_image")
-      ? "sending_image"
-      : values.includes("recording")
-        ? "recording"
-        : values.includes("typing")
-          ? "typing"
-          : null;
-    setChatActivities((previous) => {
-      if (!nextActivity && !(chatId in previous)) return previous;
-      if (nextActivity && previous[chatId] === nextActivity) return previous;
-      const next = { ...previous };
-      if (nextActivity) next[chatId] = nextActivity;
-      else delete next[chatId];
-      return next;
-    });
-  }, []);
 
   const openChatSearch = useCallback(() => {
     setSearchOpen(true);
@@ -674,9 +615,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [editingFolder, setEditingFolder]     = useState<ChatFolder | null>(null);
   const [pageIdx, setPageIdx]           = useState(0);
-  const pagerViewRef    = useRef<PagerViewInstance>(null);
-  const pagerListRef    = useRef<FlatListInstance>(null);
-  const folderScrollRef = useRef<ScrollViewInstance>(null);
+  const pagerRef        = useRef<any>(null);
+  const folderScrollRef = useRef<AfuNativeRef.ScrollView>(null);
   const tabLayoutsRef   = useRef<Record<number, { x: number; width: number }>>({});
   const folderPillX     = useRef(new Animated.Value(6)).current;
   const folderPillW     = useRef(new Animated.Value(52)).current;
@@ -709,26 +649,22 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
     if (!user) return;
     const offline = !isOnline();
 
-    // Start all local reads before waiting on any one of them. My Notes can
-    // involve AsyncStorage plus SQLite, so it must not serialize the regular
-    // conversation cache or the authenticated server refresh.
-    const localNotesPromise = waitForRequest(
+    // Offline users must be able to open the durable chat cache even when the
+    // auth token has not yet been restored. Session verification is only
+    // required before a server request, never before local hydration.
+    // Native SQLite can be delayed by migrations on a release first launch.
+    // Cache hydration is an enhancement, never a reason to block Supabase.
+    const localNotes = await waitForRequest(
       getLocalNotesConversation(user.id),
       LOCAL_CHAT_HYDRATION_TIMEOUT_MS,
       () => {},
     );
-    const cachedConversationsPromise: Promise<any[] | null | undefined> = !background
-      ? hasPreloadedConversations()
-        ? Promise.resolve(getPreloadedConversations())
-        : waitForRequest(
-            getLocalConversations(),
-            LOCAL_CHAT_HYDRATION_TIMEOUT_MS,
-            () => {},
-          )
-      : Promise.resolve(null);
 
-    const renderCachedConversations = (cached: any[] | null | undefined, localNotes: any) => {
-      if (!cached) return;
+    if (!background) {
+      const cacheStartedAt = Date.now();
+      const cached = hasPreloadedConversations()
+        ? getPreloadedConversations()
+        : await waitForRequest(getLocalConversations(), LOCAL_CHAT_HYDRATION_TIMEOUT_MS, () => {}) ?? [];
       const cachedItems = cached
         .filter((item: any) =>
           (localNotes || !isLocalNotesId(item.id)) &&
@@ -742,48 +678,12 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         setChats(cachedItems as any);
         setLoading(false);
       }
-    };
-
-    let cachedSnapshot: any[] | null | undefined;
-    let cacheSnapshotReady = false;
-    let resolvedLocalNotes: any = null;
-    let localNotesReady = false;
-    let serverSnapshotApplied = false;
-
-    // Paint durable conversations without waiting for My Notes or Supabase.
-    // The fully reconciled snapshot below can still add Notes and fresh server
-    // metadata when those requests finish.
-    if (!background) {
-      const cacheStartedAt = Date.now();
-      void cachedConversationsPromise.then((cached) => {
-        cachedSnapshot = cached;
-        cacheSnapshotReady = true;
-        if (!serverSnapshotApplied) {
-          renderCachedConversations(
-            cached,
-            localNotesReady ? resolvedLocalNotes : null,
-          );
-        }
-        if (__DEV__) {
-          console.log(
-            "[ChatPerf] cache render",
-            Date.now() - cacheStartedAt,
-            "ms",
-            "chats",
-            cached?.length ?? 0,
-          );
-        }
-      });
+      if (__DEV__) {
+        console.log("[ChatPerf] cache render", Date.now() - cacheStartedAt, "ms", "chats", cachedItems.length);
+      }
     }
 
     if (offline) {
-      const [localNotes, cached] = await Promise.all([
-        localNotesPromise,
-        cachedConversationsPromise,
-      ]);
-      resolvedLocalNotes = localNotes;
-      localNotesReady = true;
-      renderCachedConversations(cached, localNotes);
       setChats((prev) => {
         const withoutNotes = prev.filter((item) => !isLocalNotesId(item.id));
         return localNotes ? [...withoutNotes, localNotesToChatItem(localNotes)] : withoutNotes;
@@ -795,8 +695,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
     // AuthContext can briefly lag behind Supabase's native session storage
     // after a sign-in or a cold start on a new device. Check the authoritative
-    // session directly before the server query. This check runs alongside the
-    // local reads above rather than holding them up.
+    // session directly before the server query, but only after local hydration
+    // has already made cached chats visible.
     if (!hasVerifiedSession) {
       let liveSessionUserId: string | null = null;
       try {
@@ -806,19 +706,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
         liveSessionUserId = null;
       }
       if (liveSessionUserId !== user.id) {
-        const [localNotes, cached] = await Promise.all([
-          localNotesPromise,
-          cachedConversationsPromise,
-        ]);
-        resolvedLocalNotes = localNotes;
-        localNotesReady = true;
-        renderCachedConversations(cached, localNotes);
-        if (localNotes) {
-          setChats((prev) => [
-            ...prev.filter((item) => !isLocalNotesId(item.id)),
-            localNotesToChatItem(localNotes),
-          ]);
-        }
         setLoading(false);
         setRefreshing(false);
         return;
@@ -832,36 +719,18 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
     const rpcStartedAt = Date.now();
     if (__DEV__) console.log("[ChatPerf] server RPC start");
-    const finishDataSync = beginDataSync();
-    const rpcPromise = (async () => {
-      try {
-        const result = await supabase.rpc(
-          "get_chat_list",
-          { p_unread_excluded_ids: unreadExcludedIds },
-        );
-        return {
-          chatRows: result.data as any[] | null,
-          chatError: result.error,
-        };
-      } catch (error) {
-        return {
-          chatRows: null,
-          chatError: { message: error instanceof Error ? error.message : String(error) },
-        };
-      } finally {
-        finishDataSync();
-      }
-    })();
-    const [localNotes, rpcResult] = await Promise.all([
-      localNotesPromise,
-      rpcPromise,
-    ]);
-    resolvedLocalNotes = localNotes;
-    localNotesReady = true;
-    if (cacheSnapshotReady && !serverSnapshotApplied) {
-      renderCachedConversations(cachedSnapshot, localNotes);
+    let chatRows: any[] | null = null;
+    let chatError: { message?: string } | null = null;
+    try {
+      const result = await supabase.rpc(
+        "get_chat_list",
+        { p_unread_excluded_ids: unreadExcludedIds },
+      );
+      chatRows = result.data as any[] | null;
+      chatError = result.error;
+    } catch (error) {
+      chatError = { message: error instanceof Error ? error.message : String(error) };
     }
-    const { chatRows, chatError } = rpcResult;
     if (__DEV__) {
       console.log(
         "[ChatPerf] server RPC end",
@@ -901,8 +770,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       setRefreshing(false);
       return;
     }
-
-    cacheChatListRows(user.id, chatRows);
 
     // The RPC includes chat membership, profile metadata, latest message,
     // delivery/read state, unread count, and mute state in one server query.
@@ -1056,14 +923,13 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
       }
     });
 
-    serverSnapshotApplied = true;
     setChats(finalItems);
     // Reconciliation complete — allow realtime events to increment unread again.
     suppressUnreadIncrementRef.current = false;
     // Persisting and image decoding are deliberately moved
     // off the navigation path. The list is useful as soon as setChats() runs;
     // these tasks can wait until the current gesture/transition is finished.
-    runAfterIdle(() => {
+    scheduleAfterInteractions(() => {
       prefetchListImages(finalItems, { avatarFields: ["avatar_url", "other_avatar"] });
       invalidateConversationsPreload();
       const regularIds = [...regularItems.map((c) => c.id), ...(notesItem ? [notesItem.id] : [])];
@@ -1467,17 +1333,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
             const preview = buildMsgPreview(msg.encrypted_content, msg.attachment_type);
             const isFromMe = msg.sender_id === user.id;
             const activeChatId = getActiveChatId();
-            const shouldIncrementUnread =
-              !isFromMe &&
-              msg.chat_id !== activeChatId &&
-              !wasChatRecentlyVisited(msg.chat_id) &&
-              !suppressUnreadIncrementRef.current;
-
-            // Persist the real realtime update immediately, so losing the
-            // network before the debounced list reconciliation cannot leave
-            // the durable Android conversation snapshot stale.
-            void updateConversationLastMessage(msg.chat_id, preview, msg.sent_at, isFromMe);
-            if (shouldIncrementUnread) void incrementUnread(msg.chat_id);
 
             // Instantly patch the matching conversation in state — no network call needed.
             setChats((prev) => {
@@ -1494,7 +1349,10 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   // replays buffered messages on reconnect which would otherwise
                   // mark every chat unread; loadChats() clears the suppression
                   // after it reconciles the correct counts from Supabase.
-                  unread_count: shouldIncrementUnread ? c.unread_count + 1 : c.unread_count,
+                  unread_count:
+                    !isFromMe && msg.chat_id !== activeChatId && !wasChatRecentlyVisited(msg.chat_id) && !suppressUnreadIncrementRef.current
+                      ? c.unread_count + 1
+                      : c.unread_count,
                 };
               });
 
@@ -1550,23 +1408,29 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
   }, [user, chatIdsKey, loadChats]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !chatPrefs.typing_indicators) return;
     const ch = supabase.channel(`user-typing-${user.id}`, { config: { broadcast: { self: false } } });
     ch.on("broadcast", { event: "typing" }, (payload) => {
-      const data = (payload.payload || {}) as any;
-      const { chat_id: chatId, user_id: uid } = data;
+      const { chat_id: chatId, user_id: uid, is_typing } = (payload.payload || {}) as any;
       if (!uid || uid === user.id || !chatId) return;
-      const activity = normalizeChatActivity(data);
-      updateChatActivity(chatId, uid, activity === "typing" && !chatPrefs.typing_indicators ? null : activity);
+      if (is_typing) {
+        if (typingTimersRef.current[chatId]) clearTimeout(typingTimersRef.current[chatId]);
+        setTypingChatIds((prev) => ({ ...prev, [chatId]: true }));
+        typingTimersRef.current[chatId] = setTimeout(() => {
+          setTypingChatIds((prev) => { const next = { ...prev }; delete next[chatId]; return next; });
+        }, 6000);
+      } else {
+        if (typingTimersRef.current[chatId]) { clearTimeout(typingTimersRef.current[chatId]); delete typingTimersRef.current[chatId]; }
+        setTypingChatIds((prev) => { const next = { ...prev }; delete next[chatId]; return next; });
+      }
     }).subscribe();
     return () => {
       supabase.removeChannel(ch);
-      Object.values(activityTimersRef.current).forEach((timer) => clearTimeout(timer));
-      activityTimersRef.current = {};
-      chatActivitiesBySenderRef.current.clear();
-      setChatActivities({});
+      Object.values(typingTimersRef.current).forEach((t) => clearTimeout(t));
+      typingTimersRef.current = {};
+      setTypingChatIds({});
     };
-  }, [user, chatPrefs.typing_indicators, updateChatActivity]);
+  }, [user, chatPrefs.typing_indicators]);
 
   const tabFiltered = chats.filter((c) => {
     if (tabFilter === "unread") return c.unread_count > 0;
@@ -1752,7 +1616,6 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
              <Ionicons name="search" size={18} color={colors.textMuted} />
              <TextInput
                ref={searchInputRef}
-               appearance="embedded"
                value={search}
                onChangeText={setSearch}
                placeholder="Search chats"
@@ -1815,10 +1678,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
             </Text>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "baseline" }}>
-              <AfuChatWordmark
-                style={[styles.headerTitle, { color: colors.text }]}
-                accentColor={colors.accent}
-              />
+              <Text style={[styles.headerTitle, { color: colors.text }]}>Afu</Text>
+              <Text style={[styles.headerTitle, { color: colors.accent }]}>Chat</Text>
             </View>
           )}
         </View>
@@ -1871,7 +1732,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
 
         {/* ── Folder tab bar — fixed, always visible regardless of list content ── */}
         {showFolderUI && (
-          <View style={{ backgroundColor: colors.background }}>
+          <View style={{ backgroundColor: colors.surface, borderBottomWidth: 0.5, borderBottomColor: colors.border }}>
             <ScrollView
               ref={folderScrollRef}
               horizontal
@@ -1895,9 +1756,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                     onPress={() => {
                       setPageIdx(idx);
                       if (hasFolders) {
-                        _PagerView
-                          ? pagerViewRef.current?.setPage(idx)
-                          : pagerListRef.current?.scrollToIndex({ index: idx, animated: true });
+                        _PagerView ? pagerRef.current?.setPage(idx) : pagerRef.current?.scrollToIndex({ index: idx, animated: true });
                       }
                     }}
                     onLongPress={() => {
@@ -1932,7 +1791,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           _PagerView ? (
             /* Native PagerView — true 1:1 finger tracking, content visible while swiping */
             <_PagerView
-              ref={pagerViewRef}
+              ref={pagerRef}
               style={{ flex: 1 }}
               initialPage={0}
               onPageScroll={handlePageScroll}
@@ -1966,7 +1825,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                           <ChatRow
                             item={item}
                             phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                            activity={chatActivities[item.id]}
+                            isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                             selectMode={selectMode}
                             isSelected={selectedIds.has(item.id)}
                             onEnterSelectMode={() => enterSelectMode(item.id)}
@@ -2004,8 +1863,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           ) : (
             /* Web / PagerView-unavailable fallback — horizontal FlatList pager */
             <FlatList
-              removeClippedSubviews={false}
-              ref={pagerListRef}
+              ref={pagerRef}
               data={pages}
               keyExtractor={(p) => ("filter" in p ? p.id : "all")}
               horizontal
@@ -2044,7 +1902,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                           <ChatRow
                             item={item}
                             phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                            activity={chatActivities[item.id]}
+                            isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                             selectMode={selectMode}
                             isSelected={selectedIds.has(item.id)}
                             onEnterSelectMode={() => enterSelectMode(item.id)}
@@ -2104,7 +1962,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
                   <ChatRow
                     item={item}
                     phonebookName={!item.is_group && !item.is_channel ? phonebookNames.get(item.other_id) : undefined}
-                    activity={chatActivities[item.id]}
+                    isActive={panelMode && item.id === activeChatId}
+                    isTyping={chatPrefs.typing_indicators && !!typingChatIds[item.id]}
                     selectMode={selectMode}
                     isSelected={selectedIds.has(item.id)}
                     onEnterSelectMode={() => enterSelectMode(item.id)}
@@ -2166,8 +2025,8 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           setPageIdx(newIdx);
           if (newIdx < updated.length + 1) {
             _PagerView
-              ? pagerViewRef.current?.setPage(newIdx)
-              : pagerListRef.current?.scrollToIndex({ index: newIdx, animated: false });
+              ? pagerRef.current?.setPage(newIdx)
+              : pagerRef.current?.scrollToIndex({ index: newIdx, animated: false });
           }
           setShowFolderModal(false);
           setEditingFolder(null);
@@ -2188,7 +2047,7 @@ export function ChatsScreen({ panelMode = false, onOpenChat }: { panelMode?: boo
           onPress={() => setSelectionMenuVisible(false)}
         >
           <Pressable
-            style={[selStyles.menuCard, { backgroundColor: colors.cardSurface }]}
+            style={[selStyles.menuCard, { backgroundColor: colors.surface }]}
             onPress={(event) => event.stopPropagation()}
           >
             <View style={selStyles.menuHandle} />
@@ -2574,12 +2433,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
   },
-  rowContent: { flex: 1, minWidth: 0 },
+  rowContent: { flex: 1 },
   rowTop: {
     flexDirection: "row",
     justifyContent: "space-between",

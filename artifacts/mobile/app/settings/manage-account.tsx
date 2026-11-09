@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "@/lib/haptics";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { TwoFactorGate } from "@/components/ui/TwoFactorGate";
 
@@ -24,7 +26,7 @@ function Section({
   return (
     <View style={s.section}>
       {title && <Text style={[s.sectionLabel, { color: colors.textMuted }]}>{title}</Text>}
-      <View style={[s.card, { backgroundColor: colors.cardSurface }]}>{children}</View>
+      <View style={[s.card, { backgroundColor: colors.card }]}>{children}</View>
     </View>
   );
 }
@@ -68,10 +70,33 @@ export default function ManageAccountScreen() {
 
   // ── Download ────────────────────────────────────────────────────────────────
   const [showDownloadGate, setShowDownloadGate] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
-  function handleDownloadData() {
+  async function handleDownloadData() {
     if (!user) return;
-    router.push({ pathname: "/settings/privacy-download", params: { preset: "all" } } as any);
+    setDownloading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-user-data", {
+        body: { types: ["profile", "posts", "messages", "activity", "transactions"] },
+      });
+
+      if (error || data?.error) {
+        const msg = data?.error ?? error?.message ?? "Something went wrong. Please try again.";
+        showAlert("Export Failed", msg);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const email = data?.email ?? user.email ?? "your registered email";
+      showAlert(
+        "Export Sent",
+        `Your data export has been sent to ${email}. Check your inbox for the attached JSON file.`
+      );
+    } catch {
+      showAlert("Error", "Failed to request data export. Please check your connection and try again.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -84,7 +109,7 @@ export default function ManageAccountScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Banner */}
-        <View style={[s.banner, { backgroundColor: colors.cardSurface }]}>
+        <View style={[s.banner, { backgroundColor: colors.card }]}>
           <View style={[s.bannerIcon, { backgroundColor: "#0A84FF18" }]}>
             <Ionicons name="person-circle" size={24} color="#0A84FF" />
           </View>
@@ -102,6 +127,7 @@ export default function ManageAccountScreen() {
             icon="cloud-download" iconColor="#0A84FF"
             label="Export My Data"
             sublabel="Download a copy of your profile, posts, messages and activity"
+            loading={downloading}
             onPress={() => setShowDownloadGate(true)}
             last colors={colors}
           />

@@ -10,17 +10,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { FlatListInstance, TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { ChatLoadingSkeleton } from "@/components/ui/Skeleton";
@@ -101,8 +99,8 @@ export default function MatchConversationScreen() {
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const otherUserId = match ? (match.user1_id === user?.id ? match.user2_id : match.user1_id) : null;
 
-  const flatRef = useRef<FlatListInstance>(null);
-  const inputRef = useRef<TextInputInstance>(null);
+  const flatRef = useRef<FlatList>(null);
+  const inputRef = useRef<AfuNativeRef.TextInput>(null);
 
   useEffect(() => { if (id) loadAll(); }, [id]);
 
@@ -289,7 +287,9 @@ export default function MatchConversationScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <LinearGradient colors={[BRAND, "#FF375F"]} style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton onPress={() => router.back()} />
+        <Pressable onPress={() => router.back()} hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </Pressable>
         <Pressable
           style={styles.headerProfile}
           onPress={() => router.push({ pathname: "/app/afumatch", params: { section: "view-profile", userId: otherProfile?.user_id } } as any)}
@@ -450,7 +450,6 @@ export default function MatchConversationScreen() {
           <View style={[styles.inputPill, { backgroundColor: colors.inputBg, borderColor: colors.border, ...Platform.select({ web: { boxShadow: "0 2px 14px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.13, shadowRadius: 8, elevation: 4 } }) }]}>
             <TextInput
               ref={inputRef}
-              appearance="embedded"
               style={[styles.inputField, { color: colors.text }]}
               placeholder="Type a message…"
               placeholderTextColor={colors.textMuted}
@@ -490,7 +489,7 @@ export default function MatchConversationScreen() {
               {EMOJI_SECTIONS[activeEmojiSection].emojis.map((em) => (
                 <Pressable
                   key={em}
-                  style={({ pressed }) => [styles.emojiItem, pressed && { backgroundColor: colors.backgroundTertiary + "44" }]}
+                  style={({ pressed }) => [styles.emojiItem, pressed && { backgroundColor: colors.border + "44" }]}
                   onPress={() => insertEmoji(em)}
                 >
                   <Text style={styles.emojiItemText}>{em}</Text>
@@ -614,7 +613,7 @@ const styles = StyleSheet.create({
   panel: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   panelHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   panelTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  balanceBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  balanceBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#1C1C1E", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   balanceText: { color: "#8E8E93", fontSize: 11, fontFamily: "Inter_400Regular" },
   giftCard: { width: 76, alignItems: "center", borderRadius: 14, padding: 10, gap: 4, borderWidth: 1.5 },
   giftCardEmoji: { fontSize: 30 },

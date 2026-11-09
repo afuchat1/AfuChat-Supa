@@ -22,7 +22,6 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
@@ -431,27 +430,23 @@ export default function QRScannerScreen() {
   if (!permission?.granted) {
     return (
       <View style={[s.root, s.centered, { backgroundColor: colors.background, paddingHorizontal: 40 }]}>
-        <View style={[s.permCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[s.permCard, { backgroundColor: colors.surface }]}>
           <Ionicons name="camera" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
           <Text style={[s.permTitle, { color: colors.text }]}>Camera Required</Text>
           <Text style={[s.permSub, { color: colors.textMuted }]}>AfuChat needs camera access to scan QR codes</Text>
           <TouchableOpacity style={[s.permBtn, { backgroundColor: Colors.brand }]} onPress={requestPermission}>
             <Text style={s.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
-          <GlassBackButton
-            onPress={() => router.back()}
-            icon="close"
-            label="Cancel"
-            accessibilityLabel="Cancel"
-            style={{ marginTop: 12, alignSelf: "center" }}
-          />
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 12 }}>
+            <Text style={{ color: colors.textMuted, fontSize: 14 }}>Cancel</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
+    <View style={[s.root, { backgroundColor: "#000" }]}>
       {/* Camera */}
       <CameraView
         style={StyleSheet.absoluteFill}
@@ -497,7 +492,9 @@ export default function QRScannerScreen() {
 
       {/* Top bar */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton style={s.iconBtn} onPress={() => router.back()} />
+        <TouchableOpacity style={s.iconBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
         <Text style={s.topTitle}>QR Scanner</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={s.iconBtn} onPress={() => setTorch((t) => !t)}>

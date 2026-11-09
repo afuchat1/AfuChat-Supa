@@ -9,14 +9,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
@@ -233,7 +232,9 @@ export default function SupportCenter() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[st.header, { paddingTop: insets.top + 8 }]}
       >
-        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} />
+        <TouchableOpacity onPress={() => router.back()} style={st.iconBtn}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={st.headerTitle}>Support Center</Text>
           <View style={st.headerSubRow}>
@@ -320,7 +321,7 @@ export default function SupportCenter() {
               {CATEGORIES.map((cat) => (
                 <TouchableOpacity
                   key={cat.id}
-                  style={[st.catCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
+                  style={[st.catCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                   onPress={() => { setCategory(cat.id); setTab("new"); }}
                   activeOpacity={0.72}
                 >
@@ -361,7 +362,7 @@ export default function SupportCenter() {
             {FAQ_ITEMS.map((item, i) => (
               <TouchableOpacity
                 key={i}
-                style={[st.faqCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
+                style={[st.faqCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 onPress={() => setExpandedFaq(expandedFaq === i ? null : i)}
                 activeOpacity={0.8}
               >
@@ -384,7 +385,7 @@ export default function SupportCenter() {
           </View>
 
           {/* Email contact */}
-          <View style={[st.emailCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+          <View style={[st.emailCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[st.emailIcon, { backgroundColor: BRAND + "14" }]}>
               <Ionicons name="mail" size={18} color={BRAND} />
             </View>
@@ -413,7 +414,7 @@ export default function SupportCenter() {
               <Animated.View
                 style={[
                   st.successCard,
-                  { backgroundColor: colors.cardSurface, borderColor: colors.border },
+                  { backgroundColor: colors.surface, borderColor: colors.border },
                   { transform: [{ scale: successAnim }] },
                 ]}
               >
@@ -605,7 +606,7 @@ export default function SupportCenter() {
                 >
                   <View style={[
                     st.deviceToggleIcon,
-                    { backgroundColor: includeDeviceInfo ? BRAND + "18" : colors.backgroundTertiary + "40" },
+                    { backgroundColor: includeDeviceInfo ? BRAND + "18" : colors.border + "40" },
                   ]}>
                     <Ionicons
                       name="phone-portrait"
@@ -738,7 +739,7 @@ export default function SupportCenter() {
                     style={[
                       st.ticketCard,
                       {
-                        backgroundColor: colors.cardSurface,
+                        backgroundColor: colors.surface,
                         borderColor: isOpen ? cfg.color + "40" : colors.border,
                         borderWidth: isOpen ? 1 : 0.5,
                       },

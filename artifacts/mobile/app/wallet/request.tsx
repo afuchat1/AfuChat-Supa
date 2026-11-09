@@ -4,10 +4,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -136,7 +136,7 @@ export default function MoneyRequestScreen() {
           </View>
 
           {/* Target card */}
-          <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+          <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Avatar uri={target.avatar_url} name={target.display_name} size={54} />
             <View style={{ flex: 1 }}>
               <Text style={[s.name, { color: colors.text }]}>{target.display_name}</Text>
@@ -172,7 +172,6 @@ export default function MoneyRequestScreen() {
           <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <Ionicons name={currency === "acoin" ? "diamond" : "flash"} size={18} color={currColor} style={{ marginRight: 8 }} />
             <TextInput
-              appearance="embedded"
               style={[s.input, { color: colors.text }]}
               placeholder="0"
               placeholderTextColor={colors.textMuted}
@@ -189,7 +188,6 @@ export default function MoneyRequestScreen() {
           <Text style={[s.label, { color: colors.textMuted, marginTop: 14 }]}>REASON (OPTIONAL)</Text>
           <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
             <TextInput
-              appearance="embedded"
               style={[s.input, { color: colors.text }]}
               placeholder="e.g. Split bill, lunch, bet…"
               placeholderTextColor={colors.textMuted}

@@ -47,12 +47,11 @@ export const T = {
   // Use the smallest radius that feels natural for each component size.
   radius: {
     xs:    6,    // tight chips, inline badges
-    sm:   12,    // small cards, icon wraps
-    md:   16,    // standard cards, inputs, buttons
-    card: 18,    // grouped cards, matching Settings sections
-    lg:   22,    // modals, sheets, large cards
-    xl:   28,    // hero surfaces
-    xxl:  34,    // full-bleed panels
+    sm:   10,    // small cards, icon wraps
+    md:   14,    // standard cards, inputs, buttons
+    lg:   18,    // modals, sheets, large cards
+    xl:   22,    // hero surfaces
+    xxl:  28,    // full-bleed panels
     pill: 999,   // pills, toggles, fully rounded buttons
   },
 
@@ -60,7 +59,7 @@ export const T = {
   iconSize:  20,
   iconWrapW: 36,
   iconWrapH: 36,
-  iconWrapR: 12,
+  iconWrapR:  9,
 
   // ── Border widths ────────────────────────────────────────────────────────────
   border: {

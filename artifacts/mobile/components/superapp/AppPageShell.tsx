@@ -1,10 +1,24 @@
 import React from "react";
-import { Platform, View } from "react-native";
+import { View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import AppBottomNav, { type AppNavItem } from "./AppBottomNav";
-import type { FullAppId } from "@/lib/superapp/appRouteIds";
 
-export type { FullAppId } from "@/lib/superapp/appRouteIds";
+export type FullAppId =
+  | "afupay"
+  | "afumarket"
+  | "afugames"
+  | "afubusiness"
+  | "afusearch"
+  | "afufreelance"
+  | "afufiles"
+  | "afugifts"
+  | "afuevents"
+  | "afumatch"
+  | "afucollections"
+  | "afuusernames"
+  | "afuqr"
+  | "afusaved"
+  | "afumusic";
 
 const NAV: Record<FullAppId, AppNavItem[]> = {
   afupay: [
@@ -20,13 +34,22 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "orders", label: "Orders", icon: "receipt-outline", href: "/app/afumarket?section=orders" },
     { key: "sell", label: "Sell", icon: "pricetag-outline", href: "/app/afumarket?section=apply-seller" },
   ],
+  afugames: [
+    { key: "games", label: "Games", icon: "game-controller-outline", href: "/app/afugames" },
+    { key: "progress", label: "My progress", icon: "trophy-outline", href: "/app/afugames?section=progress" },
+  ],
   afubusiness: [
     { key: "home", label: "Overview", icon: "home-outline", href: "/app/afubusiness" },
     { key: "analytics", label: "Analytics", icon: "bar-chart-outline", href: "/app/afubusiness?section=analytics" },
     { key: "products", label: "Products", icon: "pricetag-outline", href: "/app/afubusiness?section=products" },
     { key: "orders", label: "Orders", icon: "receipt-outline", href: "/app/afubusiness?section=orders" },
   ],
-  afusearch: [],
+  afusearch: [
+    { key: "all", label: "Search", icon: "search-outline", href: "/app/afusearch" },
+    { key: "people", label: "People", icon: "people-outline", href: "/app/afusearch?section=people" },
+    { key: "posts", label: "Posts", icon: "document-text-outline", href: "/app/afusearch?section=posts" },
+    { key: "events", label: "Events", icon: "calendar-outline", href: "/app/afusearch?section=events" },
+  ],
   afufreelance: [
     { key: "browse", label: "Browse", icon: "search-outline", href: "/app/afufreelance" },
     { key: "post-gig", label: "Post a gig", icon: "add-circle-outline", href: "/app/afufreelance?section=post-gig" },
@@ -63,37 +86,25 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "saved", label: "Saved", icon: "bookmark-outline", href: "/app/afusaved" },
   ],
   afumusic: [
-    { key: "discover", label: "Explore", icon: "compass-outline", activeIcon: "compass", href: "/app/afumusic" },
-    { key: "library", label: "My Music", icon: "albums-outline", activeIcon: "albums", href: "/app/afumusic?section=library" },
-    { key: "offline", label: "Downloads", icon: "cloud-download-outline", activeIcon: "cloud-download", href: "/app/afumusic?section=offline" },
-    { key: "studio", label: "Studio", icon: "musical-notes-outline", activeIcon: "musical-notes", href: "/app/afumusic?section=studio" },
-  ],
-  afufootball: [
-    { key: "live", label: "Matchday", icon: "football-outline", activeIcon: "football", href: "/app/afufootball" },
-    { key: "competitions", label: "Leagues", icon: "trophy-outline", activeIcon: "trophy", href: "/app/afufootball?section=competitions" },
-    { key: "followed", label: "Following", icon: "bookmark-outline", activeIcon: "bookmark", href: "/app/afufootball?section=followed" },
-    { key: "search", label: "Search", icon: "search-outline", activeIcon: "search", href: "/football/search" },
+    { key: "discover", label: "Discover", icon: "sparkles-outline", href: "/app/afumusic" },
+    { key: "library", label: "Library", icon: "albums-outline", href: "/app/afumusic?section=library" },
+    { key: "offline", label: "Offline", icon: "arrow-down-circle-outline", href: "/app/afumusic?section=offline" },
+    { key: "studio", label: "Studio", icon: "mic-outline", href: "/app/afumusic?section=studio" },
   ],
 };
 
-// App modules own their in-flow header and back control. The shell places the
-// shared floating navigation over pages that define app destinations.
+// App modules own their in-flow header and back control. The shell remains
+// responsible for the shared safe-area surface and app-level bottom nav, so
+// pages never become modal overlays or detached windows.
 
 export function getAppNav(appId: FullAppId) {
-  const items = NAV[appId];
-  // Offline music caching uses the native file cache and is not available in browsers.
-  return appId === "afumusic" && Platform.OS === "web"
-    ? items.filter((item) => item.key !== "offline")
-    : items;
+  return NAV[appId];
 }
 
 export function normalizeAppNavKey(section?: string) {
-  if (section === "request") return "requests";
-  if (["send", "receive", "exchange"].includes(section ?? "")) return "home";
   if (section === "apply-seller") return "sell";
   if (section === "apply" || section === "manage" || section === "storefront" || section === "product" || section === "order") return "browse";
   if (section === "post-gig") return "post-gig";
-  if (["competitions", "followed"].includes(section ?? "")) return section;
   if (["airtime", "data-bundles", "bills", "transfer", "hotels", "tickets", "fee-details"].includes(section ?? "")) {
     return "services";
   }
@@ -110,7 +121,13 @@ type Props = {
 export default function AppPageShell({ appId, activeKey, showNav = true, children }: Props) {
   const { colors } = useTheme();
   const items = getAppNav(appId);
-  const shouldShowNav = showNav && items.length > 1;
+  const shouldShowNav = showNav && items.length > 1 && (
+    appId === "afumarket" ||
+    appId === "afubusiness" ||
+    appId === "afugifts" ||
+    appId === "afuevents" ||
+    appId === "afumusic"
+  );
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flex: 1, minHeight: 0, position: "relative" }}>{children}</View>

@@ -14,13 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { AfuLogo } from "@/components/ui/AfuLogo";
-import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import { DonateSheet } from "@/components/DonateSheet";
 import Colors from "@/constants/colors";
 import Constants from "expo-constants";
 import { openAppReview } from "@/lib/appReview";
 import { useLanguage } from "@/context/LanguageContext";
-import { openExternalLink } from "@/lib/openExternalLink";
 
 const VERSION = Constants.expoConfig?.version ?? "2.2.5";
 const BUILD   = (Constants.expoConfig?.android as any)?.versionCode
@@ -86,11 +84,11 @@ const STATS = [
 // ─── Links ────────────────────────────────────────────────────────────────────
 
 const LINKS = [
-  { icon: "document-text",   label: "about.terms",  onPress: () => router.push("/terms") },
-  { icon: "shield-checkmark",label: "about.privacy",    onPress: () => router.push("/privacy") },
+  { icon: "document-text",   label: "about.terms",  onPress: () => Linking.openURL("https://afuchat.com/terms").catch(() => {}) },
+  { icon: "shield-checkmark",label: "about.privacy",    onPress: () => Linking.openURL("https://afuchat.com/privacy").catch(() => {}) },
   { icon: "help-buoy",       label: "about.help_support",    onPress: () => router.push("/support" as any) },
   { icon: "star",            label: "about.rate_on_google_play", onPress: () => openAppReview().catch(() => {}) },
-  { icon: "globe",           label: "about.visit_website", onPress: () => openExternalLink("https://afuchat.com").catch(() => {}) },
+  { icon: "globe",           label: "about.visit_website", onPress: () => Linking.openURL("https://afuchat.com").catch(() => {}) },
   { icon: "mail",            label: "about.contact_us",        onPress: () => Linking.openURL("mailto:hello@afuchat.com").catch(() => {}) },
 ] as const;
 
@@ -117,7 +115,7 @@ export default function AboutScreen() {
       >
 
         {/* ── Hero card ─────────────────────────────────────────────────── */}
-        <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[s.heroCard, { backgroundColor: colors.card }]}>
           <LinearGradient
             colors={isDark
               ? ["rgba(31,149,255,0.12)", "transparent"]
@@ -129,10 +127,8 @@ export default function AboutScreen() {
           <AfuLogo size={88} />
 
           <View style={s.wordmark}>
-            <AfuChatWordmark
-              style={[s.wordAfu, { color: colors.text }]}
-              accentColor={ACCENT}
-            />
+            <Text style={[s.wordAfu,  { color: colors.text }]}>Afu</Text>
+            <Text style={[s.wordChat, { color: ACCENT }]}>Chat</Text>
           </View>
 
           <View style={[s.versionBadge, { backgroundColor: ACCENT + "18", borderColor: ACCENT + "40" }]}>
@@ -153,7 +149,7 @@ export default function AboutScreen() {
         {/* ── Stats ─────────────────────────────────────────────────────── */}
         <View style={s.statsRow}>
           {STATS.map(({ value, label }) => (
-            <View key={label} style={[s.statBox, { backgroundColor: colors.cardSurface }]}>
+            <View key={label} style={[s.statBox, { backgroundColor: colors.card }]}>
               <Text style={[s.statValue, { color: ACCENT }]}>{value}</Text>
               <Text style={[s.statLabel, { color: colors.textMuted }]}>{t(label)}</Text>
             </View>
@@ -164,7 +160,7 @@ export default function AboutScreen() {
         <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{t("about.features_section")}</Text>
         <View style={s.featuresGrid}>
           {FEATURES.map(({ icon, label, desc }) => (
-            <View key={label} style={[s.featureCard, { backgroundColor: colors.cardSurface }]}>
+            <View key={label} style={[s.featureCard, { backgroundColor: colors.card }]}>
               <View style={[s.featureIconBox, { backgroundColor: ACCENT + "15" }]}>
                 <Ionicons name={icon as any} size={22} color={ACCENT} />
               </View>
@@ -176,7 +172,7 @@ export default function AboutScreen() {
 
         {/* ── Company ───────────────────────────────────────────────────── */}
         <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{t("about.company_section")}</Text>
-        <View style={[s.companyCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[s.companyCard, { backgroundColor: colors.card }]}>
           {[
             { label: "about.legal_name",   value: "AfuChat Technologies Limited" },
             { label: "about.founded",      value: "2023" },
@@ -225,8 +221,8 @@ export default function AboutScreen() {
 
         {/* GitHub */}
         <TouchableOpacity
-          style={[s.githubCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
-          onPress={() => openExternalLink(GITHUB_URL).catch(() => {})}
+          style={[s.githubCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => Linking.openURL(GITHUB_URL).catch(() => {})}
           activeOpacity={0.82}
         >
           <View style={[s.githubIconBox, { backgroundColor: isDark ? "#ffffff14" : "#00000010" }]}>
@@ -244,7 +240,7 @@ export default function AboutScreen() {
 
         {/* ── Links ─────────────────────────────────────────────────────── */}
         <Text style={[s.sectionTitle, { color: colors.textMuted }]}>{t("about.legal_support_section")}</Text>
-        <View style={[s.linksCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[s.linksCard, { backgroundColor: colors.card }]}>
           {LINKS.map(({ icon, label, onPress }, i) => (
             <React.Fragment key={label}>
               {i > 0 && <View style={[s.linkDivider, { backgroundColor: colors.separator }]} />}
@@ -263,10 +259,8 @@ export default function AboutScreen() {
         <View style={s.footer}>
           <View style={s.footerLogo}>
             <AfuLogo size={20} />
-            <AfuChatWordmark
-              style={[s.wordAfu, { color: colors.textMuted, fontSize: 14 }]}
-              accentColor={ACCENT}
-            />
+            <Text style={[s.wordAfu,  { color: colors.textMuted, fontSize: 14 }]}>Afu</Text>
+            <Text style={[s.wordChat, { color: ACCENT, fontSize: 14 }]}>Chat</Text>
           </View>
           <Text style={[s.copyright, { color: colors.textMuted }]}>
             © {new Date().getFullYear()} AfuChat Technologies Limited
@@ -293,6 +287,7 @@ const s = StyleSheet.create({
   },
   wordmark: { flexDirection: "row", alignItems: "baseline" },
   wordAfu:  { fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
+  wordChat: { fontSize: 30, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
   versionBadge: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 4 },
   versionText:  { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.2 },
   tagline:     { fontSize: 14, fontFamily: "Inter_400Regular", letterSpacing: 1 },

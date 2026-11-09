@@ -27,29 +27,17 @@ export function GlassMenuSection({ title, children, style }: GlassMenuSectionPro
       {title ? (
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>{title}</Text>
       ) : null}
-      <View
-        style={[
-          styles.sectionShadow,
-          Platform.select({
-            ios: { shadowColor: "#071522", shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-            android: { elevation: 2 },
-            web: { boxShadow: "0 4px 14px rgba(12,35,56,0.06)" } as any,
-          }),
-        ]}
-      >
-        <View style={[styles.sectionCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
-          {children}
-        </View>
+      <View style={[styles.sectionCard, { backgroundColor: colors.backgroundSecondary }]}>
+        {children}
       </View>
     </View>
   );
 }
 
 // ─── GlassMenuSeparator ───────────────────────────────────────────────────────
-// The inset divider keeps grouped settings rows easy to scan.
+// Invisible spacer — kept for backward compat but renders nothing in flat UI
 export function GlassMenuSeparator({ indent = 54 }: { indent?: number }) {
-  const { colors } = useTheme();
-  return <View style={[styles.separator, { backgroundColor: colors.separator, marginLeft: indent }]} />;
+  return null;
 }
 
 // ─── GlassMenuItem ────────────────────────────────────────────────────────────
@@ -103,7 +91,7 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
       style={({ pressed }) => [
         styles.row,
         disabled && { opacity: T.states.disabled },
-        pressed && Platform.OS === "ios" && { backgroundColor: colors.glassBgSubtle },
+        pressed && Platform.OS === "ios" && { opacity: T.states.pressed },
       ]}
       onPress={() => {
         if (disabled || loading) return;
@@ -119,7 +107,7 @@ export const GlassMenuItem = React.memo(function GlassMenuItem({
         style={[
           styles.iconWrap,
           // danger bg uses colors.errorSubtle (token) not a hardcoded rgba
-          { backgroundColor: danger ? colors.errorSubtle : colors.accent + "16" },
+          { backgroundColor: danger ? colors.errorSubtle : colors.backgroundSecondary },
         ]}
       >
         <Ionicons
@@ -186,16 +174,7 @@ const styles = StyleSheet.create({
     marginBottom: T.space.sm - 2,
     marginTop: T.space.xxl - 2,
   },
-  sectionShadow: { borderRadius: T.radius.lg },
-  sectionCard: {
-    overflow: "hidden",
-    borderWidth: T.border.hairline,
-    borderRadius: T.radius.lg,
-  },
-  separator: {
-    height: T.border.hairline,
-    marginRight: T.space.lg,
-  },
+  sectionCard: { overflow: "hidden" },
 
   row: {
     flexDirection: "row",

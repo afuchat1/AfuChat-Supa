@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,17 +9,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { useCall } from "@/context/CallContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -28,8 +26,6 @@ import * as Haptics from "@/lib/haptics";
 import { showAlert } from "@/lib/alert";
 import { showToast } from "@/lib/toast";
 import { generateGroupInviteLink } from "@/lib/groupInvite";
-import { AFUAI_BOT_ID } from "@/lib/afuAiBot";
-import { isLocalNotesId } from "@/lib/storage/localNotes";
 import QRCode from "@/components/ui/QRCode";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -154,7 +150,7 @@ function InfoRow({
 }
 
 function InfoCard({ children, colors }: { children: React.ReactNode; colors: any }) {
-  return <View style={[s.infoCard, { backgroundColor: colors.cardSurface }]}>{children}</View>;
+  return <View style={[s.infoCard, { backgroundColor: colors.surface }]}>{children}</View>;
 }
 
 function MemberRow({ member, accent, colors, isMe }: { member: Member; accent: string; colors: any; isMe: boolean }) {
@@ -190,9 +186,9 @@ function MemberRow({ member, accent, colors, isMe }: { member: Member; accent: s
   );
 }
 
-function PostCell({ post, cellSize, colors }: { post: GridPost; cellSize: number; colors: any }) {
+function PostCell({ post, cellSize }: { post: GridPost; cellSize: number }) {
   const uri = post.image_url ?? post.video_url;
-  if (!uri) return <View style={[s.postCell, { width: cellSize, height: cellSize, backgroundColor: colors.backgroundSecondary }]} />;
+  if (!uri) return <View style={[s.postCell, { width: cellSize, height: cellSize, backgroundColor: "#1C1C1E" }]} />;
   return (
     <TouchableOpacity
       style={[s.postCell, { width: cellSize, height: cellSize }]}
@@ -226,10 +222,8 @@ export default function ChatInfoScreen() {
 
   const { colors, accent, isDark } = useTheme();
   const { user } = useAuth();
-  const { status: callStatus, startCall } = useCall();
   const insets = useSafeAreaInsets();
   const BRAND = accent ?? Colors.brand;
-  const callStartingRef = useRef(false);
 
   // ── Core state ──────────────────────────────────────────────────────────────
   const [meta,          setMeta]         = useState<ChatMeta | null>(null);
@@ -262,12 +256,6 @@ export default function ChatInfoScreen() {
   const avatarUri = meta
     ? (isGroup || isChannel ? meta.avatar_url : meta.other_avatar)
     : (avatarParam ?? null);
-  const canCall = isDM &&
-    !!otherId &&
-    otherId !== user?.id &&
-    otherId !== AFUAI_BOT_ID &&
-    !isLocalNotesId(id) &&
-    displayName.trim().toLowerCase() !== "notifications";
 
   // Tab definitions by type
   const TABS = isChannel
@@ -463,23 +451,9 @@ export default function ChatInfoScreen() {
     router.back();
   }
 
-  const handleStartCall = useCallback(async () => {
-    if (!otherId || !user?.id || callStartingRef.current) return;
-    callStartingRef.current = true;
-    try {
-      const callId = await startCall({
-        calleeId: otherId,
-        calleeName: meta?.other_name ?? displayName,
-        calleeAvatar: meta?.other_avatar ?? avatarUri,
-        chatId: id,
-      });
-      router.push({ pathname: "/call/[id]", params: { id: callId } } as any);
-    } catch {
-      // CallContext reports actionable errors, including unavailable runtimes.
-    } finally {
-      callStartingRef.current = false;
-    }
-  }, [otherId, user?.id, startCall, meta?.other_name, meta?.other_avatar, displayName, avatarUri, id]);
+  const showCallsComingSoon = useCallback(() => {
+    showAlert("Calls", "Coming soon");
+  }, []);
 
   // ── Subtitle ─────────────────────────────────────────────────────────────────
 
@@ -526,16 +500,14 @@ export default function ChatInfoScreen() {
       { icon: "exit",             label: "Leave",    action: handleLeaveGroup },
     ];
     // DM
-    const dmActions = [
+    return [
       { icon: "chatbubble",       label: "Message",  action: openChat },
       { icon: isMuted ? "notifications" : "notifications-off", label: isMuted ? "Unmute" : "Mute",
         action: () => { if (isMuted) handleUnmute(); else setShowMutePicker(v => !v); } },
+      { icon: "call",             label: "Call",     action: showCallsComingSoon },
+      { icon: "videocam",         label: "Video",    action: showCallsComingSoon },
     ];
-    if (canCall && callStatus === "idle") {
-      dmActions.push({ icon: "call", label: "Call", action: handleStartCall });
-    }
-    return dmActions;
-  }, [isChannel, isChannelOwner, isGroup, isMuted, canCall, callStatus, handleStartCall, handleLeaveGroup]);
+  }, [isChannel, isChannelOwner, isGroup, isMuted, showCallsComingSoon, handleLeaveGroup]);
 
   // ── List data (members or posts for FlatList) ────────────────────────────────
 
@@ -563,7 +535,7 @@ export default function ChatInfoScreen() {
       );
     }
     if (isDM && activeTab === 0) {
-      return <PostCell post={item as GridPost} cellSize={cellSize} colors={colors} />;
+      return <PostCell post={item as GridPost} cellSize={cellSize} />;
     }
     return null;
   }
@@ -575,7 +547,9 @@ export default function ChatInfoScreen() {
 
       {/* ── Top bar ── */}
       <View style={[s.topBar, { paddingTop: insets.top + 4 }]}>
-        <GlassBackButton onPress={() => router.back()} style={s.topBtn} />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={s.topBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+    </TouchableOpacity>
         <View style={{ flex: 1 }} />
         {(!isChannel || isChannelOwner) && <TouchableOpacity
           onPress={() => router.push({

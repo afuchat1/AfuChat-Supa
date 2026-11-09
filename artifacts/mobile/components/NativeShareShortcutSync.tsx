@@ -1,10 +1,9 @@
 import { useEffect } from "react";
-import { runAfterIdle } from "@/lib/runAfterIdle";
+import { scheduleAfterInteractions } from "@/lib/scheduleAfterInteractions";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getLocalConversations, type LocalConversation } from "@/lib/storage/localConversations";
 import { updateNativeShareShortcuts, type ShareShortcutChat } from "@/lib/nativeShareShortcuts";
-import { cacheChatListRows, getRecentChatListRows } from "@/lib/chatListSnapshot";
 
 function conversationToShortcut(conversation: Partial<LocalConversation> & Record<string, any>): ShareShortcutChat | null {
   if (!conversation.id || conversation.kind === "notes" || !conversation.last_message_at) return null;
@@ -39,27 +38,13 @@ function serverRowToShortcut(row: any): ShareShortcutChat | null {
   });
 }
 
-function updateShortcutsFromServerRows(rows: any[]): void {
-  updateNativeShareShortcuts(
-    rows
-      .filter((row) => !row.is_archived && row.last_message_at)
-      .sort((a, b) => {
-        const aTime = new Date(a.last_message_at || a.chat_updated_at || 0).getTime();
-        const bTime = new Date(b.last_message_at || b.chat_updated_at || 0).getTime();
-        return bTime - aTime;
-      })
-      .map(serverRowToShortcut)
-      .filter(Boolean) as ShareShortcutChat[],
-  );
-}
-
 /**
  * Keeps Android Direct Share targets warm even when the user has not opened
  * the chats tab in this app session. The local cache is published first and
  * the server list replaces it when available.
  */
 export default function NativeShareShortcutSync() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!user) {
@@ -69,7 +54,7 @@ export default function NativeShareShortcutSync() {
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const idleTask = runAfterIdle(() => {
+    const interaction = scheduleAfterInteractions(() => {
       timer = setTimeout(() => {
         void (async () => {
           try {
@@ -83,24 +68,21 @@ export default function NativeShareShortcutSync() {
                 .filter(Boolean) as ShareShortcutChat[],
             );
 
-            const recentRows = getRecentChatListRows(user.id);
-            if (recentRows) {
-              updateShortcutsFromServerRows(recentRows);
-              return;
-            }
-
-            // A cached identity can publish local shortcuts, but cannot make
-            // authenticated server requests until Supabase restores its session.
-            if (!isAuthenticated) return;
-
-            const { data, error } = await supabase.rpc("get_chat_list", {
+            const { data } = await supabase.rpc("get_chat_list", {
               p_unread_excluded_ids: [],
             });
-            if (error) throw error;
             if (cancelled) return;
-            const rows = (data ?? []) as any[];
-            cacheChatListRows(user.id, rows);
-            updateShortcutsFromServerRows(rows);
+            updateNativeShareShortcuts(
+              ((data ?? []) as any[])
+                 .filter((row) => !row.is_archived && row.last_message_at)
+                .sort((a, b) => {
+                  const aTime = new Date(a.last_message_at || a.chat_updated_at || 0).getTime();
+                  const bTime = new Date(b.last_message_at || b.chat_updated_at || 0).getTime();
+                  return bTime - aTime;
+                })
+                .map(serverRowToShortcut)
+                .filter(Boolean) as ShareShortcutChat[],
+            );
           } catch {
             // The cached targets are sufficient for offline/background use.
           }
@@ -110,10 +92,10 @@ export default function NativeShareShortcutSync() {
 
     return () => {
       cancelled = true;
-      idleTask.cancel();
+      interaction.cancel();
       if (timer) clearTimeout(timer);
     };
-  }, [user?.id, isAuthenticated]);
+  }, [user?.id]);
 
   return null;
 }

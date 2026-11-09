@@ -12,11 +12,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";

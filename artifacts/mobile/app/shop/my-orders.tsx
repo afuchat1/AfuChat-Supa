@@ -51,7 +51,7 @@ function OrderCard({ order, onPress }: { order: ShopOrder; onPress: () => void }
 
   return (
     <TouchableOpacity
-      style={[st.orderCard, { backgroundColor: colors.cardSurface }]}
+      style={[st.orderCard, { backgroundColor: colors.surface }]}
       onPress={onPress}
       activeOpacity={0.82}
     >
@@ -218,17 +218,17 @@ export default function MyOrdersScreen() {
       >
         {/* Stats row */}
         <View style={st.statsRow}>
-          <View style={[st.statCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.statCard, { backgroundColor: colors.surface }]}>
             <Ionicons name="cube" size={20} color={BRAND} />
             <Text style={[st.statVal, { color: colors.text }]}>{orders.length}</Text>
             <Text style={[st.statLabel, { color: colors.textMuted }]}>Total Orders</Text>
           </View>
-          <View style={[st.statCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.statCard, { backgroundColor: colors.surface }]}>
             <Ionicons name="time" size={20} color="#FF9500" />
             <Text style={[st.statVal, { color: colors.text }]}>{activeCount}</Text>
             <Text style={[st.statLabel, { color: colors.textMuted }]}>Active</Text>
           </View>
-          <View style={[st.statCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.statCard, { backgroundColor: colors.surface }]}>
             <Ionicons name="wallet" size={20} color={GOLD} />
             <Text style={[st.statVal, { color: colors.text }]}>{formatShopAcoin(totalSpent)}</Text>
             <Text style={[st.statLabel, { color: colors.textMuted }]}>Spent</Text>

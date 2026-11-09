@@ -8,29 +8,29 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
   ActivityIndicator,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
+import { GlassInputSurface } from "@/components/ui/GlassInputSurface";
 import { router, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { useTheme } from "@/hooks/useTheme";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { shareStory } from "@/lib/share";
 import { hydrateViewedUsers, markStoriesViewed } from "@/lib/storyViewedStore";
 import { safePause, safePlay } from "@/lib/safeMedia";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getCachedStoryMedia } from "@/lib/storyMediaCache";
-import { useTheme } from "@/hooks/useTheme";
 
 const STORY_DURATION = 5000;
 const STORY_LIST_CACHE_PREFIX = "@afuchat:story_list:";
@@ -622,9 +622,9 @@ export default function ViewStoryScreen() {
 
   if (!story) {
     return (
-      <View style={[styles.root, styles.loadingScreen, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.loadingLabel, { color: colors.textMuted }]}>
+      <View style={[styles.root, styles.loadingScreen]}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingLabel}>
           {storiesLoaded ? "No stories available" : "Loading stories…"}
         </Text>
       </View>
@@ -639,7 +639,7 @@ export default function ViewStoryScreen() {
   return (
     <KeyboardAvoidingView
       behavior="padding"
-      style={[styles.root, { backgroundColor: colors.background }]}
+      style={[styles.root, { backgroundColor: "#0D0D0D" }]}
     >
       {/* ── Media ─────────────────────────────────────────────────────────── */}
       {isVideoStory ? (
@@ -678,13 +678,9 @@ export default function ViewStoryScreen() {
         <View style={styles.mediaErrorOverlay}>
           <Ionicons name="cloud-offline-outline" size={34} color="#fff" />
           <Text style={styles.downloadText}>This story is not downloaded on this device</Text>
-          <GlassBackButton
-            onPress={() => router.back()}
-            icon="close"
-            label="Close"
-            accessibilityLabel="Close"
-            style={{ alignSelf: "center" }}
-          />
+          <TouchableOpacity style={styles.mediaErrorButton} onPress={() => router.back()}>
+            <Text style={styles.mediaErrorButtonText}>Close</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -743,12 +739,9 @@ export default function ViewStoryScreen() {
         <TouchableOpacity style={styles.topBtn} onPress={openShareSheet} activeOpacity={0.8}>
           <Ionicons name="share-social" size={20} color="#fff" />
         </TouchableOpacity>
-        <GlassBackButton
-          style={styles.topBtn}
-          onPress={() => router.back()}
-          icon="close"
-          accessibilityLabel="Close"
-        />
+        <TouchableOpacity style={styles.topBtn} onPress={() => router.back()} activeOpacity={0.8}>
+          <Ionicons name="close" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* ── Tap zones — prev / next ──────────────────────────────────────── */}
@@ -792,7 +785,7 @@ export default function ViewStoryScreen() {
               onPress={openViewers}
               activeOpacity={0.75}
             >
-              <Ionicons name="eye" size={15} color="rgba(255,255,255,0.85)" />
+              <Ionicons name="eye" size={15} color="#FFFFFF" />
               <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
               {storyLike.count > 0 && (
                 <>
@@ -801,12 +794,12 @@ export default function ViewStoryScreen() {
                   <Text style={styles.viewerPillCount}>{storyLike.count}</Text>
                 </>
               )}
-              <Ionicons name="chevron-up" size={13} color="rgba(255,255,255,0.45)" />
+              <Ionicons name="chevron-up" size={13} color="#FFFFFF" />
             </TouchableOpacity>
           ) : (
             /* Non-owner: viewer count display (read-only) */
             <View style={[styles.viewerPill, { pointerEvents: "none" }]}>
-              <Ionicons name="eye" size={15} color="rgba(255,255,255,0.65)" />
+              <Ionicons name="eye" size={15} color="#FFFFFF" />
               <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
             </View>
           )}
@@ -835,12 +828,11 @@ export default function ViewStoryScreen() {
           {/* Comment input — non-owners only */}
           {!isOwner && (
             <>
-              <View style={styles.commentInputWrap}>
+              <GlassInputSurface tone="overlay" style={styles.commentInputWrap}>
                 <TextInput
-                  appearance="embedded"
-                  style={styles.commentInput}
+                  style={[styles.commentInput, { color: colors.glassBarText }]}
                   placeholder="Reply…"
-                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  placeholderTextColor={colors.glassBarMuted}
                   value={commentText}
                   onChangeText={setCommentText}
                   onFocus={() => setPaused(true)}
@@ -849,7 +841,7 @@ export default function ViewStoryScreen() {
                   onSubmitEditing={sendComment}
                   maxLength={500}
                 />
-              </View>
+              </GlassInputSurface>
               {commentText.trim() ? (
                 <TouchableOpacity
                   onPress={sendComment}
@@ -878,7 +870,7 @@ export default function ViewStoryScreen() {
               <Text style={styles.panelTitle}>Share Story</Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity onPress={closeShareSheet}>
-                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.45)" />
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
@@ -897,7 +889,7 @@ export default function ViewStoryScreen() {
                 <Text style={styles.shareOptionLabel}>Share Link</Text>
                 <Text style={styles.shareOptionSub}>Copy or send via any app</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
+              <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
             </TouchableOpacity>
 
             {chatList.length > 0 && (
@@ -937,7 +929,7 @@ export default function ViewStoryScreen() {
           >
             <View style={styles.panelHandle} />
             <View style={styles.panelHeader}>
-              <Ionicons name="eye" size={18} color="rgba(255,255,255,0.7)" />
+              <Ionicons name="eye" size={18} color="#FFFFFF" />
               <Text style={styles.panelTitle}>
                 Viewers · {story.view_count || 0}
               </Text>
@@ -952,7 +944,7 @@ export default function ViewStoryScreen() {
               )}
               <View style={{ flex: 1 }} />
               <TouchableOpacity onPress={closeViewers}>
-                <Ionicons name="close-circle" size={26} color="rgba(255,255,255,0.45)" />
+                <Ionicons name="close-circle" size={26} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
@@ -962,7 +954,7 @@ export default function ViewStoryScreen() {
               </View>
             ) : viewers.length === 0 ? (
               <View style={styles.centeredMsg}>
-                <Ionicons name="eye-off" size={36} color="rgba(255,255,255,0.2)" />
+                <Ionicons name="eye-off" size={36} color="#FFFFFF" />
                 <Text style={[styles.mutedText, { marginTop: 8 }]}>No viewers yet</Text>
               </View>
             ) : (
@@ -1006,6 +998,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
+    backgroundColor: "#0D0D0D",
   },
   loadingLabel: {
     color: "rgba(255,255,255,0.72)",
@@ -1198,11 +1191,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.28)",
     justifyContent: "center",
     paddingHorizontal: 14,
+    borderWidth: 0.75,
     ...Platform.select({
       web: { boxShadow: "0 2px 14px rgba(0,0,0,0.28)" } as any,
       default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 8, elevation: 4 },

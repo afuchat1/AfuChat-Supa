@@ -4,10 +4,10 @@ import {
   FlatList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -97,7 +97,6 @@ export default function PrivacyRestrictedScreen() {
           <View style={s.searchBar}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              appearance="embedded"
               style={[s.searchInput, { color: colors.text }]}
               placeholder={t("restricted.search")}
               placeholderTextColor={colors.textMuted}
@@ -130,7 +129,7 @@ export default function PrivacyRestrictedScreen() {
           renderItem={({ item, index }) => {
             const isLast = index === filtered.length - 1;
             return (
-              <View style={[s.rowWrapper, { backgroundColor: colors.cardSurface, marginHorizontal: 16 }]}>
+              <View style={[s.rowWrapper, { backgroundColor: colors.card, marginHorizontal: 16 }]}>
                 <View style={s.row}>
                   <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
                   <View style={{ flex: 1 }}>

@@ -22,7 +22,7 @@ function Section({
   return (
     <View style={s.section}>
       <Text style={[s.sectionLabel, { color: colors.textMuted }]}>{t(title)}</Text>
-      <View style={[s.card, { backgroundColor: colors.cardSurface }]}>{children}</View>
+      <View style={[s.card, { backgroundColor: colors.card }]}>{children}</View>
     </View>
   );
 }
@@ -181,7 +181,7 @@ export default function PrivacySettingsScreen() {
             <Switch
               value={adv.auto_reply_enabled}
               onValueChange={(v) => setFeature("auto_reply_enabled", v)}
-              trackColor={{ true: accent, false: colors.backgroundTertiary }}
+              trackColor={{ true: accent, false: colors.separator }}
               thumbColor="#fff"
             />
           </View>
@@ -199,7 +199,7 @@ export default function PrivacySettingsScreen() {
             <Switch
               value={adv.temp_chat_enabled}
               onValueChange={(v) => setFeature("temp_chat_enabled", v)}
-              trackColor={{ true: accent, false: colors.backgroundTertiary }}
+              trackColor={{ true: accent, false: colors.separator }}
               thumbColor="#fff"
             />
           </View>

@@ -3,7 +3,8 @@
  *
  * JS-side splash overlay shown while fonts and assets load.
  *
- * Uses the same saved theme preference and semantic palette as ThemeContext.
+ * Light mode uses the black logo on white. Dark mode uses the white
+ * notification/logo mark on black. No app-icon or blue splash artwork is used.
  *
  * Fades out quickly once `ready` becomes true, then calls `onDone`
  * so the parent can call SplashScreen.hideAsync().
@@ -23,9 +24,6 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LOGO_BLACK_B64 } from "@/lib/logoAssets";
 import { LOGO_WHITE_BOLD_B64 } from "@/lib/logoWhiteBold";
-import Colors from "@/constants/colors";
-import { THEME_MODE_KEY } from "@/context/ThemeContext";
-import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 
 const { width } = Dimensions.get("window");
 const LOGO_SIZE = Math.min(width * 0.32, 130);
@@ -48,7 +46,7 @@ export function SplashScreenView({ ready, onDone }: Props) {
   const [isDark, setIsDark] = React.useState(systemScheme === "dark");
 
   React.useEffect(() => {
-    AsyncStorage.getItem(THEME_MODE_KEY)
+    AsyncStorage.getItem("@afuchat_theme")
       .then((val) => {
         if (val === "dark")       setIsDark(true);
         else if (val === "light") setIsDark(false);
@@ -77,10 +75,9 @@ export function SplashScreenView({ ready, onDone }: Props) {
     ]).start(() => onDoneRef.current());
   }, [ready, opacity, scale]);
 
-  const palette       = isDark ? Colors.dark : Colors.light;
-  const bg            = palette.background;
-  const wordmarkColor = palette.text;
-  const taglineColor  = palette.textSecondary;
+  const bg            = isDark ? "#000000" : "#FFFFFF";
+  const wordmarkColor = isDark ? "#FFFFFF" : "#000000";
+  const taglineColor  = isDark ? "rgba(255,255,255,0.52)" : "rgba(0,0,0,0.48)";
   const logoSource    = isDark ? LOGO_WHITE : { uri: LOGO_BLACK_B64 };
 
   return (
@@ -97,10 +94,9 @@ export function SplashScreenView({ ready, onDone }: Props) {
       </Animated.View>
 
       <View style={styles.wordmarkRow}>
-        <AfuChatWordmark
-          style={[styles.wordmark, { color: wordmarkColor }]}
-          accentColor={palette.accent}
-        />
+        <Text style={[styles.wordmark, { color: wordmarkColor }]}>
+          Afu<Text style={[styles.wordmarkAccent, { color: wordmarkColor }]}>Chat</Text>
+        </Text>
       </View>
 
       <View style={styles.taglineWrap}>
@@ -143,6 +139,9 @@ const styles = StyleSheet.create({
       android: "sans-serif-medium",
       default: "System",
     }),
+  },
+  wordmarkAccent: {
+    color: "#1018D8",
   },
   taglineWrap: {
     marginTop: 10,

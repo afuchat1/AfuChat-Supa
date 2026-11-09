@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { safeRouter } from "@/lib/navUtils";
@@ -93,7 +92,6 @@ export default function AirtimeScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="call" size={18} color={colors.textMuted} />
           <TextInput
-            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={phone}
             onChangeText={setPhone}
@@ -121,7 +119,6 @@ export default function AirtimeScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Text style={[styles.inputPrefix, { color: colors.textMuted }]}>🪙</Text>
           <TextInput
-            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={amount}
             onChangeText={setAmount}
@@ -132,7 +129,7 @@ export default function AirtimeScreen() {
         </View>
 
         {fee && (
-          <View style={[styles.feeCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.feeCard, { backgroundColor: colors.surface }]}>
             <View style={styles.feeRow}>
               <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>Airtime</Text>
               <Text style={[styles.feeValue, { color: colors.text }]}>{fee.subtotal} ACoins</Text>

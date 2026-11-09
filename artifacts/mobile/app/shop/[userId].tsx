@@ -15,7 +15,6 @@ import {
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -139,7 +138,9 @@ export default function StoreStorefront() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Floating back + cart */}
       <View style={[st.floatBar, { paddingTop: insets.top + 4 }]}>
-        <GlassBackButton onPress={() => router.back()} />
+        <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={20} color="#fff" />
+        </TouchableOpacity>
         <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/app/afumarket?section=cart" as any)}>
           <Ionicons name="cart" size={20} color="#fff" />
           {cartCount > 0 && (
@@ -155,12 +156,9 @@ export default function StoreStorefront() {
       ) : !shop ? (
         <View style={st.loadingWrap}>
           <Text style={[st.notFoundText, { color: colors.textMuted }]}>Store not found.</Text>
-          <GlassBackButton
-            onPress={() => router.back()}
-            label="Go back"
-            accessibilityLabel="Go back"
-            style={{ marginTop: 8, alignSelf: "center" }}
-          />
+          <TouchableOpacity onPress={() => router.back()} style={[st.backBtn, { backgroundColor: colors.accent }]}>
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -194,7 +192,7 @@ export default function StoreStorefront() {
               </View>
 
               {/* Store info card */}
-              <View style={[st.infoCard, { backgroundColor: colors.cardSurface }]}>
+              <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
                 <View style={st.infoRow}>
                   <View style={[st.logoWrap, { borderColor: colors.background }]}>
                     <Avatar uri={shop.logo_url || seller?.avatar_url} name={shop.name} size={64} square={true} />
@@ -319,6 +317,7 @@ const st = StyleSheet.create({
   root: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  backBtn: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   floatBar: {
     position: "absolute",
     top: 0,

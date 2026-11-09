@@ -25,7 +25,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useHorizontalScrollLock } from "@/context/TabSwipeContext";
@@ -176,7 +176,7 @@ function UserCard({
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.cardSurface }]}
+      style={[styles.card, { backgroundColor: colors.surface }]}
       onPress={() => router.push({ pathname: "/[handle]", params: { handle: user.handle } })}
       activeOpacity={0.85}
     >
@@ -543,7 +543,7 @@ export function SuggestedUsers({
         <SectionHeader compact={compact} colors={colors} accent={accent} loading />
         <View style={styles.skeletonRow}>
           {[1, 2, 3].map(i => (
-            <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.cardSurface }]} />
+            <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface }]} />
           ))}
         </View>
       </View>

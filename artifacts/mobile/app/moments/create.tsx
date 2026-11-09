@@ -12,16 +12,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import Svg, { Circle } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
@@ -31,6 +29,9 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { showAlert } from "@/lib/alert";
+import MusicPickerSheet from "@/components/music/MusicPickerSheet";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
+import type { AfuMusicTrack } from "@/modules/afumusic";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { aiEnhancePost, aiGenerateHashtags, aiGenerateCaption } from "@/lib/aiHelper";
 import {
@@ -112,7 +113,7 @@ export default function CreatePostScreen() {
   const { preferredLang }  = useLanguage();
   const insets             = useSafeAreaInsets();
   const params             = useLocalSearchParams<{ prefill?: string; imageUrl?: string; imageUrls?: string }>();
-  const inputRef           = useRef<TextInputInstance>(null);
+  const inputRef           = useRef<AfuNativeRef.TextInput>(null);
   const postBtnScale       = useRef(new Animated.Value(1)).current;
 
   // ── state ──────────────────────────────────────────────────────────────────
@@ -128,6 +129,8 @@ export default function CreatePostScreen() {
     return params.imageUrl ? [params.imageUrl] : [];
   }, [params.imageUrl, params.imageUrls]);
   const [images,           setImages]           = useState<string[]>(initialImages);
+  const [musicTrack,       setMusicTrack]       = useState<AfuMusicTrack | null>(null);
+  const [musicPickerOpen,  setMusicPickerOpen]  = useState(false);
   const [audience,         setAudience]         = useState<Audience>("public");
   const [langCode,         setLangCode]         = useState<string | null>(preferredLang);
   const [locationTag,      setLocationTag]      = useState("");
@@ -148,7 +151,7 @@ export default function CreatePostScreen() {
   // ── derived ────────────────────────────────────────────────────────────────
   const charCount      = content.length;
   const isOverLimit    = charCount > MAX_CHARS;
-  const canPost        = (content.trim().length > 0 || images.length > 0) && !isOverLimit;
+  const canPost        = (content.trim().length > 0 || images.length > 0 || !!musicTrack) && !isOverLimit;
   const audienceOption = AUDIENCE_OPTIONS.find(a => a.key === audience)!;
   const filteredLangs  = LANG_LIST.filter(l =>
     !langSearch ||
@@ -205,6 +208,7 @@ export default function CreatePostScreen() {
 
     const _content     = content.trim();
     const _images      = [...images];
+    const _musicTrack  = musicTrack;
     const _userId      = user.id;
     const _audience    = audience;
     const _langCode    = langCode;
@@ -229,7 +233,17 @@ export default function CreatePostScreen() {
         updatePostProgress(0.75);
         let body = _content;
         if (_locationTag) body += `\n📍 ${_locationTag}`;
-        const payload: any = { author_id: _userId, content: body, image_url: urls[0] ?? null, visibility: _audience };
+        const payload: any = {
+          author_id: _userId,
+          content: body,
+          image_url: urls[0] ?? null,
+          visibility: _audience,
+          ...(_musicTrack ? {
+            music_track_id: _musicTrack.id,
+            post_type: urls.length === 0 ? "music" : "post",
+            audio_name: _musicTrack.title,
+          } : {}),
+        };
         if (_langCode) payload.language_code = _langCode;
         const { data: post, error: pe } = await supabase.from("posts").insert(payload).select().single();
         if (pe || !post) throw new Error("Could not create post.");
@@ -271,12 +285,13 @@ export default function CreatePostScreen() {
     >
       {/* ──────────────────────────── Header ──────────────────────────────── */}
       <View style={[ss.header, { paddingTop: insets.top + 6, borderBottomColor: colors.separator }]}>
-        <GlassBackButton
+        <TouchableOpacity
           style={ss.closeBtn}
           onPress={() => { Keyboard.dismiss(); if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any); }}
-          icon="close"
-          accessibilityLabel="Close"
-        />
+          hitSlop={12}
+        >
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
 
         <Text style={[ss.headerTitle, { color: colors.text }]}>New Post</Text>
 
@@ -425,6 +440,25 @@ export default function CreatePostScreen() {
           />
         )}
 
+        {musicTrack ? (
+          <View style={{ marginLeft: 16 + AVATAR_SZ + 14, marginRight: 16, marginTop: 10, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 10, padding: 9, borderRadius: 14, backgroundColor: colors.surface }}>
+            <AfuMusicArtwork
+              uri={musicTrack.coverArtUrl}
+              size={36}
+              radius={11}
+              iconColor={colors.accent}
+              backgroundColor={colors.backgroundSecondary}
+              accessibilityLabel={`${musicTrack.title} cover art`}
+            />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 11 }} numberOfLines={1}>{musicTrack.title}</Text>
+              <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 2 }} numberOfLines={1}>{musicTrack.artist} · {musicTrack.price > 0 ? `${musicTrack.price} ACoin` : "Free"}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setMusicPickerOpen(true)} accessibilityLabel="Change attached music"><Ionicons name="create-outline" size={18} color={colors.textSecondary} /></TouchableOpacity>
+            <TouchableOpacity onPress={() => setMusicTrack(null)} accessibilityLabel="Remove attached music"><Ionicons name="close-circle" size={18} color={colors.textMuted} /></TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Bottom padding for toolbar clearance */}
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -447,6 +481,10 @@ export default function CreatePostScreen() {
             size={22}
             color={images.length > 0 ? colors.accent : colors.textSecondary}
           />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={ss.toolBtn} onPress={() => setMusicPickerOpen(true)} activeOpacity={0.7} accessibilityLabel="Attach AfuMusic track">
+          <Ionicons name={musicTrack ? "musical-notes" : "musical-notes-outline"} size={22} color={musicTrack ? colors.accent : colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity style={ss.toolBtn} onPress={() => setShowMention(true)} activeOpacity={0.7}>
@@ -493,6 +531,17 @@ export default function CreatePostScreen() {
       {/* ════════════════════════════ MODALS ══════════════════════════════════ */}
 
       {/* Audience */}
+      <MusicPickerSheet
+        visible={musicPickerOpen}
+        purpose="post"
+        selectedTrackId={musicTrack?.id}
+        onClose={() => setMusicPickerOpen(false)}
+        onSelect={(track) => {
+          setMusicTrack(track);
+          setMusicPickerOpen(false);
+        }}
+      />
+
       <Modal visible={showAudience} transparent animationType="slide" onRequestClose={() => setShowAudience(false)}>
         <Pressable style={ss.overlay} onPress={() => setShowAudience(false)}>
           <Pressable style={[ss.sheet, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 16) + 8 }]} onPress={() => {}}>
@@ -528,7 +577,6 @@ export default function CreatePostScreen() {
             <View style={[ss.searchPill, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Ionicons name="search" size={16} color={colors.textMuted} />
               <TextInput
-                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="Search languages…"
                 placeholderTextColor={colors.textMuted}
@@ -573,7 +621,6 @@ export default function CreatePostScreen() {
             <View style={[ss.searchPill, { backgroundColor: colors.inputBg, borderColor: colors.accent + "40" }]}>
               <Ionicons name="location" size={16} color={colors.accent} />
               <TextInput
-                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="City, venue, neighbourhood…"
                 placeholderTextColor={colors.textMuted}
@@ -617,7 +664,6 @@ export default function CreatePostScreen() {
             <View style={[ss.searchPill, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Ionicons name="at" size={16} color={colors.accent} />
               <TextInput
-                appearance="embedded"
                 style={[ss.searchInput, { color: colors.text }]}
                 placeholder="Search by name or handle…"
                 placeholderTextColor={colors.textMuted}
@@ -634,7 +680,8 @@ export default function CreatePostScreen() {
                 <TouchableOpacity style={ss.mentionRow} onPress={() => insertMention(item.handle)} activeOpacity={0.75}>
                   <Avatar uri={item.avatar_url} name={item.display_name} size={38} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[ss.mentionName, { color: colors.text }]}>@{item.handle}</Text>
+                    <Text style={[ss.mentionName, { color: colors.text }]}>{item.display_name}</Text>
+                    <Text style={[ss.mentionHandle, { color: colors.textMuted }]}>@{item.handle}</Text>
                   </View>
                 </TouchableOpacity>
               )}

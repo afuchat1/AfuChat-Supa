@@ -6,13 +6,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -154,7 +153,7 @@ export default function PaidCommunitiesScreen() {
   }
 
   const renderCommunityCard = ({ item }: { item: Community }) => (
-    <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
+    <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={styles.cardHeader}>
         <View style={styles.cardEmojiWrap}>
           <Text style={styles.cardEmoji}>{item.emoji}</Text>
@@ -198,7 +197,9 @@ export default function PaidCommunitiesScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Paid Communities</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -221,21 +222,21 @@ export default function PaidCommunitiesScreen() {
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 40 }}>
           <Text style={[styles.createTitle, { color: colors.text }]}>Create a Paid Community</Text>
           <View style={[styles.field, { backgroundColor: colors.surface }]}>
-            <TextInput appearance="embedded" style={[styles.fieldInput, { color: colors.text }]} placeholder="Emoji (e.g. 🏰)" placeholderTextColor={colors.textMuted} value={createEmoji} onChangeText={setCreateEmoji} maxLength={4} />
+            <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Emoji (e.g. 🏰)" placeholderTextColor={colors.textMuted} value={createEmoji} onChangeText={setCreateEmoji} maxLength={4} />
           </View>
           <View style={[styles.field, { backgroundColor: colors.surface }]}>
-            <TextInput appearance="embedded" style={[styles.fieldInput, { color: colors.text }]} placeholder="Community name" placeholderTextColor={colors.textMuted} value={createName} onChangeText={setCreateName} maxLength={60} />
+            <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Community name" placeholderTextColor={colors.textMuted} value={createName} onChangeText={setCreateName} maxLength={60} />
           </View>
           <View style={[styles.field, { backgroundColor: colors.surface, height: 100, alignItems: "flex-start", paddingTop: 14 }]}>
-            <TextInput appearance="embedded" style={[styles.fieldInput, { color: colors.text }]} placeholder="Description (optional)" placeholderTextColor={colors.textMuted} value={createDesc} onChangeText={setCreateDesc} multiline numberOfLines={3} />
+            <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Description (optional)" placeholderTextColor={colors.textMuted} value={createDesc} onChangeText={setCreateDesc} multiline numberOfLines={3} />
           </View>
           <View style={[styles.field, { backgroundColor: colors.surface }]}>
             <Ionicons name="wallet" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
-            <TextInput appearance="embedded" style={[styles.fieldInput, { color: colors.text }]} placeholder="Entry price in ACoin" placeholderTextColor={colors.textMuted} value={createPrice} onChangeText={setCreatePrice} keyboardType="number-pad" />
+            <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Entry price in ACoin" placeholderTextColor={colors.textMuted} value={createPrice} onChangeText={setCreatePrice} keyboardType="number-pad" />
             <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium" }}>ACoin</Text>
           </View>
           <View style={[styles.field, { backgroundColor: colors.surface }]}>
-            <TextInput appearance="embedded" style={[styles.fieldInput, { color: colors.text }]} placeholder="Tags (comma-separated)" placeholderTextColor={colors.textMuted} value={createTags} onChangeText={setCreateTags} />
+            <TextInput style={[styles.fieldInput, { color: colors.text }]} placeholder="Tags (comma-separated)" placeholderTextColor={colors.textMuted} value={createTags} onChangeText={setCreateTags} />
           </View>
           <TouchableOpacity style={[styles.createBtn, { backgroundColor: colors.accent, opacity: creating ? 0.7 : 1 }]} onPress={createCommunity} disabled={creating}>
             {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Launch Community</Text>}

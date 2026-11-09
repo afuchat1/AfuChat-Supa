@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -7,22 +7,20 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import { SmartSheet } from "@/components/ui/SmartSheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
 import { confirmAlert, showAlert } from "@/lib/alert";
 import Colors from "@/constants/colors";
-import { isVerifiedCreator } from "@/lib/creatorEntitlements";
 
 type Seller = {
   id: string;
@@ -55,7 +53,6 @@ type OwnedUsername = {
 };
 
 const HANDLE_RE = /^[a-z0-9_]{1,30}$/;
-const MAX_LISTING_PRICE = 1000;
 function money(value: number): string {
   const amount = Math.max(0, Number(value) || 0);
   if (amount >= 1000000) {
@@ -107,14 +104,12 @@ function SellerLine({ seller, colors }: { seller: Seller | null; colors: any }) 
 function ListingCard({
   item,
   own,
-  policyBlocked = false,
   onPress,
   onDelist,
   colors,
 }: {
   item: Listing;
   own: boolean;
-  policyBlocked?: boolean;
   onPress: () => void;
   onDelist?: () => void;
   colors: any;
@@ -129,7 +124,7 @@ function ListingCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.cardSurface, opacity: pressed ? 0.78 : 1 },
+        { backgroundColor: colors.surface, opacity: pressed ? 0.78 : 1 },
       ]}
     >
       <View style={[styles.handleMark, { backgroundColor: auction ? Colors.gold + "20" : colors.accent + "16" }]}>
@@ -140,7 +135,6 @@ function ListingCard({
           <Text style={[styles.handle, { color: colors.text }]} numberOfLines={1}>@{item.username}</Text>
           {auction ? <View style={[styles.auctionPill, { backgroundColor: Colors.gold + "20" }]}><Text style={[styles.auctionPillText, { color: Colors.gold }]}>LIVE AUCTION</Text></View> : null}
           {item.is_resale ? <View style={[styles.resalePill, { backgroundColor: Colors.gold + "20" }]}><Ionicons name="repeat-outline" size={10} color={Colors.gold} /><Text style={[styles.resalePillText, { color: Colors.gold }]}>RESALE</Text></View> : null}
-          {policyBlocked ? <View style={[styles.resalePill, { backgroundColor: colors.error + "18" }]}><Text style={[styles.resalePillText, { color: colors.error }]}>UNAVAILABLE · PRICE CAP</Text></View> : null}
         </View>
         <SellerLine seller={item.seller} colors={colors} />
         <Text style={[styles.cardNote, { color: colors.textMuted }]}>{own ? "Your active listing" : auction ? `${timeLeft(item.auction_end_at)} · ${item.views || 0} watchers` : "Instant ownership transfer"}</Text>
@@ -172,7 +166,7 @@ function ListingCard({
 function FeaturedCard({ item, colors, onPress }: { item: FeaturedPlacement; colors: any; onPress: () => void }) {
   const listing = item.listing;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.featuredCard, { backgroundColor: colors.cardSurface, opacity: pressed ? 0.82 : 1 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.featuredCard, { backgroundColor: colors.surface, opacity: pressed ? 0.82 : 1 }]}>
       <View style={styles.featuredTop}><View style={[styles.featuredBadge, { backgroundColor: Colors.gold + "22" }]}><Ionicons name="star-outline" size={12} color={Colors.gold} /><Text style={[styles.featuredBadgeText, { color: Colors.gold }]}>FEATURED</Text></View><Text style={[styles.featuredTime, { color: colors.textMuted }]}>{timeLeft(item.ends_at)}</Text></View>
       <View style={styles.featuredHandleRow}>
         <Text style={[styles.featuredHandle, { color: colors.text }]} numberOfLines={1}>@{listing.username}</Text>
@@ -248,7 +242,7 @@ function BidSheet({ item, visible, onClose, onDone, colors }: { item: Listing | 
 
 function OwnedCard({ item, colors }: { item: OwnedUsername; colors: any }) {
   return (
-    <View style={[styles.ownedCard, { backgroundColor: colors.cardSurface }]}>
+    <View style={[styles.ownedCard, { backgroundColor: colors.surface }]}>
       <View style={[styles.ownedMark, { backgroundColor: colors.accent + "16" }]}>
         <Text style={[styles.ownedAt, { color: colors.accent }]}>@</Text>
       </View>
@@ -290,8 +284,6 @@ function ListHandleSheet({
   visible,
   handles,
   userId,
-  eligible,
-  activeListingCount,
   onClose,
   onDone,
   colors,
@@ -299,38 +291,29 @@ function ListHandleSheet({
   visible: boolean;
   handles: string[];
   userId?: string;
-  eligible: boolean;
-  activeListingCount: number;
   onClose: () => void;
   onDone: () => void;
   colors: any;
 }) {
   const [selectedHandle, setSelectedHandle] = useState("");
   const [price, setPrice] = useState("");
+  const [auction, setAuction] = useState(false);
+  const [duration, setDuration] = useState("168");
   const [busy, setBusy] = useState(false);
-  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
       setSelectedHandle(handles[0] ?? "");
       setPrice("");
+      setAuction(false);
+      setDuration("168");
       setBusy(false);
-      submitLockRef.current = false;
     }
   }, [visible, handles]);
 
   const submit = async () => {
-    if (submitLockRef.current) return;
     if (!userId) {
       showAlert("Sign in required", "Sign in before listing a username.");
-      return;
-    }
-    if (!eligible) {
-      showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to list a username.");
-      return;
-    }
-    if (activeListingCount >= 1) {
-      showAlert("One active listing at a time", "Delist your current username listing before creating another.");
       return;
     }
     const username = selectedHandle.replace(/^@/, "").trim().toLowerCase();
@@ -343,35 +326,23 @@ function ListHandleSheet({
       showAlert("Set a price", "Enter a whole ACoin amount of at least 1.");
       return;
     }
-    if (amount > MAX_LISTING_PRICE) {
-      showAlert("Price limit exceeded", "Username listings can be priced at no more than 1,000 ACoin ($10).");
-      return;
-    }
 
     Keyboard.dismiss();
-    submitLockRef.current = true;
     setBusy(true);
-    try {
-      const { data, error } = await supabase.rpc("create_username_listing", {
-        p_username: username,
-        p_price: amount,
-        p_is_auction: false,
-        p_duration_hours: null,
-      });
-      const listing = Array.isArray(data) ? data[0] : data;
-      if (error || !listing?.id || listing.seller_id !== userId || Number(listing.price) !== amount || listing.is_active !== true) {
-        showAlert("Could not list username", error ? friendlyError(error.message) : "The server did not confirm this listing.");
-        return;
-      }
-      onClose();
-      onDone();
-      showAlert("Listing published", `@${username} is available for ${money(amount)} ACoin. There is no listing fee.`);
-    } catch (error) {
-      showAlert("Could not list username", error instanceof Error ? friendlyError(error.message) : "The listing could not be confirmed.");
-    } finally {
-      submitLockRef.current = false;
-      setBusy(false);
+    const { error } = await supabase.rpc("create_username_listing", {
+      p_username: username,
+      p_price: amount,
+      p_is_auction: auction,
+      p_duration_hours: auction ? Number.parseInt(duration, 10) : null,
+    });
+    setBusy(false);
+    if (error) {
+      showAlert("Could not list username", friendlyError(error.message));
+      return;
     }
+    onClose();
+    onDone();
+    showAlert("Listing published", auction ? `@${username} is live for bids for ${duration} hours.` : `@${username} is now available for ${money(amount)} ACoin.`);
   };
 
   return (
@@ -382,7 +353,7 @@ function ListHandleSheet({
         </View>
         <Text style={[styles.sheetTitle, { color: colors.text }]}>Sell your username</Text>
         <Text style={[styles.sheetCopy, { color: colors.textMuted }]}>
-          Choose a username you own and set a fixed sale price. Listing is free; the maximum sale price is 1,000 ACoin ($10).
+          Choose any username you own, then set a fixed price for a fast transfer or run a timed auction for a handle with real demand.
         </Text>
         <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Username to list</Text>
         <View style={styles.handleOptions}>
@@ -412,10 +383,18 @@ function ListHandleSheet({
             placeholderTextColor={colors.textMuted}
             keyboardType="number-pad"
             returnKeyType="done"
-            maxLength={4}
           />
           <Text style={[styles.suffix, { color: colors.textMuted }]}>ACoin</Text>
         </View>
+        <View style={styles.saleModeRow}>
+          <Pressable onPress={() => setAuction(false)} style={[styles.saleMode, { backgroundColor: !auction ? colors.accent : colors.inputBg }]}><Ionicons name="flash-outline" size={15} color={!auction ? "#fff" : colors.textMuted} /><Text style={[styles.saleModeText, { color: !auction ? "#fff" : colors.textMuted }]}>Buy now</Text></Pressable>
+          <Pressable onPress={() => setAuction(true)} style={[styles.saleMode, { backgroundColor: auction ? Colors.gold : colors.inputBg }]}><Ionicons name="hammer-outline" size={15} color={auction ? "#fff" : colors.textMuted} /><Text style={[styles.saleModeText, { color: auction ? "#fff" : colors.textMuted }]}>Auction</Text></Pressable>
+        </View>
+        {auction ? (
+          <View style={styles.durationRow}>
+            {[48, 72, 168].map((hours) => <Pressable key={hours} onPress={() => setDuration(String(hours))} style={[styles.durationPill, { backgroundColor: duration === String(hours) ? Colors.gold + "22" : colors.inputBg }]}><Text style={[styles.durationText, { color: duration === String(hours) ? Colors.gold : colors.textMuted }]}>{hours === 168 ? "7 days" : `${hours} hours`}</Text></Pressable>)}
+          </View>
+        ) : null}
         <Pressable
           testID="publish-username-listing"
           onPress={() => void submit()}
@@ -451,55 +430,37 @@ function PurchaseSheet({
   colors: any;
 }) {
   const [busy, setBusy] = useState(false);
-  const purchaseLockRef = useRef(false);
   if (!item) return null;
 
   const canAfford = balance >= item.price;
   const buy = async () => {
-    if (purchaseLockRef.current || busy) return;
     if (!userId) {
       showAlert("Sign in required", "Sign in before buying a username.");
       return;
     }
-    if (item.price > MAX_LISTING_PRICE) {
-      showAlert("Listing unavailable", "This username is above the 1,000 ACoin marketplace price limit.");
+    setBusy(true);
+    const currentBalance = await onRefreshBalance();
+    if (currentBalance === null) {
+      setBusy(false);
+      showAlert("Wallet unavailable", "We could not verify your wallet balance. Nothing was charged.");
       return;
     }
-    purchaseLockRef.current = true;
-    setBusy(true);
-    try {
-      const currentBalance = await onRefreshBalance();
-      if (currentBalance === null) {
-        showAlert("Wallet unavailable", "We could not verify your wallet balance. Nothing was charged.");
-        return;
-      }
-      if (currentBalance < item.price) {
-        showAlert("Not enough ACoin", `You need ${money(item.price)} ACoin, but your wallet has ${money(currentBalance)}.`);
-        return;
-      }
-
-      const { data, error } = await supabase.rpc("purchase_username", { p_listing_id: item.id });
-      const purchase = Array.isArray(data) ? data[0] : data;
-      if (error) {
-        onDone();
-        showAlert("Purchase not completed", friendlyError(error.message));
-        return;
-      }
-      if (!purchase?.id || purchase.id !== item.id || purchase.is_active !== false) {
-        onDone();
-        showAlert("Purchase status not confirmed", "Refresh My Usernames and AfuPay before trying again, to avoid submitting the purchase twice.");
-        return;
-      }
-      onClose();
-      onDone();
-      showAlert("Username secured", `@${item.username} now belongs to your account.`);
-    } catch {
-      onDone();
-      showAlert("Purchase status not confirmed", "Check My Usernames and AfuPay before trying again, to avoid submitting the purchase twice.");
-    } finally {
-      purchaseLockRef.current = false;
+    if (currentBalance < item.price) {
       setBusy(false);
+      showAlert("Not enough ACoin", `You need ${money(item.price)} ACoin, but your wallet has ${money(currentBalance)}.`);
+      return;
     }
+
+    const { error } = await supabase.rpc("purchase_username", { p_listing_id: item.id });
+    setBusy(false);
+    if (error) {
+      showAlert("Purchase not completed", friendlyError(error.message));
+      onDone();
+      return;
+    }
+    onClose();
+    onDone();
+    showAlert("Username secured", `@${item.username} now belongs to your account.`);
   };
 
   return (
@@ -556,7 +517,7 @@ function PurchaseSheet({
 export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" | "owned" | "mine" }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, profile, subscription, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [listings, setListings] = useState<Listing[]>([]);
   const [featured, setFeatured] = useState<FeaturedPlacement[]>([]);
   const [owned, setOwned] = useState<OwnedUsername[]>([]);
@@ -609,20 +570,13 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
       const [listingResult, ownedResult, featuredResult] = await Promise.all([
         query,
         user?.id
-          ? supabase.from("owned_usernames").select("handle, owner_id").eq("owner_id", user.id).not("acquired_at", "is", null).order("handle")
+          ? supabase.from("owned_usernames").select("handle, owner_id").eq("owner_id", user.id).order("handle")
           : Promise.resolve({ data: [], error: null }),
         supabase.from("username_featured_listings").select("id, listing_id, amount, ends_at").gt("ends_at", new Date().toISOString()).order("ends_at", { ascending: false }).limit(12),
       ]);
       if (listingResult.error) throw listingResult.error;
 
       const rawListings = (listingResult.data || []) as Array<Omit<Listing, "seller">>;
-      const overLimitOwnListings = rawListings.filter((item) =>
-        item.seller_id === user?.id &&
-        Math.max(Number(item.price) || 0, Number(item.reserve_price) || 0, Number(item.current_bid) || 0) > MAX_LISTING_PRICE
-      );
-      await Promise.allSettled(overLimitOwnListings.map((item) =>
-        supabase.rpc("delist_username_listing", { p_listing_id: item.id })
-      ));
       const sellerIds = [...new Set(rawListings.map((item) => item.seller_id).filter(Boolean))];
       let sellers: Seller[] = [];
       if (sellerIds.length) {
@@ -672,8 +626,6 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
   const visibleListings = useMemo(() => {
     return listings
       .filter((item) => {
-        const policyBlocked = Math.max(Number(item.price) || 0, Number(item.reserve_price) || 0, Number(item.current_bid) || 0) > MAX_LISTING_PRICE;
-        if (policyBlocked && (tab !== "mine" || item.seller_id !== user?.id)) return false;
         if (tab === "mine") return item.seller_id === user?.id;
         if (tab === "market") return item.seller_id !== user?.id;
         return false;
@@ -685,9 +637,8 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
         return aAmount - bAmount || a.created_at.localeCompare(b.created_at);
       });
   }, [listings, tab, user?.id]);
-  const auctionCount = listings.filter((item) => item.is_auction && Math.max(item.price, item.reserve_price || 0, item.current_bid || 0) <= MAX_LISTING_PRICE).length;
+  const auctionCount = listings.filter((item) => item.is_auction).length;
   const sellerListingCount = listings.filter((item) => item.seller_id === user?.id).length;
-  const canSellUsername = isVerifiedCreator(profile?.is_verified, subscription);
   const listableHandles = useMemo(() => {
     const candidates = [profile?.handle ?? "", ...owned.map((item) => item.handle)];
     return [...new Set(candidates
@@ -715,7 +666,9 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
+        <TouchableOpacity onPress={() => safeRouter.back("/apps")} hitSlop={10} style={{ width: 34, height: 40, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel="Go back">
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
         <View style={styles.headerTitle}>
           <Text style={[styles.eyebrow, { color: colors.accent }]}>USERNAME MARKET</Text>
           <Text style={[styles.title, { color: colors.text }]}>Find a name worth keeping.</Text>
@@ -812,7 +765,6 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
             <ListingCard
               item={item}
               own={ownListingIds.has(item.id)}
-              policyBlocked={Math.max(item.price, item.reserve_price || 0, item.current_bid || 0) > MAX_LISTING_PRICE}
               colors={colors}
               onPress={() => {
                  if (ownListingIds.has(item.id)) {
@@ -831,20 +783,7 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
         testID="open-list-username"
         accessibilityRole="button"
         accessibilityLabel="List your username"
-        onPress={() => {
-          if (!user) {
-            showAlert("Sign in required", "Sign in before listing a username.");
-          } else if (!canSellUsername) {
-            showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to list a username.", [
-              { text: "Not now", style: "cancel" },
-              { text: "View plans", onPress: () => safeRouter.push("/premium") },
-            ]);
-          } else if (sellerListingCount >= 1) {
-            showAlert("One active listing at a time", "Delist your current username listing before creating another.");
-          } else {
-            setListVisible(true);
-          }
-        }}
+        onPress={() => (user ? setListVisible(true) : showAlert("Sign in required", "Sign in before listing a username."))}
         style={({ pressed }) => [styles.fab, { backgroundColor: colors.accent, bottom: insets.bottom + 20, width: 136, height: 52, borderRadius: 26, flexDirection: "row", gap: 7, opacity: pressed ? 0.8 : 1 }]}
       >
         <Ionicons name="add" size={27} color="#fff" />
@@ -861,8 +800,6 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
         onDone={() => {
           setSelected(null);
           void load(true);
-          void refreshBalance();
-          void refreshProfile?.();
         }}
         onRefreshBalance={refreshBalance}
         colors={colors}
@@ -871,8 +808,6 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
         visible={listVisible}
         handles={listableHandles}
         userId={user?.id}
-        eligible={canSellUsername}
-        activeListingCount={sellerListingCount}
         onClose={() => setListVisible(false)}
         onDone={() => void load(true)}
         colors={colors}

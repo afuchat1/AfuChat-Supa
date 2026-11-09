@@ -23,31 +23,31 @@ import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
-  Linking,
   PanResponder,
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
   Modal,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
-import { supabase } from "@/lib/supabase";
-import { listMusicTracks, purchaseMusicTrack } from "@/lib/afuMusic";
+import MusicPickerSheet from "@/components/music/MusicPickerSheet";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
 import type { AfuMusicTrack } from "@/modules/afumusic";
+import { useAfuMusicPlayer } from "@/modules/afumusic/MusicPlayerContext";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
@@ -331,16 +331,12 @@ function CameraPhase({
   onClose: () => void;
   soundName?: string;
 }) {
-  const { colors, accent } = useTheme();
+  const { accent } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: W, height: H } = useWindowDimensions();
 
   const [CameraView, setCameraView] = useState<any>(null);
   const [camAvailable, setCamAvailable] = useState(true);
-  const [cameraLoading, setCameraLoading] = useState(true);
-  const [cameraPermission, setCameraPermission] = useState<any>(null);
-  const [permissionBusy, setPermissionBusy] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
   const [facing, setFacing] = useState<"front" | "back">("back");
   const [flash, setFlash] = useState<"off" | "on" | "torch">("off");
   const [isRecording, setIsRecording] = useState(false);
@@ -358,8 +354,6 @@ function CameraPhase({
   const [beautyMode, setBeautyMode] = useState(false);
 
   const cameraRef = useRef<any>(null);
-  const cameraModuleRef = useRef<any>(null);
-  const recordingStartRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedRef = useRef(0);
@@ -369,80 +363,24 @@ function CameraPhase({
 
   useEffect(() => {
     mounted.current = true;
-    let active = true;
-    const loadCamera = async () => {
+    import("expo-camera").then(async (m) => {
+      setCameraView(() => m.CameraView ?? (m as any).Camera ?? null);
+      // Pre-request permissions on mount so first record tap is instant
       try {
-        const m = await import("expo-camera");
-        if (!active) return;
-        const view = m.CameraView ?? (m as any).Camera ?? null;
-        cameraModuleRef.current = m;
-        setCameraView(() => view);
-        setCamAvailable(!!view);
-        if (!view) return;
-        const permission = await m.Camera.getCameraPermissionsAsync();
-        if (active) setCameraPermission(permission);
-      } catch {
-        if (active) setCamAvailable(false);
-      } finally {
-        if (active) setCameraLoading(false);
-      }
-    };
-    void loadCamera();
+        const cam = m.Camera ?? m.CameraView;
+        if (cam?.requestCameraPermissionsAsync) {
+          await cam.requestCameraPermissionsAsync();
+          await cam.requestMicrophonePermissionsAsync?.();
+        }
+      } catch {}
+    }).catch(() => setCamAvailable(false));
     return () => {
-      active = false;
       mounted.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
     };
   }, []);
-
-  async function requestCameraAccess() {
-    const camera = cameraModuleRef.current?.Camera;
-    if (!camera) return;
-    setPermissionBusy(true);
-    try {
-      const current = await camera.getCameraPermissionsAsync();
-      const next = current.granted ? current : await camera.requestCameraPermissionsAsync();
-      setCameraPermission(next);
-      if (!next.granted && next.canAskAgain === false) {
-        showAlert("Camera access is blocked", "Enable camera access in AfuChat settings to record a video.", [
-          { text: "Not now", style: "cancel" },
-          { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
-        ]);
-      }
-    } catch (error: any) {
-      showAlert("Could not access the camera", error?.message || "Please try again.");
-    } finally {
-      setPermissionBusy(false);
-    }
-  }
-
-  async function ensureMicrophoneAccess() {
-    const camera = cameraModuleRef.current?.Camera;
-    if (!camera) {
-      showAlert("Microphone unavailable", "Close and reopen the video creator, then try again.");
-      return false;
-    }
-    const current = await camera.getMicrophonePermissionsAsync();
-    const next = current.granted ? current : await camera.requestMicrophonePermissionsAsync();
-    if (next.granted) return true;
-
-    const buttons = next.canAskAgain === false
-      ? [
-          { text: "Not now", style: "cancel" as const },
-          { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
-        ]
-      : undefined;
-    showAlert(
-      "Microphone access needed",
-      next.canAskAgain === false
-        ? "Enable microphone access in AfuChat settings to record video with sound."
-        : "Allow microphone access to record video with sound.",
-      buttons,
-    );
-    return false;
-  }
 
   function startCountdown(cb: () => void) {
     setCountdown(3);
@@ -461,31 +399,21 @@ function CameraPhase({
     }, 1000);
   }
 
-  async function doRecord(holdToRecord = false) {
-    if (!cameraRef.current || isRecording || recordingStartRef.current) return;
-    recordingStartRef.current = true;
+  async function doRecord() {
+    if (!cameraRef.current || isRecording) return;
+    // Permissions are pre-requested on mount — no delay here
+
+    setIsRecording(true);
+    setElapsed(0);
+    elapsedRef.current = 0;
+    void Haptics.impactAsync("medium");
+    timerRef.current = setInterval(() => {
+      elapsedRef.current += 1;
+      if (mounted.current) setElapsed(elapsedRef.current);
+      if (elapsedRef.current >= maxDur) stopRecord();
+    }, 1000);
+
     try {
-      if (!cameraPermission?.granted) {
-        await requestCameraAccess();
-        return;
-      }
-      if (!cameraReady) {
-        showAlert("Camera starting", "Wait for the camera preview, then try recording again.");
-        return;
-      }
-      if (!(await ensureMicrophoneAccess())) return;
-      if (holdToRecord && !holdActiveRef.current) return;
-
-      setIsRecording(true);
-      setElapsed(0);
-      elapsedRef.current = 0;
-      void Haptics.impactAsync("medium");
-      timerRef.current = setInterval(() => {
-        elapsedRef.current += 1;
-        if (mounted.current) setElapsed(elapsedRef.current);
-        if (elapsedRef.current >= maxDur) stopRecord();
-      }, 1000);
-
       const result = await cameraRef.current.recordAsync({
         maxDuration: maxDur,
         quality: getCameraRecordingQuality(),
@@ -493,13 +421,10 @@ function CameraPhase({
       if (result?.uri && mounted.current) {
         onCapture(result.uri, elapsedRef.current || 10, speed);
       }
-    } catch (error: any) {
-      showAlert("Could not start recording", error?.message || "Check camera and microphone access, then try again.");
-    } finally {
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-      if (mounted.current) setIsRecording(false);
-      recordingStartRef.current = false;
-    }
+    } catch {}
+
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (mounted.current) setIsRecording(false);
   }
 
   function stopRecord() {
@@ -508,26 +433,10 @@ function CameraPhase({
     if (mounted.current) setIsRecording(false);
   }
 
-  async function handleRecordPress() {
+  function handleRecordPress() {
     if (isRecording) { stopRecord(); return; }
-    if (countdown !== null || recordingStartRef.current) return;
-    recordingStartRef.current = true;
-    try {
-      if (!cameraPermission?.granted) {
-        await requestCameraAccess();
-        return;
-      }
-      if (!cameraReady) {
-        showAlert("Camera starting", "Wait for the camera preview, then try recording again.");
-        return;
-      }
-      if (!(await ensureMicrophoneAccess())) return;
-      startCountdown(() => { void doRecord(); });
-    } catch (error: any) {
-      showAlert("Could not prepare recording", error?.message || "Check camera and microphone access, then try again.");
-    } finally {
-      recordingStartRef.current = false;
-    }
+    if (countdown !== null) return;
+    startCountdown(() => doRecord());
   }
 
   // Hold-to-record: press and hold = start recording immediately (no countdown)
@@ -537,7 +446,7 @@ function CameraPhase({
     holdTimerRef.current = setTimeout(() => {
       holdActiveRef.current = true;
       void Haptics.impactAsync("heavy");
-      doRecord(true);
+      doRecord();
     }, 250);
   }
 
@@ -546,8 +455,8 @@ function CameraPhase({
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
-    if (holdActiveRef.current) {
-      if (isRecording) stopRecord();
+    if (holdActiveRef.current && isRecording) {
+      stopRecord();
       holdActiveRef.current = false;
     }
   }
@@ -557,49 +466,20 @@ function CameraPhase({
     : null;
 
   return (
-    <View style={[cs.root, { width: W, height: H, backgroundColor: colors.background }]}>
+    <View style={[cs.root, { width: W, height: H }]}>
       <StatusBar hidden />
 
       {/* ── Camera view ── */}
-      {cameraLoading ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-          <ActivityIndicator color={colors.accent} size="large" />
-          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: "Inter_400Regular" }}>Checking camera access…</Text>
-        </View>
-      ) : !camAvailable || !CameraView ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-          <Ionicons name="videocam-off" size={48} color={colors.textMuted} />
-          <Text style={{ color: colors.textMuted, marginTop: 12, fontFamily: "Inter_400Regular" }}>Camera unavailable</Text>
+      {!camAvailable || !CameraView ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
+          <Ionicons name="videocam-off" size={48} color="#555" />
+          <Text style={{ color: "#555", marginTop: 12, fontFamily: "Inter_400Regular" }}>Camera unavailable</Text>
           <TouchableOpacity
             onPress={onPickFromGallery}
             style={[cs.galleryFallbackBtn, { backgroundColor: accent }]}
           >
             <Ionicons name="images" size={18} color="#fff" />
             <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", marginLeft: 8 }}>Pick from Gallery</Text>
-          </TouchableOpacity>
-        </View>
-      ) : !cameraPermission?.granted ? (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }]}>
-          <Ionicons name="camera" size={48} color={colors.textMuted} />
-          <Text style={{ color: colors.text, marginTop: 14, textAlign: "center", fontFamily: "Inter_500Medium" }}>
-            Allow camera access to record a short video.
-          </Text>
-          <TouchableOpacity
-            disabled={permissionBusy}
-            onPress={() => cameraPermission?.canAskAgain === false
-              ? void Linking.openSettings().catch(() => {})
-              : void requestCameraAccess()}
-            style={[cs.galleryFallbackBtn, { backgroundColor: accent, marginTop: 18, opacity: permissionBusy ? 0.65 : 1 }]}
-          >
-            {permissionBusy
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Ionicons name="camera" size={18} color="#fff" />}
-            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", marginLeft: 8 }}>
-              {cameraPermission?.canAskAgain === false ? "Open Settings" : "Allow Camera"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onPickFromGallery} style={{ padding: 14 }}>
-            <Text style={{ color: "#ddd", fontFamily: "Inter_500Medium" }}>Choose a video instead</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -610,7 +490,6 @@ function CameraPhase({
           mode="video"
           flash={flash}
           zoom={zoom}
-          onCameraReady={() => setCameraReady(true)}
         >
           {/* Filter overlay */}
           {filterOverlay && (
@@ -821,7 +700,7 @@ function CameraPhase({
               >
                 <View style={[
                   cs.frameCircle,
-                  fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: colors.backgroundSecondary, borderWidth: 1.5, borderColor: colors.border },
+                  fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: "#333", borderWidth: 1.5, borderColor: "#555" },
                   activeFrame.id === fr.id && { borderWidth: 2.5, borderColor: "#fff" },
                 ]}>
                   {fr.emoji ? (
@@ -931,6 +810,7 @@ function EditPhase({
   videoUri, duration, fileSize, videoWidth, videoHeight, videoMime,
   onBack, onPost,
   soundName, soundAlbumArt,
+  musicTrack, onOpenMusicPicker, onClearMusic,
   capturedSpeed,
 }: {
   videoUri: string; duration: number; fileSize: number;
@@ -939,9 +819,13 @@ function EditPhase({
   onBack: () => void;
   onPost: (payload: PostPayload) => void;
   soundName?: string; soundAlbumArt?: string;
+  musicTrack: AfuMusicTrack | null;
+  onOpenMusicPicker: () => void;
+  onClearMusic: () => void;
   capturedSpeed?: number;
 }) {
-  const { colors, accent, isDark } = useTheme();
+  const { colors, accent } = useTheme();
+  const musicPlayer = useAfuMusicPlayer();
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
 
@@ -956,11 +840,6 @@ function EditPhase({
   const [thumbGen, setThumbGen] = useState(false);
   const [caption, setCaption] = useState("");
   const [soundDismissed, setSoundDismissed] = useState(false);
-  const [selectedMusic, setSelectedMusic] = useState<AfuMusicTrack | null>(null);
-  const [musicTracks, setMusicTracks] = useState<AfuMusicTrack[]>([]);
-  const [musicLoading, setMusicLoading] = useState(false);
-  const [showMusicPicker, setShowMusicPicker] = useState(false);
-  const [purchasingTrackId, setPurchasingTrackId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<TextOverlay | null>(null);
   const [editTextValue, setEditTextValue] = useState("");
   const [editTextColor, setEditTextColor] = useState("#FFFFFF");
@@ -976,6 +855,28 @@ function EditPhase({
   const [audience, setAudience] = useState<"public" | "followers" | "private">("public");
   const [step, setStep] = useState<1 | 2>(1);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [musicAudioMode, setMusicAudioMode] = useState<"original" | "mix" | "replace">("mix");
+  const [musicVolume, setMusicVolume] = useState(0.75);
+  const [originalAudioVolume, setOriginalAudioVolume] = useState(0.75);
+
+  useEffect(() => {
+    if (!musicTrack || musicAudioMode === "original") {
+      if (musicTrack) musicPlayer.stopShot(musicTrack.id);
+      return;
+    }
+    musicPlayer.play(musicTrack, [musicTrack], "Video soundtrack preview", {
+      source: "shot",
+      showPlayer: false,
+      volume: musicVolume,
+    }).catch((error) => showAlert("Music preview unavailable", error));
+    return () => musicPlayer.stopShot(musicTrack.id);
+  }, [musicTrack?.id, musicAudioMode, musicPlayer.play, musicPlayer.stopShot]);
+
+  useEffect(() => {
+    if (musicTrack && musicAudioMode !== "original") {
+      musicPlayer.setVolume(musicVolume);
+    }
+  }, [musicAudioMode, musicPlayer.setVolume, musicTrack?.id, musicVolume]);
 
   // Thumbnail generation
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1043,42 +944,6 @@ function EditPhase({
     },
   })).current;
 
-  async function openMusicPicker() {
-    setShowMusicPicker(true);
-    setMusicLoading(true);
-    try {
-      setMusicTracks(await listMusicTracks());
-    } catch (error: any) {
-      showAlert("Music unavailable", error?.message || "Could not load AfuMusic tracks.");
-    } finally {
-      setMusicLoading(false);
-    }
-  }
-
-  async function chooseMusic(track: AfuMusicTrack) {
-    if (track.price > 0 && !track.isOwned) {
-      setPurchasingTrackId(track.id);
-      try {
-        await purchaseMusicTrack(track.id);
-        const refreshed = await listMusicTracks();
-        setMusicTracks(refreshed);
-        const purchased = refreshed.find((item) => item.id === track.id);
-        if (!purchased?.isOwned) throw new Error("The purchase was not confirmed. Try again.");
-        setSelectedMusic(purchased);
-        setSoundDismissed(false);
-        setShowMusicPicker(false);
-      } catch (error: any) {
-        showAlert("Could not unlock track", error?.message || "Please try again.");
-      } finally {
-        setPurchasingTrackId(null);
-      }
-      return;
-    }
-    setSelectedMusic(track);
-    setSoundDismissed(false);
-    setShowMusicPicker(false);
-  }
-
   function handlePost() {
     onPost({
       videoUri, videoMime, duration: trimEnd - trimStart,
@@ -1090,8 +955,11 @@ function EditPhase({
       textOverlays: texts,
       stickerOverlays: stickers,
       trimStart, trimEnd,
-      soundName: soundDismissed ? null : (selectedMusic?.title || soundName),
-      musicTrackId: soundDismissed ? null : (selectedMusic?.id || null),
+      soundName: soundDismissed ? null : soundName,
+      musicTrackId: musicTrack?.id ?? null,
+      musicAudioMode,
+      musicVolume,
+      originalAudioVolume,
       audience,
     });
   }
@@ -1109,20 +977,19 @@ function EditPhase({
   ];
 
   return (
-    <KeyboardAvoidingView style={[es.root, { backgroundColor: colors.background }]} behavior="padding">
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <KeyboardAvoidingView style={[es.root, { backgroundColor: "#000" }]} behavior="padding">
+      <StatusBar barStyle="light-content" />
 
       {/* ── Top bar ── */}
       <View style={[es.topBar, { paddingTop: insets.top + 6 }]}>
-        <GlassBackButton
-          onPress={step === 1 ? onBack : () => setStep(1)}
-          style={es.backBtn}
-        />
+        <TouchableOpacity onPress={step === 1 ? onBack : () => setStep(1)} style={es.backBtn} hitSlop={10}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
         <View style={{ flex: 1, alignItems: "center" }}>
-          <Text style={[es.topTitle, { color: colors.text }]}>{step === 1 ? "Enhance" : "Details"}</Text>
+          <Text style={es.topTitle}>{step === 1 ? "Enhance" : "Details"}</Text>
           <View style={{ flexDirection: "row", gap: 6, marginTop: 3 }}>
             <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: accent }} />
-            <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: step === 2 ? accent : colors.border }} />
+            <View style={{ width: 20, height: 3, borderRadius: 2, backgroundColor: step === 2 ? accent : "#3a3a3a" }} />
           </View>
         </View>
         {step === 1 ? (
@@ -1156,7 +1023,8 @@ function EditPhase({
             contentFit="cover"
             shouldPlay
             isLooping
-            isMuted={false}
+            isMuted={!!musicTrack && musicAudioMode === "replace"}
+            volume={musicTrack && musicAudioMode === "mix" ? originalAudioVolume : 1}
             playbackRate={playbackSpeed}
           />
           {filterOverlay && (
@@ -1247,20 +1115,8 @@ function EditPhase({
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface }}>
-          <Ionicons name="musical-notes" size={19} color={accent} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }} numberOfLines={1}>{selectedMusic?.title || (soundDismissed ? "No soundtrack" : soundName || "Add an AfuMusic soundtrack")}</Text>
-            <Text style={{ color: "#777", fontFamily: "Inter_400Regular", fontSize: 11 }}>{selectedMusic ? ("AfuMusic · " + selectedMusic.artist) : "Choose a free track or unlock a paid track"}</Text>
-          </View>
-          <TouchableOpacity onPress={openMusicPicker} style={{ paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: accent }}>
-            <Text style={{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{selectedMusic || soundName ? "Change" : "Choose music"}</Text>
-          </TouchableOpacity>
-          {(selectedMusic || soundName) && !soundDismissed ? <TouchableOpacity onPress={() => { setSoundDismissed(true); setSelectedMusic(null); }} hitSlop={8}><Ionicons name="close" size={18} color="#777" /></TouchableOpacity> : null}
-        </View>
-
         {/* ── Edit tabs ── */}
-        <View style={[es.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+        <View style={[es.tabBar, { backgroundColor: "#111", borderBottomColor: "#222" }]}>
           {TABS.map((t) => (
             <TouchableOpacity
               key={t.id}
@@ -1275,7 +1131,7 @@ function EditPhase({
         </View>
 
         {/* ── Tab panels ── */}
-        <View style={[es.panel, { backgroundColor: colors.surface }]}>
+        <View style={[es.panel, { backgroundColor: "#111" }]}>
 
           {/* FILTERS */}
           {tab === "filters" && (
@@ -1313,7 +1169,7 @@ function EditPhase({
                   >
                     <View style={[
                       es.frameThumb,
-                      fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: colors.backgroundSecondary },
+                      fr.bg ? { backgroundColor: fr.bg } : { backgroundColor: "#333" },
                       frame.id === fr.id && { borderWidth: 2.5, borderColor: accent },
                     ]}>
                       {fr.emoji
@@ -1348,7 +1204,7 @@ function EditPhase({
               {texts.map((t) => (
                 <View key={t.id} style={es.textItem}>
                   <TouchableOpacity
-                    style={[es.textItemPreview, t.hasBg && { backgroundColor: colors.backgroundSecondary }]}
+                    style={[es.textItemPreview, t.hasBg && { backgroundColor: "#333" }]}
                     onPress={() => { setEditingText(t); setEditTextValue(t.text); setEditTextColor(t.color); setEditTextBold(t.bold); setEditTextBg(t.hasBg); }}
                   >
                     <Text style={{ color: t.color, fontSize: 14, fontFamily: t.bold ? "Inter_700Bold" : "Inter_400Regular" }} numberOfLines={1}>{t.text}</Text>
@@ -1445,7 +1301,7 @@ function EditPhase({
 
               {/* Thumbnail scrubber */}
               <View style={[es.trimThumbRow]}>
-                <View style={[es.trimThumbBox, { backgroundColor: colors.backgroundSecondary }]}>
+                <View style={[es.trimThumbBox, { backgroundColor: "#222" }]}>
                   {thumbnailUri && !thumbGen ? (
                     <ExpoImage source={{ uri: thumbnailUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
                   ) : (
@@ -1475,7 +1331,7 @@ function EditPhase({
                 </View>
 
                 <View
-                  style={[es.trimTrack, { backgroundColor: colors.backgroundSecondary }]}
+                  style={[es.trimTrack, { backgroundColor: "#333" }]}
                   onLayout={(e) => { trimTrackW.current = e.nativeEvent.layout.width; }}
                 >
                   {/* Selected range */}
@@ -1568,7 +1424,7 @@ function EditPhase({
         <View style={{ gap: 0, paddingTop: 8 }}>
 
           {/* ── Caption — primary field ── */}
-          <View style={[es.captionWrap, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 4 }]}>
+          <View style={[es.captionWrap, { backgroundColor: "#1A1A1A", borderColor: "#333", marginBottom: 4 }]}>
             <Ionicons name="pencil" size={17} color="#666" style={{ marginTop: 3 }} />
             <TextInput
               style={[es.captionInput, { color: "#fff" }]}
@@ -1638,10 +1494,10 @@ function EditPhase({
                   {audience === "public" ? "Everyone" : audience === "followers" ? "Followers" : "Only Me"}
                 </Text>
               </View>
-              {soundName && !soundDismissed && (
+              {(musicTrack || (soundName && !soundDismissed)) && (
                 <View style={[es.advPill, { backgroundColor: accent + "22" }]}>
                   <Ionicons name="musical-notes" size={11} color={accent} />
-                  <Text style={[es.advPillText, { color: accent }]} numberOfLines={1}>Sound</Text>
+                  <Text style={[es.advPillText, { color: accent }]} numberOfLines={1}>{musicTrack ? "Music" : "Sound"}</Text>
                 </View>
               )}
             </View>
@@ -1673,6 +1529,86 @@ function EditPhase({
                 </View>
               </View>
 
+              {/* Licensed soundtrack and explicit source-mix controls */}
+              <View style={{ gap: 9, marginTop: 16 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={es.optionLabel}>Music and original audio</Text>
+                  {musicTrack ? (
+                    <TouchableOpacity onPress={onClearMusic} hitSlop={8} accessibilityLabel="Remove selected music">
+                      <Ionicons name="close-circle" size={19} color="#888" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                {musicTrack ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, backgroundColor: "#1A1A1A" }}>
+                    <AfuMusicArtwork
+                      uri={musicTrack.coverArtUrl}
+                      size={38}
+                      radius={10}
+                      iconColor={accent}
+                      backgroundColor="#292929"
+                      accessibilityLabel={`${musicTrack.title} cover art`}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }} numberOfLines={1}>{musicTrack.title}</Text>
+                      <Text style={{ color: "#999", fontFamily: "Inter_400Regular", fontSize: 10, marginTop: 3 }} numberOfLines={1}>{musicTrack.artist} · Cleared for AfuChat videos</Text>
+                    </View>
+                    <TouchableOpacity onPress={onOpenMusicPicker} style={{ paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: accent + "22" }}>
+                      <Text style={{ color: accent, fontFamily: "Inter_700Bold", fontSize: 10 }}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity onPress={onOpenMusicPicker} style={{ height: 43, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, borderWidth: 1, borderColor: "#333", backgroundColor: "#1A1A1A" }}>
+                    <Ionicons name="musical-notes" size={16} color={accent} />
+                    <Text style={{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Browse licensed AfuMusic</Text>
+                  </TouchableOpacity>
+                )}
+                {musicTrack ? (
+                  <>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {([
+                        ["original", "Original"],
+                        ["mix", "Mix"],
+                        ["replace", "Replace"],
+                      ] as const).map(([mode, label]) => (
+                        <TouchableOpacity
+                          key={mode}
+                          onPress={() => setMusicAudioMode(mode)}
+                          style={{ flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 9, backgroundColor: musicAudioMode === mode ? accent + "22" : "#1A1A1A", borderWidth: 1, borderColor: musicAudioMode === mode ? accent : "#292929" }}
+                        >
+                          <Text style={{ color: musicAudioMode === mode ? accent : "#888", fontFamily: "Inter_600SemiBold", fontSize: 10 }}>{label}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {musicAudioMode !== "original" ? (
+                      [
+                        { label: "Music volume", value: musicVolume, change: setMusicVolume },
+                        ...(musicAudioMode === "mix" ? [{ label: "Original audio", value: originalAudioVolume, change: setOriginalAudioVolume }] : []),
+                      ].map((control) => (
+                        <View key={control.label} style={{ gap: 5 }}>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ color: "#999", fontFamily: "Inter_500Medium", fontSize: 10 }}>{control.label}</Text>
+                            <Text style={{ color: "#ddd", fontFamily: "Inter_600SemiBold", fontSize: 10 }}>{Math.round(control.value * 100)}%</Text>
+                          </View>
+                          <View style={{ flexDirection: "row", gap: 5 }}>
+                            {[0, 0.25, 0.5, 0.75, 1].map((value) => (
+                              <TouchableOpacity
+                                key={value}
+                                onPress={() => control.change(value)}
+                                accessibilityLabel={`${control.label} ${Math.round(value * 100)} percent`}
+                                style={{ flex: 1, height: 7, borderRadius: 4, backgroundColor: control.value >= value ? accent : "#333" }}
+                              />
+                            ))}
+                          </View>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={{ color: "#888", fontFamily: "Inter_400Regular", fontSize: 10 }}>The original video sound will be used without the selected music.</Text>
+                    )}
+                  </>
+                ) : null}
+              </View>
+
               {/* Cover thumbnail */}
               <View style={{ gap: 8, marginTop: 14 }}>
                 <Text style={es.optionLabel}>Cover frame</Text>
@@ -1680,11 +1616,11 @@ function EditPhase({
                   {thumbnailUri ? (
                     <ExpoImage
                       source={{ uri: thumbnailUri }}
-                      style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: colors.backgroundSecondary }}
+                      style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: "#222" }}
                       contentFit="cover"
                     />
                   ) : (
-                    <View style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }}>
+                    <View style={{ width: 72, height: 52, borderRadius: 6, backgroundColor: "#222", alignItems: "center", justifyContent: "center" }}>
                       <Ionicons name="image" size={20} color="#444" />
                     </View>
                   )}
@@ -1703,7 +1639,7 @@ function EditPhase({
 
               {/* Sound banner */}
               {soundName && !soundDismissed && (
-                <View style={[es.soundBanner, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, marginTop: 14 }]}>
+                <View style={[es.soundBanner, { backgroundColor: "#222", borderColor: "#333", marginTop: 14 }]}>
                   {soundAlbumArt
                     ? <ExpoImage source={{ uri: soundAlbumArt }} style={es.soundArt} contentFit="cover" />
                     : <View style={[es.soundArt, { backgroundColor: accent + "22", alignItems: "center", justifyContent: "center" }]}>
@@ -1735,35 +1671,11 @@ function EditPhase({
         </View>
         )}
       </ScrollView>
-      <Modal visible={showMusicPicker} transparent animationType="slide" onRequestClose={() => setShowMusicPicker(false)}>
-        <Pressable onPress={() => setShowMusicPicker(false)} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.65)" }}>
-          <Pressable onPress={() => {}} style={{ maxHeight: "72%", backgroundColor: colors.surface, paddingTop: 18, paddingBottom: Math.max(insets.bottom, 16) + 10 }}>
-            <View style={{ paddingHorizontal: 18, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: "#fff", fontFamily: "Inter_700Bold", fontSize: 18 }}>AfuMusic soundtrack</Text>
-              <TouchableOpacity onPress={() => setShowMusicPicker(false)} hitSlop={10}><Ionicons name="close" size={22} color="#aaa" /></TouchableOpacity>
-            </View>
-            {musicLoading ? <ActivityIndicator color={accent} style={{ marginVertical: 24 }} /> : musicTracks.length === 0 ? <Text style={{ color: "#888", padding: 20 }}>No published tracks are available yet.</Text> : (
-              <ScrollView keyboardShouldPersistTaps="handled">
-                {musicTracks.map((track) => {
-                  const needsPurchase = track.price > 0 && !track.isOwned;
-                  const busy = purchasingTrackId === track.id;
-                  return <TouchableOpacity key={track.id} disabled={!!purchasingTrackId} onPress={() => chooseMusic(track)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingVertical: 13, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#2a2a2a" }}>
-                    <View style={{ width: 42, height: 42, backgroundColor: track.coverColor || "#292343", alignItems: "center", justifyContent: "center" }}><Ionicons name="musical-notes" size={18} color={track.accentColor || accent} /></View>
-                    <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 13 }}>{track.title}</Text><Text numberOfLines={1} style={{ color: "#888", fontFamily: "Inter_400Regular", fontSize: 11, marginTop: 3 }}>{track.artist + " · " + (track.price > 0 ? (track.price + " ACoin") : "Free")}</Text></View>
-                    {busy ? <ActivityIndicator color={accent} /> : <Text style={{ color: accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>{needsPurchase ? "Unlock" : selectedMusic?.id === track.id ? "Selected" : "Use track"}</Text>}
-                  </TouchableOpacity>;
-                })}
-              </ScrollView>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 function TrimScrubber({ value, max, accent, onChange }: { value: number; max: number; accent: string; onChange: (t: number) => void }) {
-  const { colors } = useTheme();
   const trackW = useRef(1);
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -1774,7 +1686,7 @@ function TrimScrubber({ value, max, accent, onChange }: { value: number; max: nu
   const pct = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return (
     <View style={ss.outer} onLayout={(e) => { trackW.current = e.nativeEvent.layout.width || 1; }} {...pan.panHandlers}>
-      <View style={[ss.track, { backgroundColor: colors.backgroundSecondary }]}>
+      <View style={[ss.track, { backgroundColor: "#333" }]}>
         <View style={[ss.fill, { width: `${pct * 100}%` as any, backgroundColor: accent }]} />
       </View>
       <View style={[ss.thumb, { left: `${pct * 100}%` as any, backgroundColor: accent }]} />
@@ -1794,7 +1706,6 @@ function AdjustSlider({ label, value, min, max, accent, onChange, leftLabel, rig
   onChange: (v: number) => void;
   leftLabel?: string; rightLabel?: string;
 }) {
-  const { colors } = useTheme();
   const trackW = useRef(1);
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -1820,7 +1731,7 @@ function AdjustSlider({ label, value, min, max, accent, onChange, leftLabel, rig
         onLayout={(e) => { trackW.current = e.nativeEvent.layout.width || 1; }}
         {...pan.panHandlers}
       >
-        <View style={[ss.track, { backgroundColor: colors.backgroundSecondary }]}>
+        <View style={[ss.track, { backgroundColor: "#333" }]}>
           <View style={[ss.fill, { width: `${pct * 100}%` as any, backgroundColor: accent }]} />
         </View>
         <View style={[ss.thumb, { left: `${pct * 100}%` as any, backgroundColor: accent }]} />
@@ -1847,7 +1758,10 @@ type PostPayload = {
   textOverlays: TextOverlay[]; stickerOverlays: StickerOverlay[];
   trimStart: number; trimEnd: number;
   soundName?: string | null;
-  musicTrackId?: string | null;
+  musicTrackId: string | null;
+  musicAudioMode: "original" | "mix" | "replace";
+  musicVolume: number;
+  originalAudioVolume: number;
   audience: "public" | "followers" | "private";
 };
 
@@ -1858,6 +1772,8 @@ export default function CreateVideoScreen() {
   const { soundName, soundAlbumArt } = useLocalSearchParams<{ soundName?: string; soundAlbumArt?: string }>();
 
   const [phase, setPhase] = useState<Phase>("camera");
+  const [musicTrack, setMusicTrack] = useState<AfuMusicTrack | null>(null);
+  const [musicPickerOpen, setMusicPickerOpen] = useState(false);
 
   // Posting phase data
   const [postingThumb, setPostingThumb] = useState<string | null>(null);
@@ -1884,6 +1800,9 @@ export default function CreateVideoScreen() {
   }
 
   async function handlePickFromGallery() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { showAlert("Permission required", "Allow access to your media library."); return; }
+
     // Show loading overlay immediately — OS picker + transcoding can freeze UI for 3–8s
     setIsPickingVideo(true);
     try {
@@ -1905,8 +1824,6 @@ export default function CreateVideoScreen() {
         } catch {}
         setPhase("edit");
       }
-    } catch (error: any) {
-      showAlert("Could not open videos", error?.message || "Please try again.");
     } finally {
       setIsPickingVideo(false);
     }
@@ -1921,7 +1838,9 @@ export default function CreateVideoScreen() {
       caption: _cap, filter: _filter, frame: _frame,
       textOverlays: _texts, stickerOverlays: _stickers,
       trimStart: _ts, trimEnd: _te,
-      soundName: _sound, musicTrackId: _musicTrackId, audience: _aud,
+      soundName: _sound, audience: _aud,
+      musicTrackId: _musicTrackId, musicAudioMode: _musicAudioMode,
+      musicVolume: _musicVolume, originalAudioVolume: _originalAudioVolume,
     } = payload;
 
     // Show inline posting phase — do NOT dismiss yet
@@ -1982,7 +1901,6 @@ export default function CreateVideoScreen() {
           stickers: _stickers.length > 0 ? _stickers : undefined,
           trimStart: _ts > 0 ? _ts : undefined,
           trimEnd: _te < _dur + (_ts || 0) ? _te : undefined,
-          musicTrackId: _musicTrackId || undefined,
         });
 
         const { data: post, error } = await supabase.from("posts").insert({
@@ -1993,7 +1911,13 @@ export default function CreateVideoScreen() {
           post_type: "video",
           visibility: _aud,
           view_count: 0,
-          ...(_sound ? { audio_name: _sound } : {}),
+          ...(_musicTrackId ? {
+            music_track_id: _musicTrackId,
+            music_audio_mode: _musicAudioMode,
+            music_volume: _musicVolume,
+            original_audio_volume: _originalAudioVolume,
+            audio_name: musicTrack?.title || _sound || null,
+          } : (_sound ? { audio_name: _sound } : {})),
           ...(_filter ? { filter: _filter } : {}),
           ...(_frame ? { avatar_overlay: _frame } : {}),
           overlay_metadata: overlayMeta,
@@ -2036,6 +1960,9 @@ export default function CreateVideoScreen() {
           onBack={() => setPhase("camera")}
           onPost={handlePost}
           soundName={soundName} soundAlbumArt={soundAlbumArt}
+          musicTrack={musicTrack}
+          onOpenMusicPicker={() => setMusicPickerOpen(true)}
+          onClearMusic={() => setMusicTrack(null)}
           capturedSpeed={capturedSpeed}
         />
       ) : (
@@ -2055,12 +1982,20 @@ export default function CreateVideoScreen() {
           </View>
         </Modal>
       )}
+      <MusicPickerSheet
+        visible={musicPickerOpen}
+        onClose={() => setMusicPickerOpen(false)}
+        onSelect={(track) => {
+          setMusicTrack(track);
+          setMusicPickerOpen(false);
+        }}
+        selectedTrackId={musicTrack?.id}
+      />
     </>
   );
 }
 
 function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; caption: string }) {
-  const { colors, isDark } = useTheme();
   const { accent } = useTheme();
   const insets = useSafeAreaInsets();
   const upload = useSyncExternalStore(subscribePostUpload, getPostUploadState, getPostUploadState);
@@ -2108,8 +2043,8 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
+      <StatusBar barStyle="light-content" />
 
       {/* ── 3-step stepper ── */}
       <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 32 }}>
@@ -2124,7 +2059,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
                 <View style={{ alignItems: "center", gap: 5 }}>
                   <View style={{
                     width: 26, height: 26, borderRadius: 13,
-                    backgroundColor: complete ? "#22C55E" : failed ? "#EF4444" : active ? accent : colors.backgroundSecondary,
+                    backgroundColor: complete ? "#22C55E" : failed ? "#EF4444" : active ? accent : "#222",
                     alignItems: "center", justifyContent: "center",
                   }}>
                     {complete && !active ? (
@@ -2134,16 +2069,16 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
                     ) : active ? (
                       <ActivityIndicator size={12} color="#fff" />
                     ) : (
-                      <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{i + 1}</Text>
+                      <Text style={{ color: "#666", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>{i + 1}</Text>
                     )}
                   </View>
                   <Text style={{
                     fontSize: 10, fontFamily: "Inter_500Medium",
-                    color: complete ? "#22C55E" : failed ? "#EF4444" : colors.textMuted,
+                    color: complete ? "#22C55E" : failed ? "#EF4444" : active ? "#fff" : "#444",
                   }}>{label}</Text>
                 </View>
                 {!isLast && (
-                  <View style={{ flex: 1, height: 1.5, marginTop: 12, marginHorizontal: 6, backgroundColor: i < 2 ? "#22C55E" : colors.border }} />
+                  <View style={{ flex: 1, height: 1.5, marginTop: 12, marginHorizontal: 6, backgroundColor: i < 2 ? "#22C55E" : "#222" }} />
                 )}
               </React.Fragment>
             );
@@ -2163,12 +2098,12 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
               contentFit="cover"
             />
           ) : (
-            <View style={{ width: 90, height: 120, borderRadius: 12, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="videocam" size={36} color={colors.textMuted} />
+            <View style={{ width: 90, height: 120, borderRadius: 12, backgroundColor: "#111", alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="videocam" size={36} color="#444" />
             </View>
           )}
           {!!caption && (
-            <Text style={{ color: colors.textSecondary, fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 260 }} numberOfLines={2}>
+            <Text style={{ color: "#888", fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", maxWidth: 260 }} numberOfLines={2}>
               {caption}
             </Text>
           )}
@@ -2180,8 +2115,8 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
             <View style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: "#22C55E18", alignItems: "center", justifyContent: "center" }}>
               <Ionicons name="checkmark-circle" size={52} color="#22C55E" />
             </View>
-            <Text style={{ color: colors.text, fontSize: 22, fontFamily: "Inter_700Bold" }}>Video Posted!</Text>
-            <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_400Regular" }}>Taking you back…</Text>
+            <Text style={{ color: "#fff", fontSize: 22, fontFamily: "Inter_700Bold" }}>Video Posted!</Text>
+            <Text style={{ color: "#555", fontSize: 13, fontFamily: "Inter_400Regular" }}>Taking you back…</Text>
           </View>
         )}
 
@@ -2191,16 +2126,16 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
             <Ionicons name="alert-circle" size={56} color="#EF4444" />
             <Text style={{ color: "#EF4444", fontSize: 18, fontFamily: "Inter_600SemiBold" }}>Upload failed</Text>
             {upload?.errorMessage ? (
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 }}>
+              <Text style={{ color: "#666", fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 }}>
                 {upload.errorMessage}
               </Text>
             ) : null}
             <TouchableOpacity
               onPress={() => { if (router.canDismiss()) router.dismissAll(); else router.replace("/(tabs)/discover" as any); }}
-              style={{ marginTop: 8, paddingHorizontal: 28, paddingVertical: 11, borderRadius: 22, borderWidth: 1, borderColor: colors.border }}
+              style={{ marginTop: 8, paddingHorizontal: 28, paddingVertical: 11, borderRadius: 22, borderWidth: 1, borderColor: "#333" }}
               activeOpacity={0.75}
             >
-              <Text style={{ color: colors.text, fontFamily: "Inter_500Medium", fontSize: 14 }}>Go Back</Text>
+              <Text style={{ color: "#fff", fontFamily: "Inter_500Medium", fontSize: 14 }}>Go Back</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -2210,14 +2145,14 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
           <View style={{ width: "100%", gap: 18 }}>
             {/* Stage + percentage */}
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: colors.text, fontSize: 16, fontFamily: "Inter_600SemiBold" }}>
+              <Text style={{ color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" }}>
                 {stageLabel[stage]}
               </Text>
               <Text style={{ color: barColor, fontSize: 16, fontFamily: "Inter_700Bold" }}>{pct}%</Text>
             </View>
 
             {/* Progress bar */}
-            <View style={{ height: 7, borderRadius: 4, backgroundColor: colors.backgroundSecondary, overflow: "hidden" }}>
+            <View style={{ height: 7, borderRadius: 4, backgroundColor: "#181818", overflow: "hidden" }}>
               <View style={{ height: 7, borderRadius: 4, backgroundColor: barColor, width: `${pct}%` as any }} />
             </View>
 
@@ -2230,7 +2165,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
                   <Text key={s.key} style={{
                     fontSize: 10,
                     fontFamily: done ? "Inter_600SemiBold" : "Inter_400Regular",
-                    color: done ? "#22C55E" : colors.textMuted,
+                    color: done ? "#22C55E" : active ? "#fff" : "#333",
                   }}>
                     {s.label}
                   </Text>
@@ -2240,7 +2175,7 @@ function PostingPhase({ thumbnailUri, caption }: { thumbnailUri: string | null; 
 
             {/* Compression card */}
             {est && (
-              <View style={{ borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 12, marginTop: 4 }}>
+              <View style={{ borderRadius: 14, backgroundColor: "#0c0c0c", borderWidth: 1, borderColor: "#1c1c1c", padding: 16, gap: 12, marginTop: 4 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Ionicons name="flash" size={13} color="#FACC15" />
                   <Text style={{ color: "#666", fontSize: 12, fontFamily: "Inter_500Medium" }}>
@@ -2302,7 +2237,7 @@ function WebPickerScreen({ onPick }: { onPick: () => void }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const cs = StyleSheet.create({
-  root: {},
+  root: { backgroundColor: "#000" },
   topBar: {
     position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: "row", alignItems: "center",
@@ -2455,12 +2390,13 @@ const es = StyleSheet.create({
   topBar: {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 16, paddingBottom: 12, gap: 12,
+    backgroundColor: "#0A0A0A",
   },
   backBtn: { padding: 4 },
   topTitle: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#fff", textAlign: "center" },
   postBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
   postBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#fff" },
-  previewWrap: { overflow: "hidden" },
+  previewWrap: { backgroundColor: "#000", overflow: "hidden" },
   videoBadges: { position: "absolute", top: 12, right: 12, gap: 6 },
   badge: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -2497,11 +2433,11 @@ const es = StyleSheet.create({
   emptyHintText: { color: "#555", fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center" },
   textItem: {
     flexDirection: "row", alignItems: "center",
-    borderRadius: 10, overflow: "hidden",
+    backgroundColor: "#1A1A1A", borderRadius: 10, overflow: "hidden",
   },
   textItemPreview: { flex: 1, paddingHorizontal: 14, paddingVertical: 10 },
   textEditor: {
-    borderRadius: 12, borderWidth: 1,
+    backgroundColor: "#1A1A1A", borderRadius: 12, borderWidth: 1,
     padding: 14, gap: 12,
   },
   textEditorInput: {
@@ -2562,12 +2498,12 @@ const es = StyleSheet.create({
   bigPostBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 17 },
   speedChip: {
     flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: 1, borderColor: "#333", backgroundColor: "#1A1A1A",
   },
   sizeCard: {
     marginHorizontal: 16, marginTop: 8, marginBottom: 4,
-    borderRadius: 14,
-    borderWidth: 1,
+    backgroundColor: "#111", borderRadius: 14,
+    borderWidth: 1, borderColor: "#2a2a2a",
     padding: 14, gap: 10,
   },
   sizeCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -2598,8 +2534,8 @@ const es = StyleSheet.create({
   advPillText: { fontFamily: "Inter_500Medium", fontSize: 11 },
   advancedPanel: {
     marginHorizontal: 16, marginTop: 4, marginBottom: 4,
-    borderRadius: 14,
-    borderWidth: 1,
+    backgroundColor: "#111", borderRadius: 14,
+    borderWidth: 1, borderColor: "#1E1E1E",
     padding: 16,
   },
   optionLabel: { color: "#666", fontFamily: "Inter_600SemiBold", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 },

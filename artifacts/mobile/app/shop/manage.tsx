@@ -10,15 +10,14 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -266,7 +265,7 @@ export default function ShopManage() {
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); try { await load(); } finally { setRefreshing(false); } }} tintColor={colors.accent} />}>
         {!shop ? (
-          <View style={[styles.setupCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.setupCard, { backgroundColor: colors.surface }]}>
             <Text style={{ fontSize: 48 }}>🏪</Text>
             <Text style={[styles.setupTitle, { color: colors.text }]}>Set Up Your Shop</Text>
             <Text style={[styles.setupSub, { color: colors.textMuted }]}>Create your AfuChat shop to sell products and earn ACoin from your followers.</Text>
@@ -327,7 +326,7 @@ export default function ShopManage() {
                 <Switch
                   value={!!shop?.pin_to_profile}
                   onValueChange={togglePinToProfile}
-                  trackColor={{ false: colors.backgroundTertiary, true: colors.accent + "80" }}
+                  trackColor={{ false: colors.border, true: colors.accent + "80" }}
                   thumbColor={shop?.pin_to_profile ? colors.accent : colors.textMuted}
                 />
               </View>
@@ -454,7 +453,7 @@ export default function ShopManage() {
           const status = ORDER_STATUS_LABELS[order.status] || ORDER_STATUS_LABELS.pending;
           const buyer = (order as any).buyer_profile;
           return (
-            <View style={[styles.orderCard, { backgroundColor: colors.cardSurface, borderLeftColor: status.color }]}>
+            <View style={[styles.orderCard, { backgroundColor: colors.surface, borderLeftColor: status.color }]}>
               <View style={styles.orderHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.orderId, { color: colors.textMuted }]}>#{order.id.slice(-8).toUpperCase()}</Text>
@@ -533,7 +532,9 @@ export default function ShopManage() {
       <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <View style={styles.headerSide}>
-            <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+              <Ionicons name="chevron-back" size={26} color={colors.accent} />
+            </TouchableOpacity>
           </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
           <View style={styles.headerSide} />
@@ -566,7 +567,9 @@ export default function ShopManage() {
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <View style={styles.headerSide}>
-            <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+              <Ionicons name="chevron-back" size={26} color={colors.accent} />
+            </TouchableOpacity>
           </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
           <View style={styles.headerSide} />
@@ -594,7 +597,9 @@ export default function ShopManage() {
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerSide}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+            <Ionicons name="chevron-back" size={26} color={colors.accent} />
+          </TouchableOpacity>
         </View>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Store Manager</Text>
         <View style={styles.headerSide}>
@@ -755,7 +760,7 @@ export default function ShopManage() {
 
             <View style={[styles.stockRow, { backgroundColor: colors.backgroundTertiary, borderRadius: 12, padding: 14 }]}>
               <Text style={[styles.formLabel, { color: colors.text }]}>Unlimited Stock</Text>
-              <Switch value={editingProduct?.is_unlimited_stock ?? false} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_unlimited_stock: v }))} trackColor={{ false: colors.backgroundTertiary, true: colors.accent }} thumbColor="#fff" />
+              <Switch value={editingProduct?.is_unlimited_stock ?? false} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_unlimited_stock: v }))} trackColor={{ false: colors.border, true: colors.accent }} thumbColor="#fff" />
             </View>
 
             {!editingProduct?.is_unlimited_stock && (
@@ -774,7 +779,7 @@ export default function ShopManage() {
 
             <View style={[styles.stockRow, { backgroundColor: colors.backgroundTertiary, borderRadius: 12, padding: 14 }]}>
               <Text style={[styles.formLabel, { color: colors.text }]}>Available for Sale</Text>
-              <Switch value={editingProduct?.is_available ?? true} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_available: v }))} trackColor={{ false: colors.backgroundTertiary, true: colors.accent }} thumbColor="#fff" />
+              <Switch value={editingProduct?.is_available ?? true} onValueChange={(v) => setEditingProduct((p) => ({ ...p, is_available: v }))} trackColor={{ false: colors.border, true: colors.accent }} thumbColor="#fff" />
             </View>
 
             <View style={styles.modalBtns}>

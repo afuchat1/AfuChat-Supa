@@ -108,13 +108,13 @@ const sl = StyleSheet.create({
 
 function MenuCard({ children, colors }: { children: React.ReactNode; colors: any }) {
   return (
-    <View style={[mc.card, { backgroundColor: colors.cardSurface }]}>
+    <View style={[mc.card, { backgroundColor: colors.surface }]}>
       {children}
     </View>
   );
 }
 const mc = StyleSheet.create({
-  card: { borderRadius: 18, overflow: "hidden" },
+  card: { overflow: "hidden" },
 });
 
 // ─── Profile Completion Bar ───────────────────────────────────────────────────
@@ -191,7 +191,7 @@ const pc = StyleSheet.create({
 export default function MeScreen() {
   const { colors, accent, isDark } = useTheme();
   const { t, preferredLang } = useLanguage();
-  const { profile: authProfile, isPremium, isVerifiedCreator, subscription, loading, user, equippedGoods } = useAuth();
+  const { profile: authProfile, isPremium, subscription, loading, user, equippedGoods } = useAuth();
   const planLabel = useMemo(() => {
     const tier = subscription?.plan_tier?.toLowerCase();
     if (tier === "premium") return t("profile.plan_premium");
@@ -406,7 +406,7 @@ export default function MeScreen() {
       >
 
         {/* ── Hero Card ───────────────────────────────────────────────────── */}
-      <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[s.heroCard, { backgroundColor: colors.surface }]}>
 
           {/* Avatar + info row */}
           <View style={s.heroTop}>
@@ -439,7 +439,7 @@ export default function MeScreen() {
                 <Text style={[s.heroName, { color: equippedGoods.has('sg4') ? Colors.gold : colors.text }]} numberOfLines={1} ellipsizeMode="tail">
                   {profile?.display_name || t("common.user")}
                 </Text>
-                <VerifiedBadge isVerified={isVerifiedCreator || !!profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={17} />
+                <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={17} />
               </View>
 
               <TouchableOpacity
@@ -650,7 +650,7 @@ export default function MeScreen() {
         handle={profile?.handle || t("common.user")}
         avatarUrl={profile?.avatar_url || null}
         afuId={afuId}
-        isVerified={isVerifiedCreator || !!profile?.is_verified}
+        isVerified={!!profile?.is_verified}
         isOrgVerified={!!profile?.is_organization_verified}
       />
 
@@ -727,7 +727,7 @@ const s = StyleSheet.create({
   content: { gap: 0, paddingHorizontal: 0 },
 
   // Hero
-  heroCard: { borderRadius: 20, overflow: "hidden" },
+  heroCard: { overflow: "hidden" },
   heroTop: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14, gap: 14 },
   heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },
   heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
@@ -744,20 +744,20 @@ const s = StyleSheet.create({
   acoinSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
 
   // Stats
-  statsRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8, borderRadius: 18, overflow: "hidden" },
+  statsRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
   statCell: { flex: 1, alignItems: "center", gap: 3 },
   statValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   statDivider: { width: 0.5, marginVertical: 4 },
 
   // Quick actions
-  quickRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 4, borderRadius: 18, overflow: "hidden" },
+  quickRow: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 4 },
   quickBtn: { flex: 1, alignItems: "center", gap: 7 },
   quickIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   quickLabel: { fontSize: 10, fontFamily: "Inter_500Medium", textAlign: "center" },
 
   // Premium banner
-  premiumBanner: { padding: 20, flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 18, overflow: "hidden" },
+  premiumBanner: { padding: 20, flexDirection: "row", alignItems: "center", gap: 14 },
   premiumIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   premiumTitle: { color: "#FFD60A", fontSize: 15, fontFamily: "Inter_700Bold" },
   premiumSub: { color: "rgba(255,255,255,0.45)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },

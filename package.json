@@ -4,11 +4,10 @@
   "license": "MIT",
   "private": true,
   "devDependencies": {
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.3"
   },
   "dependencies": {
     "@babel/generator": "7.29.7",
     "@babel/types": "7.29.7"
-  },
-  "packageManager": "pnpm@10.29.3"
+  }
 }

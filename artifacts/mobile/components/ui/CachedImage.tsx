@@ -9,7 +9,7 @@ type Props = Omit<ImageProps, "source"> & {
 /**
  * Persistent remote image — instant, offline-first.
  *
- * expo-image owns the complete loading pipeline: in-memory caching,
+ * expo-image owns the complete loading pipeline: native memory/disk caching,
  * bitmap downsampling, and recycled-cell cleanup. Keeping one cache owner
  * avoids a second FileSystem/SQLite download path and duplicate bitmaps.
  */

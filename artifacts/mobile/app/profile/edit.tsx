@@ -8,16 +8,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +31,8 @@ import { storage, KEYS } from "@/lib/storage";
 import { checkUsernameAvailability, usernamePurchasePrompt } from "@/lib/usernameAvailability";
 
 // ─── Cooldown helpers ─────────────────────────────────────────────────────────
-const NAME_COOLDOWN_DAYS = 7;
+const HANDLE_COOLDOWN_DAYS = 30;
+const NAME_COOLDOWN_DAYS   = 7;
 
 function getDaysRemaining(storedMs: string | undefined, cooldownDays: number): number {
   if (!storedMs) return 0;
@@ -108,7 +107,7 @@ function ProfileCompletionCard({
   const barColor   = allDone ? "#34C759" : accent;
 
   return (
-    <View style={[compStyles.card, { backgroundColor: colors.cardSurface }]}>
+    <View style={[compStyles.card, { backgroundColor: colors.surface }]}>
       {/* Header row */}
       <View style={compStyles.header}>
         <View style={compStyles.headerLeft}>
@@ -118,7 +117,7 @@ function ProfileCompletionCard({
             color={allDone ? "#34C759" : colors.textMuted}
           />
           <Text style={[compStyles.title, { color: colors.textMuted }]}>
-            {"PROFILE COMPLETENESS"}
+            PROFILE COMPLETENESS
           </Text>
         </View>
         <Text style={[compStyles.pct, { color: allDone ? "#34C759" : accent }]}>
@@ -142,7 +141,7 @@ function ProfileCompletionCard({
       {/* Discovery nudge */}
       {!allDone && (
         <Text style={[compStyles.nudge, { color: colors.textMuted }]}>
-          {"Complete your profile to appear in People You May Know"}
+          Complete your profile to appear in People You May Know
         </Text>
       )}
 
@@ -171,7 +170,7 @@ function ProfileCompletionCard({
                 color={step.done ? (allDone ? "#34C759" : accent) : colors.textMuted}
               />
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flex: 1 }}>
               <Text style={[compStyles.stepLabel, { color: step.done ? colors.text : colors.textSecondary }]}>
                 {step.label}
               </Text>
@@ -215,7 +214,6 @@ const compStyles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: 0.8,
     textTransform: "uppercase",
-    textAlign: "left",
   },
   pct: {
     fontSize: 15,
@@ -238,7 +236,6 @@ const compStyles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
     lineHeight: 17,
-    textAlign: "left",
   },
   steps: {
     marginTop: 10,
@@ -263,13 +260,11 @@ const compStyles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Inter_500Medium",
     lineHeight: 18,
-    textAlign: "left",
   },
   stepHint: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
     marginTop: 1,
-    textAlign: "left",
   },
   doneTag: {
     fontSize: 11,
@@ -282,7 +277,7 @@ function SectionCard({ title, icon, children, colors }: {
   title: string; icon: string; children: React.ReactNode; colors: any;
 }) {
   return (
-    <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
+    <View style={[styles.card, { backgroundColor: colors.surface }]}>
       <View style={styles.cardHeader}>
         <Ionicons name={icon as any} size={16} color={colors.textMuted} />
         <Text style={[styles.cardTitle, { color: colors.textMuted }]}>{title}</Text>
@@ -298,7 +293,7 @@ function FieldRow({ label, children, noBorder, colors }: {
   return (
     <View style={[styles.fieldRow, !noBorder && { borderBottomColor: colors.border }]}>
       <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
-      <View style={{ flex: 1, minWidth: 0 }}>{children}</View>
+      <View style={{ flex: 1 }}>{children}</View>
     </View>
   );
 }
@@ -308,7 +303,7 @@ function HandleStatus({ status, colors, accent }: {
   colors: any; accent: string;
 }) {
   if (status === "idle" || status === "own") return null;
-  if (status === "checking") return <ActivityIndicator size="small" color={colors.textMuted} />;
+  if (status === "checking") return <ActivityIndicator size="small" color={colors.textMuted} style={{ marginLeft: 8 }} />;
   const map = {
     available:      { icon: "checkmark-circle", color: "#34C759", label: "Available" },
     owned:          { icon: "checkmark-circle", color: "#34C759", label: "You own this username" },
@@ -319,7 +314,7 @@ function HandleStatus({ status, colors, accent }: {
   const cfg = map[status as keyof typeof map];
   if (!cfg) return null;
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: 8 }}>
       <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
       <Text style={{ fontSize: 11, color: cfg.color, fontFamily: "Inter_500Medium" }}>{cfg.label}</Text>
     </View>
@@ -365,6 +360,9 @@ export default function EditProfileScreen() {
   const handleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cooldown — read once synchronously from MMKV (synchronous store)
+  const [handleLockedDays] = useState(() =>
+    getDaysRemaining(storage.getString(KEYS.HANDLE_CHANGED_AT_PREFIX + (user?.id ?? "")), HANDLE_COOLDOWN_DAYS)
+  );
   const [nameLockedDays] = useState(() =>
     getDaysRemaining(storage.getString(KEYS.NAME_CHANGED_AT_PREFIX + (user?.id ?? "")), NAME_COOLDOWN_DAYS)
   );
@@ -479,6 +477,13 @@ export default function EditProfileScreen() {
       );
       return;
     }
+    if (handleChanged && handleLockedDays > 0) {
+      showAlert(
+        "Username Locked",
+        `You can change your username again in ${handleLockedDays} day${handleLockedDays !== 1 ? "s" : ""}.`
+      );
+      return;
+    }
 
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -531,12 +536,14 @@ export default function EditProfileScreen() {
       }
       return;
     }
+    if (handleChanged) updateData.handle = cleanHandle;
     const { error } = await supabase.from("profiles").update(updateData).eq("id", user!.id);
     if (error) {
       showAlert("Error", error.message);
     } else {
       if (nameChanged)   storage.setString(KEYS.NAME_CHANGED_AT_PREFIX   + user!.id, Date.now().toString());
-      patchProfile({ ...updateData, ...(handleChanged ? { handle: cleanHandle } : {}) });
+      if (handleChanged) storage.setString(KEYS.HANDLE_CHANGED_AT_PREFIX + user!.id, Date.now().toString());
+      patchProfile(updateData);
       if (router.canGoBack()) router.back(); else router.replace("/(tabs)/me" as any);
     }
     setSaving(false);
@@ -576,15 +583,18 @@ export default function EditProfileScreen() {
       <View style={[styles.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.navBarInner}>
           {/* Left — back */}
-          <GlassBackButton
+          <TouchableOpacity
             style={styles.navSideLeft}
             onPress={() => router.back()}
-            icon="chevron-back"
-          />
+            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+            activeOpacity={0.6}
+          >
+            <Ionicons name="chevron-back" size={28} color={accent} />
+          </TouchableOpacity>
 
           {/* Center — title */}
           <Text style={[styles.navTitle, { color: colors.text }]} numberOfLines={1}>
-            {"Edit Profile"}
+            Edit Profile
           </Text>
 
           {/* Right — save */}
@@ -699,9 +709,8 @@ export default function EditProfileScreen() {
         {/* ── Identity ── */}
         <SectionCard title="IDENTITY" icon="person" colors={colors}>
           <FieldRow label="Name" colors={colors}>
-            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <TextInput
-                appearance="embedded"
                 style={[styles.fieldInput, { color: nameLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
                 value={displayName}
                 onChangeText={setDisplayName}
@@ -712,21 +721,20 @@ export default function EditProfileScreen() {
                 editable={nameLockedDays === 0}
               />
               {nameLockedDays > 0 && (
-                <Ionicons name="lock-closed" size={15} color={colors.textMuted} />
+                <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
               )}
-            </AfuInputSurface>
+            </View>
             {nameLockedDays > 0 && (
               <Text style={[styles.handleHint, { color: colors.textMuted }]}>
-                {`Can change in ${nameLockedDays} day${nameLockedDays !== 1 ? "s" : ""} · changes every ${NAME_COOLDOWN_DAYS} days`}
+                Can change in {nameLockedDays} day{nameLockedDays !== 1 ? "s" : ""} · changes every {NAME_COOLDOWN_DAYS} days
               </Text>
             )}
           </FieldRow>
           <FieldRow label="Handle" noBorder colors={colors}>
-            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text style={[styles.handleAt, { color: colors.textMuted }]}>@</Text>
               <TextInput
-                appearance="embedded"
-                style={[styles.fieldInput, { color: colors.text, flex: 1 }]}
+                style={[styles.fieldInput, { color: handleLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
                 value={handle}
                 onChangeText={setHandle}
                 placeholder="your_handle"
@@ -734,17 +742,25 @@ export default function EditProfileScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                editable={true}
+                editable={handleLockedDays === 0}
               />
-              <HandleStatus status={handleStatus} colors={colors} accent={accent} />
-            </AfuInputSurface>
-            {handleStatus === "taken" && (
+              {handleLockedDays > 0
+                ? <Ionicons name="lock-closed" size={14} color={colors.textMuted} style={{ marginLeft: 6 }} />
+                : <HandleStatus status={handleStatus} colors={colors} accent={accent} />
+              }
+            </View>
+            {handleLockedDays > 0 && (
+              <Text style={[styles.handleHint, { color: colors.textMuted }]}>
+                Can change in {handleLockedDays} day{handleLockedDays !== 1 ? "s" : ""} · changes every {HANDLE_COOLDOWN_DAYS} days
+              </Text>
+            )}
+            {handleLockedDays === 0 && handleStatus === "taken" && (
               <Text style={[styles.handleHint, { color: "#FF3B30" }]}>That handle is already taken. Try another.</Text>
             )}
-            {handleStatus === "invalid_format" && (
+            {handleLockedDays === 0 && handleStatus === "invalid_format" && (
               <Text style={[styles.handleHint, { color: "#FF9F0A" }]}>Only letters, numbers and underscores, minimum 3 characters.</Text>
             )}
-            {handleStatus === "available" && (
+            {handleLockedDays === 0 && handleStatus === "available" && (
               <Text style={[styles.handleHint, { color: "#34C759" }]}>@{handle.trim().toLowerCase()} is available!</Text>
             )}
           </FieldRow>
@@ -753,22 +769,15 @@ export default function EditProfileScreen() {
         {/* ── About ── */}
         <SectionCard title="ABOUT" icon="document-text" colors={colors}>
           <FieldRow label="Bio" colors={colors}>
-            <AfuInputSurface
-              variant="input"
-              cornerRadius={16}
-              contentStyle={styles.bioInputShell}
-            >
-              <TextInput
-                appearance="embedded"
-                style={[styles.fieldInput, styles.bioInput, { color: colors.text, flex: 1 }]}
-                value={bio}
-                onChangeText={t => setBio(t.slice(0, 150))}
-                placeholder="Tell people about yourself…"
-                placeholderTextColor={colors.textMuted}
-                multiline
-                textAlignVertical="top"
-              />
-            </AfuInputSurface>
+            <TextInput
+              style={[styles.fieldInput, styles.bioInput, { color: colors.text }]}
+              value={bio}
+              onChangeText={t => setBio(t.slice(0, 150))}
+              placeholder="Tell people about yourself…"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              textAlignVertical="top"
+            />
             <View style={styles.bioFooter}>
               <TouchableOpacity
                 style={[styles.aiBioBtn, { backgroundColor: accent + "14", borderColor: accent + "30" }]}
@@ -800,33 +809,28 @@ export default function EditProfileScreen() {
             </View>
           </FieldRow>
           <FieldRow label="Website" noBorder colors={colors}>
-            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
-              <TextInput
-                appearance="embedded"
-                style={[styles.fieldInput, { color: colors.text, flex: 1 }]}
-                value={website}
-                onChangeText={setWebsite}
-                placeholder="https://your-website.com"
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                keyboardType="url"
-                autoCorrect={false}
-              />
-            </AfuInputSurface>
+            <TextInput
+              style={[styles.fieldInput, { color: colors.text }]}
+              value={website}
+              onChangeText={setWebsite}
+              placeholder="https://your-website.com"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="url"
+              autoCorrect={false}
+            />
           </FieldRow>
         </SectionCard>
 
         {/* ── Location ── */}
         <SectionCard title="LOCATION" icon="location" colors={colors}>
           <FieldRow label="Country" noBorder colors={colors}>
-            <AfuInputSurface variant="input" contentStyle={styles.profileInputShell}>
-              <TouchableOpacity onPress={() => setShowCountryModal(true)} style={styles.pickerBtn}>
-                <Text style={[styles.pickerBtnText, { color: selectedCountry ? colors.text : colors.textMuted }]}>
-                  {selectedCountry ? `${selectedCountry.flag}  ${selectedCountry.name}` : "Select country"}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            </AfuInputSurface>
+            <TouchableOpacity onPress={() => setShowCountryModal(true)} style={styles.pickerBtn}>
+              <Text style={[styles.pickerBtnText, { color: selectedCountry ? colors.text : colors.textMuted }]}>
+                {selectedCountry ? `${selectedCountry.flag}  ${selectedCountry.name}` : "Select country"}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           </FieldRow>
         </SectionCard>
 
@@ -912,7 +916,7 @@ export default function EditProfileScreen() {
         {/* ── Interests ── */}
         <SectionCard title="INTERESTS" icon="compass" colors={colors}>
           <Text style={[styles.interestsHint, { color: colors.textMuted }]}>
-            {"Select topics you care about — they shape your feed and help others find you."}
+            Select topics you care about — they shape your feed and help others find you.
           </Text>
           <View style={styles.interestsGrid}>
             {INTERESTS.map(item => {
@@ -954,7 +958,6 @@ export default function EditProfileScreen() {
           <View style={[styles.modalSearch, { backgroundColor: colors.inputBg }]}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              appearance="embedded"
               style={[styles.modalSearchInput, { color: colors.text }]}
               value={countrySearch}
               onChangeText={setCountrySearch}
@@ -1027,7 +1030,6 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
-    minWidth: 0,
     textAlign: "center",
     fontSize: 17,
     fontFamily: "Inter_600SemiBold",
@@ -1083,23 +1085,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 4,
   },
-  fieldLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
-  fieldInput: { minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22, textAlign: "left" },
-  profileInputShell: { minHeight: 46, gap: 8, paddingHorizontal: 12, paddingVertical: 0 },
-  handleAt: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  handleHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "left" },
+  fieldLabel: { fontSize: 11, fontFamily: "Inter_500Medium", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 },
+  fieldInput: { fontSize: 15, fontFamily: "Inter_400Regular", lineHeight: 22 },
+  handleAt: { fontSize: 15, fontFamily: "Inter_400Regular", marginRight: 2 },
+  handleHint: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
 
   // Bio
-  bioInputShell: { minHeight: 96, alignItems: "stretch", paddingHorizontal: 12, paddingVertical: 9 },
-  bioInput: { minHeight: 78 },
+  bioInput: { minHeight: 72 },
   bioFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 8 },
   aiBioBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   aiBioBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   charCounter: { fontSize: 12, fontFamily: "Inter_400Regular" },
 
   // Picker button
-  pickerBtn: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  pickerBtnText: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, textAlign: "left" },
+  pickerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  pickerBtnText: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1 },
 
   // Gender
   genderGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
@@ -1112,7 +1112,7 @@ const styles = StyleSheet.create({
   dobPartDay: { flex: 0.8 },
   dobPartMonth: { flex: 1.45 },
   dobPartYear: { flex: 1 },
-  dobPartText: { fontSize: 14, fontFamily: "Inter_400Regular", flexShrink: 1, textAlign: "left" },
+  dobPartText: { fontSize: 14, fontFamily: "Inter_400Regular", flexShrink: 1 },
   dobPickerWrap: { borderRadius: 12, borderWidth: 0.5, overflow: "hidden", marginTop: 10 },
   dobPickerScroll: { maxHeight: 180 },
   dobPickerItem: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10 },
@@ -1120,7 +1120,7 @@ const styles = StyleSheet.create({
   clearText: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 6 },
 
   // Interests
-  interestsHint: { minWidth: 0, fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 4, paddingHorizontal: 16, textAlign: "left" },
+  interestsHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 4, paddingHorizontal: 16 },
   interestsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
   interestChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   interestChipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
@@ -1134,6 +1134,6 @@ const styles = StyleSheet.create({
   modalSearchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   countryRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   countryFlag: { fontSize: 24 },
-  countryName: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular", textAlign: "left" },
+  countryName: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   clearCountryBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, padding: 16 },
 });

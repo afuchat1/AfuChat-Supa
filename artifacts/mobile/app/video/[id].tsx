@@ -30,6 +30,7 @@ import {
   Pressable,
   ScrollView,
   Share,
+  StatusBar,
   StyleSheet,
   Switch,
   Text,
@@ -38,17 +39,16 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import type { FlatListInstance, ListViewToken } from "react-native";
-import { StatusBar } from "expo-status-bar";
+import type { ListViewToken as ViewToken } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { VideoView, useVideoPlayer } from "expo-video";
+import { BlurView } from "expo-blur";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library/legacy";
@@ -62,9 +62,10 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useTheme } from "@/hooks/useTheme";
+import { GLASS, glassTokens } from "@/constants/glass";
 import { RichText } from "@/components/ui/RichText";
 import { encodeId, decodeId, isUuid } from "@/lib/shortId";
-import { getCachedVideoUri, cacheVideo, markVideoWatched, saveVideoForOffline, getOfflineVideos } from "@/lib/videoCache";
+import { getCachedVideoUri, cacheVideo, markVideoWatched, getOfflineVideos } from "@/lib/videoCache";
 import { storage } from "@/lib/storage/mmkv";
 import { recordWatchHistory } from "@/lib/watchHistory";
 import { onShortsRefresh } from "@/lib/shortsRefresh";
@@ -74,19 +75,11 @@ import { trackEvent } from "@/lib/activityTracker";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
 import { useResolvedVideoSource } from "@/hooks/useResolvedVideoSource";
 import { getPostVideoManifest, pickBestSource } from "@/lib/videoApi";
-import {
-  getNetworkProfile,
-  getPreferredVideoHeight,
-  getPreferredVideoMaxBitrateKbps,
-  isOffline as checkIsOffline,
-  shouldPreloadAdjacentVideo,
-  subscribeToNetworkChanges,
-  subscribeToNetworkProfileChanges,
-  type NetworkProfile,
-} from "@/lib/networkQuality";
+import { getPreferredVideoHeight, isOffline as checkIsOffline, subscribeToNetworkChanges } from "@/lib/networkQuality";
 import { safePause, safePlay } from "@/lib/safeMedia";
 import { ChatBubbleSkeleton, ShortsFeedSkeleton } from "@/components/ui/Skeleton";
 import SignInPromptModal from "@/components/ui/SignInPromptModal";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
 import {
   computeFeedScore,
   detectTopicsInContent,
@@ -105,8 +98,6 @@ import {
 import * as Haptics from "@/lib/haptics";
 import { VideoCommentsSheet } from "@/components/ui/VideoCommentsSheet";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
-import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
-import { listMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -130,19 +121,15 @@ type VideoPost = {
   id: string; author_id: string; content: string; video_url: string;
   image_url: string | null; created_at: string; view_count: number;
   audio_name: string | null;
-  music_track_id: string | null;
+  music_track_id?: string | null;
+  music_audio_mode?: "original" | "mix" | "replace";
+  music_volume?: number;
+  original_audio_volume?: number;
   profile: { display_name: string; handle: string; avatar_url: string | null; is_verified: boolean; is_organization_verified: boolean };
   liked: boolean; bookmarked: boolean; likeCount: number; replyCount: number;
 };
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
-
-function readMusicTrackId(metadata: unknown): string | null {
-  try {
-    const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
-    return parsed && typeof parsed.musicTrackId === "string" ? parsed.musicTrackId : null;
-  } catch { return null; }
-}
 
 function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -230,7 +217,6 @@ function TapHandler({
 // ─── SocialShareSheet ─────────────────────────────────────────────────────────
 
 function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; onClose: () => void; url: string; title: string }) {
-  const { colors } = useTheme();
   if (!visible) return null;
   async function handlePlatform(p: typeof SOCIAL_PLATFORMS[number]) {
     if (p.id === "copy") { Clipboard.setStringAsync(url); onClose(); return; }
@@ -242,12 +228,12 @@ function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; 
     else await Share.share({ message: `${title} ${url}`, url, title });
   }
   return (
-    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.36} backgroundColor={colors.surface}>
+    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.36}>
       <View style={ssStyles.header}>
-        <Ionicons name="search" size={20} color={colors.textMuted} />
-        <Text style={[ssStyles.title, { color: colors.text }]}>Send to</Text>
+        <Ionicons name="search" size={20} color="#bbb" />
+        <Text style={ssStyles.title}>Send to</Text>
         <TouchableOpacity onPress={onClose} hitSlop={10}>
-          <Ionicons name="close" size={22} color={colors.textMuted} />
+          <Ionicons name="close" size={22} color="#555" />
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -260,7 +246,7 @@ function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; 
             <View style={[ssStyles.iconCircle, { backgroundColor: p.color }]}>
               <Ionicons name={p.icon as any} size={22} color="#fff" />
             </View>
-            <Text style={[ssStyles.cellLabel, { color: colors.textSecondary }]}>{p.label}</Text>
+            <Text style={ssStyles.cellLabel}>{p.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -269,88 +255,82 @@ function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; 
 }
 const ssStyles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18, paddingHorizontal: 20 },
-  title: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  title: { flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#111", textAlign: "center" },
   scrollRow: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 16, paddingBottom: 12, gap: 4 },
   cell: { width: 72, alignItems: "center", gap: 7, paddingVertical: 8 },
   iconCircle: { width: 54, height: 54, borderRadius: 27, alignItems: "center", justifyContent: "center" },
-  cellLabel: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center" },
+  cellLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#444", textAlign: "center" },
 });
 
 // ─── VideoContextMenu ─────────────────────────────────────────────────────────
 
-function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownload, onSaveOffline, onCopyLink, onNotInterested, onReport, autoScroll, onToggleAutoScroll }: {
+function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownload, onCopyLink, onNotInterested, onReport, autoScroll, onToggleAutoScroll }: {
   visible: boolean; item: VideoPost | null; onClose: () => void;
   onShare: () => void; onRepost: () => void; onDownload: () => void;
-  onSaveOffline: () => void;
   onCopyLink: () => void; onNotInterested: () => void; onReport: () => void;
   autoScroll: boolean; onToggleAutoScroll: () => void;
 }) {
-  const { colors } = useTheme();
   if (!visible || !item) return null;
 
   function tap(fn: () => void) { onClose(); setTimeout(fn, 180); }
 
   return (
-    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.55} backgroundColor={colors.surface}>
-      <View style={[cmStyles.sep, { backgroundColor: colors.separator }]} />
+    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.55} backgroundColor="#fff">
+      <View style={cmStyles.sep} />
 
       {/* Group 1 — sharing actions */}
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onRepost)} activeOpacity={0.65}>
-        <Ionicons name="repeat" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Repost</Text>
+        <Ionicons name="repeat" size={24} color="#111" style={cmStyles.rowIcon} />
+        <Text style={cmStyles.rowLabel}>Repost</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onShare)} activeOpacity={0.65}>
-        <Ionicons name="arrow-redo" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Share to</Text>
+        <Ionicons name="arrow-redo" size={24} color="#111" style={cmStyles.rowIcon} />
+        <Text style={cmStyles.rowLabel}>Share to</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onCopyLink)} activeOpacity={0.65}>
-        <Ionicons name="link" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Copy link</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={cmStyles.row} onPress={() => tap(onSaveOffline)} activeOpacity={0.65}>
-        <Ionicons name="cloud-download" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Save offline</Text>
+        <Ionicons name="link" size={24} color="#111" style={cmStyles.rowIcon} />
+        <Text style={cmStyles.rowLabel}>Copy link</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onDownload)} activeOpacity={0.65}>
-        <Ionicons name="download" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Save</Text>
+        <Ionicons name="download" size={24} color="#111" style={cmStyles.rowIcon} />
+        <Text style={cmStyles.rowLabel}>Save</Text>
       </TouchableOpacity>
 
-      <View style={[cmStyles.sep, { backgroundColor: colors.separator }]} />
+      <View style={cmStyles.sep} />
 
       {/* Group 2 — playback controls */}
       <View style={cmStyles.row}>
-        <Ionicons name="infinite" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Auto scroll</Text>
+        <Ionicons name="infinite" size={24} color="#111" style={cmStyles.rowIcon} />
+        <Text style={cmStyles.rowLabel}>Auto scroll</Text>
         <Switch
           value={autoScroll}
           onValueChange={() => { onToggleAutoScroll(); }}
-          trackColor={{ false: colors.backgroundTertiary, true: colors.accent }}
-          thumbColor={colors.text}
+          trackColor={{ false: "#ddd", true: "#111" }}
+          thumbColor="#fff"
           style={cmStyles.toggle}
         />
       </View>
 
-      <View style={[cmStyles.sep, { backgroundColor: colors.separator }]} />
+      <View style={cmStyles.sep} />
 
       {/* Group 3 — negative actions */}
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onNotInterested)} activeOpacity={0.65}>
-        <Ionicons name="eye-off" size={24} color={colors.text} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Not interested</Text>
+        <Ionicons name="eye-off" size={24} color="#111" style={cmStyles.rowIcon} />
+        <Text style={cmStyles.rowLabel}>Not interested</Text>
       </TouchableOpacity>
       <TouchableOpacity style={[cmStyles.row, cmStyles.rowLast]} onPress={() => tap(onReport)} activeOpacity={0.65}>
-        <Ionicons name="flag" size={24} color={colors.error} style={cmStyles.rowIcon} />
-        <Text style={[cmStyles.rowLabel, { color: colors.error }]}>Report</Text>
+        <Ionicons name="flag" size={24} color="#FF3B30" style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: "#FF3B30" }]}>Report</Text>
       </TouchableOpacity>
     </SmartSheet>
   );
 }
 const cmStyles = StyleSheet.create({
-  sep:       { height: StyleSheet.hairlineWidth, marginVertical: 2 },
+  sep:       { height: StyleSheet.hairlineWidth, backgroundColor: "#e8e8e8", marginVertical: 2 },
   row:       { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 16, minHeight: 56 },
   rowLast:   { marginBottom: 8 },
   rowIcon:   { marginRight: 18, width: 24, textAlign: "center" },
-  rowLabel:  { flex: 1, fontSize: 16, fontFamily: "Inter_700Bold" },
+  rowLabel:  { flex: 1, fontSize: 16, fontFamily: "Inter_700Bold", color: "#111" },
   toggle:    { marginLeft: "auto" },
 });
 
@@ -373,14 +353,9 @@ const VideoItem = React.memo(function VideoItem({
   commentsOpen?: boolean; squeezedH?: number;
 }) {
   const { accent } = useAppAccent();
-  const { colors } = useTheme();
-  const { playMusic } = useGlobalMusicPlayer();
+  const { isDark } = useTheme();
+  const videoGlass = glassTokens(isDark);
   const insets = useSafeAreaInsets();
-  const [networkProfile, setNetworkProfile] = useState<NetworkProfile>(() => getNetworkProfile());
-  useEffect(() => subscribeToNetworkProfileChanges(setNetworkProfile), []);
-  const shouldPreload = isNearActive && shouldPreloadAdjacentVideo(networkProfile);
-  const shouldMountVideo = isActive || shouldPreload;
-  const preloadOnly = !isActive && shouldPreload;
   // On web, create the player with its final stable source. expo-video's web
   // replace() calls HTMLMediaElement.play() without handling the returned
   // promise, so replacing the fallback URL with a resolved/cache URL can
@@ -388,7 +363,7 @@ const VideoItem = React.memo(function VideoItem({
   // players still start empty and use replaceAsync below because that path
   // supports the native player lifecycle.
   const player = useVideoPlayer(
-    Platform.OS === "web" && shouldMountVideo ? { uri: item.video_url } : null,
+    Platform.OS === "web" ? { uri: item.video_url } : null,
     (p) => { p.loop = true; p.muted = false; },
   );
   const videoViewRef = useRef<VideoView>(null);
@@ -461,23 +436,18 @@ const VideoItem = React.memo(function VideoItem({
   const lastSavedProgressRef = useRef(0);   // timestamp of last AsyncStorage save
   const cacheDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const resolved = useResolvedVideoSource(
-    shouldMountVideo && !cachedUri ? item.id : null,
-    item.video_url,
-    {
-      targetHeight: getPreferredVideoHeight(networkProfile),
-      maxBitrateKbps: getPreferredVideoMaxBitrateKbps(networkProfile),
-    },
-  );
+  const resolved = useResolvedVideoSource(item.id, item.video_url, { targetHeight: getPreferredVideoHeight() });
   // When an error occurs fall back directly to the raw video_url, bypassing cache/manifest
   const playbackUri = videoError ? item.video_url : (cachedUri || resolved.uri || item.video_url);
+  const shouldMountVideo = isActive || isNearActive;
   const sourceReadyRef = useRef(Platform.OS === "web" && !!item.video_url);
+  const preloadOnly = !isActive && isNearActive;
   const showExpand = !!item.content && (item.content.split("\n").length > 2 || item.content.length > 120);
 
   // Start pre-caching once the video enters the preload window.
   // Delay by 500 ms so the download does NOT compete with the swipe animation.
   useEffect(() => {
-    if ((!isActive && !shouldPreload) || cacheAttempted.current || !item.video_url) return;
+    if (!isNearActive || cacheAttempted.current || !item.video_url) return;
     cacheAttempted.current = true;
     cacheDelayRef.current = setTimeout(() => {
       getCachedVideoUri(item.video_url).then((ex) => {
@@ -486,7 +456,7 @@ const VideoItem = React.memo(function VideoItem({
       }).catch(() => {});
     }, 500);
     return () => { if (cacheDelayRef.current) { clearTimeout(cacheDelayRef.current); cacheDelayRef.current = null; } };
-  }, [isActive, shouldPreload]);
+  }, [isNearActive]);
 
   // Cleanup PiP-exit cover timer on unmount
   useEffect(() => {
@@ -589,12 +559,20 @@ const VideoItem = React.memo(function VideoItem({
     }
   }, [isActive]);
 
-  // ── Mute non-active (preloaded) players ─────────────────────────────────
-  // Prevents any audio bleed from the 1-2 near-active buffered videos when
-  // the active video plays or enters PiP.
+  // ── Coordinate a published soundtrack with the video's original audio ───
+  // Inactive/preloaded clips stay silent. For a music-backed video, replace
+  // mutes the original sound while mix applies the creator's saved level.
+  const soundtrackMode = item.music_track_id ? item.music_audio_mode ?? "original" : "original";
+  const originalAudioVolumeValue = Number(item.original_audio_volume ?? 1);
+  const originalAudioVolume = Number.isFinite(originalAudioVolumeValue)
+    ? Math.max(0, Math.min(1, originalAudioVolumeValue))
+    : 1;
   useEffect(() => {
-    try { player.muted = !isActive; } catch {}
-  }, [isActive]);
+    try {
+      player.muted = !isActive || soundtrackMode === "replace";
+      player.volume = soundtrackMode === "mix" ? originalAudioVolume : 1;
+    } catch {}
+  }, [isActive, originalAudioVolume, player, soundtrackMode]);
 
   // ── AppState: resume on foreground return ───────────────────────────────
   // useFocusEffect fires only on navigation events, NOT the home button, so
@@ -813,7 +791,7 @@ const VideoItem = React.memo(function VideoItem({
             safePause(player);
           }}
         />
-      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />}
+      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />}
 
       {/* TapHandler on native — uses Responder, does NOT block scroll */}
       <TapHandler
@@ -825,7 +803,7 @@ const VideoItem = React.memo(function VideoItem({
   );
 
   return (
-    <View style={[vStyles.item, { width: screenW, height: screenH, backgroundColor: colors.background }]}>
+    <View style={[vStyles.item, { width: screenW, height: screenH }]}>
       {/* Video area — squeezes up when comments open (TikTok/Shorts style) */}
       <Animated.View style={{
         width: screenW, height: videoAreaAnim, overflow: "hidden",
@@ -836,7 +814,7 @@ const VideoItem = React.memo(function VideoItem({
 
         {/* PiP-exit cover: hides the VideoView while Android animates it back to full size */}
         {pipExiting && (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, pointerEvents: "none" } as any]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000", pointerEvents: "none" } as any]} />
         )}
 
         {/* Poster thumbnail: persists until first frame renders, eliminates black flash on swipe */}
@@ -859,6 +837,16 @@ const VideoItem = React.memo(function VideoItem({
         {paused && !buffering && (
           <View style={[vStyles.centerOverlay, { pointerEvents: "none" } as any]}>
             <View style={vStyles.pauseCircle}>
+              <BlurView
+                pointerEvents="none"
+                intensity={GLASS.blur.medium}
+                tint="dark"
+                style={StyleSheet.absoluteFill}
+              />
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: videoGlass.fill }]}
+              />
               <Ionicons name="play" size={32} color="#fff" style={{ marginLeft: 3 }} />
             </View>
           </View>
@@ -885,6 +873,25 @@ const VideoItem = React.memo(function VideoItem({
 
         {/* Caption overlay — flush above seek bar, 1-line default + read more */}
         <Animated.View style={[vStyles.captionOverlay, { opacity: overlayOpacity, pointerEvents: commentsOpen ? "none" : "box-none" } as any]}>
+          <BlurView
+            pointerEvents="none"
+            intensity={GLASS.blur.medium}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(10,10,12,0.46)" }]}
+          />
+          {item.music_track_id ? (
+            <MusicTrackCard
+              trackId={item.music_track_id}
+              mode="video"
+              isActive={isActive && tabFocused && !paused}
+              audioMode={item.music_audio_mode}
+              musicVolume={item.music_volume}
+            />
+          ) : undefined}
           {!!item.content && (
             <>
               {/* Hidden full-text measurement — determines if truncation occurs */}
@@ -918,26 +925,6 @@ const VideoItem = React.memo(function VideoItem({
                 )}
               </TouchableOpacity>
             </>
-          )}
-          {!!item.audio_name && (
-            <TouchableOpacity
-              onPress={async () => {
-                if (!item.music_track_id) { router.push("/app/afumusic" as any); return; }
-                try {
-                  const tracks = await listMusicTracks();
-                  const track = tracks.find((entry) => entry.id === item.music_track_id);
-                  if (!track) { router.push("/app/afumusic" as any); return; }
-                  if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
-                  const uri = await getMusicPlaybackUri(track);
-                  if (uri) playMusic(track, uri);
-                } catch { router.push("/app/afumusic" as any); }
-              }}
-              activeOpacity={0.8}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 7, alignSelf: "flex-start", maxWidth: screenW * 0.72 }}
-            >
-              <Ionicons name="musical-notes" size={13} color="#fff" />
-              <Text numberOfLines={1} style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 12 }}>♫ {item.audio_name}</Text>
-            </TouchableOpacity>
           )}
         </Animated.View>
 
@@ -985,7 +972,17 @@ const VideoItem = React.memo(function VideoItem({
       </Animated.View>
 
       {/* ── WeChat-style horizontal bottom action bar ─────────────────────── */}
-      <View style={[vStyles.bottomBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+      <View style={[vStyles.bottomBar, { borderTopColor: videoGlass.border }]}>
+        <BlurView
+          pointerEvents="none"
+          intensity={GLASS.blur.medium}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: videoGlass.fill }]}
+        />
         {/* Left: avatar · @handle · slim Follow button below handle (no display name) */}
         <View style={vStyles.bottomBarLeft}>
           <TouchableOpacity onPress={() => navigateToProfile(item.profile.handle, true).catch(() => {})} activeOpacity={0.85}>
@@ -1000,7 +997,7 @@ const VideoItem = React.memo(function VideoItem({
                 <UserName
                   userId={item.author_id}
                   name={`@${item.profile.handle}`}
-                  style={[vStyles.barHandle, { color: colors.text }]}
+                  style={vStyles.barHandle}
                   numberOfLines={1}
                   suppressStar
                 />
@@ -1014,14 +1011,10 @@ const VideoItem = React.memo(function VideoItem({
             {!isSelf && (
               <TouchableOpacity
                 onPress={() => onFollow(item.author_id, isFollowing)}
-                style={[
-                  vStyles.followBtn,
-                  { borderColor: colors.border },
-                  isFollowing && [vStyles.followBtnActive, { borderColor: colors.border, backgroundColor: colors.backgroundSecondary }],
-                ]}
+                style={[vStyles.followBtn, isFollowing && vStyles.followBtnActive]}
                 activeOpacity={0.8}
               >
-                <Text style={[vStyles.followBtnText, { color: colors.textSecondary }]}>
+                <Text style={[vStyles.followBtnText, isFollowing && vStyles.followBtnTextActive]}>
                   {isFollowing ? "Following" : "Follow"}
                 </Text>
               </TouchableOpacity>
@@ -1033,21 +1026,21 @@ const VideoItem = React.memo(function VideoItem({
         <View style={vStyles.bottomBarRight}>
           <TouchableOpacity onPress={handleLike} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
             <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-              <Ionicons name="heart" size={24} color={item.liked ? "#FF3B30" : colors.text} />
+              <Ionicons name="heart" size={24} color={item.liked ? "#FF3B30" : "#fff"} />
             </Animated.View>
-            <Text style={[vStyles.barActionLabel, { color: colors.text }]}>{formatCount(item.likeCount)}</Text>
+            <Text style={vStyles.barActionLabel}>{formatCount(item.likeCount)}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onOpenComments(item.id)} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
-            <Ionicons name="chatbubble-ellipses" size={24} color={colors.text} />
-            <Text style={[vStyles.barActionLabel, { color: colors.text }]}>{formatCount(item.replyCount)}</Text>
+            <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
+            <Text style={vStyles.barActionLabel}>{formatCount(item.replyCount)}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onBookmark(item.id, item.bookmarked)} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
-            <Ionicons name="bookmark" size={24} color={item.bookmarked ? "#FFD60A" : colors.text} />
-            <Text style={[vStyles.barActionLabel, { color: colors.text }]}> </Text>
+            <Ionicons name="bookmark" size={24} color={item.bookmarked ? "#FFD60A" : "#fff"} />
+            <Text style={vStyles.barActionLabel}> </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => onShare(item)} hitSlop={8} activeOpacity={0.75} style={vStyles.barAction}>
-            <Ionicons name="paper-plane" size={24} color={colors.text} />
-            <Text style={[vStyles.barActionLabel, { color: colors.text }]}> </Text>
+            <Ionicons name="paper-plane" size={24} color="#fff" />
+            <Text style={vStyles.barActionLabel}> </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1060,7 +1053,7 @@ const VS_SHADOW = Platform.select({
   default: { textShadowColor: "rgba(0,0,0,0.8)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 },
 });
 const vStyles = StyleSheet.create({
-  item: { overflow: "hidden" },
+  item: { backgroundColor: "#000", overflow: "hidden" },
   centerOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   doubleTapHeart: {
     position: "absolute",
@@ -1069,9 +1062,9 @@ const vStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  pauseCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(0,0,0,0.4)", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" },
+  pauseCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: "transparent", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center", overflow: "hidden" },
   // Caption sits directly above the seek bar (seekContainer height = 28)
-  captionOverlay: { position: "absolute", left: 16, right: 16, bottom: 28 },
+  captionOverlay: { position: "absolute", left: 16, right: 16, bottom: 34, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, overflow: "hidden" },
   captionWrap: { marginTop: 2 },
   caption: { color: "rgba(255,255,255,0.93)", fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 21, ...VS_SHADOW },
   captionMeasure: { position: "absolute", opacity: 0, left: 0, right: 0, top: -9999, pointerEvents: "none" } as any,
@@ -1082,9 +1075,11 @@ const vStyles = StyleSheet.create({
     height: BOTTOM_BAR_H,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "transparent",
     paddingHorizontal: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(255,255,255,0.14)",
+    overflow: "hidden",
     gap: 8,
   },
   bottomBarLeft: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, overflow: "hidden" },
@@ -1096,7 +1091,7 @@ const vStyles = StyleSheet.create({
   followBtnText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   followBtnTextActive: { color: "rgba(255,255,255,0.45)" },
   barAction: { alignItems: "center", gap: 3 },
-  barActionLabel: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  barActionLabel: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold", ...VS_SHADOW },
   // ── Seek bar — hidden by default, tap to reveal, drag to scrub ────────────
   seekContainer: {
     position: "absolute", left: 0, right: 0, bottom: 0,
@@ -1135,7 +1130,7 @@ const vStyles = StyleSheet.create({
 
 export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {}) {
   const { accent } = useAppAccent();
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, setForceDark } = useTheme();
   const params = useLocalSearchParams<{ id: string }>();
   const rawId = isEmbedded ? undefined : params.id;
   const id = rawId && !isUuid(rawId) ? decodeId(rawId) : rawId;
@@ -1174,17 +1169,19 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   useFocusEffect(
     useCallback(() => {
       setTabFocused(true);
+      setForceDark(true);
       activateKeepAwakeAsync?.("video-feed")?.catch(() => {});
       return () => {
         setTabFocused(false);
+        setForceDark(false);
         setAutoScroll(false);
         autoScrollRef.current = false;
       deactivateKeepAwake?.("video-feed")?.catch(() => {});
       };
-    }, [])
+    }, [setForceDark])
   );
 
-  const listRef = useRef<FlatListInstance>(null);
+  const listRef = useRef<FlatList>(null);
   const cursorRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(hasMore);
@@ -1254,7 +1251,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         created_at: new Date(e.cachedAt).toISOString(),
         view_count: 0,
         audio_name: null,
-        music_track_id: null,
         profile: {
           display_name: e.authorName ?? "Cached video",
           handle: e.authorHandle ?? "offline",
@@ -1296,7 +1292,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             created_at: local.created_at,
             view_count: local.view_count,
             audio_name: null,
-        music_track_id: null,
             profile: {
               display_name: local.author_name ?? "User",
               handle: local.author_handle ?? "user",
@@ -1367,7 +1362,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     let query = supabase
       .from("posts")
-      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, music_track_id, music_audio_mode, music_volume, original_audio_volume, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
       .not("video_url", "is", null)
       .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false });
@@ -1400,7 +1395,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const [
         { data: likesData }, { data: repliesData }, { data: viewsData },
         { data: myLikes }, { data: myBookmarks }, { data: myFollows },
-        { data: creatorSubscriptions },
       ] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
@@ -1408,11 +1402,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
         currentUser ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
         currentUser ? supabase.from("follows").select("following_id").eq("follower_id", currentUser.id).in("following_id", authorIds) : { data: [] },
-        supabase.from("user_subscriptions")
-          .select("user_id,subscription_plans(tier,grants_verification)")
-          .in("user_id", authorIds)
-          .eq("is_active", true)
-          .gt("expires_at", new Date().toISOString()),
       ]);
 
       setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
@@ -1426,22 +1415,16 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
       const followedSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
-      const verifiedPlanAuthorIds = new Set(
-        (creatorSubscriptions || [])
-          .filter((s: any) => s.subscription_plans?.grants_verification)
-          .map((s: any) => s.user_id)
-      );
-      const priorityAuthorIds = new Set(
-        (creatorSubscriptions || [])
-          .filter((s: any) => ["silver", "gold", "platinum"].includes(s.subscription_plans?.tier))
-          .map((s: any) => s.user_id)
-      );
 
       const allMapped: VideoPost[] = data.map((p: any) => ({
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
-        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null, music_track_id: readMusicTrackId(p.overlay_metadata),
-        profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id), is_organization_verified: !!p.profiles?.is_organization_verified },
+        view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null,
+        music_track_id: p.music_track_id ?? null,
+        music_audio_mode: p.music_audio_mode ?? "original",
+        music_volume: Number(p.music_volume ?? 0.75),
+        original_audio_volume: Number(p.original_audio_volume ?? 1),
+        profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified, is_organization_verified: !!p.profiles?.is_organization_verified },
         liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
         likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
       }));
@@ -1484,8 +1467,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             interestMatches,
             isFollowing: followedSet.has(v.author_id),
             authorInteractionCount: v.liked ? 3 : 0,
-            isVerified: v.profile.is_verified,
-            isPriorityCreator: priorityAuthorIds.has(v.author_id),
+            isVerified: false,
             isOrgVerified: false,
             hasImages: !!v.image_url,
             sameCountry: false,
@@ -1519,8 +1501,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           const recency = Math.max(0, 100 - ageHours * 1.5);
           const velocity = Math.min((v.likeCount + v.replyCount * 2) / Math.max(ageHours, 0.5) * 6, 20);
           // Larger jitter so following tab isn't purely chronological every time
-          const priorityBoost = priorityAuthorIds.has(v.author_id) ? 35 : 0;
-          const score = recency + velocity + priorityBoost + Math.random() * 8;
+          const score = recency + velocity + Math.random() * 8;
           return { id: v.id, author_id: v.author_id, score, postType: "video" as const, video: v };
         });
         scored.sort((a, b) => b.score - a.score);
@@ -1547,13 +1528,17 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           } else if (existingIdx === -1) {
             const { data: tRow } = await supabase
               .from("posts")
-              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+              .select(`id, author_id, content, video_url, image_url, created_at, audio_name, music_track_id, music_audio_mode, music_volume, original_audio_volume, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
               .eq("id", id).not("video_url", "is", null).maybeSingle();
             if (tRow) {
               newVideos = [{
                 id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
                 video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
-                view_count: 0, audio_name: tRow.audio_name || null, music_track_id: readMusicTrackId(tRow.overlay_metadata),
+                view_count: 0, audio_name: tRow.audio_name || null,
+                music_track_id: tRow.music_track_id ?? null,
+                music_audio_mode: tRow.music_audio_mode ?? "original",
+                music_volume: Number(tRow.music_volume ?? 0.75),
+                original_audio_volume: Number(tRow.original_audio_volume ?? 1),
                 profile: { display_name: (tRow.profiles as any)?.display_name || "User", handle: (tRow.profiles as any)?.handle || "user", avatar_url: (tRow.profiles as any)?.avatar_url || null, is_verified: !!(tRow.profiles as any)?.is_verified, is_organization_verified: !!(tRow.profiles as any)?.is_organization_verified },
                 liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
               }, ...newVideos];
@@ -1658,21 +1643,21 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   // ── FlatList config ────────────────────────────────────────────────────────
 
   // Stable ref — never changes identity so FlatList never re-wires the handler
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const idx = viewableItems[0]?.index;
-    if (idx == null) return;
-
-    setActiveIndex(idx);
-    activeIndexRef.current = idx;
-    // Mark this video (and its neighbors) as seen so it gets demoted next session
-    const seenBatch: string[] = [];
-    for (const vt of viewableItems) {
-      if (vt.item?.id) seenBatch.push(vt.item.id);
-    }
-    if (seenBatch.length > 0) markVideosSeen(seenBatch).catch(() => {});
-    // Preload more when 3 from end
-    if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
-      fetchVideos(videoTabRef.current, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
+    if (idx != null) {
+      setActiveIndex(idx);
+      activeIndexRef.current = idx;
+      // Mark this video (and its neighbors) as seen so it gets demoted next session
+      const seenBatch: string[] = [];
+      for (const vt of viewableItems) {
+        if (vt.item?.id) seenBatch.push(vt.item.id);
+      }
+      if (seenBatch.length > 0) markVideosSeen(seenBatch).catch(() => {});
+      // Preload more when 3 from end
+      if (idx >= videosLenRef.current - 3 && !loadingMoreRef.current && hasMoreRef.current && cursorRef.current) {
+        fetchVideos(videoTabRef.current, cursorRef.current).catch(() => { loadingMoreRef.current = false; setLoadingMore(false); });
+      }
     }
   }).current;
 
@@ -1785,26 +1770,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     setTimeout(() => setDownloadToast(null), durationMs);
   }
 
-  async function handleSaveOffline(item: VideoPost) {
-    const result = await saveVideoForOffline(item.id, item.video_url, {
-      title: `${item.profile?.display_name ?? ""}${item.content ? `: ${item.content.slice(0, 60)}` : ""}`,
-      thumbnail: item.image_url ?? null,
-      authorId: item.author_id,
-      authorHandle: item.profile?.handle,
-      authorName: item.profile?.display_name,
-      authorAvatar: item.profile?.avatar_url ?? null,
-    });
-    if (result.success) {
-      showToast(result.alreadySaved ? "Already saved offline" : "Saved for offline viewing", 3000);
-    } else if (result.reason === "storage_limit") {
-      showToast("Offline storage is full. Remove a saved video first.", 3500);
-    } else if (result.reason === "already_saving") {
-      showToast("This video is already being saved", 2500);
-    } else {
-      showToast("Could not save offline. Check your connection and try again.", 3500);
-    }
-  }
-
   async function handleDownload(item: VideoPost) {
     if (downloading) return;
 
@@ -1832,7 +1797,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     }
 
     setDownloading(true); showToast("Saving to device…", 30000);
-    let stagedDownloadPath: string | null = null;
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== "granted") {
@@ -1841,19 +1805,13 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         return;
       }
       const url = await resolveDownloadUrl();
-      const documentDirectory = FileSystem.documentDirectory;
-      if (!documentDirectory) throw new Error("Persistent device storage is unavailable.");
-      stagedDownloadPath = `${documentDirectory}afuchat_dl_${item.id}.mp4`;
-      const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, stagedDownloadPath);
+      const dest = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? ""}afuchat_dl_${item.id}.mp4`;
+      const { uri, status: dlStatus } = await FileSystem.downloadAsync(url, dest);
       if (!uri || (dlStatus !== undefined && (dlStatus < 200 || dlStatus >= 400))) throw new Error(`HTTP ${dlStatus}`);
       await MediaLibrary.createAssetAsync(uri);
-      await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
-      stagedDownloadPath = null;
+      await FileSystem.deleteAsync(uri, { idempotent: true });
       setDownloading(false); showToast("Saved to your device");
     } catch (err) {
-      if (stagedDownloadPath) {
-        await FileSystem.deleteAsync(stagedDownloadPath, { idempotent: true }).catch(() => {});
-      }
       setDownloading(false); setDownloadToast(null);
       console.error("[download]", err);
       showAlert("Download failed", "Could not save the video. If the issue persists, check the Status page under Settings → Help & About.");
@@ -1938,7 +1896,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     <VideoItem
       item={item}
       isActive={index === activeIndex}
-      isNearActive={index === activeIndex + 1}
+      isNearActive={Math.abs(index - activeIndex) <= 2}
       isFollowing={followingSet.has(item.author_id)}
       isSelf={user?.id === item.author_id}
       commentsOpen={commentPostId === item.id}
@@ -1951,12 +1909,14 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
   if (loading) {
     return (
-      <View style={[mStyles.root, { paddingBottom: tabOffset, backgroundColor: colors.background }]}>
-        <StatusBar style="light" />
+      <View style={[mStyles.root, { paddingBottom: tabOffset }]}>
+        <StatusBar barStyle="light-content" />
         <ShortsFeedSkeleton dark={isDark} />
         {/* Render the real header on top so navigation chrome is visible during load */}
         <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
-          <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]}>
+            <Ionicons name="arrow-back" size={22} color="#fff" />
+          </TouchableOpacity>
           <View style={mStyles.tabRow}>
             <TouchableOpacity
               onPress={() => switchTab("for_you")}
@@ -1973,7 +1933,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
             </TouchableOpacity>
           </View>
           <View style={mStyles.headerRight}>
-            <TouchableOpacity hitSlop={8} onPress={() => router.push("/app/afusearch" as any)}>
+            <TouchableOpacity hitSlop={8} onPress={() => router.push("/search" as any)}>
               <Ionicons name="search" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -1983,12 +1943,14 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   }
 
   return (
-    <View style={[mStyles.root, { paddingBottom: tabOffset, backgroundColor: colors.background }]}>
-      <StatusBar style="light" />
+    <View style={[mStyles.root, { paddingBottom: tabOffset }]}>
+      <StatusBar barStyle="light-content" />
 
       {/* Fixed header */}
       <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
-        <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]}>
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
         <View style={mStyles.tabRow}>
           <TouchableOpacity
             onPress={() => switchTab("for_you")}
@@ -2005,7 +1967,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           </TouchableOpacity>
         </View>
         <View style={mStyles.headerRight}>
-          <TouchableOpacity hitSlop={8} onPress={() => router.push("/app/afusearch" as any)}>
+          <TouchableOpacity hitSlop={8} onPress={() => router.push("/search" as any)}>
             <Ionicons name="search" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -2015,7 +1977,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       {videos.length === 0 ? (
         <View style={mStyles.emptyState}>
           <View style={mStyles.emptyIcon}>
-            <Ionicons name={isOffline ? "cloud-offline" : "videocam"} size={44} color="rgba(255,255,255,0.25)" />
+            <Ionicons name={isOffline ? "cloud-offline" : "videocam"} size={44} color="#FFFFFF" />
           </View>
           <Text style={mStyles.emptyTitle}>{isOffline ? "You're offline" : "No videos yet"}</Text>
           <Text style={mStyles.emptySubtitle}>
@@ -2058,9 +2020,9 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           onLayout={onListLayout}
           // Misc
           decelerationRate="fast"
-          style={{ flex: 1, backgroundColor: colors.background }}
+          style={{ flex: 1, backgroundColor: "#000" }}
           ListFooterComponent={loadingMore ? (
-            <View style={{ width: SCREEN_W, height: listHeight, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+            <View style={{ width: SCREEN_W, height: listHeight, alignItems: "center", justifyContent: "center", backgroundColor: "#000" }}>
               <ActivityIndicator color="rgba(255,255,255,0.6)" size="small" />
             </View>
           ) : undefined}
@@ -2081,7 +2043,6 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         onShare={() => menuItem && setShareSheetItem(menuItem)}
         onRepost={() => menuItem && handleRepost(menuItem)}
         onDownload={() => menuItem && handleDownload(menuItem)}
-        onSaveOffline={() => menuItem && handleSaveOffline(menuItem)}
         onCopyLink={() => menuItem && handleCopyLink(menuItem)}
         onNotInterested={() => { if (menuItem) { setMenuItem(null); handleNotInterested(menuItem); } }}
         onReport={() => menuItem && handleReport(menuItem)}
@@ -2114,6 +2075,7 @@ export default function VideoPlayerScreen() {
 const mStyles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: "#000",
   } as any,
   headerRow: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 30, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingBottom: 10 },
   headerSide: { width: 38, alignItems: "center" },

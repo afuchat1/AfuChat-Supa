@@ -5,15 +5,14 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import VideoPreview from "@/components/ui/VideoPreview";
@@ -236,7 +235,9 @@ export default function CreateDuetScreen() {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-          <GlassBackButton onPress={() => router.back()} style={s.headerBtn} icon="close" accessibilityLabel="Close" />
+          <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
           <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
           <View style={s.headerBtn} />
         </View>
@@ -251,7 +252,9 @@ export default function CreateDuetScreen() {
     return (
       <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-          <GlassBackButton onPress={() => router.back()} style={s.headerBtn} icon="close" accessibilityLabel="Close" />
+          <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
           <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
           <View style={s.headerBtn} />
         </View>
@@ -265,7 +268,9 @@ export default function CreateDuetScreen() {
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border, backgroundColor: colors.surface }]}>
-        <GlassBackButton onPress={() => router.back()} style={s.headerBtn} icon="close" accessibilityLabel="Close" />
+        <TouchableOpacity onPress={() => router.back()} style={s.headerBtn} hitSlop={8}>
+          <Ionicons name="close" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[s.headerTitle, { color: colors.text }]}>Duet</Text>
         <TouchableOpacity
           onPress={post}
@@ -299,7 +304,7 @@ export default function CreateDuetScreen() {
             {/* Original video */}
             <View style={s.videoHalf}>
               <Text style={[s.videoHalfLabel, { color: colors.textMuted }]}>Original</Text>
-              <View style={[s.videoBox, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={[s.videoBox, { backgroundColor: "#000" }]}>
                 <VideoPreview
                   uri={original.video_url}
                   style={StyleSheet.absoluteFill}
@@ -377,7 +382,7 @@ export default function CreateDuetScreen() {
           </View>
 
           {/* Info card */}
-          <View style={[s.infoCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+          <View style={[s.infoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="information-circle" size={18} color={colors.textMuted} />
             <Text style={[s.infoText, { color: colors.textMuted }]}>
               Your duet will appear side-by-side with the original video in the feed. It will be public on your profile.

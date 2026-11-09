@@ -17,7 +17,6 @@ import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { AfuLogo } from "@/components/ui/AfuLogo";
-import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import Colors from "@/constants/colors";
 import { openAppReview } from "@/lib/appReview";
 import { requestNativeWidgetPin } from "@/lib/nativeShareShortcuts";
@@ -39,7 +38,7 @@ function Section({
         {title && (
           <Text style={[s.sectionLabel, { color: colors.textMuted }]}>{t(title)}</Text>
         )}
-      <View style={[s.card, { backgroundColor: colors.cardSurface }]}>
+      <View style={[s.card, { backgroundColor: colors.card }]}>
         {children}
       </View>
     </View>
@@ -129,7 +128,7 @@ export default function SettingsScreen() {
 
         {/* ── Profile card ──────────────────────────────────────────────── */}
         <TouchableOpacity
-          style={[s.profileCard, { backgroundColor: colors.cardSurface }]}
+          style={[s.profileCard, { backgroundColor: colors.card }]}
           onPress={() => router.push("/profile/edit")}
           activeOpacity={0.8}
         >
@@ -343,10 +342,8 @@ export default function SettingsScreen() {
         <View style={s.footer}>
           <View style={s.footerBrand}>
             <AfuLogo size={24} />
-            <AfuChatWordmark
-              style={[s.footerAfu, { color: colors.textMuted }]}
-              accentColor={BRAND}
-            />
+            <Text style={[s.footerAfu,  { color: colors.textMuted }]}>Afu</Text>
+            <Text style={[s.footerChat, { color: BRAND }]}>Chat</Text>
           </View>
           <Text style={[s.footerTagline, { color: colors.textMuted }]}>
             {t("settings.footer_tagline")}
@@ -431,5 +428,6 @@ const s = StyleSheet.create({
   footer: { alignItems: "center", paddingTop: 16, paddingBottom: 8, gap: 4 },
   footerBrand: { flexDirection: "row", alignItems: "center", gap: 4 },
   footerAfu:  { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
+  footerChat: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: -0.4 },
   footerTagline: { fontSize: 11, fontFamily: "Inter_400Regular", letterSpacing: 0.3 },
 });

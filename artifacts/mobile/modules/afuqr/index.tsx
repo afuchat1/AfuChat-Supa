@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from "expo-camera";
 import { useTheme } from "@/hooks/useTheme";
-import { openExternalLink } from "@/lib/openExternalLink";
 import { showAlert } from "@/lib/alert";
 import * as Haptics from "@/lib/haptics";
 import Colors from "@/constants/colors";
@@ -61,7 +60,7 @@ export default function AfuQRApp() {
     if (!result) return;
     const { data } = result;
     if (/^https?:\/\//i.test(data)) {
-      await openExternalLink(data).catch(() => showAlert("Error", "Could not open URL."));
+      await Linking.openURL(data).catch(() => showAlert("Error", "Could not open URL."));
     } else if (/^tel:/i.test(data)) {
       await Linking.openURL(data).catch(() => showAlert("Error", "Could not open phone."));
     } else if (/^mailto:/i.test(data)) {
@@ -89,8 +88,8 @@ export default function AfuQRApp() {
   if (!permission.granted) {
     return (
       <View style={[s.center, { backgroundColor: colors.background, padding: 36 }]}>
-        <View style={[s.permIconWrap, { backgroundColor: colors.surface }]}>
-          <Ionicons name="qr-code" size={48} color={colors.text} />
+        <View style={[s.permIconWrap, { backgroundColor: "#1C1C1E" }]}>
+          <Ionicons name="qr-code" size={48} color="#fff" />
         </View>
         <Text style={[s.permTitle, { color: colors.text }]}>Camera Access</Text>
         <Text style={[s.permSub, { color: colors.textMuted }]}>
@@ -112,7 +111,7 @@ export default function AfuQRApp() {
   const isUrl = result && /^https?:\/\//i.test(result.data);
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]}>
+    <View style={[s.root, { backgroundColor: "#000" }]}>
       <CameraView
         style={StyleSheet.absoluteFill}
         facing="back"
@@ -158,7 +157,7 @@ export default function AfuQRApp() {
 
         {result && typeInfo && (
           <View
-            style={[s.resultCard, { bottom: insets.bottom + 16, backgroundColor: colors.cardSurface }]}
+            style={[s.resultCard, { bottom: insets.bottom + 16, backgroundColor: colors.surface }]}
           >
             <View style={s.resultTop}>
               <View style={[s.resultIconWrap, { backgroundColor: Colors.brand + "18" }]}>

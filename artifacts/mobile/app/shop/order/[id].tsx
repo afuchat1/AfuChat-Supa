@@ -8,11 +8,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
-  type ScrollViewInstance,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
@@ -22,7 +21,6 @@ import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import {
   ShopOrder,
@@ -103,7 +101,7 @@ export default function OrderDetailScreen() {
   const { user, profile, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollRef = useRef<AfuNativeRef.ScrollView>(null);
 
   const [order, setOrder] = useState<ShopOrder | null>(null);
   const [messages, setMessages] = useState<OrderMessage[]>([]);
@@ -281,12 +279,9 @@ export default function OrderDetailScreen() {
       <View style={[st.root, { backgroundColor: colors.backgroundSecondary, alignItems: "center", justifyContent: "center" }]}>
         <Ionicons name="alert-circle" size={48} color={colors.textMuted} />
         <Text style={[{ color: colors.text, fontSize: 16, fontFamily: "Inter_500Medium", marginTop: 12 }]}>Order not found</Text>
-        <GlassBackButton
-          onPress={() => router.back()}
-          label="Go back"
-          accessibilityLabel="Go back"
-          style={{ marginTop: 20, alignSelf: "center" }}
-        />
+        <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20, padding: 12 }}>
+          <Text style={{ color: BRAND, fontFamily: "Inter_600SemiBold" }}>Go back</Text>
+        </TouchableOpacity>
       </View>
     );
   }

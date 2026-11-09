@@ -71,8 +71,7 @@ const NAV_ROUTES: Record<string, string> = {
   discover:           "/(tabs)/discover",
   chats:              "/(tabs)/chats",
   chat:               "/(tabs)/chats",
-  search:             "/app/afusearch",
-  football:           "/app/afufootball",
+  search:             "/(tabs)/search",
   "new-chat":         "/chat/new",
   communities:        "/(tabs)/communities",
   contacts:           "/(tabs)/contacts",
@@ -105,7 +104,8 @@ const NAV_ROUTES: Record<string, string> = {
   "my-posts":         "/my-posts",
   "watch-history":    "/watch-history",
   // ── Commerce & mini-apps ──────────────────────────────────────────────────
-  shop:               "/app/afumarket",
+  shop:               "/shop",
+  games:              "/app/afugames",
   freelance:          "/app/afufreelance",
   gifts:              "/app/afugifts",
   business:           "/app/afubusiness",
@@ -130,7 +130,7 @@ const SYSTEM_ROUTES = new Set([
   "terms", "about", "help", "feedback", "likes",
   "explore", "trending", "feed", "home", "index", "join",
   "achievements", "watch-history",
-  "business", "collections", "welcome",
+  "business", "collections", "games", "welcome",
   "store", "paid-communities", "phone-contacts", "file-manager",
   "create-post", "username-market", "user-discovery",
   "profile-not-found", "profile-private",
@@ -216,31 +216,6 @@ export async function handleIncomingUrl(url: string | null | undefined): Promise
       const chatId = decodePathSegment(segments[1]);
       if (isChatId(chatId)) {
         return { type: "navigate", path: "/chat/[id]", params: { id: chatId } };
-      }
-    }
-
-    // AfuFootball shared links are generated at /football/{match|team|league}/:id.
-    // Validate provider IDs before routing so arbitrary path segments are never
-    // interpreted as a dynamic entity ID.
-    if (segments[0] === "football") {
-      if (segments.length === 1) {
-        return { type: "navigate", path: "/app/afufootball" };
-      }
-      if (segments.length === 2 && segments[1] === "search") {
-        return { type: "navigate", path: "/football/search" };
-      }
-      if (segments.length === 2 && segments[1] === "settings") {
-        return { type: "navigate", path: "/football/settings" };
-      }
-      if (segments.length === 3 && ["match", "team", "league"].includes(segments[1])) {
-        const id = segments[2];
-        if (/^\d{1,10}$/.test(id) && Number(id) > 0) {
-          return {
-            type: "navigate",
-            path: `/football/${segments[1]}/[id]`,
-            params: { id },
-          };
-        }
       }
     }
 

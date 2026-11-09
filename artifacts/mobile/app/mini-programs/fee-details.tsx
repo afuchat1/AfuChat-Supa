@@ -45,14 +45,14 @@ export default function FeeDetailsScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
         {hasTransaction && (
           <>
-        <View style={[styles.serviceCard, { backgroundColor: colors.cardSurface }]}>
+            <View style={[styles.serviceCard, { backgroundColor: colors.surface }]}>
               <View style={[styles.serviceIconWrap, { backgroundColor: (FEE_COLOR_MAP[serviceType] || colors.accent) + "15" }]}>
                 <Ionicons name={FEE_ICON_MAP[serviceType] || "receipt"} size={32} color={FEE_COLOR_MAP[serviceType] || colors.accent} />
               </View>
               <Text style={[styles.serviceName, { color: colors.text }]}>{SERVICE_LABELS[serviceType]}</Text>
             </View>
 
-        <View style={[styles.breakdownCard, { backgroundColor: colors.cardSurface }]}>
+            <View style={[styles.breakdownCard, { backgroundColor: colors.surface }]}>
               <Text style={[styles.breakdownTitle, { color: colors.text }]}>Fee Breakdown</Text>
               <View style={styles.row}>
                 <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Service Amount</Text>
@@ -73,7 +73,7 @@ export default function FeeDetailsScreen() {
         )}
 
         {!hasTransaction && (
-      <View style={[styles.heroCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface }]}>
             <View style={[styles.heroIcon, { backgroundColor: colors.accent + "15" }]}>
               <Ionicons name="receipt" size={36} color={colors.accent} />
             </View>
@@ -84,7 +84,7 @@ export default function FeeDetailsScreen() {
           </View>
         )}
 
-      <View style={[styles.allFeesCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[styles.allFeesCard, { backgroundColor: colors.surface }]}>
           <Text style={[styles.allFeesTitle, { color: colors.text }]}>All Service Fees</Text>
           {(Object.keys(SERVICE_FEES) as ServiceType[]).map((key, i, arr) => (
             <View key={key}>

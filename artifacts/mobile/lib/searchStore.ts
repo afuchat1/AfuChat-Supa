@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { displaySearchTerm, normalizeSearchTerm } from "@/lib/searchNormalization";
 
 const HISTORY_KEY = "@afuchat_search_history";
 const SAVED_KEY = "@afuchat_saved_searches";
@@ -33,10 +32,8 @@ export async function getSearchHistory(): Promise<string[]> {
 
 export async function addToHistory(term: string): Promise<string[]> {
   const history = await getSearchHistory();
-  const displayTerm = displaySearchTerm(term);
-  const normalized = normalizeSearchTerm(displayTerm);
-  const filtered = history.filter(h => normalizeSearchTerm(h) !== normalized);
-  const updated = [displayTerm, ...filtered].slice(0, 30);
+  const filtered = history.filter(h => h.toLowerCase() !== term.toLowerCase());
+  const updated = [term, ...filtered].slice(0, 30);
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
   return updated;
 }
@@ -63,8 +60,7 @@ export async function getSavedSearches(): Promise<SavedSearch[]> {
 
 export async function saveSearch(query: string, category: string): Promise<SavedSearch[]> {
   const saved = await getSavedSearches();
-  const normalized = normalizeSearchTerm(query);
-  if (saved.some(s => normalizeSearchTerm(s.query) === normalized)) return saved;
+  if (saved.some(s => s.query.toLowerCase() === query.toLowerCase())) return saved;
   const entry: SavedSearch = {
     id: Date.now().toString(36),
     query,

@@ -1,19 +1,14 @@
-import { runAfterIdle } from "./runAfterIdle";
-import { getLiveSupabaseSession, supabase } from "./supabase";
+import { scheduleAfterInteractions } from "./scheduleAfterInteractions";
+import { supabase } from "./supabase";
 import {
   getPendingMessages,
   removePendingMessage,
   onConnectivityChange,
-  onConnectionStateChange,
-  getConnectivityState,
-  canAttemptNetwork,
-  beginDataSync,
   isOnline,
 } from "./offlineStore";
 import { drainQueue, startSyncQueue, stopSyncQueue } from "./storage/syncQueue";
 import {
   getPendingLocalMessages,
-  isClientMessageId,
   markMessageSynced,
   getLocalMessageCount,
   saveMessages,
@@ -25,59 +20,12 @@ const MAX_ITEMS_PER_SYNC = 10;
 export async function syncPendingMessages(): Promise<void> {
   if (syncing || !isOnline()) return;
   syncing = true;
-  let finishDataSync: (() => void) | null = null;
 
   try {
-    const session = await getLiveSupabaseSession();
-    if (!session) return;
-
     // 1. Sync legacy AsyncStorage pending messages
-    const pending = (await getPendingMessages()).filter(
-      (msg) => msg.sender_id === session.user.id,
-    );
-    // 2. Sync SQLite pending messages (primary path)
-    const localPending = (await getPendingLocalMessages()).filter(
-      (msg) => msg.sender_id === session.user.id,
-    );
-    if (pending.length > 0 || localPending.length > 0) {
-      finishDataSync = beginDataSync();
-    }
-
+    const pending = await getPendingMessages();
     for (const msg of pending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
-        if (isClientMessageId(msg.id)) {
-          const insertPayload: Record<string, unknown> = {
-            id: msg.id,
-            chat_id: msg.chat_id,
-            sender_id: msg.sender_id,
-            encrypted_content: msg.encrypted_content,
-          };
-          if (msg.reply_to_message_id) {
-            insertPayload.reply_to_message_id = msg.reply_to_message_id;
-          }
-          const { data: inserted, error: insertError } = await supabase
-            .from("messages")
-            .insert(insertPayload)
-            .select("id, encrypted_content")
-            .single();
-          if (!insertError && inserted?.id === msg.id) {
-            await removePendingMessage(msg.id);
-            continue;
-          }
-
-          const { data: committed, error: confirmError } = await supabase
-            .from("messages")
-            .select("id, encrypted_content")
-            .eq("id", msg.id)
-            .eq("chat_id", msg.chat_id)
-            .eq("sender_id", msg.sender_id)
-            .maybeSingle();
-          if (!confirmError && committed?.id === msg.id && committed.encrypted_content === msg.encrypted_content) {
-            await removePendingMessage(msg.id);
-          }
-          continue;
-        }
-
         // Deduplication: check if a message with the same content+chat+sender
         // was already inserted (e.g., sent on a previous retry before the ack
         // arrived). If found, just remove from queue without re-inserting.
@@ -109,64 +57,36 @@ export async function syncPendingMessages(): Promise<void> {
       }
     }
 
+    // 2. Sync SQLite pending messages (primary path)
+    const localPending = await getPendingLocalMessages();
     for (const msg of localPending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
-        // New local messages use the same UUID as the server row, so a retry
-        // after a lost acknowledgement is safely idempotent without treating
-        // two intentionally identical messages as duplicates. Keep the
-        // timestamp/content check only for rows queued by older app versions.
-        if (!isClientMessageId(msg.id)) {
-          const { data: legacyMatch } = await supabase
-            .from("messages")
-            .select("id")
-            .eq("chat_id", msg.conversation_id)
-            .eq("sender_id", msg.sender_id)
-            .eq("encrypted_content", msg.content)
-            .gte("sent_at", new Date(Date.now() - 60_000).toISOString())
-            .maybeSingle();
+        // Deduplication: same guard as above
+        const { data: existing } = await supabase
+          .from("messages")
+          .select("id")
+          .eq("chat_id", msg.conversation_id)
+          .eq("sender_id", msg.sender_id)
+          .eq("encrypted_content", msg.content)
+          .gte("sent_at", new Date(Date.now() - 60_000).toISOString())
+          .maybeSingle();
 
-          if (legacyMatch) {
-            await markMessageSynced(msg.id, legacyMatch.id);
-            continue;
-          }
+        if (existing) {
+          await markMessageSynced(msg.id, existing.id);
+          continue;
         }
-
-        const insertPayload: Record<string, unknown> = {
-          chat_id: msg.conversation_id,
-          sender_id: msg.sender_id,
-          encrypted_content: msg.content,
-        };
-        if (isClientMessageId(msg.id)) insertPayload.id = msg.id;
-        if (msg.reply_to_id) insertPayload.reply_to_message_id = msg.reply_to_id;
 
         const { data, error } = await supabase
           .from("messages")
-          .insert(insertPayload)
+          .insert({
+            chat_id: msg.conversation_id,
+            sender_id: msg.sender_id,
+            encrypted_content: msg.content,
+          })
           .select("id")
           .single();
         if (!error && data?.id) {
           await markMessageSynced(msg.id, data.id);
-          continue;
-        }
-
-        // If the insert committed but its acknowledgement was lost, confirm the
-        // same immutable message ID before retrying. Never infer success from
-        // matching text for new client-ID messages.
-        if (isClientMessageId(msg.id)) {
-          const { data: committed, error: confirmError } = await supabase
-            .from("messages")
-            .select("id, encrypted_content")
-            .eq("id", msg.id)
-            .eq("chat_id", msg.conversation_id)
-            .eq("sender_id", msg.sender_id)
-            .maybeSingle();
-          if (
-            !confirmError &&
-            committed?.id === msg.id &&
-            committed.encrypted_content === msg.content
-          ) {
-            await markMessageSynced(msg.id, committed.id);
-          }
         }
       } catch {
         // Leave the row pending. The next connectivity/interval pass can retry.
@@ -182,7 +102,6 @@ export async function syncPendingMessages(): Promise<void> {
     // A failed pass must remain recoverable through the next retry trigger.
   } finally {
     // Never leave the global lock held after a SQLite or network exception.
-    finishDataSync?.();
     syncing = false;
   }
 }
@@ -193,7 +112,6 @@ async function reconnectRealtime(): Promise<void> {
   if (realtimeReconnecting) return;
   realtimeReconnecting = true;
   try {
-    if (!(await getLiveSupabaseSession())) return;
     await supabase.realtime.disconnect();
     await supabase.realtime.connect();
   } catch {
@@ -204,65 +122,7 @@ async function reconnectRealtime(): Promise<void> {
 }
 
 let unsubscribe: (() => void) | null = null;
-let connectionStateUnsubscribe: (() => void) | null = null;
 const onlineListeners: Array<() => void> = [];
-let connectionProbeTimer: ReturnType<typeof setTimeout> | null = null;
-let connectionProbeAttempt = 0;
-let connectionProbeInFlight = false;
-
-function clearConnectionProbe(): void {
-  if (connectionProbeTimer) clearTimeout(connectionProbeTimer);
-  connectionProbeTimer = null;
-}
-
-function scheduleConnectionProbe(delayMs: number): void {
-  if (
-    connectionProbeTimer ||
-    connectionProbeInFlight ||
-    getConnectivityState() === "online" ||
-    !canAttemptNetwork()
-  ) return;
-  connectionProbeTimer = setTimeout(() => {
-    connectionProbeTimer = null;
-    void probeConnection();
-  }, delayMs);
-}
-
-async function probeConnection(): Promise<void> {
-  if (
-    connectionProbeInFlight ||
-    getConnectivityState() === "online" ||
-    !canAttemptNetwork()
-  ) return;
-  connectionProbeInFlight = true;
-  try {
-    const session = await getLiveSupabaseSession();
-    if (!session) return;
-
-    // This authenticated read is a real connectivity probe. A returned HTTP
-    // response confirms the app endpoint even if Android's reachability check
-    // is stale; a failed request keeps the banner in Connecting.
-    const { error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", session.user.id)
-      .limit(1);
-    if (!error || getConnectivityState() === "online") {
-      connectionProbeAttempt = 0;
-      return;
-    }
-  } catch {
-    // Retry below with bounded backoff.
-  } finally {
-    connectionProbeInFlight = false;
-  }
-
-  if (getConnectivityState() === "connecting") {
-    connectionProbeAttempt += 1;
-    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(connectionProbeAttempt, 5));
-    scheduleConnectionProbe(delay);
-  }
-}
 
 export function addOnlineListener(fn: () => void): () => void {
   onlineListeners.push(fn);
@@ -307,34 +167,14 @@ function stopRetryInterval(): void {
 }
 
 export function startOfflineSync(): void {
-  if (unsubscribe) {
-    if (isOnline()) {
-      void syncPendingMessages();
-      void drainQueue(MAX_ITEMS_PER_SYNC);
-    }
-    return;
-  }
+  if (unsubscribe) return;
 
   // Keep both offline systems under the same authenticated lifecycle. The root
   // layout must not start either one before Supabase has restored identity.
   startSyncQueue();
 
-  connectionStateUnsubscribe = onConnectionStateChange((state) => {
-    if (state === "offline") {
-      clearConnectionProbe();
-      connectionProbeAttempt = 0;
-    } else if (state === "connecting") {
-      scheduleConnectionProbe(250);
-    } else {
-      clearConnectionProbe();
-      connectionProbeAttempt = 0;
-    }
-  });
-
   unsubscribe = onConnectivityChange((online) => {
     if (online) {
-      clearConnectionProbe();
-      connectionProbeAttempt = 0;
       void syncPendingMessages();
       reconnectRealtime();
       onlineListeners.forEach((fn) => { try { fn(); } catch {} });
@@ -353,12 +193,6 @@ export function stopOfflineSync(): void {
     unsubscribe();
     unsubscribe = null;
   }
-  if (connectionStateUnsubscribe) {
-    connectionStateUnsubscribe();
-    connectionStateUnsubscribe = null;
-  }
-  clearConnectionProbe();
-  connectionProbeAttempt = 0;
   stopRetryInterval();
   stopSyncQueue();
 }
@@ -374,16 +208,12 @@ export async function preloadConversationMessages(
   chatIds: string[],
 ): Promise<void> {
   if (!isOnline() || chatIds.length === 0) return;
-  const initialSession = await getLiveSupabaseSession();
-  if (!initialSession) return;
   // This is background warm-up, not a requirement for opening chat. Start
   // after current interactions and keep it small so a large chat list cannot
   // monopolise the JS/native bridge or saturate the network.
   await new Promise<void>((resolve) => {
-    runAfterIdle(resolve);
+    scheduleAfterInteractions(() => resolve());
   });
-  const currentSession = await getLiveSupabaseSession();
-  if (currentSession?.user?.id !== initialSession.user.id) return;
   for (const chatId of chatIds.slice(0, 5)) {
     if (!isOnline()) break;
     try {

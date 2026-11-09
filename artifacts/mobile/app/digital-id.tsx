@@ -16,7 +16,6 @@ import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import Svg, { Line } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Sharing from "expo-sharing";
@@ -188,7 +187,9 @@ export default function DigitalIdScreen() {
 
       {/* HEADER */}
       <View style={[s.header, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={s.iconBtn} />
+        <TouchableOpacity onPress={() => router.back()} style={s.iconBtn}>
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[s.headerTitle, { color: colors.text }]}>Digital ID</Text>
         <View style={s.iconBtn} />
       </View>
@@ -232,7 +233,7 @@ export default function DigitalIdScreen() {
         <View style={[s.tip, { backgroundColor: isDark ? "#ffffff07" : "#00000007", borderColor: BRAND + "22" }]}>
           <Ionicons name="scan-circle" size={13} color={BRAND} />
           <Text style={[s.tipText, { color: colors.textMuted }]}>
-            {"Show your QR code so others can scan and send you payments instantly."}
+            Show your QR code so others can scan and send you payments instantly.
           </Text>
         </View>
       </ScrollView>
@@ -269,11 +270,10 @@ function ActionBtn({ label, icon, color, loading, disabled, onPress }: {
 
 /* ─── SHARED CARD PARTS ─── */
 function CardStrip({ primary, secondary, h = 8 }: { primary: string; secondary: string; h?: number }) {
-  const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", height: h }}>
       <View style={{ flex: 1.8, backgroundColor: primary }} />
-      <View style={{ flex: 5.4, backgroundColor: colors.border }} />
+      <View style={{ flex: 5.4, backgroundColor: "#000000" }} />
       <View style={{ flex: 1.8, backgroundColor: secondary }} />
     </View>
   );
@@ -299,12 +299,11 @@ function SecurityPattern({ w, h, color }: { w: number; h: number; color: string 
 }
 
 function MagneticStripe({ w }: { w: number }) {
-  const { colors } = useTheme();
   return (
-    <View style={{ width: w, height: 38, backgroundColor: colors.backgroundTertiary, marginVertical: 0 }}>
+    <View style={{ width: w, height: 38, backgroundColor: "#1a1a1a", marginVertical: 0 }}>
       <View style={{ position: "absolute", inset: 0, opacity: 0.4 }}>
         {[...Array(6)].map((_, i) => (
-          <View key={i} style={{ height: 2, backgroundColor: i % 2 === 0 ? colors.separator : colors.border, flex: 1 }} />
+          <View key={i} style={{ height: 2, backgroundColor: i % 2 === 0 ? "#333" : "#111", flex: 1 }} />
         ))}
       </View>
     </View>
@@ -365,22 +364,20 @@ type CP = {
 };
 
 function Field({ label, value, mono, accent, large }: { label: string; value: string; mono?: boolean; accent?: string; large?: boolean }) {
-  const { colors } = useTheme();
   return (
     <View style={{ gap: 2 }}>
-      <Text style={[s.fLbl, { color: colors.textMuted }]}>{label}</Text>
-      <Text style={[large ? s.fValLg : s.fVal, mono && s.fMono, { color: accent ?? colors.text }]} numberOfLines={1}>{value}</Text>
+      <Text style={s.fLbl}>{label}</Text>
+      <Text style={[large ? s.fValLg : s.fVal, mono && s.fMono, accent ? { color: accent } : {}]} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
 /* ─── FRONT FACE ─── */
 function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, memberNumber, issued, expires, mrzLine1, mrzLine2 }: CP) {
-  const { colors } = useTheme();
   const AV = Math.round(cw * 0.30);
 
   return (
-    <View style={[s.card, { width: cw, height: ch, backgroundColor: colors.cardSurface }]}>
+    <View style={[s.card, { width: cw, height: ch, backgroundColor: "#0C0A06" }]}>
       <SecurityPattern w={cw} h={ch} color={theme.primary} />
 
       {/* TOP STRIP */}
@@ -389,12 +386,12 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
       {/* HEADER */}
       <View style={s.frontHdr}>
         <AfuLogo size={28} style={{ marginRight: 8 }} />
-        <View style={{ flex: 1, minWidth: 0, marginLeft: 0 }}>
+        <View style={{ flex: 1, marginLeft: 0 }}>
           <Text style={s.frontBrand}>AFUCHAT</Text>
-          <Text style={[s.frontSub, { color: colors.textMuted }]}>UNIVERSE · DIGITAL IDENTITY CARD</Text>
+          <Text style={s.frontSub}>UNIVERSE · DIGITAL IDENTITY CARD</Text>
         </View>
-          <View style={[s.idBadge, { borderColor: colors.border }]}>
-            <Text style={[s.idBadgeTxt, { color: colors.text }]}>ID</Text>
+        <View style={s.idBadge}>
+          <Text style={s.idBadgeTxt}>ID</Text>
         </View>
       </View>
 
@@ -403,10 +400,10 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
         {/* LEFT: circular avatar + role badge */}
         <View style={{ alignItems: "center", gap: 8, width: AV + 16 }}>
           <View style={[s.avatarRing, { width: AV + 6, height: AV + 6, borderRadius: (AV + 6) / 2, borderColor: theme.primary }]}>
-            <View style={[s.avatarInner, { width: AV, height: AV, borderRadius: AV / 2, backgroundColor: colors.backgroundTertiary }]}>
+            <View style={[s.avatarInner, { width: AV, height: AV, borderRadius: AV / 2 }]}>
               {profile?.avatar_url
                 ? <Image source={{ uri: profile.avatar_url }} style={{ width: AV, height: AV, borderRadius: AV / 2 }} resizeMode="cover" />
-                : <Ionicons name="person" size={AV * 0.48} color={colors.textMuted} />}
+                : <Ionicons name="person" size={AV * 0.48} color="#ffffff44" />}
             </View>
           </View>
           <View style={[s.roleBadgeFront, { backgroundColor: roleConf.bg, borderColor: roleConf.color + "99" }]}>
@@ -415,7 +412,7 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
         </View>
 
         {/* RIGHT: info fields */}
-        <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
+        <View style={{ flex: 1, gap: 7 }}>
           <Field label="FULL NAME" value={profile?.display_name ?? "N/A"} large />
           <Field label="MEMBER NO." value={`AFU-${padMember(memberNumber ?? 1)}`} mono accent={theme.primary} large />
           <Field label="NATIONALITY" value={profile?.country ?? "DIGITAL CITIZEN"} />
@@ -424,19 +421,19 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
             <View style={{ flex: 1 }}><Field label="EXPIRES" value={expires} /></View>
           </View>
           <View style={{ marginTop: 2 }}>
-            <Text style={[s.sigLbl, { color: colors.textMuted }]}>{"HOLDER'S SIGNATURE"}</Text>
-            <Text style={[s.sigValFront, { color: colors.text }]} numberOfLines={1}>{profile?.display_name ?? ""}</Text>
+            <Text style={s.sigLbl}>{"HOLDER'S SIGNATURE"}</Text>
+            <Text style={s.sigValFront} numberOfLines={1}>{profile?.display_name ?? ""}</Text>
           </View>
         </View>
       </View>
 
       {/* DIVIDER */}
-      <View style={[s.hdivider, { backgroundColor: colors.separator }]} />
+      <View style={s.hdivider} />
 
       {/* MRZ */}
-      <View style={[s.mrzZone, { backgroundColor: colors.backgroundTertiary }]}>
-        <Text style={[s.mrz, { color: colors.textMuted }]} numberOfLines={1}>{mrzLine1}</Text>
-        <Text style={[s.mrz, { color: colors.textMuted }]} numberOfLines={1}>{mrzLine2}</Text>
+      <View style={s.mrzZone}>
+        <Text style={s.mrz} numberOfLines={1}>{mrzLine1}</Text>
+        <Text style={s.mrz} numberOfLines={1}>{mrzLine2}</Text>
       </View>
 
       {/* BOTTOM STRIP */}
@@ -447,11 +444,10 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
 
 /* ─── BACK FACE ─── */
 function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber, afuId, issued, expires, qrValue, mrzLine1, mrzLine2 }: CP) {
-  const { colors } = useTheme();
   const QR_SIZE = Math.round(ch * 0.46);
 
   return (
-    <View style={[s.card, { width: cw, height: ch, backgroundColor: colors.cardSurface }]}>
+    <View style={[s.card, { width: cw, height: ch, backgroundColor: "#0C0A06" }]}>
       <SecurityPattern w={cw} h={ch} color={theme.secondary || theme.primary} />
 
       {/* TOP STRIP */}
@@ -461,16 +457,16 @@ function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber,
       <View style={s.backHdr}>
         <AfuLogo size={18} style={{ marginRight: 6 }} />
         <Text style={s.backBrand}>AFUCHAT</Text>
-          <Text style={[s.backBrand, { color: colors.textMuted, fontWeight: "400" }]}> · DIGITAL</Text>
+        <Text style={[s.backBrand, { color: "#ffffff55", fontWeight: "400" }]}> · DIGITAL</Text>
         <View style={{ flex: 1 }} />
         <View style={s.secureBadge}>
-          <Ionicons name="lock-closed" size={9} color={colors.text} />
-          <Text style={[s.secureTxt, { color: colors.text }]}> SECURE</Text>
+          <Ionicons name="lock-closed" size={9} color="#fff" />
+          <Text style={s.secureTxt}> SECURE</Text>
         </View>
       </View>
 
       {/* DIVIDER */}
-      <View style={[s.hdivider, { backgroundColor: colors.separator }]} />
+      <View style={s.hdivider} />
 
       {/* BODY */}
       <View style={s.backBody}>
@@ -485,9 +481,9 @@ function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber,
         </View>
 
         {/* Right info panel */}
-        <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+        <View style={{ flex: 1, gap: 8 }}>
           <View>
-          <Text style={[s.fLbl, { color: colors.textMuted }]}>AFU ID</Text>
+            <Text style={s.fLbl}>AFU ID</Text>
             <Text style={[s.afuIdBig, { color: theme.primary }]} numberOfLines={1}>{afuId}</Text>
           </View>
           <Field label="MEMBER NO." value={`AFU-${padMember(memberNumber ?? 1)}`} mono />
@@ -496,18 +492,18 @@ function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber,
             <View style={{ flex: 1 }}><Field label="ISSUED" value={issued} /></View>
             <View style={{ flex: 1 }}><Field label="EXPIRES" value={expires} /></View>
           </View>
-          <View style={[s.hdivider, { backgroundColor: colors.separator }]} />
-          <Text style={[s.sigValBack, { color: colors.text }]} numberOfLines={1}>{profile?.display_name ?? ""}</Text>
+          <View style={s.hdivider} />
+          <Text style={s.sigValBack} numberOfLines={1}>{profile?.display_name ?? ""}</Text>
         </View>
       </View>
 
       {/* DIVIDER */}
-      <View style={[s.hdivider, { backgroundColor: colors.separator }]} />
+      <View style={s.hdivider} />
 
       {/* MRZ */}
-      <View style={[s.mrzZone, { backgroundColor: colors.backgroundTertiary }]}>
-        <Text style={[s.mrz, { color: colors.textMuted }]} numberOfLines={1}>{mrzLine1}</Text>
-        <Text style={[s.mrz, { color: colors.textMuted }]} numberOfLines={1}>{mrzLine2}</Text>
+      <View style={s.mrzZone}>
+        <Text style={s.mrz} numberOfLines={1}>{mrzLine1}</Text>
+        <Text style={s.mrz} numberOfLines={1}>{mrzLine2}</Text>
       </View>
 
       {/* BOTTOM STRIP */}
@@ -534,7 +530,7 @@ const s = StyleSheet.create({
   actionBtnDim: { opacity: 0.4 },
   actionBtnTxt: { fontSize: 13, fontWeight: "600" },
   tip: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 10, padding: 12, borderWidth: 0.5, maxWidth: 360, width: "90%" },
-  tipText: { flex: 1, minWidth: 0, fontSize: 11, lineHeight: 17, textAlign: "left" },
+  tipText: { flex: 1, fontSize: 11, lineHeight: 17 },
   captureLayer: { position: "absolute", left: 0, top: 0, opacity: 0, zIndex: -1, pointerEvents: "none" as any },
 
   /* Card shell */

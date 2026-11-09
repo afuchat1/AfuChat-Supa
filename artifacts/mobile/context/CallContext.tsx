@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { showToast } from "@/lib/toast";
 import {
@@ -58,7 +59,7 @@ export function useCall() {
 }
 
 export function CallProvider({ children }: { children: React.ReactNode }) {
-  const { user, profile, isAuthenticated } = useAuth();
+  const { user, profile } = useAuth();
   const [status, setStatus] = useState<CallStatus>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [incomingNotice, setIncomingNotice] = useState<IncomingCallNotice | null>(null);
@@ -67,27 +68,35 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isAvailable, setIsAvailable] = useState(false);
   const userRef = useRef(user);
   const profileRef = useRef(profile);
-  const isAuthenticatedRef = useRef(isAuthenticated);
   userRef.current = user;
   profileRef.current = profile;
-  isAuthenticatedRef.current = isAuthenticated;
 
   useEffect(() => {
     let disposed = false;
-    if (!isAuthenticated || !user?.id) {
+    const refreshAvailability = () => {
+      if (!disposed) setIsAvailable(getWebRTCAvailable());
+    };
+    // Android can finish registering the native module just after the first
+    // React effect. A transient false result must not disable calling for the
+    // entire session.
+    refreshAvailability();
+    const retryTimers = [250, 1000, 2500].map((delay) =>
+      setTimeout(refreshAvailability, delay),
+    );
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") setTimeout(refreshAvailability, 100);
+    });
+
+    if (!user?.id) {
       setStatus("idle");
       setCallInfo(null);
       setIncomingNotice(null);
-      setIsAvailable(false);
       return () => {
         disposed = true;
+        retryTimers.forEach(clearTimeout);
+        appStateSubscription.remove();
       };
     }
-
-    // Report whether this build can support calls without touching the native
-    // WebRTC module. Loading it here can abort the whole Android process in
-    // release builds before the user reaches the call feature.
-    setIsAvailable(getWebRTCAvailable());
 
     const removeListener = addCallEngineListener((event) => {
       if (disposed) return;
@@ -107,10 +116,12 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     const cleanupPromise = initCallEngine(user.id);
     return () => {
       disposed = true;
+      retryTimers.forEach(clearTimeout);
+      appStateSubscription.remove();
       removeListener();
       cleanupPromise.then((cleanup) => cleanup()).catch(() => {});
     };
-  }, [isAuthenticated, user?.id]);
+  }, [user?.id]);
 
   const startCall = useCallback(async (params: {
     calleeId: string;
@@ -119,27 +130,29 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     chatId: string | null;
   }): Promise<string> => {
     const u = userRef.current;
-    if (!isAuthenticatedRef.current || !u) {
-      throw new Error("Reconnect to your account before making calls.");
-    }
+    if (!u) throw new Error("Not signed in");
+    const callId = typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     try {
-      return await engineStart({
+      await engineStart({
         ...params,
+        callId,
         myId: u.id,
         myName: profileRef.current?.display_name ?? "AfuChat user",
         myAvatar: profileRef.current?.avatar_url ?? null,
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not start the call";
-      showToast(message, { type: "error" });
-      throw error instanceof Error ? error : new Error(message);
+      return callId;
+    } catch {
+      showToast("Could not start the call", { type: "error" });
+      throw new Error("Could not start the call");
     }
   }, []);
 
   const acceptCall = useCallback(async () => {
     const notice = incomingNotice;
     const u = userRef.current;
-    if (!isAuthenticatedRef.current || !notice || !u) return;
+    if (!notice || !u) return;
     try {
       await engineAccept(notice, {
         myId: u.id,
@@ -147,22 +160,19 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         myAvatar: profileRef.current?.avatar_url ?? null,
       });
       setIncomingNotice(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Could not connect the call";
-      showToast(message, { type: "error" });
-      throw error instanceof Error ? error : new Error(message);
+    } catch {
+      showToast("Could not connect the call", { type: "error" });
+      throw new Error("Could not connect the call");
     }
   }, [incomingNotice]);
 
   const declineCall = useCallback(() => {
-    if (isAuthenticatedRef.current && incomingNotice) {
-      engineDecline(incomingNotice);
-    }
+    if (incomingNotice) engineDecline(incomingNotice);
     setIncomingNotice(null);
   }, [incomingNotice]);
 
   const endCall = useCallback(async () => {
-    if (isAuthenticatedRef.current) await engineEnd();
+    await engineEnd();
   }, []);
 
   const toggleMute = useCallback(() => setIsMuted(engineMute()), []);

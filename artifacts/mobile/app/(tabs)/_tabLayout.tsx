@@ -2,9 +2,11 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
+import { LinearGradient } from "@/components/ui/SafeGradient";
+import { BlurView } from "expo-blur";
+import { GLASS, glassTokens } from "@/constants/glass";
 import { Security2FABanner } from "@/components/ui/Security2FABanner";
 import {
-  Animated,
   Platform,
   Pressable,
   StyleSheet,
@@ -13,7 +15,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { usePathname } from "expo-router";
 import { safeRouter } from "@/lib/navUtils";
 import type { RealtimeChannel, Session } from "@supabase/supabase-js";
@@ -26,17 +28,11 @@ import { supabase } from "@/lib/supabase";
 import { getTotalUnread, subscribeUnread } from "@/lib/chatUnreadEvents";
 import { Avatar } from "@/components/ui/Avatar";
 import { useLanguage } from "@/context/LanguageContext";
-import {
-  FloatingGlassSurface,
-  FloatingNavIndicator,
-  FloatingNavSurface,
-  floatingNavigationStyles,
-} from "@/components/ui/FloatingNavSurface";
 
-// Visible bottom bar tabs — Chat · Feed · Shorts · Apps · Me
+// Visible bottom bar tabs — Chat · Discover · Shorts · Apps · Me
 const BOTTOM_TABS = [
   { route: "/(tabs)/chats",    icon: "chatbubbles",        label: "navigation.chat"     },
-  { route: "/(tabs)/discover", icon: "newspaper",          label: "Feed"                  },
+  { route: "/(tabs)/discover", icon: "compass",            label: "navigation.discover" },
   { route: "/(tabs)/shorts",   icon: "play-circle",        label: "navigation.shorts"   },
   { route: "/(tabs)/apps",     icon: "grid",               label: "navigation.apps"     },
   { route: "/(tabs)/me",       icon: "person-circle",      label: "navigation.me"       },
@@ -49,7 +45,7 @@ function normalizeTabPath(p: string): string {
   if (p === "/shorts"   || p === "/(tabs)/shorts")   return "/(tabs)/shorts";
   if (p === "/apps"     || p === "/(tabs)/apps")     return "/(tabs)/apps";
   if (p === "/me"       || p === "/(tabs)/me")       return "/(tabs)/me";
-  if (p === "/search"   || p === "/(tabs)/search")   return "/app/afusearch";
+  if (p === "/search"   || p === "/(tabs)/search")   return "/(tabs)/search";
   return p;
 }
 
@@ -165,28 +161,15 @@ export function CompactTabBar({
   const pathname           = usePathname();
   const insets             = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const glass = glassTokens(isDark);
   const { t } = useLanguage();
   const totalUnread        = useTotalUnread(userId);
   const active             = normalizeTabPath(pathname);
   const [showCreateActions, setShowCreateActions] = useState(false);
-  const [barWidth, setBarWidth] = useState(0);
-  const activeIndex = Math.max(0, BOTTOM_TABS.findIndex((tab) => tab.route === active));
-  const createFabScale = useRef(new Animated.Value(1)).current;
-  const composeFabScale = useRef(new Animated.Value(1)).current;
   // Keep this binding distinct from older module-level brand constants. A
   // previous name collided in the transformed web bundle and caused a TDZ
   // crash while TabLayout was mounting.
   const accentColor = colors.accent;
-
-  function animateFab(scale: Animated.Value, toValue: number) {
-    Animated.spring(scale, {
-      toValue,
-      damping: 16,
-      stiffness: 280,
-      mass: 0.8,
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-  }
 
   const CREATE_OPTIONS = [
     { icon: "camera",        label: "navigation.story",   route: "/stories/camera",        color: accentColor },
@@ -195,10 +178,11 @@ export function CompactTabBar({
     { icon: "document-text", label: "navigation.article", route: "/moments/create-article", color: accentColor },
   ];
 
-  const INACTIVE_ICON  = colors.navigationInactive;
-  const ACTIVE_ICON    = colors.navigationActive;
+  const INACTIVE_ICON  = colors.textSecondary;
+  const ACTIVE_ICON    = colors.accent;
   const PILL_BOTTOM    = Math.max(insets.bottom, 8) + 6;
   const PILL_H         = 56;
+  const ACTIVE_WRAP    = colors.accent;
 
   function handleTabPress(route: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -214,64 +198,109 @@ export function CompactTabBar({
   return (
     <>
       {/* ── Pill bar ──────────────────────────────────────────────────── */}
-      <FloatingNavSurface
-        bottomOffset={PILL_BOTTOM}
-        onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
+      <View
+        style={[
+          pill.rowWrap,
+          { bottom: PILL_BOTTOM, pointerEvents: "box-none" },
+        ]}
       >
-        <FloatingNavIndicator
-          itemCount={BOTTOM_TABS.length}
-          selectedIndex={activeIndex}
-          barWidth={barWidth}
-        />
-        {BOTTOM_TABS.map((tab) => {
-          const focused   = active === tab.route;
-          const iconColor = focused ? ACTIVE_ICON : INACTIVE_ICON;
+        <View
+          style={[
+            pill.bar,
+            {
+              height: PILL_H,
+              backgroundColor: "transparent",
+              borderColor: glass.border,
+              ...Platform.select({
+                ios: {
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: isDark ? 0.35 : 0.12,
+                  shadowRadius: 16,
+                },
+                android: { elevation: 8 },
+                web: { boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.45)" : "0 4px 20px rgba(0,0,0,0.10)" } as any,
+              }),
+            },
+          ]}
+        >
+          <BlurView
+            pointerEvents="none"
+            intensity={GLASS.blur.medium}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: glass.fill }]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={glass.specular}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={pill.glassHighlight}
+          />
+          {BOTTOM_TABS.map((tab) => {
+            const focused   = active === tab.route;
+            const iconColor = focused ? colors.bubbleText : INACTIVE_ICON;
 
-          return (
-            <TouchableOpacity
-              key={tab.route}
-              style={floatingNavigationStyles.item}
-              onPress={() => handleTabPress(tab.route)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
-              accessibilityState={{ selected: focused }}
-            >
-              <View style={floatingNavigationStyles.iconWrap}>
-                {tab.route === "/(tabs)/me" ? (
-                  <Avatar
-                    uri={avatarUrl}
-                    name={displayName || t("navigation.me")}
-                    size={24}
-                    userId={userId}
-                  />
-                ) : (
-                  <Ionicons name={tab.icon as any} size={22} color={iconColor} />
-                )}
-                {/* Unread badge on Chat */}
-                {tab.route === "/(tabs)/chats" && totalUnread > 0 && (
-                  <View style={[pill.badge, { backgroundColor: accentColor }]}>
-                    <Text style={pill.badgeText} numberOfLines={1}>
-                      {totalUnread > 99 ? "99+" : String(totalUnread)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text
-                style={[
-                  floatingNavigationStyles.label,
-                  { color: focused ? ACTIVE_ICON : INACTIVE_ICON },
-                ]}
-                numberOfLines={1}
-                allowFontScaling={false}
-                maxFontSizeMultiplier={1}
+            return (
+              <TouchableOpacity
+                key={tab.route}
+                style={pill.tab}
+                onPress={() => handleTabPress(tab.route)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                 accessibilityLabel={t(tab.label)}
+                accessibilityState={{ selected: focused }}
               >
-                {tab.label.startsWith("navigation.") ? t(tab.label) : tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </FloatingNavSurface>
+                <View
+                  style={pill.iconWrap}
+                >
+                  {focused && (
+                    <View
+                      style={[
+                        pill.activeIconOval,
+                        { backgroundColor: ACTIVE_WRAP, pointerEvents: "none" },
+                      ]}
+                    />
+                  )}
+                  {tab.route === "/(tabs)/me" ? (
+                    <Avatar
+                      uri={avatarUrl}
+                       name={displayName || t("navigation.me")}
+                      size={24}
+                      userId={userId}
+                    />
+                  ) : (
+                    <Ionicons name={tab.icon as any} size={22} color={iconColor} />
+                  )}
+                  {/* Unread badge on Chat */}
+                  {tab.route === "/(tabs)/chats" && totalUnread > 0 && (
+                    <View style={[pill.badge, { backgroundColor: accentColor }]}>
+                      <Text style={pill.badgeText} numberOfLines={1}>
+                        {totalUnread > 99 ? "99+" : String(totalUnread)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text
+                  style={[
+                    pill.label,
+                    { color: focused ? ACTIVE_ICON : INACTIVE_ICON },
+                  ]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                  maxFontSizeMultiplier={1}
+                >
+                   {t(tab.label)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       {/* Create FAB and its expanded action FABs */}
       {active === "/(tabs)/discover" && (
@@ -285,15 +314,23 @@ export function CompactTabBar({
                 {
                   bottom: PILL_BOTTOM + PILL_H + 72 + (CREATE_OPTIONS.length - index - 1) * 58,
                   right: 28,
+                  backgroundColor: "transparent",
+                  borderColor: glass.border,
                 },
               ]}
               activeOpacity={0.8}
               accessibilityRole="button"
                accessibilityLabel={`${t("navigation.create")} ${t(opt.label)}`}
             >
-              <FloatingGlassSurface
+              <BlurView
                 pointerEvents="none"
+                intensity={GLASS.blur.medium}
+                tint={isDark ? "dark" : "light"}
                 style={StyleSheet.absoluteFill}
+              />
+              <View
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: glass.fill }]}
               />
               <View style={pill.actionLabel}>
                 <Text
@@ -311,8 +348,6 @@ export function CompactTabBar({
             </TouchableOpacity>
           ))}
           <TouchableOpacity
-            onPressIn={() => animateFab(createFabScale, 0.91)}
-            onPressOut={() => animateFab(createFabScale, 1)}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
               setShowCreateActions((open) => !open);
@@ -322,8 +357,9 @@ export function CompactTabBar({
               {
                 bottom: PILL_BOTTOM + PILL_H + 12,
                 right: 24,
-                  backgroundColor: accentColor,
-                transform: [{ scale: createFabScale }],
+                backgroundColor: accentColor,
+                borderWidth: 1,
+                borderColor: glass.border,
               },
             ]}
             activeOpacity={0.82}
@@ -339,8 +375,6 @@ export function CompactTabBar({
       {/* FAB — Compose, right side, chats tab only */}
       {active === "/(tabs)/chats" && !!userId && (
         <TouchableOpacity
-          onPressIn={() => animateFab(composeFabScale, 0.91)}
-          onPressOut={() => animateFab(composeFabScale, 1)}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
             safeRouter.push("/chat/new" as any);
@@ -351,7 +385,6 @@ export function CompactTabBar({
               bottom: PILL_BOTTOM + PILL_H + 12,
               right: 24,
               backgroundColor: accentColor,
-              transform: [{ scale: composeFabScale }],
             },
           ]}
           activeOpacity={0.82}
@@ -365,29 +398,94 @@ export function CompactTabBar({
 }
 
 const pill = StyleSheet.create({
-  fab: {
+  rowWrap: {
     position: "absolute",
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    left: 20,
+    right: 20,
+    zIndex: 100,
+    alignItems: "center",
+  },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    width: "100%",
+    overflow: "hidden",
+  },
+  glassHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 18,
+  },
+  tab: {
+    flex: 1,
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    alignSelf: "stretch",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
+    paddingVertical: 0,
+  },
+  iconWrap: {
+    width: 44,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  activeIconOval: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 9999,
+  },
+  label: {
+    width: "100%",
+    fontSize: 9,
+    lineHeight: 10,
+    fontFamily: "Inter_700Bold",
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    marginTop: 0,
+    textAlign: "center",
+    includeFontPadding: false,
+    textTransform: "uppercase",
+  },
+  fab: {
+    position: "absolute",
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionFab: {
     position: "absolute",
     width: 142,
     height: 44,
     borderRadius: 22,
+    borderWidth: 2,
     flexDirection: "row",
     paddingLeft: 14,
     paddingRight: 4,
     justifyContent: "space-between",
+    overflow: "hidden",
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.18,
+        shadowRadius: 5,
+      },
+      android: { elevation: 5 },
+      web: { boxShadow: "0 2px 8px rgba(0,0,0,0.18)" } as any,
+    }),
   },
   actionLabel: {
     flex: 1,
@@ -426,13 +524,12 @@ const pill = StyleSheet.create({
 });
 
 function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
-  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         animation: "none",
-        sceneStyle: { backgroundColor: colors.background },
+        sceneStyle: { backgroundColor: "transparent" },
         tabBarStyle: {
           display: "none",
           backgroundColor: "transparent",
@@ -446,7 +543,7 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
       <Tabs.Screen name="index"         options={{ href: null }} />
       <Tabs.Screen name="chats"         options={{ href: isLoggedIn ? undefined : null }} />
       <Tabs.Screen name="discover"      options={{ href: isLoggedIn ? undefined : null, lazy: true }} />
-      <Tabs.Screen name="shorts"        options={{ href: isLoggedIn ? undefined : null, lazy: true, sceneStyle: { backgroundColor: colors.background } }} />
+      <Tabs.Screen name="shorts"        options={{ href: isLoggedIn ? undefined : null, lazy: true, sceneStyle: { backgroundColor: "#000" } }} />
       <Tabs.Screen name="search"        options={{ href: null }} />
       <Tabs.Screen name="contacts"      options={{ href: null }} />
       <Tabs.Screen name="communities"   options={{ href: null }} />
@@ -458,16 +555,11 @@ function ClassicTabLayout({ isLoggedIn }: { isLoggedIn: boolean }) {
 
 export default function TabLayout() {
   const { session, profile, loading, user } = useAuth();
-  const { colors } = useTheme();
   const isLoggedIn     = !!session || !!user;
   const prevSessionRef = useRef<Session | null>(null);
   const insets         = useSafeAreaInsets();
   const { width }      = useWindowDimensions();
-  const pathname       = usePathname();
   const isDesktop      = Platform.OS === "web" && width >= 980;
-  const activeRoute    = normalizeTabPath(pathname);
-  const isAfuSearch    =
-    activeRoute === "/app/afusearch" || activeRoute.startsWith("/app/afusearch/");
 
   useEffect(() => {
     if (loading) return;
@@ -492,15 +584,15 @@ export default function TabLayout() {
     (!loading && isLoggedIn && profile?.onboarding_completed === false);
 
   if (loading || isRedirecting) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+    return <View style={{ flex: 1, backgroundColor: "transparent" }} />;
   }
 
   return (
     <TabSwipeProvider>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1 }}>
         <ClassicTabLayout isLoggedIn={isLoggedIn} />
 
-        {isLoggedIn && !isDesktop && !isAfuSearch && (
+        {isLoggedIn && !isDesktop && (
           <CompactTabBar
             userId={user?.id}
             avatarUrl={profile?.avatar_url}

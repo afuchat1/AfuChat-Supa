@@ -9,17 +9,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "@/lib/supabase";
 import { uploadToStorage } from "@/lib/mediaUpload";
@@ -271,18 +270,16 @@ export default function MatchOnboarding() {
   });
 
   return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: isDark ? "#0D0D0D" : "#FFF" }]}>
       {/* Progress bar */}
       <View style={[styles.progressTrack, { marginTop: insets.top + 8 }]}>
         <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
       </View>
 
       {/* Back button */}
-      <GlassBackButton
-        style={[styles.backBtn, { top: insets.top + 16 }]}
-        onPress={prevStep}
-        icon="chevron-back"
-      />
+      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 16 }]} onPress={prevStep}>
+        <Ionicons name="chevron-back" size={22} color={colors.accent} />
+      </TouchableOpacity>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView
@@ -547,7 +544,7 @@ export default function MatchOnboarding() {
               <Text style={[styles.stepTitle, { color: colors.text }]}>Where are you?</Text>
               <Text style={[styles.stepSub, { color: colors.textMuted }]}>Your location helps find people near you. Only your city or country is ever shown. Your exact location is never shared.</Text>
 
-        <View style={[styles.locationCard, { backgroundColor: colors.cardSurface }]}>
+              <View style={[styles.locationCard, { backgroundColor: colors.surface }]}>
                 <Ionicons name="shield-checkmark" size={20} color="#34C759" />
                 <Text style={[styles.locationPrivacy, { color: colors.textSecondary }]}>
                   AfuMatch never shares your precise location. Only your city name is shown to potential matches.
@@ -602,7 +599,7 @@ export default function MatchOnboarding() {
                 />
               </View>
 
-          <View style={[styles.summaryCard, { backgroundColor: colors.cardSurface, borderColor: BRAND }]}>
+              <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: BRAND }]}>
                 <Text style={[styles.summaryTitle, { color: colors.text }]}>Your AfuMatch Profile</Text>
                 <View style={styles.summaryRows}>
                   <SummaryRow icon="person" label={name || "N/A"} />

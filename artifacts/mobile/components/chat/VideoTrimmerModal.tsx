@@ -13,8 +13,23 @@ import {
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
-import { VideoView, useVideoPlayer } from "expo-video";
+// Type-only — stripped at compile time, never triggers native module load
+import type { AVPlaybackStatus } from "expo-av";
+
+// expo-av: lazy-load on native only.
+// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
+// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
+// so that check always returns null and silently disables all audio.
+import { Platform as _AvPlatform } from "react-native";
+import { isExpoGo } from "@/lib/expoEnvironment";
+const _AV = (() => {
+  if (_AvPlatform.OS === "web" || isExpoGo()) return null;
+  try { return require("expo-av"); } catch { return null; }
+})();
 const _VT = (() => { try { return require("expo-video-thumbnails"); } catch { return null; } })();
+
+const VideoComp   = _AV?.Video    ?? null;
+const ResizeModeContain = _AV?.ResizeMode?.CONTAIN ?? "contain";
 
 const { width: SW } = Dimensions.get("window");
 const THUMB_COUNT = 10;
@@ -46,10 +61,7 @@ interface Props {
 export default function VideoTrimmerModal({
   visible, uri, mimeType, onConfirm, onCancel, colors, accent,
 }: Props) {
-  const player = useVideoPlayer(uri ? { uri } : null, (videoPlayer) => {
-    videoPlayer.loop = false;
-    videoPlayer.timeUpdateEventInterval = 0.1;
-  });
+  const videoRef = useRef<any>(null);
   const [duration, setDuration] = useState(0);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
@@ -77,51 +89,6 @@ export default function VideoTrimmerModal({
     }
   }, [visible, uri]);
 
-  useEffect(() => {
-    if (!visible || !uri) {
-      player.pause();
-      return;
-    }
-
-    let loaded = false;
-    const markLoaded = () => {
-      if (loaded) return;
-      const nextDuration = player.duration;
-      if (!Number.isFinite(nextDuration) || nextDuration <= 0) return;
-      loaded = true;
-      setDuration(nextDuration);
-      durRef.current = nextDuration;
-      trimEndRef.current = nextDuration;
-      setTrimEnd(nextDuration);
-      setVideoLoaded(true);
-      void generateThumbs(nextDuration);
-    };
-    const sourceSubscription = player.addListener("sourceLoad", markLoaded);
-    const statusSubscription = player.addListener("statusChange", ({ status }) => {
-      if (status === "readyToPlay") markLoaded();
-    });
-    const timeSubscription = player.addListener("timeUpdate", ({ currentTime }) => {
-      setCurrentPos(currentTime);
-      setIsPlaying(player.playing);
-      if (player.playing && currentTime >= trimEndRef.current - 0.2) {
-        player.pause();
-        player.currentTime = trimStartRef.current;
-      }
-    });
-    const playingSubscription = player.addListener("playingChange", ({ isPlaying: nextPlaying }) => {
-      setIsPlaying(nextPlaying);
-    });
-    if (player.status === "readyToPlay") markLoaded();
-
-    return () => {
-      sourceSubscription.remove();
-      statusSubscription.remove();
-      timeSubscription.remove();
-      playingSubscription.remove();
-      player.pause();
-    };
-  }, [player, uri, visible]);
-
   async function generateThumbs(dur: number) {
     if (!uri || dur <= 0) return;
     setThumbsLoading(true);
@@ -142,16 +109,39 @@ export default function VideoTrimmerModal({
     setThumbsLoading(false);
   }
 
+  function onPlaybackStatusUpdate(status: AVPlaybackStatus) {
+    if (!status.isLoaded) return;
+    setCurrentPos((status.positionMillis ?? 0) / 1000);
+    setIsPlaying(status.isPlaying ?? false);
+    if (status.didJustFinish || (status.positionMillis ?? 0) / 1000 >= trimEndRef.current - 0.2) {
+      videoRef.current?.pauseAsync().catch(() => {});
+      videoRef.current?.setPositionAsync(trimStartRef.current * 1000).catch(() => {});
+    }
+  }
+
+  function onLoad(status: AVPlaybackStatus) {
+    if (!status.isLoaded) return;
+    const dur = (status.durationMillis ?? 0) / 1000;
+    if (dur > 0) {
+      setDuration(dur);
+      durRef.current = dur;
+      setTrimEnd(dur);
+      trimEndRef.current = dur;
+      setVideoLoaded(true);
+      generateThumbs(dur);
+    }
+  }
+
   async function togglePlay() {
     if (!videoLoaded) return;
     if (isPlaying) {
-      player.pause();
+      await videoRef.current?.pauseAsync().catch(() => {});
     } else {
       const pos = currentPos;
       if (pos < trimStartRef.current || pos >= trimEndRef.current - 0.2) {
-        player.currentTime = trimStartRef.current;
+        await videoRef.current?.setPositionAsync(trimStartRef.current * 1000).catch(() => {});
       }
-      player.play();
+      await videoRef.current?.playAsync().catch(() => {});
     }
   }
 
@@ -168,7 +158,7 @@ export default function VideoTrimmerModal({
         setTrimStart(t);
       },
       onPanResponderRelease: () => {
-        player.currentTime = trimStartRef.current;
+        videoRef.current?.setPositionAsync(trimStartRef.current * 1000).catch(() => {});
       },
     })
   ).current;
@@ -186,7 +176,7 @@ export default function VideoTrimmerModal({
         setTrimEnd(t);
       },
       onPanResponderRelease: () => {
-        player.currentTime = trimEndRef.current - 0.5;
+        videoRef.current?.setPositionAsync(trimEndRef.current * 1000 - 500).catch(() => {});
       },
     })
   ).current;
@@ -198,19 +188,33 @@ export default function VideoTrimmerModal({
 
   return (
     <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onCancel}>
-      <View style={[s.container, { backgroundColor: colors.background }]}>
+      <View style={s.container}>
         {/* Header */}
         <View style={s.header}>
           <TouchableOpacity onPress={onCancel} hitSlop={12} style={s.headerBtn}>
-            <Ionicons name="close" size={22} color={colors.text} />
+            <Ionicons name="close" size={22} color="#fff" />
           </TouchableOpacity>
-          <Text style={[s.headerTitle, { color: colors.text }]}>Trim Video</Text>
+          <Text style={s.headerTitle}>Trim Video</Text>
           <View style={s.headerBtn} />
         </View>
 
         {/* Video preview */}
-        <View style={[s.videoWrap, { backgroundColor: colors.backgroundSecondary }]}>
-          <VideoView player={player} style={s.video} contentFit="contain" nativeControls={false} />
+        <View style={s.videoWrap}>
+          {VideoComp ? (
+            <VideoComp
+              ref={videoRef}
+              source={{ uri }}
+              style={s.video}
+              resizeMode={ResizeModeContain}
+              onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+              onLoad={onLoad}
+              progressUpdateIntervalMillis={100}
+            />
+          ) : (
+            <View style={[s.video, { alignItems: "center", justifyContent: "center" }]}>
+              <ActivityIndicator color="#fff" />
+            </View>
+          )}
           {!videoLoaded && (
             <View style={s.videoLoadOverlay}>
               <ActivityIndicator color={accent} size="large" />
@@ -232,7 +236,7 @@ export default function VideoTrimmerModal({
             </Text>
           </View>
           <View style={s.infoBadge}>
-            <Text style={[s.infoTime, { color: colors.text }]}>{fmtTime(trimEnd)}</Text>
+            <Text style={[s.infoTime, { color: "#fff" }]}>{fmtTime(trimEnd)}</Text>
             <Ionicons name="play-skip-forward" size={12} color={accent} />
           </View>
         </View>
@@ -241,7 +245,7 @@ export default function VideoTrimmerModal({
         <View style={s.timelineWrap}>
           {/* Track background */}
           <View
-            style={[s.track, { backgroundColor: colors.backgroundSecondary }]}
+            style={s.track}
             onLayout={(e) => { trackW.current = e.nativeEvent.layout.width; }}
           >
             {/* Thumbnail strip */}
@@ -255,12 +259,12 @@ export default function VideoTrimmerModal({
                   t ? (
                     <Image key={i} source={{ uri: t }} style={s.thumb} resizeMode="cover" />
                   ) : (
-                    <View key={i} style={[s.thumb, { backgroundColor: colors.backgroundSecondary }]} />
+                    <View key={i} style={[s.thumb, { backgroundColor: "#2a2a2a" }]} />
                   )
                 )}
               </View>
             ) : (
-              <View style={[s.thumbPlaceholder, { backgroundColor: colors.backgroundSecondary }]} />
+              <View style={s.thumbPlaceholder} />
             )}
 
             {/* Dimmed overlay — before trim start */}
@@ -343,11 +347,11 @@ export default function VideoTrimmerModal({
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: "#0a0a0a" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: Platform.OS === "ios" ? 56 : 16, paddingBottom: 12 },
   headerBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold" },
-  videoWrap: { width: SW, height: SW * 0.58, position: "relative" },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  videoWrap: { width: SW, height: SW * 0.58, backgroundColor: "#111", position: "relative" },
   video: { width: SW, height: SW * 0.58 },
   videoLoadOverlay: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   infoRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12 },
@@ -360,12 +364,13 @@ const s = StyleSheet.create({
     height: TRACK_H,
     borderRadius: 8,
     overflow: "hidden",
+    backgroundColor: "#1e1e1e",
     position: "relative",
   },
   thumbRow: { flexDirection: "row", position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   thumb: { flex: 1, height: TRACK_H },
   thumbLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  thumbPlaceholder: { flex: 1 },
+  thumbPlaceholder: { flex: 1, backgroundColor: "#1e1e1e" },
   dimOverlay: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.68)" },
   selBorder: { position: "absolute", top: 0, bottom: 0, borderWidth: 2, borderRadius: 4 },
   playhead: { position: "absolute", top: 0, bottom: 0, width: 2, backgroundColor: "rgba(255,255,255,0.9)" },

@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
-import { reportNetworkResponse } from "./offlineStore";
 
 export const supabaseUrl = SUPABASE_URL;
 export const supabaseAnonKey = SUPABASE_ANON_KEY;
@@ -75,24 +74,15 @@ class StaticRenderWebSocket {
 const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
 const fetchWithTimeout: typeof fetch = async (input, init) => {
   const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, SUPABASE_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), SUPABASE_REQUEST_TIMEOUT_MS);
   const callerSignal = init?.signal;
   const abortFromCaller = () => controller.abort();
   callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
-    const response = await fetch(input, {
+    return await fetch(input, {
       ...init,
       signal: controller.signal,
     });
-    reportNetworkResponse(response.status < 500);
-    return response;
-  } catch (error) {
-    if (!callerSignal?.aborted || timedOut) reportNetworkResponse(false);
-    throw error;
   } finally {
     clearTimeout(timer);
     callerSignal?.removeEventListener("abort", abortFromCaller);
@@ -130,24 +120,3 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     ...(isStaticRender ? { transport: StaticRenderWebSocket as any } : {}),
   },
 });
-
-/**
- * Return the current non-expired Supabase session for background services.
- * Cached AfuChat identity is intentionally not accepted as authentication.
- */
-export async function getLiveSupabaseSession() {
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    const session = data?.session;
-    if (error || !session?.user?.id || !session.access_token) return null;
-    if (
-      typeof session.expires_at === "number" &&
-      session.expires_at * 1000 <= Date.now()
-    ) {
-      return null;
-    }
-    return session;
-  } catch {
-    return null;
-  }
-}

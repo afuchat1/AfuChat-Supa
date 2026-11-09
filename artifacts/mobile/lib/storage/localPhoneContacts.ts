@@ -54,17 +54,18 @@ export async function getLocalPhoneContacts(): Promise<LocalPhoneContact[]> {
 export async function saveDevicePhoneContacts(
   contacts: DevicePhoneContact[],
 ): Promise<void> {
-  const db = await getDB();
-  const previous = await getLocalPhoneContacts();
-  const previousMatches = new Map(
-    previous.filter((contact) => contact.matched_user_id)
-      .map((contact) => [contact.normalized_phone, contact]),
-  );
-  await db.execAsync("BEGIN IMMEDIATE");
   try {
+    const db = await getDB();
+    const previous = await getLocalPhoneContacts();
+    const previousMatches = new Map(
+      previous
+        .filter((contact) => contact.matched_user_id)
+        .map((contact) => [contact.normalized_phone, contact]),
+    );
+
     await db.runAsync("DELETE FROM phonebook_contacts");
     for (const contact of contacts) {
-      const old = contact.normalized_phone ? previousMatches.get(contact.normalized_phone) : undefined;
+      const old = previousMatches.get(contact.normalized_phone);
       await db.runAsync(
         `INSERT OR REPLACE INTO phonebook_contacts
          (contact_key, name, phone, normalized_phone, position, phone_index,
@@ -72,52 +73,66 @@ export async function saveDevicePhoneContacts(
           matched_bio, matched_acoin, matched_is_verified,
           matched_is_organization_verified, stored_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [contact.key, contact.name, contact.phone, contact.normalized_phone,
-         contact.position, contact.phone_index, old?.matched_user_id ?? null,
-         old?.matched_display_name ?? null, old?.matched_handle ?? null,
-         old?.matched_avatar_url ?? null, old?.matched_bio ?? null,
-         old?.matched_acoin ?? 0, old?.matched_is_verified ? 1 : 0,
-         old?.matched_is_organization_verified ? 1 : 0, Date.now()],
+        [
+          contact.key,
+          contact.name,
+          contact.phone,
+          contact.normalized_phone,
+          contact.position,
+          contact.phone_index,
+          old?.matched_user_id ?? null,
+          old?.matched_display_name ?? null,
+          old?.matched_handle ?? null,
+          old?.matched_avatar_url ?? null,
+          old?.matched_bio ?? null,
+          old?.matched_acoin ?? 0,
+          old?.matched_is_verified ? 1 : 0,
+          old?.matched_is_organization_verified ? 1 : 0,
+          Date.now(),
+        ],
       );
     }
-    await db.execAsync("COMMIT");
-  } catch (error) {
-    try { await db.execAsync("ROLLBACK"); } catch {}
-    throw error;
-  }
+  } catch {}
 }
 
 export async function replacePhoneContactMatches(
   matches: PhoneContactMatch[],
 ): Promise<void> {
-  const db = await getDB();
-  await db.execAsync("BEGIN IMMEDIATE");
   try {
+    const db = await getDB();
     await db.runAsync(
       `UPDATE phonebook_contacts SET
-        matched_user_id = NULL, matched_display_name = NULL,
-        matched_handle = NULL, matched_avatar_url = NULL, matched_bio = NULL,
-        matched_acoin = 0, matched_is_verified = 0,
+        matched_user_id = NULL,
+        matched_display_name = NULL,
+        matched_handle = NULL,
+        matched_avatar_url = NULL,
+        matched_bio = NULL,
+        matched_acoin = 0,
+        matched_is_verified = 0,
         matched_is_organization_verified = 0`,
     );
+
     for (const match of matches) {
-      if (!match.normalized_phone) continue;
       await db.runAsync(
         `UPDATE phonebook_contacts SET
           matched_user_id = ?, matched_display_name = ?, matched_handle = ?,
           matched_avatar_url = ?, matched_bio = ?, matched_acoin = ?,
           matched_is_verified = ?, matched_is_organization_verified = ?
          WHERE normalized_phone = ?`,
-        [match.user_id, match.display_name, match.handle, match.avatar_url,
-         match.bio, match.acoin, match.is_verified ? 1 : 0,
-         match.is_organization_verified ? 1 : 0, match.normalized_phone],
+        [
+          match.user_id,
+          match.display_name,
+          match.handle,
+          match.avatar_url,
+          match.bio,
+          match.acoin,
+          match.is_verified ? 1 : 0,
+          match.is_organization_verified ? 1 : 0,
+          match.normalized_phone,
+        ],
       );
     }
-    await db.execAsync("COMMIT");
-  } catch (error) {
-    try { await db.execAsync("ROLLBACK"); } catch {}
-    throw error;
-  }
+  } catch {}
 }
 
 function rowToLocalPhoneContact(row: any): LocalPhoneContact {

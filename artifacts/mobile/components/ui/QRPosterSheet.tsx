@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import * as Sharing from "expo-sharing";
 import { showToast } from "@/lib/toast";
@@ -139,7 +139,7 @@ export default function QRPosterSheet({
                     source={{ uri: avatarUrl }}
                     style={s.avatar}
                     contentFit="cover"
-                    cachePolicy="memory-disk"
+                    cachePolicy="memory"
                   />
                 ) : (
                   <View style={[s.avatar, s.avatarFallback]}>

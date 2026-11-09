@@ -13,17 +13,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   Platform,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
-import { navigateToKnownProfile } from "@/lib/navigateToProfile";
+import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -277,7 +275,7 @@ export default function UserDiscoveryScreen() {
   const nearbyError = locationError || nearbyLoadError;
 
   const channelRef = useRef<any>(null);
-  const searchRef = useRef<TextInputInstance>(null);
+  const searchRef = useRef<AfuNativeRef.TextInput>(null);
   const tabIndicator = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -672,7 +670,9 @@ export default function UserDiscoveryScreen() {
           { backgroundColor: colors.surface, borderBottomColor: colors.border },
         ]}
       >
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={styles.backBtn} />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
+        </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Find People</Text>
           <Text style={[styles.headerSub, { color: colors.textMuted }]}>
@@ -682,7 +682,7 @@ export default function UserDiscoveryScreen() {
           </Text>
         </View>
         <TouchableOpacity
-          onPress={() => router.push("/app/afusearch" as any)}
+          onPress={() => router.push("/search" as any)}
           hitSlop={10}
           style={styles.headerIcon}
         >
@@ -770,7 +770,6 @@ export default function UserDiscoveryScreen() {
             />
             <TextInput
               ref={searchRef}
-              appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search by name, handle, or interests…"
               placeholderTextColor={colors.textMuted}
@@ -1069,7 +1068,9 @@ const UserRow = React.memo(function UserRow({
             opacity: pressed ? 0.92 : 1,
           },
         ]}
-        onPress={() => navigateToKnownProfile(item)}
+        onPress={() =>
+          navigateToProfile(item.handle, true).catch(() => {})
+        }
       >
         {/* Avatar */}
         <UserAvatar

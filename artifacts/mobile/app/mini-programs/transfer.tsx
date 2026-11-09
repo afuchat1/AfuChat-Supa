@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { safeRouter } from "@/lib/navUtils";
@@ -9,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
+import Colors from "@/constants/colors";
 import * as Haptics from "@/lib/haptics";
 import { calculateFee, processServiceTransaction } from "@/lib/serviceTransactions";
 
@@ -68,7 +68,6 @@ export default function TransferScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="person" size={18} color={colors.textMuted} />
           <TextInput
-            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={recipient}
             onChangeText={setRecipient}
@@ -82,7 +81,6 @@ export default function TransferScreen() {
         <View style={[styles.amountWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Text style={styles.amountPrefix}>🪙</Text>
           <TextInput
-            appearance="embedded"
             style={[styles.amountInput, { color: colors.text }]}
             value={amount}
             onChangeText={setAmount}
@@ -96,7 +94,6 @@ export default function TransferScreen() {
         <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="chatbubble" size={18} color={colors.textMuted} />
           <TextInput
-            appearance="embedded"
             style={[styles.input, { color: colors.text }]}
             value={note}
             onChangeText={setNote}
@@ -106,7 +103,7 @@ export default function TransferScreen() {
         </View>
 
         {fee && (
-        <View style={[styles.feeCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.feeCard, { backgroundColor: colors.surface }]}>
             <View style={styles.feeRow}>
               <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>Transfer Amount</Text>
               <Text style={[styles.feeValue, { color: colors.text }]}>{fee.subtotal} ACoins</Text>
@@ -141,9 +138,9 @@ export default function TransferScreen() {
           <Text style={styles.sendBtnText}>{loading ? "Sending..." : "Send Money"}</Text>
         </TouchableOpacity>
 
-        <View style={[styles.noteCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
-          <Ionicons name="shield-checkmark" size={18} color={colors.warning} />
-          <Text style={[styles.noteText, { color: colors.textSecondary }]}>
+        <View style={[styles.noteCard, { backgroundColor: "#FFF3E0", borderColor: "#FFB74D" }]}>
+          <Ionicons name="shield-checkmark" size={18} color="#F57C00" />
+          <Text style={styles.noteText}>
             All transfers are secured and recorded. A {fee?.feePercent || 1.5}% fee is charged per transaction.
           </Text>
         </View>
@@ -178,5 +175,5 @@ const styles = StyleSheet.create({
   sendBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 16, marginTop: 8 },
   sendBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
   noteCard: { flexDirection: "row", gap: 8, borderRadius: 12, padding: 12, borderWidth: 1, alignItems: "flex-start" },
-  noteText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  noteText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", color: "#795548", lineHeight: 18 },
 });

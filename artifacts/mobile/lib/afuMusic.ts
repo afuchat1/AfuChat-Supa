@@ -1,20 +1,28 @@
 import * as FileSystem from "expo-file-system/legacy";
-import { Platform } from "react-native";
 
 import type { AfuMusicTrack } from "@/modules/afumusic";
 import { cacheMusicFile, getOfflineMusicEntries, getOfflineMusicUri } from "./musicCache";
-import { deleteUserFile, getSignedR2ReadUrl, uploadToStorage } from "./mediaUpload";
+import {
+  deleteUserFile,
+  getSignedR2ReadUrl,
+  isPrivateMusicStorageReady,
+  prepareMediaForUpload,
+  uploadToStorage,
+} from "./mediaUpload";
 import { supabase } from "./supabase";
-import { isVerifiedCreator } from "./creatorEntitlements";
 
 const MUSIC_BUCKET = "music";
-const MUSIC_COVER_BUCKET = "music-covers";
+const MUSIC_PRIVATE_BUCKET = "music-private";
 const MAX_AUDIO_BYTES = 100 * 1024 * 1024;
-const MAX_COVER_BYTES = 15 * 1024 * 1024;
+const MAX_COVER_BYTES = 10 * 1024 * 1024;
 const AUDIO_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/ogg", "audio/aac"]);
-const COVER_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
-const MUSIC_TRACK_COLUMNS = "id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,cover_url,cover_storage_path,created_at";
-const MUSIC_TRACK_WITH_CREATOR_COLUMNS = `${MUSIC_TRACK_COLUMNS},creator:profiles!music_tracks_creator_id_fkey(display_name,handle)`;
+const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MUSIC_TRACK_COLUMNS = "id,creator_id,title,artist,audio_url,genre,price_acoin,storage_path,storage_bucket,mime_type,file_size,duration_seconds,play_count,usage_count,is_featured,video_use_allowed,cover_art_url,created_at";
+const MUSIC_TRACK_COLUMNS_NO_COVER = MUSIC_TRACK_COLUMNS.replace(",cover_art_url", "");
+const MUSIC_TRACK_COLUMNS_NO_STORAGE_BUCKET = MUSIC_TRACK_COLUMNS_NO_COVER.replace(",storage_bucket", "");
+const MUSIC_TRACK_COLUMNS_BASE = MUSIC_TRACK_COLUMNS_NO_STORAGE_BUCKET.replace(",video_use_allowed", "");
+let warnedAboutCoverMigration = false;
+let warnedAboutPlatformMigration = false;
 
 type MusicRow = {
   id: string;
@@ -25,16 +33,28 @@ type MusicRow = {
   genre: string;
   price_acoin: number | null;
   storage_path: string | null;
+  storage_bucket?: string | null;
   mime_type: string | null;
   file_size: number | null;
   duration_seconds: number | null;
   play_count: number | null;
   usage_count?: number | null;
   is_featured?: boolean | null;
-  cover_url?: string | null;
-  cover_storage_path?: string | null;
+  video_use_allowed?: boolean | null;
+  cover_art_url?: string | null;
   created_at: string;
   creator?: { display_name?: string | null; handle?: string | null } | null;
+};
+
+export type AfuMusicLedgerItem = {
+  id: string;
+  trackId: string | null;
+  title: string;
+  artist: string;
+  amount: number;
+  happenedAt: string;
+  counterpartyName: string;
+  counterpartyHandle: string | null;
 };
 
 function formatDuration(seconds: number | null | undefined) {
@@ -44,17 +64,62 @@ function formatDuration(seconds: number | null | undefined) {
   return `${minutes}:${remaining}`;
 }
 
-function colorsFor(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index++) hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
-  const palettes = [
-    ["#252143", "#F7BB75"],
-    ["#E85949", "#19172F"],
-    ["#25356D", "#E9C35B"],
-    ["#6D7B77", "#F7E6C1"],
-    ["#5A2C62", "#F06451"],
-  ];
-  return palettes[hash % palettes.length];
+function isMissingCoverColumns(error: any) {
+  const message = String(error?.message ?? error?.details ?? "").toLowerCase();
+  return /cover_art_(url|path)/.test(message)
+    && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
+}
+
+function isMissingStorageBucketColumn(error: any) {
+  const message = String(error?.message ?? error?.details ?? "").toLowerCase();
+  return message.includes("storage_bucket")
+    && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
+}
+
+function isMissingPlatformColumns(error: any) {
+  const message = String(error?.message ?? error?.details ?? "").toLowerCase();
+  return /(cover_art_(url|path)|video_use_allowed|storage_bucket)/.test(message)
+    && ["42703", "PGRST204"].includes(String(error?.code ?? ""));
+}
+
+function warnCoverMigrationMissing() {
+  if (warnedAboutCoverMigration) return;
+  warnedAboutCoverMigration = true;
+  console.warn("[AfuMusic] Apply 20261013000003_afumusic_cover_art.sql to enable track cover art.");
+}
+
+function warnPlatformMigrationMissing() {
+  if (warnedAboutPlatformMigration) return;
+  warnedAboutPlatformMigration = true;
+  console.warn("[AfuMusic] Apply the AfuMusic platform integration migration to enable video licensing and music posts.");
+}
+
+function warnPrivateStorageMigrationMissing() {
+  if (warnedAboutPlatformMigration) return;
+  warnedAboutPlatformMigration = true;
+  console.warn("[AfuMusic] Apply 20261014000001_afumusic_private_storage_setup.sql before publishing paid tracks.");
+}
+
+async function selectTracksWithCompatibleColumns(makeRequest: (columns: string) => any) {
+  let result = await makeRequest(MUSIC_TRACK_COLUMNS);
+  if (!isMissingPlatformColumns(result.error)) return result;
+  if (/cover_art_(url|path)/i.test(String(result.error?.message ?? ""))) {
+    warnCoverMigrationMissing();
+  } else {
+    warnPlatformMigrationMissing();
+  }
+
+  result = await makeRequest(MUSIC_TRACK_COLUMNS_NO_COVER);
+  if (!isMissingPlatformColumns(result.error)) return result;
+
+  if (isMissingStorageBucketColumn(result.error)) {
+    warnPrivateStorageMigrationMissing();
+    result = await makeRequest(MUSIC_TRACK_COLUMNS_NO_STORAGE_BUCKET);
+    if (!isMissingPlatformColumns(result.error)) return result;
+  }
+
+  result = await makeRequest(MUSIC_TRACK_COLUMNS_BASE);
+  return result;
 }
 
 function rowToTrack(
@@ -63,7 +128,6 @@ function rowToTrack(
   cachedIds: Set<string>,
   currentUserId?: string,
 ): AfuMusicTrack {
-  const [coverColor, accentColor] = colorsFor(row.id);
   const artist = row.creator?.display_name?.trim() || row.creator?.handle?.trim() || row.artist?.trim() || "AfuMusic creator";
   const handle = row.creator?.handle ? `@${row.creator.handle.replace(/^@/, "")}` : undefined;
   return {
@@ -78,14 +142,15 @@ function rowToTrack(
     price: Math.max(0, row.price_acoin ?? 0),
     isOwned: ownedIds.has(row.id) || row.creator_id === currentUserId,
     isCached: cachedIds.has(row.id),
-    coverUrl: row.cover_url ?? undefined,
-    coverStoragePath: row.cover_storage_path ?? undefined,
-    coverColor,
-    accentColor,
     storagePath: row.storage_path ?? undefined,
+    storageBucket: row.storage_bucket ?? "music",
     mimeType: row.mime_type ?? undefined,
     fileSize: row.file_size ?? undefined,
-    audioUrl: row.audio_url ?? null,
+    // Paid playback must go through the authenticated read-URL endpoint, never
+    // through the public CDN URL stored in legacy rows.
+    audioUrl: (row.price_acoin ?? 0) > 0 ? null : row.audio_url ?? null,
+    videoUseAllowed: row.video_use_allowed ?? false,
+    coverArtUrl: row.cover_art_url ?? undefined,
     isFeatured: row.is_featured ?? false,
     createdAt: row.created_at,
   };
@@ -97,87 +162,262 @@ async function currentUserId(): Promise<string> {
   return data.user.id;
 }
 
-async function loadTracks(query?: string, ids?: string[], limit = 100): Promise<AfuMusicTrack[]> {
-  const userId = await currentUserId();
-  let request = supabase
-    .from("music_tracks")
-    .select(MUSIC_TRACK_WITH_CREATOR_COLUMNS)
-    .eq("status", "published");
-  if (ids) {
-    if (!ids.length) return [];
-    request = request.in("id", ids);
-  } else if (query?.trim()) {
-    const escaped = query.trim().replace(/[%_,]/g, "");
-    if (escaped) request = request.or(`title.ilike.%${escaped}%,artist.ilike.%${escaped}%,genre.ilike.%${escaped}%`);
+async function optionalCurrentUserId(): Promise<string | undefined> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.user.id;
+  } catch {
+    return undefined;
   }
-  request = request.order("created_at", { ascending: false }).limit(Math.max(1, Math.min(100, Math.floor(limit))));
+}
+
+async function loadTracks(query?: string): Promise<AfuMusicTrack[]> {
+  const userId = await optionalCurrentUserId();
+  const searchTerm = query?.trim().replace(/[%_,()."]/g, "");
+  let matchingCreatorIds: string[] = [];
+  if (searchTerm) {
+    const { data: matchingCreators, error: creatorSearchError } = await supabase
+      .from("profiles")
+      .select("id")
+      .or(`display_name.ilike.%${searchTerm}%,handle.ilike.%${searchTerm}%`)
+      .limit(100);
+    if (creatorSearchError) throw creatorSearchError;
+    matchingCreatorIds = (matchingCreators ?? []).map((profile: any) => profile.id);
+  }
+  const buildRequest = (columns: string) => {
+    let request = (supabase.from("music_tracks") as any)
+      .select(columns)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (searchTerm) {
+      const filters = [
+        `title.ilike.%${searchTerm}%`,
+        `artist.ilike.%${searchTerm}%`,
+        `genre.ilike.%${searchTerm}%`,
+      ];
+      if (matchingCreatorIds.length) {
+        filters.push(`creator_id.in.(${matchingCreatorIds.join(",")})`);
+      }
+      request = request.or(filters.join(","));
+    }
+    return request;
+  };
   const [{ data: rows, error }, { data: purchases }, offline] = await Promise.all([
-    request,
-    supabase.from("music_purchases").select("track_id").eq("buyer_id", userId),
-    getOfflineMusicEntries(userId),
+    selectTracksWithCompatibleColumns(buildRequest),
+    userId
+      ? supabase.from("music_purchases").select("track_id").eq("buyer_id", userId)
+      : Promise.resolve({ data: [] as { track_id: string }[] }),
+    userId ? getOfflineMusicEntries(userId) : Promise.resolve([]),
   ]);
   if (error) throw error;
+
+  const creatorIds = [...new Set((rows ?? []).map((row: any) => row.creator_id).filter(Boolean))];
+  const { data: profiles, error: profileError } = creatorIds.length
+    ? await supabase.from("profiles").select("id,display_name,handle").in("id", creatorIds)
+    : { data: [], error: null };
+  if (profileError) throw profileError;
 
   const purchased = new Set((purchases ?? []).map((item: any) => item.track_id));
   const cached = new Set(offline.map((entry) => entry.trackId));
-  return ((rows ?? []) as MusicRow[]).map((row) => rowToTrack(row, purchased, cached, userId));
+  const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.id, profile]));
+  return ((rows ?? []) as MusicRow[]).map((row) => rowToTrack({
+    ...row,
+    creator: profileMap.get(row.creator_id),
+  }, purchased, cached, userId));
 }
 
-export async function listMusicTracks(limit = 100) {
-  return loadTracks(undefined, undefined, limit);
-}
-
-export async function listCreatorMusicTracks(): Promise<AfuMusicTrack[]> {
-  const userId = await currentUserId();
-  const [{ data: rows, error }, offline] = await Promise.all([
-    supabase
-      .from("music_tracks")
-      .select(MUSIC_TRACK_COLUMNS)
-      .eq("creator_id", userId)
-      .eq("status", "published")
-      .order("created_at", { ascending: false })
-      .limit(200),
-    getOfflineMusicEntries(userId),
-  ]);
-  if (error) throw error;
-
-  const cached = new Set(offline.map((entry) => entry.trackId));
-  return ((rows ?? []) as MusicRow[]).map((row) => ({
-    ...rowToTrack(row, new Set([row.id]), cached, userId),
-    artist: "You",
-    handle: "@you",
-  }));
+export async function listMusicTracks() {
+  return loadTracks();
 }
 
 export async function searchMusicTracks(query: string) {
   return loadTracks(query);
 }
 
-export async function searchMusicTracksByIds(ids: string[]) {
-  return loadTracks(undefined, ids);
+export async function listMusicTracksByCreator(creatorId: string) {
+  if (!creatorId) return [];
+  let viewerId: string | undefined;
+  try {
+    viewerId = (await supabase.auth.getUser()).data.user?.id;
+  } catch {
+    viewerId = undefined;
+  }
+
+  const base = () => (supabase.from("music_tracks") as any)
+      .select(MUSIC_TRACK_COLUMNS)
+      .eq("creator_id", creatorId)
+      .eq("status", "published")
+      .order("created_at", { ascending: false })
+      .limit(24);
+  const loadRows = (columns: string) => (supabase.from("music_tracks") as any)
+    .select(columns)
+    .eq("creator_id", creatorId)
+    .eq("status", "published")
+    .order("created_at", { ascending: false })
+    .limit(24);
+  const [{ data: rows, error }, { data: purchases }, offline, { data: creator }] = await Promise.all([
+    selectTracksWithCompatibleColumns(loadRows),
+    viewerId
+      ? supabase.from("music_purchases").select("track_id").eq("buyer_id", viewerId)
+      : Promise.resolve({ data: [] as { track_id: string }[] }),
+    viewerId ? getOfflineMusicEntries(viewerId) : Promise.resolve([]),
+    supabase.from("profiles").select("id,display_name,handle").eq("id", creatorId).maybeSingle(),
+  ]);
+  if (error) throw error;
+
+  const purchasedIds = new Set((purchases ?? []).map((item: any) => item.track_id));
+  const cachedIds = new Set(offline.map((entry) => entry.trackId));
+  return ((rows ?? []) as MusicRow[]).map((row) => rowToTrack({
+    ...row,
+    creator: creator?.id === creatorId ? creator : null,
+  }, purchasedIds, cachedIds, viewerId));
+}
+
+export async function getMusicTrackById(trackId: string) {
+  const userId = await currentUserId();
+  const query = (columns: string) => (supabase.from("music_tracks") as any)
+    .select(columns)
+    .eq("id", trackId)
+    .eq("status", "published")
+    .maybeSingle();
+  const [{ data: row, error }, { data: purchase }, offline] = await Promise.all([
+    selectTracksWithCompatibleColumns(query),
+    supabase.from("music_purchases").select("track_id").eq("buyer_id", userId).eq("track_id", trackId).maybeSingle(),
+    getOfflineMusicEntries(userId),
+  ]);
+  if (error) throw error;
+  if (!row) return null;
+  const [{ data: profile }, cached] = await Promise.all([
+    row.creator_id
+      ? supabase.from("profiles").select("id,display_name,handle").eq("id", row.creator_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    Promise.resolve(offline.some((entry) => entry.trackId === trackId)),
+  ]);
+  return rowToTrack({
+    ...(row as MusicRow),
+    creator: profile?.id === row.creator_id ? profile : null,
+  }, new Set(purchase ? [trackId] : []), new Set(cached ? [trackId] : []), userId);
 }
 
 export async function purchaseMusicTrack(trackId: string) {
-  const { data, error } = await supabase.rpc("purchase_music_track", { p_track_id: trackId });
+  const { data: paymentsReady, error: readinessError } = await supabase.rpc("afumusic_payments_ready");
+  if (readinessError || paymentsReady !== true) {
+    throw new Error("Secure AfuMusic purchases are not deployed yet. Your ACoin was not charged.");
+  }
+  const { data: purchase, error } = await supabase.rpc("purchase_music_track", { p_track_id: trackId });
   if (error) throw error;
-  const result = data as { ok?: boolean; already_owned?: boolean; price_acoin?: number } | null;
-  if (!result?.ok) throw new Error("The music purchase was not confirmed.");
-  return { alreadyOwned: !!result.already_owned, price: Number(result.price_acoin) || 0 };
+  if (!purchase || (purchase as any).ok !== true) {
+    throw new Error("The purchase was not confirmed. Your ACoin was not charged.");
+  }
+
+  const buyerId = await currentUserId();
+  const { data: receipt, error: receiptError } = await supabase
+    .from("music_purchases")
+    .select("id")
+    .eq("track_id", trackId)
+    .eq("buyer_id", buyerId)
+    .maybeSingle();
+  if (receiptError) throw receiptError;
+  if (!receipt) throw new Error("The purchase receipt could not be verified.");
+}
+
+async function loadMusicLedger(kind: "purchase" | "earning"): Promise<AfuMusicLedgerItem[]> {
+  const userId = await currentUserId();
+  const { data, error } = kind === "purchase"
+    ? await supabase
+        .from("music_purchases")
+        .select("id,track_id,creator_id,price_acoin,purchased_at")
+        .eq("buyer_id", userId)
+        .order("purchased_at", { ascending: false })
+        .limit(100)
+    : await supabase
+        .from("music_transactions")
+        .select("id,track_id,buyer_id,amount_acoin,created_at")
+        .eq("creator_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+  if (error) throw error;
+  const records = data ?? [];
+  if (records.length === 0) return [];
+
+  const trackIds = [...new Set(records.map((row: any) => row.track_id).filter(Boolean))] as string[];
+  const profileIds = [...new Set(records.map((row: any) => kind === "purchase" ? row.creator_id : row.buyer_id))] as string[];
+  const [{ data: tracks, error: tracksError }, { data: profiles, error: profilesError }] = await Promise.all([
+    trackIds.length
+      ? supabase.from("music_tracks").select("id,title,artist").in("id", trackIds)
+      : Promise.resolve({ data: [], error: null }),
+    profileIds.length
+      ? supabase.from("profiles").select("id,display_name,handle").in("id", profileIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (tracksError) throw tracksError;
+  if (profilesError) throw profilesError;
+  const trackMap = new Map((tracks ?? []).map((track: any) => [track.id, track]));
+  const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.id, profile]));
+  return records.map((row: any) => {
+    const track = row.track_id ? trackMap.get(row.track_id) : null;
+    const counterparty = profileMap.get(kind === "purchase" ? row.creator_id : row.buyer_id);
+    return {
+      id: row.id,
+      trackId: row.track_id ?? null,
+      title: track?.title || "Unavailable track",
+      artist: track?.artist || "AfuMusic creator",
+      amount: kind === "purchase" ? row.price_acoin : row.amount_acoin,
+      happenedAt: kind === "purchase" ? row.purchased_at : row.created_at,
+      counterpartyName: counterparty?.display_name || counterparty?.handle || "AfuMusic user",
+      counterpartyHandle: counterparty?.handle ? `@${counterparty.handle.replace(/^@/, "")}` : null,
+    };
+  });
+}
+
+export function listMusicPurchases() {
+  return loadMusicLedger("purchase");
+}
+
+export function listMusicEarnings() {
+  return loadMusicLedger("earning");
 }
 
 export async function getMusicPlaybackUri(track: AfuMusicTrack): Promise<string | null> {
   const userId = await currentUserId();
+  if (track.price > 0 && track.creatorId !== userId && !track.isOwned) {
+    throw new Error("Purchase this track before playing it.");
+  }
   const cached = await getOfflineMusicUri(userId, track.id);
   if (cached) return cached;
-  if (track.audioUrl?.startsWith("file://")) return track.audioUrl;
+  if (track.price === 0 && track.audioUrl?.startsWith("file://")) return track.audioUrl;
+  const storageBucket = track.storageBucket ?? MUSIC_BUCKET;
+  if (track.price > 0 && storageBucket !== MUSIC_PRIVATE_BUCKET) {
+    throw new Error("This paid track is not in private storage. It must be moved before paid playback can continue.");
+  }
   if (!track.storagePath) {
-    if (track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")) {
+    if (track.price === 0 && track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")) {
       return track.audioUrl;
     }
     return null;
   }
-  const result = await getSignedR2ReadUrl(MUSIC_BUCKET, track.storagePath, track.id);
+  const result = await getSignedR2ReadUrl(storageBucket, track.storagePath, track.id);
   if (result.error || !result.url) throw new Error(result.error || "This track is not available for playback.");
+  return result.url;
+}
+
+export async function getMusicDownloadUri(track: AfuMusicTrack, filename: string): Promise<string | null> {
+  const userId = await currentUserId();
+  if (track.price > 0 && track.creatorId !== userId && !track.isOwned) {
+    throw new Error("Purchase this track before downloading it.");
+  }
+  const storageBucket = track.storageBucket ?? MUSIC_BUCKET;
+  if (track.price > 0 && storageBucket !== MUSIC_PRIVATE_BUCKET) {
+    throw new Error("This paid track is not in private storage. It must be moved before paid downloads can continue.");
+  }
+  if (!track.storagePath) {
+    return track.price === 0 && track.audioUrl && !track.audioUrl.includes(".supabase.co/storage/")
+      ? track.audioUrl
+      : null;
+  }
+  const result = await getSignedR2ReadUrl(storageBucket, track.storagePath, track.id, filename);
+  if (result.error || !result.url) throw new Error(result.error || "This track is not available for download.");
   return result.url;
 }
 
@@ -207,249 +447,294 @@ function audioExtension(name: string, mimeType: string) {
   const fromName = name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (fromName && ["mp3", "m4a", "wav", "ogg", "aac"].includes(fromName)) return fromName;
   if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("m4a")) return "m4a";
   if (mimeType.includes("mp4")) return "m4a";
   if (mimeType.includes("wav")) return "wav";
   if (mimeType.includes("ogg")) return "ogg";
-  return "audio";
+  if (mimeType.includes("aac")) return "aac";
+  throw new Error("Use an MP3, M4A, WAV, OGG, or AAC audio file.");
 }
 
-export type MusicTrackInput = {
-  title: string;
-  genre: string;
-  price: number;
-  fileUri?: string;
-  fileName?: string;
-  mimeType?: string;
-  fileSize?: number;
-  coverFileUri?: string;
-  coverFileName?: string;
-  coverMimeType?: string;
-  coverFileSize?: number;
-};
+function resolveAudioMimeType(fileName: string, mimeType?: string) {
+  const normalized = mimeType?.split(";")[0]?.trim().toLowerCase();
+  if (normalized && AUDIO_TYPES.has(normalized)) return normalized;
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  const inferred: Record<string, string> = {
+    mp3: "audio/mpeg",
+    m4a: "audio/mp4",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    aac: "audio/aac",
+  };
+  return inferred[extension ?? ""] ?? "";
+}
 
-function validateTrackDetails(input: MusicTrackInput) {
-  const title = input.title.trim();
-  const genre = input.genre.trim();
-  if (!title || title.length > 120) throw new Error("Track titles must be between 1 and 120 characters.");
-  if (!genre || genre.length > 40) throw new Error("Choose a valid music genre.");
-  if (!Number.isInteger(input.price) || input.price < 0 || input.price > 100000) {
-    throw new Error("Choose a whole-number price from 0 to 100,000 ACoin.");
+async function verifiedFileSize(uri: string, reportedSize: number | undefined, label: string) {
+  let info: { exists?: boolean; size?: number } | null = null;
+  try {
+    info = await FileSystem.getInfoAsync(uri) as { exists?: boolean; size?: number };
+  } catch {
+    // Picker metadata is the fallback for browser/blob and provider-backed URIs.
   }
-  return { title, genre, price: input.price };
-}
-
-async function assertCreatorCanSell(creatorId: string) {
-  const [{ data: creator, error: creatorError }, { data: activeSubscription, error: subscriptionError }] = await Promise.all([
-    supabase.from("profiles").select("is_verified").eq("id", creatorId).maybeSingle(),
-    supabase
-      .from("user_subscriptions")
-      .select("is_active,expires_at,subscription_plans(tier)")
-      .eq("user_id", creatorId)
-      .eq("is_active", true)
-      .gt("expires_at", new Date().toISOString())
-      .maybeSingle(),
-  ]);
-  if (creatorError || subscriptionError) throw new Error("Could not verify creator eligibility. Try again.");
-  const plan = (activeSubscription as any)?.subscription_plans;
-  if (!isVerifiedCreator(creator?.is_verified, activeSubscription ? {
-    is_active: activeSubscription.is_active,
-    expires_at: activeSubscription.expires_at,
-    plan_tier: Array.isArray(plan) ? plan[0]?.tier : plan?.tier,
-  } : null)) {
-    throw new Error("An active Standard or Pro plan, or an existing verified badge, is required to sell music.");
-  }
-}
-
-async function selectedFileSize(uri: string, reportedSize?: number) {
-  let size = Number(reportedSize ?? 0);
-  if (Platform.OS === "web" && (uri.startsWith("blob:") || uri.startsWith("data:"))) {
-    try {
-      const response = await fetch(uri);
-      if (!response.ok) throw new Error("Could not read the selected file.");
-      const blob = await response.blob();
-      size = blob.size || size;
-    } catch {
-      if (!size) throw new Error("The selected file is no longer available. Please choose it again.");
-    }
-  } else if (!size) {
-    const info = await FileSystem.getInfoAsync(uri);
-    if (!info.exists) throw new Error("The selected file is no longer available. Please choose it again.");
-    size = Number((info as any).size ?? 0);
+  const size = Number(info?.size && info.size > 0 ? info.size : reportedSize);
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new Error(`Could not verify the ${label} file size. Choose the file again and retry.`);
   }
   return size;
 }
 
-function uniqueStorageName() {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+async function extractDurationSeconds(uri: string): Promise<number | null> {
+  if (typeof document !== "undefined") {
+    return new Promise((resolve) => {
+      const audio = document.createElement("audio");
+      let settled = false;
+      const finish = (value: number | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        audio.onloadedmetadata = null;
+        audio.onerror = null;
+        audio.removeAttribute("src");
+        audio.load();
+        resolve(value);
+      };
+      const timeout = setTimeout(() => finish(null), 12_000);
+      audio.preload = "metadata";
+      audio.onloadedmetadata = () => {
+        const duration = audio.duration;
+        finish(Number.isFinite(duration) && duration > 0 ? Math.round(duration) : null);
+      };
+      audio.onerror = () => finish(null);
+      audio.src = uri;
+      audio.load();
+    });
+  }
+
+  let sound: { unloadAsync: () => Promise<unknown> } | null = null;
+  try {
+    const { Audio } = await import("expo-av");
+    const loaded = await Audio.Sound.createAsync(
+      { uri },
+      { shouldPlay: false },
+      undefined,
+      false,
+    );
+    sound = loaded.sound;
+    const durationMillis = loaded.status.isLoaded ? loaded.status.durationMillis : undefined;
+    return typeof durationMillis === "number" && Number.isFinite(durationMillis) && durationMillis > 0
+      ? Math.round(durationMillis / 1000)
+      : null;
+  } catch {
+    return null;
+  } finally {
+    await sound?.unloadAsync().catch(() => {});
+  }
 }
 
-async function uploadMusicAudio(creatorId: string, input: MusicTrackInput) {
-  if (!input.fileUri || !input.fileName) throw new Error("Choose an audio file before publishing.");
-  const mimeType = (input.mimeType || "audio/mpeg").split(";")[0].toLowerCase();
+export async function publishMusicTrack(input: {
+  title: string;
+  genre: string;
+  price: number;
+  fileUri: string;
+  fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+  videoUseAllowed?: boolean;
+  coverUri?: string;
+  coverFileName?: string;
+  coverMimeType?: string;
+  coverFileSize?: number;
+}) {
+  const creatorId = await currentUserId();
+  const mimeType = resolveAudioMimeType(input.fileName, input.mimeType);
   if (!AUDIO_TYPES.has(mimeType)) throw new Error("Use an MP3, M4A, WAV, OGG, or AAC audio file.");
-  const fileSize = await selectedFileSize(input.fileUri, input.fileSize);
+  const title = input.title.trim();
+  if (!title || title.length > 120) throw new Error("Track titles must be between 1 and 120 characters.");
+  if (!Number.isInteger(input.price) || (input.price !== 0 && (input.price < 5 || input.price > 1000))) {
+    throw new Error("Free tracks must cost 0 ACoin; paid tracks must cost between 5 and 1,000 ACoin.");
+  }
+  if (input.price > 0) {
+    const { data: allowed, error } = await supabase.rpc("afumusic_creator_has_premium", {
+      p_creator_id: creatorId,
+    });
+    if (error || allowed !== true) {
+      throw new Error("Paid publishing needs the AfuMusic premium-entitlement migration. Apply the production migration before retrying.");
+    }
+  }
+  let coverMimeType = "";
+  let coverSize = 0;
+  let safeCoverExtension = "jpg";
+  if (input.coverUri) {
+    const schemaCheck = await supabase
+      .from("music_tracks")
+      .select("cover_art_url,cover_art_path")
+      .limit(1);
+    if (isMissingCoverColumns(schemaCheck.error)) {
+      warnCoverMigrationMissing();
+      throw new Error("Track cover art needs the AfuMusic cover-art migration. Apply 20261013000003_afumusic_cover_art.sql in Supabase, then retry.");
+    }
+    if (schemaCheck.error) throw schemaCheck.error;
+
+    const coverName = input.coverFileName || "cover.jpg";
+    const coverExtension = coverName.split(".").pop()?.toLowerCase() || "jpg";
+    const inferredType = coverExtension === "png" ? "image/png"
+      : coverExtension === "webp" ? "image/webp"
+      : coverExtension === "jpg" || coverExtension === "jpeg" ? "image/jpeg"
+      : "";
+    coverMimeType = input.coverMimeType || inferredType;
+    if (!COVER_TYPES.has(coverMimeType)) {
+      throw new Error("Use a JPG, PNG, or WebP image for the cover.");
+    }
+    coverSize = await verifiedFileSize(input.coverUri, input.coverFileSize, "cover image");
+    if (coverSize > MAX_COVER_BYTES) throw new Error("Cover images must be 10 MB or smaller.");
+    safeCoverExtension = coverMimeType === "image/png" ? "png" : coverMimeType === "image/webp" ? "webp" : "jpg";
+  }
+  if (input.price > 0) {
+    const schemaCheck = await supabase.from("music_tracks").select("storage_bucket").limit(1);
+    if (isMissingStorageBucketColumn(schemaCheck.error)) {
+      warnPrivateStorageMigrationMissing();
+      throw new Error("Paid publishing needs the AfuMusic private-storage setup migration. Apply 20261014000001_afumusic_private_storage_setup.sql before retrying.");
+    }
+    if (schemaCheck.error) throw schemaCheck.error;
+    if (!(await isPrivateMusicStorageReady())) {
+      throw new Error("Paid AfuMusic publishing is blocked until the dedicated private R2 bucket is reachable by the upload service. Your audio was not uploaded.");
+    }
+  }
+  const fileSize = await verifiedFileSize(input.fileUri, input.fileSize, "audio");
   if (fileSize > MAX_AUDIO_BYTES) throw new Error("Audio files must be 100 MB or smaller.");
+  const durationSeconds = await extractDurationSeconds(input.fileUri);
+  if (durationSeconds !== null && durationSeconds > 7200) {
+    throw new Error("Audio tracks must be two hours or shorter.");
+  }
 
   const extension = audioExtension(input.fileName, mimeType);
-  const path = `${creatorId}/${uniqueStorageName()}.${extension}`;
-  const upload = await uploadToStorage(MUSIC_BUCKET, path, input.fileUri, mimeType);
-  if (upload.error || !upload.publicUrl) throw new Error(upload.error || "Audio upload failed.");
-  return { path, url: upload.publicUrl, mimeType, fileSize };
-}
-
-function coverDetails(input: MusicTrackInput) {
-  if (!input.coverFileUri) return null;
-  const suppliedMime = (input.coverMimeType || "").split(";")[0].toLowerCase();
-  const namedExtension = input.coverFileName?.split(".").pop()?.toLowerCase();
-  const mimeFromExtension: Record<string, string> = {
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    webp: "image/webp",
-  };
-  const mimeType = suppliedMime === "image/jpg"
-    ? "image/jpeg"
-    : suppliedMime || mimeFromExtension[namedExtension || ""] || "image/jpeg";
-  if (!COVER_TYPES.has(mimeType)) throw new Error("Use a JPEG, PNG, or WebP image for cover art.");
-  const extension = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
-  return { uri: input.coverFileUri, mimeType, extension };
-}
-
-async function uploadMusicCover(creatorId: string, input: MusicTrackInput) {
-  const cover = coverDetails(input);
-  if (!cover) return null;
-  const fileSize = await selectedFileSize(cover.uri, input.coverFileSize);
-  if (fileSize > MAX_COVER_BYTES) throw new Error("Cover images must be 15 MB or smaller.");
-  const path = `${creatorId}/covers/${uniqueStorageName()}.${cover.extension}`;
-  const upload = await uploadToStorage(MUSIC_COVER_BUCKET, path, cover.uri, cover.mimeType);
-  if (upload.error || !upload.publicUrl) throw new Error(upload.error || "Cover upload failed.");
-  return { path, url: upload.publicUrl };
-}
-
-async function removeUploadedObject(bucket: string, path?: string | null) {
-  if (!path) return;
-  const result = await deleteUserFile(`${bucket}/${path}`);
-  if (!result.ok) console.warn(`[AfuMusic] R2 cleanup failed: ${result.error}`);
-}
-
-export async function publishMusicTrack(input: MusicTrackInput & { fileUri: string; fileName: string }) {
-  const creatorId = await currentUserId();
-  const details = validateTrackDetails(input);
-  if (details.price > 0) await assertCreatorCanSell(creatorId);
-
-  const audio = await uploadMusicAudio(creatorId, input);
-  let cover: { path: string; url: string } | null = null;
+  const uniquePart = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const path = `${creatorId}/${uniquePart}.${extension}`;
+  const audioBucket = input.price > 0 ? MUSIC_PRIVATE_BUCKET : MUSIC_BUCKET;
+  const audioKey = `${audioBucket}/${path}`;
+  let coverPath: string | null = null;
+  let coverKey: string | null = null;
   try {
-    cover = await uploadMusicCover(creatorId, input);
-    const { data, error } = await supabase.from("music_tracks").insert({
-      creator_id: creatorId,
-      title: details.title,
-      audio_url: audio.url,
-      genre: details.genre,
-      price_acoin: Math.floor(details.price),
-      storage_path: audio.path,
-      mime_type: audio.mimeType,
-      file_size: audio.fileSize,
-      cover_url: cover?.url ?? null,
-      cover_storage_path: cover?.path ?? null,
-    }).select(MUSIC_TRACK_COLUMNS).single();
-    if (error) throw error;
-    return {
-      ...rowToTrack(data as MusicRow, new Set([data.id]), new Set(), creatorId),
-      artist: "You",
-      handle: "@you",
-    };
-  } catch (error) {
-    await removeUploadedObject(MUSIC_BUCKET, audio.path);
-    if (cover) await removeUploadedObject(MUSIC_COVER_BUCKET, cover.path);
-    throw error;
-  }
-}
-
-export async function updateMusicTrack(track: AfuMusicTrack, input: MusicTrackInput) {
-  const creatorId = await currentUserId();
-  const details = validateTrackDetails(input);
-  const { data: existing, error: existingError } = await supabase
-    .from("music_tracks")
-    .select("price_acoin,storage_path,cover_storage_path")
-    .eq("id", track.id)
-    .eq("creator_id", creatorId)
-    .eq("status", "published")
-    .maybeSingle();
-  if (existingError) throw existingError;
-  if (!existing) throw new Error("This track was not found or is no longer available to edit.");
-  if (details.price > 0 && details.price !== Number(existing.price_acoin ?? 0)) {
-    await assertCreatorCanSell(creatorId);
-  }
-
-  let audio: Awaited<ReturnType<typeof uploadMusicAudio>> | null = null;
-  let cover: { path: string; url: string } | null = null;
-  try {
-    if (input.fileUri) audio = await uploadMusicAudio(creatorId, input);
-    cover = await uploadMusicCover(creatorId, input);
-    const update: Record<string, unknown> = {
-      title: details.title,
-      genre: details.genre,
-      price_acoin: Math.floor(details.price),
-    };
-    if (audio) {
-      update.audio_url = audio.url;
-      update.storage_path = audio.path;
-      update.mime_type = audio.mimeType;
-      update.file_size = audio.fileSize;
-    }
-    if (cover) {
-      update.cover_url = cover.url;
-      update.cover_storage_path = cover.path;
+    const upload = await uploadToStorage(audioBucket, path, input.fileUri, mimeType, fileSize);
+    if (
+      upload.error ||
+      (input.price > 0 ? upload.privateStoragePath !== path : !upload.publicUrl)
+    ) {
+      throw new Error(upload.error || "Audio upload failed.");
     }
 
-    const { data, error } = await supabase
-      .from("music_tracks")
-      .update(update)
-      .eq("id", track.id)
-      .eq("creator_id", creatorId)
-      .eq("status", "published")
-      .select(MUSIC_TRACK_COLUMNS)
-      .single();
-    if (error) throw error;
-
-    if (audio) {
-      try {
-        await removeMusicTrackOffline(track);
-      } catch (cacheError) {
-        console.warn("[AfuMusic] Could not clear the outdated offline copy:", cacheError);
+    let coverUrl: string | null = null;
+    if (input.coverUri) {
+      coverPath = `${creatorId}/${uniquePart}_cover.${safeCoverExtension}`;
+      coverKey = `${MUSIC_BUCKET}/${coverPath}`;
+      const stableCoverUri = await prepareMediaForUpload(input.coverUri, safeCoverExtension);
+      const coverUpload = await uploadToStorage(MUSIC_BUCKET, coverPath, stableCoverUri, coverMimeType, coverSize);
+      if (coverUpload.error || !coverUpload.publicUrl) {
+        throw new Error(coverUpload.error || "Cover upload failed.");
       }
+      coverUrl = coverUpload.publicUrl;
     }
-    if (audio && existing.storage_path) {
-      await removeUploadedObject(MUSIC_BUCKET, existing.storage_path);
+
+    const trackValues: Record<string, unknown> = {
+      creator_id: creatorId,
+      title,
+      audio_url: input.price > 0 ? null : upload.publicUrl,
+      genre: input.genre,
+      price_acoin: input.price,
+      storage_path: path,
+      storage_bucket: audioBucket,
+      mime_type: mimeType,
+      file_size: fileSize,
+      duration_seconds: durationSeconds,
+    };
+    let includeVideoLicense = true;
+    let includeCover = true;
+    let inserted: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const selectedColumns = MUSIC_TRACK_COLUMNS
+        .replace(includeCover ? "" : ",cover_art_url", "")
+        .replace(includeVideoLicense ? "" : ",video_use_allowed", "");
+      const values = {
+        ...trackValues,
+        ...(includeVideoLicense ? { video_use_allowed: input.videoUseAllowed ?? false } : {}),
+        ...(includeCover ? { cover_art_url: coverUrl, cover_art_path: coverPath } : {}),
+      };
+      inserted = await (supabase.from("music_tracks") as any)
+        .insert(values)
+        .select(selectedColumns)
+        .single();
+      if (!inserted.error) break;
+
+      if (isMissingPlatformColumns(inserted.error)) {
+        const message = String(inserted.error.message ?? "").toLowerCase();
+        if (message.includes("video_use_allowed")) {
+          warnPlatformMigrationMissing();
+          if (input.price > 0 || input.videoUseAllowed) {
+            throw new Error("Track publishing needs the AfuMusic platform migration. Apply it before publishing paid tracks or enabling video use.");
+          }
+          includeVideoLicense = false;
+          continue;
+        }
+        if (message.includes("cover_art_")) {
+          warnCoverMigrationMissing();
+          if (coverUrl) {
+            throw new Error("Track cover art needs the AfuMusic cover-art migration. Apply it before publishing with artwork.");
+          }
+          includeCover = false;
+          continue;
+        }
+      }
+      break;
     }
-    if (cover && existing.cover_storage_path) {
-      await removeUploadedObject(MUSIC_COVER_BUCKET, existing.cover_storage_path);
+    if (inserted?.error) {
+      if (input.price > 0 && inserted.error.code === "23502") {
+        throw new Error("Paid-track privacy needs the AfuMusic production migration. Apply it before publishing paid music.");
+      }
+      throw inserted.error;
     }
+    const data = inserted.data as MusicRow;
     return {
-      ...rowToTrack(data as MusicRow, new Set([track.id]), new Set(), creatorId),
+      ...rowToTrack(data, new Set([data.id]), new Set(), creatorId),
       artist: "You",
       handle: "@you",
     };
   } catch (error) {
-    if (audio) await removeUploadedObject(MUSIC_BUCKET, audio.path);
-    if (cover) await removeUploadedObject(MUSIC_COVER_BUCKET, cover.path);
+    await Promise.all([
+      deleteUserFile(audioKey).catch(() => {}),
+      coverKey ? deleteUserFile(coverKey).catch(() => {}) : Promise.resolve(),
+    ]);
+    if (input.coverUri && isMissingCoverColumns(error)) {
+      throw new Error("Track cover uploads need the AfuMusic cover-art database migration. Apply 20261013000003_afumusic_cover_art.sql in Supabase, then retry.");
+    }
     throw error;
   }
 }
 
 export async function removeMusicTrack(track: AfuMusicTrack) {
   const creatorId = await currentUserId();
-  const { data, error } = await supabase
-    .from("music_tracks")
+  const remove = (includeCoverPath: boolean) => (supabase.from("music_tracks") as any)
     .update({ status: "removed" })
     .eq("id", track.id)
     .eq("creator_id", creatorId)
-    .select("id")
+    .select(includeCoverPath ? "storage_path,cover_art_path" : "storage_path")
     .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("This track was not found or is no longer yours.");
-
-  await removeUploadedObject(MUSIC_BUCKET, track.storagePath);
-  await removeUploadedObject(MUSIC_COVER_BUCKET, track.coverStoragePath);
+  let result = await remove(true);
+  if (isMissingCoverColumns(result.error)) {
+    warnCoverMigrationMissing();
+    result = await remove(false);
+  }
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error("This track is unavailable or you do not have permission to remove it.");
+  if (result.data.storage_path) {
+    const deleted = await deleteUserFile(`${MUSIC_BUCKET}/${result.data.storage_path}`);
+    if (!deleted.ok) {
+      console.warn("[AfuMusic] R2 cleanup failed:", deleted.error);
+    }
+  }
+  if (result.data.cover_art_path) {
+    const deleted = await deleteUserFile(`${MUSIC_BUCKET}/${result.data.cover_art_path}`);
+    if (!deleted.ok) {
+      console.warn("[AfuMusic] cover cleanup failed:", deleted.error);
+    }
+  }
 }

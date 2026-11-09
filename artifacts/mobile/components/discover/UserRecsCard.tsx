@@ -126,7 +126,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.cardSurface }]}>
+      <View style={[styles.container, { backgroundColor: colors.surface }]}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Skeleton width={16} height={16} borderRadius={8} />
@@ -135,7 +135,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.list}>
           {[0, 1, 2].map((i) => (
-            <View key={i} style={[styles.card, { backgroundColor: colors.cardSurface }]}>
+            <View key={i} style={[styles.card, { backgroundColor: colors.surface }]}>
               <Skeleton width={52} height={52} borderRadius={26} />
               <Skeleton width={82} height={13} borderRadius={6} style={{ marginTop: 6 }} />
               <Skeleton width={62} height={10} borderRadius={5} />
@@ -156,7 +156,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
           <Ionicons name="person-add-outline" size={16} color={colors.accent} />
           <Text style={[styles.title, { color: colors.text }]}>People to follow</Text>
         </View>
-        <TouchableOpacity onPress={() => safeRouter.push("/user-discovery" as any)} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => safeRouter.push("/search" as any)} activeOpacity={0.7}>
           <Text style={[styles.seeAll, { color: colors.accent }]}>See all</Text>
         </TouchableOpacity>
       </View>
@@ -169,7 +169,7 @@ export const UserRecsCard = React.memo(function UserRecsCard({ seed = 0, onRequi
         {users.map((u) => (
           <TouchableOpacity
             key={u.id}
-            style={[styles.card, { backgroundColor: colors.cardSurface }]}
+            style={[styles.card, { backgroundColor: colors.surface }]}
             onPress={() => navigateToProfile(u.handle, true).catch(() => {})}
             activeOpacity={0.88}
           >

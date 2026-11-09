@@ -9,14 +9,13 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
@@ -366,7 +365,9 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   function renderHeader(title: string, rightAction?: { label: string; onPress: () => void }) {
     return (
       <View style={[st.subHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
-        <GlassBackButton onPress={() => setScreen("home")} icon="chevron-back" />
+        <Pressable onPress={() => setScreen("home")} hitSlop={12} style={st.backBtn}>
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
+        </Pressable>
         <Text style={[st.subTitle, { color: colors.text }]}>{title}</Text>
         {rightAction ? (
           <Pressable onPress={rightAction.onPress} style={[st.headerAction, { backgroundColor: accent + "22" }]}>
@@ -406,7 +407,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
       <View style={[st.root, { backgroundColor: colors.background }]}>
         {renderHeader("Create Your Shop")}
         <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }}>
-          <View style={[st.infoCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
             <Ionicons name="storefront" size={32} color={accent} />
             <Text style={[st.infoTitle, { color: colors.text }]}>Launch on AfuMarket</Text>
             <Text style={[st.infoText, { color: colors.textMuted }]}>Create your store to start selling to thousands of AfuChat users.</Text>
@@ -456,7 +457,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
         {renderHeader("Analytics")}
         {listLoading ? (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-            {[1,2,3].map(i => <View key={i} style={[st.kpiCard, { backgroundColor: colors.cardSurface }]}><ActivityIndicator size="small" color={accent} /></View>)}
+            {[1,2,3].map(i => <View key={i} style={[st.kpiCard, { backgroundColor: colors.surface }]}><ActivityIndicator size="small" color={accent} /></View>)}
           </ScrollView>
         ) : (
           <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 20 }}>
@@ -473,7 +474,7 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
               ))}
             </View>
             {shop && (
-              <View style={[st.shopStatCard, { backgroundColor: colors.cardSurface }]}>
+              <View style={[st.shopStatCard, { backgroundColor: colors.surface }]}>
                 <Text style={[st.sectionLabel, { color: colors.textSecondary }]}>SHOP OVERVIEW</Text>
                 <View style={{ marginTop: 12, gap: 10 }}>
                   <View style={st.shopStatRow}>
@@ -678,7 +679,9 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.subHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => setScreen("orders")} icon="chevron-back" />
+          <Pressable onPress={() => setScreen("orders")} hitSlop={12} style={st.backBtn}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
           <Text style={[st.subTitle, { color: colors.text }]}>Order Detail</Text>
           <View style={{ width: 60 }} />
         </View>
@@ -821,7 +824,9 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
       showsVerticalScrollIndicator={false}
     >
       <View style={[st.homeHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border, paddingTop: insets.top + 10 }]}>
-        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
+        <Pressable onPress={() => safeRouter.back("/apps")} hitSlop={10} style={st.backBtn} accessibilityRole="button" accessibilityLabel="Go back">
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </Pressable>
         <Text style={[st.homeTitle, { color: colors.text }]}>AfuBusiness</Text>
         <View style={{ width: 34 }} />
       </View>

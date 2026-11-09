@@ -1,9 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { storage, KEYS } from "./storage/mmkv";
-import {
-  resolveConnectivityPhase,
-  type ConnectivityPhase,
-} from "./connectivityModel";
 
 const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -29,76 +25,35 @@ export type PendingMessage = {
   sender_id: string;
   encrypted_content: string;
   created_at: string;
-  reply_to_message_id?: string | null;
-  sender_display_name?: string | null;
-  sender_avatar_url?: string | null;
-  sender_handle?: string | null;
 };
 
-let _isOnline = false;
-let _connectionPhase: ConnectivityPhase = "connecting";
-let _transportConnected: boolean | null = null;
-let _internetReachable: boolean | null = null;
-let _backendReachable: boolean | null = null;
+// NetInfo is asynchronous on native, and release builds can mount the first
+// screen before its initial fetch resolves. Treating that unknown window as
+// offline makes connected users take the cache-only branch and can leave the
+// app looking offline until the next network transition. Screens already
+// hydrate local caches first, so allow network work during the short unknown
+// window; once NetInfo reports, the real state takes over immediately.
+let _isOnline = true;
 let _listeners: ((online: boolean) => void)[] = [];
 // Reconnect-specific listeners — fired ONLY when transitioning from offline → online.
 // Use onReconnect() to subscribe; screens use this to trigger a data refresh
 // without having to filter out the offline→online direction themselves.
 let _reconnectListeners: (() => void)[] = [];
-const _connectionStateListeners = new Set<(state: ConnectivityPhase) => void>();
-const _dataSyncListeners = new Set<(active: boolean) => void>();
 let _netInfoInitialized = false;
-let _connectivityReported = false;
-let _connectionWasLost = false;
-let _activeDataSyncs = 0;
+let _netInfoReported = false;
 
-function browserOnline(): boolean | null {
-  if (typeof navigator === "undefined" || typeof navigator.onLine !== "boolean") return null;
-  return navigator.onLine;
-}
-
-function publishConnectionState(): void {
-  const previousOnline = _isOnline;
-  const previousPhase = _connectionPhase;
-  const hadInitialReport = _connectivityReported;
-  _connectionPhase = resolveConnectivityPhase({
-    transportConnected: _transportConnected,
-    internetReachable: _internetReachable,
-    backendReachable: _backendReachable,
-    browserOnline: browserOnline(),
-  });
-  _isOnline = _connectionPhase === "online";
-  _connectivityReported = true;
-  if (_connectionPhase === "offline" || previousPhase === "online" && !_isOnline) {
-    _connectionWasLost = true;
-  }
-
-  if (previousPhase !== _connectionPhase) {
-    _connectionStateListeners.forEach((fn) => {
-      try { fn(_connectionPhase); } catch {}
-    });
-  }
-  if (previousOnline !== _isOnline || !hadInitialReport) {
-    _listeners.forEach((fn) => { try { fn(_isOnline); } catch {} });
-  }
-  // Do not classify the first NetInfo or request result as a reconnect.
-  if (_isOnline && hadInitialReport && !previousOnline && _connectionWasLost) {
-    _connectionWasLost = false;
+function _fireConnectivity(newOnline: boolean): void {
+  const wasOnline = _isOnline;
+  const hadInitialReport = _netInfoReported;
+  _netInfoReported = true;
+  _isOnline = newOnline;
+  _listeners.forEach((fn) => { try { fn(newOnline); } catch {} });
+  // Do not classify the first NetInfo answer as a reconnect. Auth bootstrap
+  // already owns the initial fetch; reconnect listeners are for a real
+  // offline -> online transition after the device has reported once.
+  if (newOnline && hadInitialReport && !wasOnline) {
     _reconnectListeners.forEach((fn) => { try { fn(); } catch {} });
   }
-}
-
-function updateFromNetInfo(state: any): void {
-  _transportConnected = typeof state.isConnected === "boolean" ? state.isConnected : null;
-  _internetReachable = typeof state.isInternetReachable === "boolean"
-    ? state.isInternetReachable
-    : null;
-
-  // Require a fresh successful app request after either type of network loss.
-  if (_transportConnected === false || _internetReachable === false) {
-    _backendReachable = null;
-  }
-  publishConnectionState();
 }
 
 function initNetInfo() {
@@ -107,47 +62,48 @@ function initNetInfo() {
 
   try {
     const NetInfo = require("@react-native-community/netinfo").default;
-    NetInfo.fetch().then(updateFromNetInfo).catch(() => {});
-    NetInfo.addEventListener(updateFromNetInfo);
+
+    // Fetch initial connectivity state immediately (async) so the very first
+    // call to isOnline() after boot reflects reality rather than the optimistic
+    // "true" default. This matters on cold start when the phone is offline.
+    NetInfo.fetch().then((state: any) => {
+      // Android's internet-reachability probe is frequently stale or blocked
+      // by carrier DNS/captive-portal checks even while normal HTTPS requests
+      // work. Use the transport connection as the offline signal; request
+      // failures still fall back to the local cache without misclassifying a
+      // connected user as offline.
+      const initialOnline = state.isConnected !== false;
+      // Always publish the first result, including an online result. This
+      // makes the initial unknown -> online transition available to reconnect
+      // listeners that mounted during auth restoration.
+      if (initialOnline !== _isOnline || !_netInfoReported) _fireConnectivity(initialOnline);
+    }).catch(() => {});
+
+    NetInfo.addEventListener((state: any) => {
+      const newOnline = state.isConnected !== false;
+      if (newOnline !== _isOnline || !_netInfoReported) _fireConnectivity(newOnline);
+    });
   } catch {}
 }
 
 export function isOnline(): boolean {
+  // Start the connectivity bridge on first use instead of during module
+  // evaluation. This keeps importing the offline cache safe and cheap during
+  // auth/navigation startup while preserving a cache-first render.
   initNetInfo();
-  // Let existing screens attempt their first request while NetInfo is still
-  // resolving an unknown state. A failed request immediately changes this to
-  // false; the banner continues to show Connecting until the backend responds.
-  return _isOnline || (
-    _connectionPhase === "connecting" &&
-    _backendReachable === null &&
-    _transportConnected !== false &&
-    _internetReachable === null &&
-    browserOnline() !== false
-  );
-}
-
-export function getConnectivityState(): ConnectivityPhase {
-  initNetInfo();
-  return _connectionPhase;
-}
-
-/** A request can still be attempted while the OS is checking internet access. */
-export function canAttemptNetwork(): boolean {
-  initNetInfo();
-  return _connectionPhase !== "offline";
-}
-
-/** Report whether Supabase returned a usable HTTP response. */
-export function reportNetworkResponse(reachable: boolean): void {
-  _backendReachable = reachable;
-  if (reachable && _transportConnected === false) _transportConnected = true;
-  publishConnectionState();
+  // Unknown connectivity must not make a connected release build look offline.
+  // NetInfo will correct this as soon as its first native result arrives.
+  return _netInfoReported ? _isOnline : true;
 }
 
 export function onConnectivityChange(fn: (online: boolean) => void): () => void {
   initNetInfo();
   _listeners.push(fn);
-  if (_connectivityReported) {
+  // NetInfo may finish its initial fetch before a screen's effect subscribes
+  // (more common in release builds, where module evaluation is faster). Replay
+  // the known state once so screens do not remain on their offline/cache path
+  // until the next physical network transition.
+  if (_netInfoReported) {
     setTimeout(() => {
       if (_listeners.includes(fn)) {
         try { fn(_isOnline); } catch {}
@@ -157,42 +113,6 @@ export function onConnectivityChange(fn: (online: boolean) => void): () => void 
   return () => {
     _listeners = _listeners.filter((l) => l !== fn);
   };
-}
-
-export function onConnectionStateChange(
-  fn: (state: ConnectivityPhase) => void,
-): () => void {
-  initNetInfo();
-  _connectionStateListeners.add(fn);
-  try { fn(_connectionPhase); } catch {}
-  return () => _connectionStateListeners.delete(fn);
-}
-
-export function beginDataSync(): () => void {
-  _activeDataSyncs += 1;
-  _dataSyncListeners.forEach((fn) => {
-    try { fn(true); } catch {}
-  });
-  let finished = false;
-  return () => {
-    if (finished) return;
-    finished = true;
-    _activeDataSyncs = Math.max(0, _activeDataSyncs - 1);
-    const active = _activeDataSyncs > 0;
-    _dataSyncListeners.forEach((fn) => {
-      try { fn(active); } catch {}
-    });
-  };
-}
-
-export function isDataSyncActive(): boolean {
-  return _activeDataSyncs > 0;
-}
-
-export function onDataSyncChange(fn: (active: boolean) => void): () => void {
-  _dataSyncListeners.add(fn);
-  try { fn(isDataSyncActive()); } catch {}
-  return () => _dataSyncListeners.delete(fn);
 }
 
 /**
@@ -301,12 +221,12 @@ export async function getCachedMoments(): Promise<any[]> {
 }
 
 export async function queueMessage(msg: PendingMessage): Promise<void> {
-  const raw = await AsyncStorage.getItem(CACHE_KEYS.PENDING_MESSAGES);
-  const pending: PendingMessage[] = raw ? JSON.parse(raw) : [];
-  const existingIndex = pending.findIndex((item) => item.id === msg.id);
-  if (existingIndex >= 0) pending[existingIndex] = msg;
-  else pending.push(msg);
-  await AsyncStorage.setItem(CACHE_KEYS.PENDING_MESSAGES, JSON.stringify(pending));
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEYS.PENDING_MESSAGES);
+    const pending: PendingMessage[] = raw ? JSON.parse(raw) : [];
+    pending.push(msg);
+    await AsyncStorage.setItem(CACHE_KEYS.PENDING_MESSAGES, JSON.stringify(pending));
+  } catch {}
 }
 
 export async function getPendingMessages(): Promise<PendingMessage[]> {
@@ -425,8 +345,9 @@ let _uidMirror: string | null = null;
 
 /**
  * Pre-populate the synchronous user-ID cache from the AsyncStorage backup.
- * Auth bootstrap starts this alongside session restoration; once it resolves,
- * the mirror includes the durable backup when MMKV uses memory storage.
+ * Call this once, as early as possible in the app startup (before AuthProvider
+ * mounts), so getCachedUserId() can return the correct value synchronously even
+ * when MMKV is using an in-memory fallback store.
  *
  * Safe to call multiple times — exits immediately if the cache is already warm.
  */
@@ -513,9 +434,6 @@ export async function clearAccountCache(): Promise<void> {
     await Promise.all([
       import("./storage/chatFolders")
         .then(({ clearAllFolders }) => clearAllFolders())
-        .catch(() => {}),
-      import("./storage/localDiscoverPeople")
-        .then(({ clearAllDiscoverPeople }) => clearAllDiscoverPeople())
         .catch(() => {}),
       import("./videoProgress")
         .then(({ clearAllVideoProgress }) => clearAllVideoProgress())
@@ -690,7 +608,6 @@ async function performWipeAllLocalData(): Promise<void> {
       "search_history", "media_cache", "offline_queue", "contacts",
       "video_registry", "phone_contact_names", "chat_folders",
       "user_profiles", "user_settings", "call_history",
-      "discover_people",
     ];
     for (const t of tables) {
       try { await db.runAsync(`DELETE FROM ${t}`); } catch {}

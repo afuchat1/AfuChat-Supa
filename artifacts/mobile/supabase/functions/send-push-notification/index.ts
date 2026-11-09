@@ -88,7 +88,6 @@ Deno.serve(async (request) => {
   }
   const chatId = typeof body?.chatId === "string" ? body.chatId.trim() : "";
   const messageId = typeof body?.messageId === "string" ? body.messageId.trim() : "";
-  let authorizedCallRecipientId: string | null = null;
   if (categoryId === "message") {
     if (!chatId || !messageId) return json({ error: "A chat and message are required" }, 400);
 
@@ -105,36 +104,18 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (messageError || !ownMessage) return json({ error: "Message is not owned by the authenticated user" }, 403);
   } else if (categoryId === "call") {
-    const callId = typeof body?.callId === "string" ? body.callId.trim() : "";
-    if (!callId || !chatId) {
+    if (typeof body?.callId !== "string" || !body.callId.trim()) {
       return json({ error: "A call ID is required" }, 400);
     }
-    const { data: call, error: callError } = await auth
-      .from("calls")
-      .select("id, caller_id, callee_id, chat_id, status")
-      .eq("id", callId)
-      .maybeSingle();
-    if (
-      callError ||
-      !call ||
-      call.caller_id !== authenticatedUserId ||
-      call.chat_id !== chatId ||
-      call.status !== "ringing"
-    ) {
-      return json({ error: "Not authorized to notify this call recipient" }, 403);
+    if (chatId) {
+      const { data: membership, error: membershipError } = await adminlessMembershipCheck(auth, chatId, authenticatedUserId);
+      if (membershipError || !membership) return json({ error: "Not authorized for this call chat" }, 403);
     }
-    authorizedCallRecipientId = call.callee_id;
   }
 
   const recipientIds = Array.isArray(body?.recipientUserIds)
     ? [...new Set(body.recipientUserIds.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))]
     : [];
-  if (
-    categoryId === "call" &&
-    (recipientIds.length !== 1 || recipientIds[0] !== authorizedCallRecipientId)
-  ) {
-    return json({ error: "A call notification may only target its callee" }, 403);
-  }
   if (!recipientIds.length) return json({ ok: true, sent: 0 });
 
   const admin = createClient(url, serviceRoleKey);
@@ -149,29 +130,6 @@ Deno.serve(async (request) => {
     authorizedRecipientIds = new Set((chatRecipients ?? []).map((row) => row.user_id));
     if (authorizedRecipientIds.size !== recipientIds.length) {
       return json({ error: "One or more recipients are not members of this chat" }, 403);
-    }
-  }
-  // Suppress message pushes while a recipient is actively viewing this chat.
-  // Keep current push delivery working if presence lookup fails or its schema
-  // has not been migrated yet.
-  if (categoryId === "message" && chatId) {
-    const now = Date.now();
-    const { data: activePresence, error: presenceError } = await admin
-      .from("active_chat_notification_presence")
-      .select("user_id")
-      .eq("chat_id", chatId)
-      .gt("expires_at", new Date(now).toISOString())
-      .lte("expires_at", new Date(now + 65_000).toISOString())
-      .in("user_id", [...authorizedRecipientIds]);
-    if (presenceError) {
-      console.error("[send-push] active-chat presence lookup failed:", presenceError.message);
-    } else {
-      for (const presence of activePresence ?? []) {
-        authorizedRecipientIds.delete(presence.user_id);
-      }
-    }
-    if (authorizedRecipientIds.size === 0) {
-      return json({ ok: true, sent: 0, attempted: 0, suppressed: "chat-active" });
     }
   }
   const { data: devices, error: deviceError } = await admin
@@ -225,17 +183,7 @@ Deno.serve(async (request) => {
               // Expo Notifications reads categoryId from the FCM data
               // payload and applies the registered Reply/Mark as read/Open
               // actions to the system notification.
-            },
-          },
-          apns: {
-            headers: {
-              "apns-push-type": "alert",
-              "apns-priority": "10",
-            },
-            payload: {
-              aps: {
-                "content-available": 1,
-              },
+              click_action: "open",
             },
           },
         },

@@ -3,17 +3,17 @@ import {
   ActivityIndicator,
   FlatList,
   Image as RNImage,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -130,7 +130,9 @@ export default function CartScreen() {
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <View style={styles.headerSide}>
-            <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+            <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+              <Ionicons name="chevron-back" size={26} color={colors.accent} />
+            </TouchableOpacity>
           </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
           <View style={styles.headerSide} />
@@ -144,7 +146,9 @@ export default function CartScreen() {
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerSide}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top:10,left:10,right:10,bottom:10 }}>
+            <Ionicons name="chevron-back" size={26} color={colors.accent} />
+          </TouchableOpacity>
         </View>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
         <View style={styles.headerSide}>
@@ -232,7 +236,7 @@ export default function CartScreen() {
               );
             })}
 
-            <View style={[styles.noteCard, { backgroundColor: colors.cardSurface }]}>
+            <View style={[styles.noteCard, { backgroundColor: colors.surface }]}>
               <Text style={[styles.noteLabel, { color: colors.text }]}>Delivery Note</Text>
               <TextInput
                 style={[styles.noteInput, { color: colors.text, borderColor: colors.border }]}
@@ -288,7 +292,7 @@ export default function CartScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              onPress={() => router.push("/terms")}
+              onPress={() => Linking.openURL("https://afuchat.com/terms").catch(() => {})}
               style={{ alignItems: "center", paddingTop: 2 }}
             >
               <Text style={[styles.topUpText, { color: colors.textMuted, fontSize: 11, textDecorationLine: "none" }]}>
@@ -296,7 +300,7 @@ export default function CartScreen() {
                 <Text style={{ color: colors.accent }}>Marketplace Terms</Text>
                 {" "}and{" "}
                 <Text style={{ color: colors.accent }}
-                  onPress={() => router.push("/terms")}
+                  onPress={() => Linking.openURL("https://afuchat.com/terms").catch(() => {})}
                 >
                   AfuPay Terms
                 </Text>

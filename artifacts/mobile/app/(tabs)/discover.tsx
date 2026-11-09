@@ -19,9 +19,8 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import type { FlatListInstance, ListViewToken, TouchableOpacityInstance } from "react-native";
-import type PagerViewInstance from "react-native-pager-view";
-import { runAfterIdle } from "@/lib/runAfterIdle";
+import type { ListViewToken as ViewToken } from "react-native";
+import { scheduleAfterInteractions } from "@/lib/scheduleAfterInteractions";
 // PagerView gives true native 1:1 finger-tracking on Android/iOS.
 const _PagerView: any = (() => {
   try { return require("react-native-pager-view").default; } catch { return null; }
@@ -30,7 +29,7 @@ const _PagerView: any = (() => {
 // be wrapped, not just the scroll handler passed to a plain FlatList.
 const AnimatedFlatList: any = Animated.createAnimatedComponent(FlatList);
 import { TabSwipeContext } from "@/context/TabSwipeContext";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { showAlert } from "@/lib/alert";
 import { useSafeAreaInsets, useSafeAreaInsets as useCardInsets } from "react-native-safe-area-context";
 import { router, useNavigation, useFocusEffect } from "expo-router";
@@ -51,9 +50,8 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import PostUploadBanner from "@/components/ui/PostUploadBanner";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
-import { getNetworkProfile } from "@/lib/networkQuality";
 import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
-import { getCachedFeedTab, getCachedMoments } from "@/lib/offlineStore";
+import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments } from "@/lib/offlineStore";
 import { timeAgo as formatRelative, formatPostDate } from "@/lib/timeAgo";
 import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, getSeenPostIds, markPostsSeen, weightedSample, type FeedSignals } from "@/lib/feedAlgorithm";
@@ -62,9 +60,6 @@ import { trackEvent } from "@/lib/activityTracker";
 import { getMergedLearnedWeights } from "@/lib/personalization";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateUserContent } from "@/lib/translate";
-import { listMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
-import type { AfuMusicTrack } from "@/modules/afumusic";
-import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
 import { LANG_LABELS } from "@/lib/i18n";
 import { encodeId } from "@/lib/shortId";
 import { useOpenLink } from "@/lib/useOpenLink";
@@ -84,6 +79,7 @@ import { getCachedStoryMedia } from "@/lib/storyMediaCache";
 import { prefetchAvatars, prefetchThumbnails, prefetchListImages } from "@/lib/storage/imagePrefetcher";
 import { useThrottledFocusEffect } from "@/lib/hooks/useThrottledFocusEffect";
 import FindPeopleTab from "@/components/discover/FindPeopleTab";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
 
 type PostItem = {
   id: string;
@@ -107,6 +103,10 @@ type PostItem = {
   article_body: string | null;
   video_url: string | null;
   duration_seconds: number | null;
+  music_track_id?: string | null;
+  music_audio_mode?: "original" | "mix" | "replace";
+  music_volume?: number;
+  original_audio_volume?: number;
   isFollowing: boolean;
   language_code?: string | null;
   org_page_id?: string;
@@ -246,7 +246,7 @@ function LinkPreviewCard({ url, colors }: { url: string; colors: any }) {
         flexDirection: "row",
         alignItems: "stretch",
         minHeight: 80,
-        backgroundColor: colors.cardSurface,
+        backgroundColor: colors.card,
       }}
     >
       {/* Thumbnail: og:image if available, otherwise large favicon */}
@@ -669,7 +669,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
     if (!preferredLang || !item.content?.trim()) { setDisplayContent(item.content); setIsTranslated(false); return; }
     if (item.language_code && item.language_code === preferredLang) return;
     let cancelled = false;
-    const task = runAfterIdle(() => {
+    const task = scheduleAfterInteractions(() => {
       if (cancelled) return;
       translateUserContent(item.content, preferredLang).then((result) => {
         if (!cancelled && result && result !== item.content) {
@@ -817,7 +817,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
             <TouchableOpacity
               onPress={openPost}
               activeOpacity={0.85}
-              style={[styles.articleCard, { backgroundColor: colors.cardSurface }]}
+              style={[styles.articleCard, { backgroundColor: colors.card }]}
             >
               {allImages.length > 0 && (
                 <CachedImage
@@ -881,6 +881,15 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
               </Text>
             </View>
           )}
+
+          {item.music_track_id ? (
+            <MusicTrackCard
+              trackId={item.music_track_id}
+              mode={item.post_type === "video" ? "video" : "post"}
+              audioMode={item.music_audio_mode}
+              musicVolume={item.music_volume}
+            />
+          ) : null}
 
           {/* ── VIDEO: thumbnail preview card (caption shown above, thumbnail below) ── */}
           {item.post_type === "video" && item.video_url && (
@@ -1020,7 +1029,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
       >
         <Pressable style={styles.crownModalBackdrop} onPress={() => setShowCrownDetails(false)}>
           <Pressable
-            style={[styles.crownModalCard, { backgroundColor: colors.cardSurface }]}
+            style={[styles.crownModalCard, { backgroundColor: colors.surface }]}
             onPress={(event) => event.stopPropagation()}
           >
             <View style={styles.crownModalIcon}>
@@ -1112,53 +1121,12 @@ type FeedEntry =
   | { _kind: "user_recs"; id: string; seed: number }
   | { _kind: "premium"; id: string; variant: "ai" | "creator" | "wallet" };
 
-// Fetch every page of a new-post delta before advancing the local feed cursor.
-// A fixed one-page limit can permanently skip older posts in a large burst.
-async function fetchAllDeltaPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
-  const pageSize = 500;
-  const allRows: any[] = [];
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await buildQuery(from, from + pageSize - 1);
-    if (error) throw error;
-    const batch = data ?? [];
-    allRows.push(...batch);
-    if (batch.length < pageSize) break;
-  }
-  return allRows;
-}
-
 export default function DiscoverScreen() {
   "use no memo";
   const { horizontalScrollActive } = React.useContext(TabSwipeContext);
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, setForceDark } = useTheme();
   const pillGlass = glassTokens(isDark);
   const { user, profile } = useAuth();
-  const { playMusic } = useGlobalMusicPlayer();
-  const [discoverMusic, setDiscoverMusic] = useState<AfuMusicTrack[]>([]);
-  const discoverMusicPlaybackCacheRef = useRef(new Map<string, {
-    uri?: string;
-    fetchedAt: number;
-    pending?: Promise<string | null>;
-  }>());
-  const resolveDiscoverMusicUri = useCallback((track: AfuMusicTrack) => {
-    const cache = discoverMusicPlaybackCacheRef.current;
-    const cached = cache.get(track.id);
-    if (cached?.uri && Date.now() - cached.fetchedAt < 2 * 60 * 1000) return Promise.resolve(cached.uri);
-    if (cached?.pending) return cached.pending;
-
-    const pending = getMusicPlaybackUri(track).then((uri) => {
-      if (discoverMusicPlaybackCacheRef.current === cache) {
-        if (uri) cache.set(track.id, { uri, fetchedAt: Date.now() });
-        else cache.delete(track.id);
-      }
-      return uri;
-    }).catch((error) => {
-      if (discoverMusicPlaybackCacheRef.current === cache) cache.delete(track.id);
-      throw error;
-    });
-    cache.set(track.id, { fetchedAt: Date.now(), pending });
-    return pending;
-  }, []);
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const isCompactHeader = screenWidth < 600;
@@ -1208,22 +1176,8 @@ export default function DiscoverScreen() {
       return next;
     });
   }, [snackAnim]);
-  const getAdaptivePageSize = () => {
-    const profile = getNetworkProfile();
-    return profile.type === "wifi" && profile.expensive !== true ? 30 : 15;
-  };
+  const PAGE_SIZE = 30;
   const imgViewer = useImageViewer();
-
-  useEffect(() => {
-    let cancelled = false;
-    discoverMusicPlaybackCacheRef.current = new Map();
-    if (!user) { setDiscoverMusic([]); return; }
-    listMusicTracks(8).then((tracks) => {
-      if (cancelled) return;
-      setDiscoverMusic(tracks);
-    }).catch(() => { if (!cancelled) setDiscoverMusic([]); });
-    return () => { cancelled = true; };
-  }, [user?.id, resolveDiscoverMusicUri]);
 
   const filteredPosts = useMemo(() => {
     const seen = new Set<string>();
@@ -1291,7 +1245,7 @@ export default function DiscoverScreen() {
     });
   }, [showSnack]);
 
-  const fabRef = useRef<TouchableOpacityInstance>(null);
+  const fabRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
 
   const tabPostsCache = useRef<Record<"for_you" | "following", PostItem[]>>({ for_you: [], following: [] });
   const tabCacheTimestamp = useRef<Record<"for_you" | "following", number>>({ for_you: 0, following: 0 });
@@ -1312,9 +1266,9 @@ export default function DiscoverScreen() {
   const throwbackExhaustedRef = useRef(false);
   const midOffsetRef = useRef(0);
   const midExhaustedRef = useRef(false);
-  const flatListRef = useRef<FlatListInstance>(null);
+  const flatListRef = useRef<any>(null);
   const recordedViewsRef = useRef<Set<string>>(new Set());
-  const pagerRef = useRef<PagerViewInstance>(null);
+  const pagerRef = useRef<any>(null);
   const discoverPillX = useRef(new Animated.Value(0)).current;
   const discoverPillW = useRef(new Animated.Value(0)).current;
   const discoverTabLayoutsRef = useRef<Record<number, { x: number; width: number }>>({});
@@ -1430,8 +1384,8 @@ export default function DiscoverScreen() {
 
   // ────────────────────────────────────────────────────────────────────────
   const viewabilityConfig = useRef({ minimumViewTime: 800, itemVisiblePercentThreshold: 50 }).current;
-  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {});
-  onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+  const onViewableItemsChangedRef = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {});
+  onViewableItemsChangedRef.current = ({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (!user) return;
     for (const vi of viewableItems) {
       if (vi.item?._kind && vi.item._kind !== "post") continue;
@@ -1464,7 +1418,7 @@ export default function DiscoverScreen() {
       trackEvent("view_post", { post_id: postId, author_id: authorId ?? "", post_type: postType ?? "text" });
     }
   };
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     onViewableItemsChangedRef.current({ viewableItems });
   }).current;
 
@@ -1690,13 +1644,12 @@ export default function DiscoverScreen() {
     // --- Following tab ---
     if (activeTab === "following") {
       if (!user) { setLoading(false); setRefreshing(false); setLoadingMore(false); return; }
-      const pageSize = getAdaptivePageSize();
 
       // Cache following IDs for 5 min — skip the round-trip on every tab switch.
       const FOLLOWING_IDS_TTL = 5 * 60 * 1000;
       let followingIds: string[];
       const _fidCache = followingIdsCacheRef.current;
-      if (!isRefresh && _fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
+      if (_fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
         followingIds = _fidCache.ids;
       } else {
         const { data: followData } = await supabase
@@ -1721,15 +1674,11 @@ export default function DiscoverScreen() {
         : null;
       // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
       const followNewerThan = isRefresh ? await getNewestFeedPostDate("following") : null;
-      // Small overlap catches posts sharing a timestamp with the newest cached row;
-      // local ID deduplication prevents duplicates in the visible feed.
-      const followDeltaSince = followNewerThan
-        ? new Date(Math.max(0, Date.parse(followNewerThan) - 1000)).toISOString()
-        : null;
-      const buildFollowBaseQuery = () => supabase
+      const followBaseQ = supabase
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
+          music_track_id, music_audio_mode, music_volume, original_audio_volume,
           post_type, article_title, article_body, video_url,
           profiles!posts_author_id_fkey(display_name, handle, avatar_url, bio, is_verified, is_organization_verified),
           post_images(image_url, display_order),
@@ -1737,30 +1686,18 @@ export default function DiscoverScreen() {
         `)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false });
-      let data: any[] | null;
-      if (followOlderThan) {
-        const result = await buildFollowBaseQuery().lt("created_at", followOlderThan).limit(pageSize);
-        if (result.error) throw result.error;
-        data = result.data;
-      } else if (followNewerThan) {
-        // Read all delta pages before saving; otherwise a burst larger than one
-        // page would advance the newest-post cursor and hide the remaining posts.
-        data = await fetchAllDeltaPages((from, to) =>
-          buildFollowBaseQuery().gt("created_at", followDeltaSince!).range(from, to),
-        );
-      } else {
-        const result = await buildFollowBaseQuery().limit(pageSize);
-        if (result.error) throw result.error;
-        data = result.data;
-      }
+        .order("created_at", { ascending: false });
+      const { data } = await (followOlderThan
+        ? followBaseQ.lt("created_at", followOlderThan).limit(PAGE_SIZE)
+        : followNewerThan
+          ? followBaseQ.gt("created_at", followNewerThan).limit(PAGE_SIZE)
+          : followBaseQ.limit(PAGE_SIZE));
 
       if (data) {
-        if (data.length < pageSize) setHasMore(false); else setHasMore(true);
+        if (data.length < PAGE_SIZE) setHasMore(false); else setHasMore(true);
 
         const postIds = data.map((p: any) => p.id);
-        const _followLimit = Math.max(pageSize * 3, postIds.length * 3);
+        const _followLimit = PAGE_SIZE * 3;
         const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
           postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
           postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
@@ -1783,6 +1720,10 @@ export default function DiscoverScreen() {
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, bio: p.profiles?.bio || null },
           liked: myLikeSet.has(p.id), likeCount: p.like_count || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
+          music_track_id: p.music_track_id ?? null,
+          music_audio_mode: p.music_audio_mode ?? "original",
+          music_volume: Number(p.music_volume ?? 0.75),
+          original_audio_volume: Number(p.original_audio_volume ?? 1),
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: true,
           language_code: p.language_code || null,
@@ -1791,7 +1732,7 @@ export default function DiscoverScreen() {
         // Enrichment is deliberately deferred until the first interactions
         // have been handled. The post rows can paint without warming every
         // profile/image cache up front.
-        runAfterIdle(() => {
+        scheduleAfterInteractions(() => {
           for (const p of data) {
             const profile = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
             if (p.author_id && profile?.handle) setHandleId(profile.handle, p.author_id);
@@ -1803,8 +1744,8 @@ export default function DiscoverScreen() {
         if (isRefresh) {
           tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
-          // Persist the full fetched delta; SQLite retains only the newest 200.
-          // The virtualized feed keeps every fetched post available for scrolling.
+          cacheFeedTab(activeTab, mapped);
+          saveFeedPosts(mapped, activeTab as LocalFeedTab).catch(() => {});
           // Delta sync: prepend new posts to existing local posts (don't wipe them)
           if (background) {
             const prevIds = new Set(postsRef.current.map((p) => p.id));
@@ -1850,10 +1791,9 @@ export default function DiscoverScreen() {
     //  2. MID       — posts 4–30 days old, random window per session
     //  3. THROWBACK — posts older than 30 days, random window per session
     // Streams are shuffled before scoring so every pull-to-refresh feels different.
-    const pageSize = getAdaptivePageSize();
-    const RECENT_SIZE = pageSize === 30 ? 12 : 8;
-    const MID_SIZE = pageSize === 30 ? 10 : 5;
-    const THROWBACK_SIZE = pageSize === 30 ? 8 : 3;
+    const RECENT_SIZE = 12;
+    const MID_SIZE = 10;
+    const THROWBACK_SIZE = 8;
 
     const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -1865,6 +1805,7 @@ export default function DiscoverScreen() {
 
     const fySelect = `
       id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
+      music_track_id, music_audio_mode, music_volume, original_audio_volume,
       post_type, article_title, article_body, video_url,
       profiles!posts_author_id_fkey(display_name, handle, avatar_url, bio, is_verified, is_organization_verified, country, interests, hide_posts_non_followers),
       post_images(image_url, display_order),
@@ -1876,11 +1817,6 @@ export default function DiscoverScreen() {
 
     // Delta sync: on refresh, only fetch posts NEWER than newest stored
     const fyNewerThan = isRefresh ? await getNewestFeedPostDate("for_you") : null;
-    // Overlap by one second so equal-timestamp posts are not skipped. IDs are
-    // deduplicated before rendering, while SQLite metadata is safely upserted.
-    const fyDeltaSince = fyNewerThan
-      ? new Date(Math.max(0, Date.parse(fyNewerThan) - 1000)).toISOString()
-      : null;
 
     // On refresh, reset all stream offsets to new random positions so every
     // session surfaces a completely different combination of content.
@@ -1896,23 +1832,12 @@ export default function DiscoverScreen() {
       .order("created_at", { ascending: false });
     if (fyOlderThan) {
       fyQ = fyQ.lt("created_at", fyOlderThan);
-    } else if (fyDeltaSince) {
-      fyQ = fyQ.gt("created_at", fyDeltaSince);
+    } else if (fyNewerThan) {
+      fyQ = fyQ.gt("created_at", fyNewerThan);
     } else {
       fyQ = fyQ.gte("created_at", fourDaysAgo);
     }
     fyQ = fyQ.limit(RECENT_SIZE);
-    // Fetch every delta page; do not advance the local watermark after only
-    // the first page, or older posts from a burst would never be discovered.
-    const recentPromise = fyDeltaSince
-      ? fetchAllDeltaPages((from, to) =>
-          supabase.from("posts").select(fySelect).eq("visibility", "public")
-            .gt("created_at", fyDeltaSince)
-            .order("created_at", { ascending: false })
-            .order("id", { ascending: false })
-            .range(from, to),
-        ).then((rows) => ({ data: rows }))
-      : fyQ;
 
     // ── Stream 2: Mid posts (4–30 days old, random window) ──
     const mdOffset = midOffsetRef.current;
@@ -1953,7 +1878,7 @@ export default function DiscoverScreen() {
             return res;
           });
 
-    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([recentPromise, midPromise, throwbackPromise]);
+    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([fyQ, midPromise, throwbackPromise]);
 
     // Merge all streams, deduplicate, then Fisher-Yates shuffle so the scoring
     // algorithm picks the best content from a randomly ordered pool — making
@@ -1986,7 +1911,7 @@ export default function DiscoverScreen() {
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))];
 
-      // Build org-posts query now so it fires alongside the feed metadata queries
+      // Build org-posts query now so it fires alongside the 6 metadata queries
       // rather than sequentially after them.
       let _orgQ: any = supabase
         .from("organization_page_posts")
@@ -1995,7 +1920,7 @@ export default function DiscoverScreen() {
         .limit(6);
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
 
-      const _fyLimit = Math.max(pageSize * 3, postIds.length * 3);
+      const _fyLimit = PAGE_SIZE * 3;
       const [
         { data: myLikes },
         { data: replyCounts },
@@ -2003,7 +1928,6 @@ export default function DiscoverScreen() {
         { data: followingData },
         { data: myReplies },
         { data: myBookmarks },
-        { data: creatorSubscriptions },
         _orgResult,
       ] = await Promise.all([
         postIds.length > 0 && user
@@ -2032,13 +1956,6 @@ export default function DiscoverScreen() {
         postIds.length > 0 && user
           ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
           : { data: [] },
-        authorIds.length > 0
-          ? supabase.from("user_subscriptions")
-              .select("user_id,expires_at,subscription_plans(tier,grants_verification)")
-              .in("user_id", authorIds)
-              .eq("is_active", true)
-              .gt("expires_at", new Date().toISOString())
-          : { data: [] },
         Promise.resolve(_orgQ).catch(() => ({ data: null })),
       ]);
       const _orgData: any[] | null = (_orgResult as any)?.data ?? null;
@@ -2050,16 +1967,6 @@ export default function DiscoverScreen() {
       for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
 
       const followingSet = new Set((followingData || []).map((f: any) => f.following_id));
-      const verifiedPlanAuthorIds = new Set(
-        (creatorSubscriptions || [])
-          .filter((s: any) => s.subscription_plans?.grants_verification)
-          .map((s: any) => s.user_id)
-      );
-      const priorityAuthorIds = new Set(
-        (creatorSubscriptions || [])
-          .filter((s: any) => ["silver", "gold", "platinum"].includes(s.subscription_plans?.tier))
-          .map((s: any) => s.user_id)
-      );
 
       // Enforce hide_posts_non_followers: remove posts from authors who restrict
       // visibility to their followers only, when the current viewer doesn't follow them.
@@ -2109,8 +2016,7 @@ export default function DiscoverScreen() {
           interestMatches,
           isFollowing: followingSet.has(p.author_id),
           authorInteractionCount: authorInteractionMap[p.author_id] || 0,
-          isVerified: p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id),
-          isPriorityCreator: priorityAuthorIds.has(p.author_id),
+          isVerified: p.profiles?.is_verified || false,
           isOrgVerified: p.profiles?.is_organization_verified || false,
           hasImages,
           sameCountry: !!userCountry && !!authorCountry && userCountry === authorCountry,
@@ -2133,7 +2039,7 @@ export default function DiscoverScreen() {
           created_at: p.created_at,
           view_count: p.view_count || 0,
           visibility: p.visibility || "public",
-          is_verified: p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id),
+          is_verified: p.profiles?.is_verified || false,
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: {
             display_name: p.profiles?.display_name || "User",
@@ -2150,44 +2056,29 @@ export default function DiscoverScreen() {
           article_title: p.article_title || null,
           article_body: p.article_body || null,
           video_url: p.video_url || null,
+          music_track_id: p.music_track_id ?? null,
+          music_audio_mode: p.music_audio_mode ?? "original",
+          music_volume: Number(p.music_volume ?? 0.75),
+          original_audio_volume: Number(p.original_audio_volume ?? 1),
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: followingSet.has(p.author_id),
           language_code: p.language_code || null,
         };
       });
 
-      // Weighted sampling keeps discovery varied, but a refresh must visibly
-      // surface genuinely new content. Reserve up to 10 newest delta posts, then
-      // fill the remaining slots from the quality-ranked recommendation pool.
+      // Weighted random sampling from top candidates — quality still wins but
+      // lower-ranked posts can surface, making every refresh genuinely different.
       const topPool = [...scored].sort((a, b) => b.score - a.score).slice(0, 60);
-      const guaranteedRecent = fyDeltaSince
-        ? (recentData || []).slice(0, 10)
-            .flatMap((post: any) => {
-              const item = scored.find((candidate: any) => candidate.id === post.id);
-              return item ? [item] : [];
-            })
-        : [];
-      const guaranteedIds = new Set(guaranteedRecent.map((item: any) => item.id));
-      const recommendationPool = topPool.filter((item) => !guaranteedIds.has(item.id));
-      const sampled = [
-        ...guaranteedRecent,
-        ...weightedSample(recommendationPool, Math.min(recommendationPool.length, Math.max(0, 30 - guaranteedRecent.length))),
-      ];
+      const sampled = weightedSample(topPool, Math.min(topPool.length, 30));
 
-      // Diversify recommendations on normal loads. When a delta exists, keep
-      // every fetched new post in chronological order so no item is hidden by
-      // random sampling and the next load-more cursor remains contiguous.
+      // Diversify: no same-author back-to-back, no 3 same post-types in a row
       const diversified = diversifyFeed(sampled.map((p) => ({ ...p, postType: p.post_type })));
-      const deltaPosts = fyDeltaSince
-        ? [...scored].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-        : [];
-      const feedPresentation = fyDeltaSince ? deltaPosts : diversified;
 
-      runAfterIdle(() => {
-        prefetchAvatars(feedPresentation.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
-        prefetchThumbnails(feedPresentation.slice(0, 6).map((p) => (p as any).image_url));
-        // Mark only the first screenful as seen; avoid a large SQLite write on refresh.
-        markPostsSeen(feedPresentation.slice(0, 30).map((p) => p.id)).catch(() => {});
+      scheduleAfterInteractions(() => {
+        prefetchAvatars(diversified.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
+        prefetchThumbnails(diversified.slice(0, 6).map((p) => (p as any).image_url));
+        // Mark these posts as seen so they get demoted on the next refresh.
+        markPostsSeen(diversified.map((p) => p.id)).catch(() => {});
       });
 
       // Org posts were fetched in parallel with the metadata queries above.
@@ -2248,34 +2139,26 @@ export default function DiscoverScreen() {
         }
       } catch (_) {}
 
-      // Interleave organization posts into the selected feed presentation.
-      // For a delta refresh, include only organization posts newer than the
-      // same cursor so they cannot move pagination behind undisplayed new posts.
-      const displayOrgPosts = fyDeltaSince
-        ? orgPostItems.filter((post) => Date.parse(post.created_at) > Date.parse(fyDeltaSince))
-        : orgPostItems;
+      // Interleave: insert 1 org post for every 5 regular posts
       const merged: PostItem[] = [];
       let orgIdx = 0;
-      for (let i = 0; i < feedPresentation.length; i++) {
-        merged.push(feedPresentation[i] as PostItem);
-        if ((i + 1) % 5 === 0 && orgIdx < displayOrgPosts.length) {
-          merged.push(displayOrgPosts[orgIdx++]);
+      for (let i = 0; i < diversified.length; i++) {
+        merged.push(diversified[i] as PostItem);
+        if ((i + 1) % 5 === 0 && orgIdx < orgPostItems.length) {
+          merged.push(orgPostItems[orgIdx++]);
         }
       }
-      while (orgIdx < displayOrgPosts.length) {
-        merged.push(displayOrgPosts[orgIdx++]);
+      // Append any remaining org posts at end
+      while (orgIdx < orgPostItems.length) {
+        merged.push(orgPostItems[orgIdx++]);
       }
 
       if (isRefresh) {
         tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
-        // Persist up to the newest 200 fetched items, not just the randomized
-        // 30-card presentation sample, so the next delta cursor cannot skip
-        // posts that were fetched but not selected for the first screen.
-        const offlineFeedWindow = [...scored, ...orgPostItems]
-          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-          .slice(0, 200);
-        saveFeedPosts(offlineFeedWindow, activeTab as LocalFeedTab).catch(() => {});
+        cacheFeedTab(activeTab, merged);
+        cacheMoments(merged);
+        saveFeedPosts(merged, activeTab as LocalFeedTab).catch(() => {});
         if (background) {
           const prevIds = new Set(postsRef.current.map((p) => p.id));
           const brandNew = merged.filter((p) => !prevIds.has(p.id));
@@ -2545,6 +2428,7 @@ export default function DiscoverScreen() {
       const activeTab = feedTabRef.current;
       const fySelect = `
         id, author_id, content, image_url, created_at, view_count, like_count, visibility,
+        music_track_id, music_audio_mode, music_volume, original_audio_volume,
         post_type, article_title, article_body, video_url,
         profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
         post_images(image_url, display_order),
@@ -2554,15 +2438,15 @@ export default function DiscoverScreen() {
       let newPostsData: any[] = [];
 
       if (activeTab === "for_you") {
-        newPostsData = await fetchAllDeltaPages((from, to) =>
-          supabase.from("posts").select(fySelect)
-            .eq("visibility", "public")
-            .gt("created_at", newestAt)
-            .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-            .order("created_at", { ascending: false })
-            .order("id", { ascending: false })
-            .range(from, to),
-        );
+        const { data } = await supabase
+          .from("posts")
+          .select(fySelect)
+          .eq("visibility", "public")
+          .gt("created_at", newestAt)
+          .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        newPostsData = data ?? [];
       } else if (activeTab === "following" && user?.id) {
         const { data: followData } = await supabase
           .from("follows")
@@ -2571,15 +2455,15 @@ export default function DiscoverScreen() {
           .limit(500);
         const followingIds = (followData ?? []).map((f: any) => f.following_id);
         if (followingIds.length > 0) {
-          newPostsData = await fetchAllDeltaPages((from, to) =>
-            supabase.from("posts").select(fySelect)
-              .in("author_id", followingIds)
-              .in("visibility", ["public", "followers"])
-              .gt("created_at", newestAt)
-              .order("created_at", { ascending: false })
-              .order("id", { ascending: false })
-              .range(from, to),
-          );
+          const { data } = await supabase
+            .from("posts")
+            .select(fySelect)
+            .in("author_id", followingIds)
+            .in("visibility", ["public", "followers"])
+            .gt("created_at", newestAt)
+            .order("created_at", { ascending: false })
+            .limit(20);
+          newPostsData = data ?? [];
         }
       }
 
@@ -2612,6 +2496,10 @@ export default function DiscoverScreen() {
         bookmarked: false,
         post_type: p.post_type ?? "text",
         article_title: p.article_title ?? null,
+        music_track_id: p.music_track_id ?? null,
+        music_audio_mode: p.music_audio_mode ?? "original",
+        music_volume: Number(p.music_volume ?? 0.75),
+        original_audio_volume: Number(p.original_audio_volume ?? 1),
         article_body: p.article_body ?? null,
         video_url: p.video_url ?? null,
         duration_seconds: (() => {
@@ -2694,8 +2582,6 @@ export default function DiscoverScreen() {
     // ① Snapshot + eagerly deduplicate against the live feed (postsRef = no stale closure)
     const existIds = new Set(postsRef.current.map((p) => p.id));
     const fresh = pendingPostsRef.current.filter((p) => !existIds.has(p.id));
-    // Persist the newest bounded offline window before clearing the pending buffer.
-    saveFeedPosts(fresh.slice(0, 200), feedTabRef.current as LocalFeedTab).catch(() => {});
 
     // ② Dismiss pill and arm the cooldown clock
     _resetPill(true);
@@ -2860,6 +2746,20 @@ export default function DiscoverScreen() {
 
       {/* ── Fixed, compact Discover header ── */}
       <View style={styles.headerBlock}>
+        <BlurView
+          pointerEvents="none"
+          intensity={GLASS.blur.medium}
+          tint={isDark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: pillGlass.fillSubtle }]}
+        />
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.62)" }}
+        />
         {/* The compact top bar, tabs, and refresh status collapse together. */}
         <View
           onLayout={(e) => {
@@ -2942,7 +2842,7 @@ export default function DiscoverScreen() {
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); router.push("/app/afusearch" as any); }}
+            onPress={() => { Haptics.selectionAsync(); router.push("/search" as any); }}
             style={[
               styles.searchBtn,
               isCompactHeader && styles.searchBtnCompact,
@@ -2970,7 +2870,7 @@ export default function DiscoverScreen() {
           style={{
             zIndex: 3,
             width: "100%",
-            backgroundColor: colors.background,
+            backgroundColor: "transparent",
           }}
         >
           <StoriesRow
@@ -2981,7 +2881,6 @@ export default function DiscoverScreen() {
         </View>
       </View>
       {/* ────────────────────────────────────────────────────────────────── */}
-
 
       {/* Edge fade removed — it was overlaying the first row of feed content */}
 
@@ -3008,45 +2907,6 @@ export default function DiscoverScreen() {
                   data={augmentedFeed}
                   keyExtractor={(entry: FeedEntry) => entry._kind === "post" ? entry.item.id : entry.id}
                   renderItem={renderFeedItem}
-                  ListHeaderComponent={feedTab === "for_you" && discoverMusic.length > 0 ? (
-                    <View style={{ marginTop: 8, marginBottom: 4 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, marginBottom: 8 }}>
-                        <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 14 }}>Music on AfuChat</Text>
-                        <TouchableOpacity onPress={() => router.push("/app/afumusic" as any)}><Text style={{ color: colors.accent, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>Explore all</Text></TouchableOpacity>
-                      </View>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 10 }}>
-                        {discoverMusic.map((track) => (
-                          <TouchableOpacity key={track.id} onPress={async () => {
-                            if (track.price > 0 && !track.isOwned) { router.push("/app/afumusic" as any); return; }
-                            try {
-                              const uri = await resolveDiscoverMusicUri(track);
-                              if (uri) {
-                                const playableQueue = discoverMusic.filter((item) => item.isOwned || item.price === 0);
-                                playMusic(track, uri, playableQueue, getMusicPlaybackUri);
-                              }
-                            }
-                            catch { router.push("/app/afumusic" as any); }
-                          }} activeOpacity={0.75} style={{ width: 88 }}>
-                            <View style={{ width: 88, height: 88, backgroundColor: track.coverColor || "#19172F", alignItems: "center", justifyContent: "center", marginBottom: 7, overflow: "hidden" }}>
-                              {track.coverUrl ? (
-                                <ExpoImage
-                                  source={{ uri: track.coverUrl }}
-                                  style={StyleSheet.absoluteFill}
-                                  contentFit="cover"
-                                  cachePolicy="memory-disk"
-                                />
-                              ) : (
-                                <Ionicons name="musical-notes" size={20} color={track.accentColor || colors.accent} />
-                              )}
-                              <View style={{ position: "absolute", right: 5, bottom: 5, backgroundColor: "#000B", paddingHorizontal: 5, paddingVertical: 3 }}><Text style={{ color: "#fff", fontSize: 9, fontFamily: "Inter_600SemiBold" }}>{track.price > 0 && !track.isOwned ? track.price + " AC" : track.price > 0 ? "Owned" : "Free"}</Text></View>
-                            </View>
-                            <Text numberOfLines={1} style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 11 }}>{track.title}</Text>
-                            <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 10, marginTop: 2 }}>{track.artist}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  ) : null}
                   contentContainerStyle={{ gap: 8, paddingBottom: insets.bottom + 100 }}
                   showsVerticalScrollIndicator={false}
                   onScroll={onFeedScroll}

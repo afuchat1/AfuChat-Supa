@@ -7,10 +7,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
@@ -39,7 +38,7 @@ export default function SchoolPickerInput({ value, onChange, country, placeholde
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const prevCountry = useRef("");
-  const searchRef = useRef<TextInputInstance>(null);
+  const searchRef = useRef<AfuNativeRef.TextInput>(null);
 
   // Load all schools whenever country changes
   useEffect(() => {
@@ -162,7 +161,6 @@ export default function SchoolPickerInput({ value, onChange, country, placeholde
             <Ionicons name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               ref={searchRef}
-              appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
               placeholder="Search by name…"
               placeholderTextColor={colors.textMuted}

@@ -20,8 +20,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -185,7 +184,7 @@ export default function ProfilePrivateScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-        <GlassBackButton
+        <TouchableOpacity
           style={styles.backBtn}
           onPress={() => {
             if (router.canGoBack()) {
@@ -194,7 +193,10 @@ export default function ProfilePrivateScreen() {
               router.replace("/(tabs)/discover" as any);
             }
           }}
-        />
+          hitSlop={{ top: 8, left: 8, right: 12, bottom: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.accent} />
+        </TouchableOpacity>
         {params.display_name ? (
           <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
             {params.display_name}

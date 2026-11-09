@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -9,23 +10,25 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "@/lib/alert";
-import { safeRouter } from "@/lib/navUtils";
-import { prepareMediaForUpload } from "@/lib/mediaUpload";
-import type { MusicTrackInput } from "@/lib/afuMusic";
-import { useGlobalMusicPlayer } from "@/components/GlobalMusicPlayer";
-import { useTheme } from "@/hooks/useTheme";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import type { AfuMusicLedgerItem } from "@/lib/afuMusic";
+import AfuMusicArtwork from "@/components/music/AfuMusicArtwork";
+import { useAfuMusicPlayer } from "./MusicPlayerContext";
+import {
+  loadMusicPlaylists,
+  saveMusicPlaylists,
+  type AfuMusicPlaylist,
+} from "./playlistStore";
+import { downloadMusicFile, getMusicDownloadFilename } from "./musicFileDownload";
 
-type MusicSection = "discover" | "library" | "offline" | "studio";
+type MusicSection = "discover" | "library" | "offline" | "playlists" | "studio" | "purchases" | "earnings";
 
 export type AfuMusicTrack = {
   id: string;
@@ -42,44 +45,60 @@ export type AfuMusicTrack = {
   isCached?: boolean;
   isFeatured?: boolean;
   audioUrl?: string | null;
-  coverUrl?: string;
-  coverStoragePath?: string;
   creatorId?: string;
   storagePath?: string;
+  storageBucket?: string;
   mimeType?: string;
   fileSize?: number;
+  videoUseAllowed?: boolean;
+  coverArtUrl?: string;
   createdAt?: string;
 };
 
 export type AfuMusicCallbacks = {
   onBrowse?: () => Promise<AfuMusicTrack[]>;
-  onListStudio?: () => Promise<AfuMusicTrack[]>;
   onSearch?: (query: string) => Promise<AfuMusicTrack[]>;
-  onPurchase?: (track: AfuMusicTrack) => Promise<void | { alreadyOwned?: boolean }>;
+  onPurchase?: (track: AfuMusicTrack) => Promise<void>;
   onCache?: (track: AfuMusicTrack) => Promise<void>;
   onRemoveCache?: (track: AfuMusicTrack) => Promise<void>;
   onListOffline?: () => Promise<AfuMusicTrack[]>;
+  onListPurchases?: () => Promise<AfuMusicLedgerItem[]>;
+  onListEarnings?: () => Promise<AfuMusicLedgerItem[]>;
   onResolveAudio?: (track: AfuMusicTrack) => Promise<string | null>;
+  onResolveDownload?: (track: AfuMusicTrack, filename: string) => Promise<string | null>;
   onPlay?: (track: AfuMusicTrack) => void | Promise<void>;
-  onUpload?: (input: MusicTrackInput & { fileUri: string; fileName: string }) => Promise<AfuMusicTrack>;
-  onUpdateUpload?: (track: AfuMusicTrack, input: MusicTrackInput) => Promise<AfuMusicTrack>;
+  onUpload?: (input: {
+    title: string;
+    genre: string;
+    price: number;
+    fileUri: string;
+    fileName: string;
+    mimeType?: string;
+    fileSize?: number;
+    videoUseAllowed?: boolean;
+    coverUri?: string;
+    coverFileName?: string;
+    coverMimeType?: string;
+    coverFileSize?: number;
+  }) => Promise<AfuMusicTrack | void>;
   onDeleteUpload?: (track: AfuMusicTrack) => Promise<void>;
   onOpenWallet?: () => void;
-  onOpenPlans?: () => void;
+  onUpgradePremium?: () => void;
 };
 
 type Props = AfuMusicCallbacks & {
   initialSection?: MusicSection;
-  canMonetize?: boolean;
+  playlistOwnerId?: string;
+  canPublishPaid?: boolean;
 };
 
-const INK = "#000000";
-const CORAL = "#1018D8";
+const INK = "#19172F";
+const CORAL = "#F06451";
 const COBALT = "#1018D8";
-const GOLD = "#D4A853";
-const CANVAS = "#F0EBE1";
-const PAPER = "#FFFFFF";
-const MUTED = "#625B50";
+const GOLD = "#D8A746";
+const CANVAS = "#F7F1E9";
+const PAPER = "#FFF9F1";
+const MUTED = "#8D847B";
 
 const GENRES = ["All", "Ambient", "Electronic", "R&B", "Acoustic", "Lo-fi"];
 
@@ -89,50 +108,69 @@ function formatPlays(value?: number) {
   return `${value} plays`;
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 function TrackArt({
   track,
   size = 72,
   radius = 18,
 }: {
-  track: AfuMusicTrack;
+  track?: AfuMusicTrack;
   size?: number;
   radius?: number;
 }) {
-  const { accent } = useTheme();
   return (
-    <View
-      style={[
-        styles.trackArt,
-        {
-          width: size,
-          height: size,
-          borderRadius: radius,
-          backgroundColor: track.coverColor || accent,
-        },
+    <AfuMusicArtwork
+      uri={track?.coverArtUrl}
+      size={size}
+      radius={radius}
+      iconColor={INK}
+      backgroundColor="#E8DED2"
+      style={styles.trackArt}
+      accessibilityLabel={track ? `${track.title} cover art` : "Track cover art"}
+    />
+  );
+}
+
+function SkeletonRows() {
+  return (
+    <View style={styles.skeletonStack}>
+      {[1, 2, 3].map((item) => (
+        <View key={item} style={styles.skeletonRow}>
+          <View style={styles.skeletonArt} />
+          <View style={styles.skeletonCopy}>
+            <View style={styles.skeletonLong} />
+            <View style={styles.skeletonShort} />
+          </View>
+          <View style={styles.skeletonDot} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function SectionPill({
+  label,
+  active,
+  icon,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.sectionPill,
+        active && styles.sectionPillActive,
+        pressed && styles.pressed,
       ]}
     >
-      {track.coverUrl ? (
-        <Image
-          source={{ uri: track.coverUrl }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          transition={120}
-        />
-      ) : (
-        <Text style={[styles.artInitials, { fontSize: Math.max(11, size * 0.2) }]}>
-          {initials(track.title || track.artist)}
-        </Text>
-      )}
-    </View>
+      <Ionicons name={icon} size={15} color={active ? PAPER : INK} />
+      <Text style={[styles.sectionPillLabel, active && styles.sectionPillLabelActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -140,75 +178,51 @@ function TrackRow({
   track,
   owned,
   cached,
+  webDownload,
+  downloading,
   managed = false,
   onOpen,
   onPlay,
   onCache,
-  onEdit,
+  onDownload,
+  onPlayNext,
+  onAddToPlaylist,
   onDelete,
-  canCache = true,
 }: {
   track: AfuMusicTrack;
   owned: boolean;
   cached: boolean;
+  webDownload?: boolean;
+  downloading?: boolean;
   managed?: boolean;
   onOpen: () => void;
   onPlay: () => void;
   onCache: () => void;
-  onEdit?: () => void;
+  onDownload?: () => void;
+  onPlayNext?: () => void;
+  onAddToPlaylist?: () => void;
   onDelete?: () => void;
-  canCache?: boolean;
 }) {
-  const { colors, accent } = useTheme();
   return (
-    <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, { borderBottomColor: colors.border }, pressed && styles.trackRowPressed]}>
-      <TrackArt track={track} size={64} radius={6} />
+    <Pressable onPress={onOpen} style={({ pressed }) => [styles.trackRow, pressed && styles.trackRowPressed]}>
+      <TrackArt track={track} size={64} radius={16} />
       <View style={styles.trackCopy}>
-        <Text style={[styles.trackTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
-        <Text style={[styles.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>{track.artist} · {track.genre}</Text>
-        <Text style={[styles.trackMeta, { color: colors.textMuted }]}>{formatPlays(track.plays)}{track.duration ? ` · ${track.duration}` : ""}</Text>
+        <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
+        <Text style={styles.trackArtist} numberOfLines={1}>{track.artist} · {track.genre}</Text>
+        <Text style={styles.trackMeta}>{formatPlays(track.plays)}{track.duration ? ` · ${track.duration}` : ""}</Text>
       </View>
       <View style={styles.rowActions}>
         {managed ? (
-          <View style={styles.managedActions}>
-            <Pressable
-              testID={`music-track-edit-${track.id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Edit ${track.title}`}
-              onPress={(event) => {
-                event.stopPropagation();
-                onEdit?.();
-              }}
-              hitSlop={8}
-              style={styles.removeTrackButton}
-            >
-              <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
-            </Pressable>
-            <Pressable
-              testID={`music-track-play-${track.id}`}
-              accessibilityLabel={`Play ${track.title}`}
-              onPress={(event) => {
-                event.stopPropagation();
-                onPlay();
-              }}
-              hitSlop={8}
-              style={({ pressed }) => [styles.miniPlay, { backgroundColor: accent }, pressed && styles.miniPlayPressed]}
-            >
-              <Ionicons name="play" size={13} color={PAPER} />
-            </Pressable>
-            <Pressable
-              testID={`music-track-remove-${track.id}`}
-              onPress={(event) => {
-                event.stopPropagation();
-                onDelete?.();
-              }}
-              hitSlop={8}
-              accessibilityLabel={`Remove ${track.title}`}
-              style={styles.removeTrackButton}
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              onDelete?.();
+            }}
+            hitSlop={8}
+            accessibilityLabel={`Remove ${track.title}`}
+          >
+            <Ionicons name="trash-outline" size={19} color={CORAL} />
+          </Pressable>
         ) : owned ? (
           <Pressable
             accessibilityLabel={`Play ${track.title}`}
@@ -217,21 +231,90 @@ function TrackRow({
               onPlay();
             }}
             hitSlop={8}
-            style={({ pressed }) => [styles.miniPlay, { backgroundColor: accent }, pressed && styles.miniPlayPressed]}
+            style={({ pressed }) => [styles.miniPlay, pressed && styles.miniPlayPressed]}
           >
             <Ionicons name="play" size={13} color={PAPER} />
           </Pressable>
         ) : (
-          <Text style={[styles.priceText, { color: accent }]}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
+          <Text style={styles.priceText}>{track.price === 0 ? "Free" : `${track.price} AC`}</Text>
         )}
-        {owned && canCache ? (
-          <Pressable onPress={onCache} hitSlop={8} accessibilityLabel={cached ? "Available offline" : "Save offline"}>
-            <Ionicons name={cached ? "arrow-down-circle" : "arrow-down-circle-outline"} size={21} color={cached ? COBALT : colors.textMuted} />
+        {owned ? (
+          <Pressable
+            onPress={(event) => {
+              event.stopPropagation();
+              if (webDownload) onDownload?.();
+              else onCache();
+            }}
+            hitSlop={8}
+            accessibilityLabel={webDownload ? `Download ${track.title}` : cached ? "Available offline" : "Save offline"}
+          >
+            {downloading ? (
+              <ActivityIndicator size="small" color={CORAL} />
+            ) : (
+              <Ionicons
+                name={webDownload ? "download-outline" : cached ? "arrow-down-circle" : "arrow-down-circle-outline"}
+                size={21}
+                color={cached && !webDownload ? COBALT : MUTED}
+              />
+            )}
           </Pressable>
+        ) : null}
+        {owned && !managed ? (
+          <>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                onPlayNext?.();
+              }}
+              hitSlop={8}
+              accessibilityLabel={`Play ${track.title} next`}
+            >
+              <Ionicons name="play-skip-forward-outline" size={19} color={MUTED} />
+            </Pressable>
+            <Pressable
+              onPress={(event) => {
+                event.stopPropagation();
+                onAddToPlaylist?.();
+              }}
+              hitSlop={8}
+              accessibilityLabel={`Add ${track.title} to a playlist`}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={MUTED} />
+            </Pressable>
+          </>
         ) : null}
         <Ionicons name="chevron-forward" size={17} color="#B2A79B" />
       </View>
     </Pressable>
+  );
+}
+
+function PlaylistRow({
+  playlist,
+  onPlay,
+  onDelete,
+}: {
+  playlist: AfuMusicPlaylist;
+  onPlay: () => void;
+  onDelete: () => void;
+}) {
+  const cover = playlist.tracks[0];
+  return (
+    <View style={styles.playlistCard}>
+      <Pressable onPress={onPlay} style={({ pressed }) => [styles.playlistMain, pressed && styles.pressed]}>
+        <TrackArt track={cover} size={58} radius={15} />
+        <View style={styles.playlistCopy}>
+          <Text style={styles.playlistTitle} numberOfLines={1}>{playlist.name}</Text>
+          <Text style={styles.playlistMeta}>{playlist.tracks.length} {playlist.tracks.length === 1 ? "track" : "tracks"}</Text>
+        </View>
+      </Pressable>
+      <Pressable onPress={onPlay} hitSlop={8} accessibilityLabel={`Play ${playlist.name}`}>
+        <Ionicons name="play-circle" size={28} color={CORAL} />
+      </Pressable>
+      <Pressable onPress={onDelete} hitSlop={8} accessibilityLabel={`Delete ${playlist.name}`}>
+        <Ionicons name="trash-outline" size={19} color={MUTED} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -246,12 +329,11 @@ function EmptyState({
   message: string;
   action?: { label: string; onPress: () => void };
 }) {
-  const { colors, accent } = useTheme();
   return (
     <View style={styles.emptyState}>
-      <View style={[styles.emptyIcon, { backgroundColor: colors.inputBg }]}><Ionicons name={icon} size={25} color={accent} /></View>
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
-      <Text style={[styles.emptyMessage, { color: colors.textMuted }]}>{message}</Text>
+      <View style={styles.emptyIcon}><Ionicons name={icon} size={25} color={CORAL} /></View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyMessage}>{message}</Text>
       {action ? (
         <Pressable onPress={action.onPress} style={({ pressed }) => [styles.outlineButton, pressed && styles.pressed]}>
           <Text style={styles.outlineButtonText}>{action.label}</Text>
@@ -264,34 +346,34 @@ function EmptyState({
 export default function AfuMusicApp({
   initialSection = "discover",
   onBrowse,
-  onListStudio,
   onSearch,
   onPurchase,
   onCache,
   onRemoveCache,
   onListOffline,
+  onListPurchases,
+  onListEarnings,
   onResolveAudio,
+  onResolveDownload,
   onPlay,
   onUpload,
-  onUpdateUpload,
   onDeleteUpload,
   onOpenWallet,
-  onOpenPlans,
+  onUpgradePremium,
+  playlistOwnerId,
+  canPublishPaid = false,
   acoinBalance,
-  canMonetize = false,
 }: Props & { acoinBalance?: number }) {
   const insets = useSafeAreaInsets();
-  const { colors, accent, isDark } = useTheme();
-  const { playMusic } = useGlobalMusicPlayer();
-  const handleBack = useCallback(() => {
-    safeRouter.back("/apps");
-  }, []);
-  const requestedSection = ["discover", "library", "offline", "studio"].includes(initialSection)
-    ? initialSection as MusicSection
-    : "discover";
-  const [section, setSection] = useState<MusicSection>(Platform.OS === "web" && requestedSection === "offline" ? "discover" : requestedSection);
+  const {
+    track: selectedTrack,
+    queue: playQueue,
+    queueTitle,
+    play: playGlobally,
+    setQueue,
+  } = useAfuMusicPlayer();
+  const [section, setSection] = useState<MusicSection>(initialSection);
   const [tracks, setTracks] = useState<AfuMusicTrack[]>([]);
-  const [studioTracks, setStudioTracks] = useState<AfuMusicTrack[]>([]);
   const [query, setQuery] = useState("");
   const [genre, setGenre] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -300,24 +382,59 @@ export default function AfuMusicApp({
   const [cachedIds, setCachedIds] = useState<string[]>([]);
   const [offlineTracks, setOfflineTracks] = useState<AfuMusicTrack[]>([]);
   const [ownedIds, setOwnedIds] = useState<string[]>([]);
+  const [downloadingIds, setDownloadingIds] = useState<string[]>([]);
+  const [savingIds, setSavingIds] = useState<string[]>([]);
+  const [playlists, setPlaylists] = useState<AfuMusicPlaylist[]>([]);
+  const [loadedPlaylistOwner, setLoadedPlaylistOwner] = useState<string | null>(null);
+  const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
+  const [playlistModalTrack, setPlaylistModalTrack] = useState<AfuMusicTrack | null>(null);
+  const [playlistDraft, setPlaylistDraft] = useState("");
   const [purchaseTrack, setPurchaseTrack] = useState<AfuMusicTrack | null>(null);
+  const [ledgerRows, setLedgerRows] = useState<AfuMusicLedgerItem[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [editingTrack, setEditingTrack] = useState<AfuMusicTrack | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadGenre, setUploadGenre] = useState("Ambient");
-  const [uploadMode, setUploadMode] = useState<"free" | "paid">("free");
-  const [uploadPrice, setUploadPrice] = useState("20");
+  const [uploadPrice, setUploadPrice] = useState("5");
+  const [uploadIsPaid, setUploadIsPaid] = useState(false);
+  const [uploadVideoUseAllowed, setUploadVideoUseAllowed] = useState(false);
   const [uploadFile, setUploadFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
-  const [coverFile, setCoverFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
-  const searchRequestRef = useRef(0);
+  const [uploadCover, setUploadCover] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const musicSearchSequence = useRef(0);
+  const musicSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadLedger = useCallback(async () => {
+    if (section !== "purchases" && section !== "earnings") return;
+    const load = section === "purchases" ? onListPurchases : onListEarnings;
+    if (!load) {
+      setLedgerRows([]);
+      setLedgerError(true);
+      return;
+    }
+    setLedgerLoading(true);
+    setLedgerError(false);
+    try {
+      setLedgerRows(await load());
+    } catch {
+      setLedgerRows([]);
+      setLedgerError(true);
+    } finally {
+      setLedgerLoading(false);
+    }
+  }, [onListEarnings, onListPurchases, section]);
+
+  useEffect(() => {
+    if (section === "purchases" || section === "earnings") void loadLedger();
+  }, [loadLedger, section]);
 
   const loadTracks = useCallback(async () => {
     setLoadError(false);
     setLoading(true);
     try {
-      if (!onBrowse) throw new Error("AfuMusic is not connected to the catalog.");
+      if (!onBrowse) throw new Error("AfuMusic catalog is unavailable.");
       const result = await onBrowse();
       setTracks(result);
       setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
@@ -328,82 +445,51 @@ export default function AfuMusicApp({
     }
   }, [onBrowse]);
 
-  const loadStudioTracks = useCallback(async () => {
-    setLoadError(false);
-    setLoading(true);
-    try {
-      if (!onListStudio) throw new Error("AfuMusic Studio is not connected to your uploads.");
-      setStudioTracks(await onListStudio());
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [onListStudio]);
-
   const syncOffline = useCallback(async () => {
     if (!onListOffline) return;
     try {
       const result = await onListOffline();
       setOfflineTracks(result);
       setCachedIds(result.map((track) => track.id));
-      setOwnedIds((ids) => Array.from(new Set([...ids, ...result.map((track) => track.id)])));
     } catch {
       setOfflineTracks([]);
       setCachedIds([]);
     }
   }, [onListOffline]);
 
-  const loadOfflineTracks = useCallback(async () => {
-    setLoadError(false);
-    setLoading(true);
-    try {
-      if (!onListOffline) throw new Error("AfuMusic downloads are unavailable.");
-      const result = await onListOffline();
-      setOfflineTracks(result);
-      setCachedIds(result.map((track) => track.id));
-      setOwnedIds((ids) => Array.from(new Set([...ids, ...result.map((track) => track.id)])));
-    } catch {
-      setLoadError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [onListOffline]);
-
-  const loadCurrentSection = useCallback(async () => {
-    if (section === "studio") return loadStudioTracks();
-    if (section === "offline") return loadOfflineTracks();
-    return loadTracks();
-  }, [loadOfflineTracks, loadStudioTracks, loadTracks, section]);
+  useEffect(() => {
+    loadTracks();
+    void syncOffline();
+  }, [loadTracks, syncOffline]);
 
   useEffect(() => {
-    const next = ["discover", "library", "offline", "studio"].includes(initialSection)
-      ? initialSection as MusicSection
-      : "discover";
-    setSection(Platform.OS === "web" && next === "offline" ? "discover" : next);
-  }, [initialSection]);
-
-  useEffect(() => {
-    searchRequestRef.current += 1;
-    void loadCurrentSection();
-    if (section !== "offline") void syncOffline();
-  }, [loadCurrentSection, section, syncOffline]);
+    let active = true;
+    setPlaylists([]);
+    setLoadedPlaylistOwner(null);
+    if (!playlistOwnerId) return () => { active = false; };
+    void loadMusicPlaylists(playlistOwnerId)
+      .then((result) => {
+        if (!active) return;
+        setPlaylists(result);
+        setLoadedPlaylistOwner(playlistOwnerId);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadedPlaylistOwner(playlistOwnerId);
+        showAlert("Playlists unavailable", "Your saved playlists could not be loaded.");
+      });
+    return () => { active = false; };
+  }, [playlistOwnerId]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    try {
-      await loadCurrentSection();
-      if (section !== "offline") await syncOffline();
-    } finally {
-      setRefreshing(false);
-    }
-  }, [loadCurrentSection, section, syncOffline]);
+    await loadTracks();
+    setRefreshing(false);
+  }, [loadTracks]);
 
   const filteredTracks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    const source = section === "studio"
-      ? studioTracks
-      : section === "offline" && onListOffline ? offlineTracks : tracks;
+    const source = section === "offline" && onListOffline ? offlineTracks : tracks;
     return source.filter((track) => {
       const matchesGenre = genre === "All" || track.genre === genre;
       const matchesQuery = !normalized ||
@@ -411,10 +497,121 @@ export default function AfuMusicApp({
       const matchesSection =
         section === "library" ? ownedIds.includes(track.id) || track.isOwned :
         section === "offline" ? cachedIds.includes(track.id) :
+        section === "studio" ? track.creatorId === playlistOwnerId :
         true;
       return matchesGenre && matchesQuery && matchesSection;
     });
-  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, query, section, studioTracks, tracks]);
+  }, [cachedIds, genre, offlineTracks, onListOffline, ownedIds, playlistOwnerId, query, section, tracks]);
+
+  useEffect(() => () => {
+    if (musicSearchTimer.current) clearTimeout(musicSearchTimer.current);
+  }, []);
+
+  const persistPlaylists = useCallback(async (next: AfuMusicPlaylist[]) => {
+    if (playlistOwnerId && loadedPlaylistOwner !== playlistOwnerId) {
+      throw new Error("Playlists are still loading. Try again in a moment.");
+    }
+    if (playlistOwnerId) await saveMusicPlaylists(playlistOwnerId, next);
+    setPlaylists(next);
+  }, [loadedPlaylistOwner, playlistOwnerId]);
+
+  const openPlaylistModal = useCallback((track: AfuMusicTrack | null = null) => {
+    setPlaylistModalTrack(track);
+    setPlaylistDraft("");
+    setPlaylistModalOpen(true);
+  }, []);
+
+  const createPlaylist = useCallback(async () => {
+    const name = playlistDraft.trim();
+    if (!name) {
+      showAlert("Name your playlist", "Enter a name before creating the playlist.");
+      return;
+    }
+    if (playlists.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      showAlert("Playlist already exists", "Choose a different name for this playlist.");
+      return;
+    }
+    const now = new Date().toISOString();
+    const playlist: AfuMusicPlaylist = {
+      id: `playlist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      tracks: playlistModalTrack ? [playlistModalTrack] : [],
+      updatedAt: now,
+    };
+    try {
+      await persistPlaylists([...playlists, playlist]);
+      setPlaylistModalOpen(false);
+      setPlaylistDraft("");
+      setPlaylistModalTrack(null);
+    } catch (error) {
+      showAlert("Playlist could not be saved", error);
+    }
+  }, [persistPlaylists, playlistDraft, playlistModalTrack, playlists]);
+
+  const addTrackToPlaylist = useCallback(async (playlistId: string) => {
+    if (!playlistModalTrack) return;
+    const updated = playlists.map((playlist) => (
+      playlist.id !== playlistId || playlist.tracks.some((item) => item.id === playlistModalTrack.id)
+        ? playlist
+        : { ...playlist, tracks: [...playlist.tracks, playlistModalTrack], updatedAt: new Date().toISOString() }
+    ));
+    try {
+      await persistPlaylists(updated);
+      setPlaylistModalOpen(false);
+      setPlaylistModalTrack(null);
+      setPlaylistDraft("");
+    } catch (error) {
+      showAlert("Track could not be added", error);
+    }
+  }, [persistPlaylists, playlistModalTrack, playlists]);
+
+  const deletePlaylist = useCallback((playlist: AfuMusicPlaylist) => {
+    showAlert("Delete this playlist?", `"${playlist.name}" and its saved track list will be removed.`, [
+      { text: "Keep playlist", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await persistPlaylists(playlists.filter((item) => item.id !== playlist.id));
+          } catch (error) {
+            showAlert("Playlist could not be deleted", error);
+          }
+        },
+      },
+    ]);
+  }, [persistPlaylists, playlists]);
+
+  const queueForTrack = useCallback((track: AfuMusicTrack) => {
+    const available = filteredTracks.filter((item) =>
+      ownedIds.includes(item.id) || item.isOwned || item.price === 0
+    );
+    return available.some((item) => item.id === track.id) ? available : [track, ...available];
+  }, [filteredTracks, ownedIds]);
+
+  const activateTrack = useCallback(async (
+    track: AfuMusicTrack,
+    queue: AfuMusicTrack[],
+    title: string,
+    notifyPlay: boolean,
+  ) => {
+    const uniqueQueue = queue.filter((item, index) => queue.findIndex((other) => other.id === item.id) === index);
+    try {
+      if (notifyPlay) await onPlay?.(track);
+      await playGlobally(track, uniqueQueue, title, { showPlayer: true });
+    } catch (error) {
+      showAlert("Playback unavailable", error);
+    }
+  }, [onPlay, playGlobally]);
+
+  const selectQueuedTrack = useCallback(async (track: AfuMusicTrack) => {
+    try {
+      await onPlay?.(track);
+      await playGlobally(track, playQueue, queueTitle, { showPlayer: true });
+    } catch (error) {
+      showAlert("Playback unavailable", error);
+    }
+  }, [onPlay, playGlobally, playQueue, queueTitle]);
 
   const featuredTracks = useMemo(() => (
     tracks
@@ -423,27 +620,24 @@ export default function AfuMusicApp({
       .slice(0, 4)
   ), [tracks]);
 
-  const handleSearch = useCallback(async (value: string) => {
+  const handleSearch = useCallback((value: string) => {
     setQuery(value);
-    const requestId = ++searchRequestRef.current;
-    if (section !== "discover") return;
-    setLoadError(false);
-    setLoading(true);
-    try {
-      const normalized = value.trim();
-      const result = normalized
-        ? await onSearch?.(normalized)
-        : await onBrowse?.();
-      if (!result) throw new Error("AfuMusic search is unavailable.");
-      if (requestId !== searchRequestRef.current) return;
-      setTracks(result);
-      setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
-    } catch (error) {
-      if (requestId === searchRequestRef.current) setLoadError(true);
-    } finally {
-      if (requestId === searchRequestRef.current) setLoading(false);
-    }
-  }, [onBrowse, onSearch, section]);
+    const requestId = ++musicSearchSequence.current;
+    if (musicSearchTimer.current) clearTimeout(musicSearchTimer.current);
+    musicSearchTimer.current = setTimeout(async () => {
+      try {
+        const result = value.trim()
+          ? await onSearch?.(value.trim())
+          : await onBrowse?.();
+        if (requestId !== musicSearchSequence.current || !result) return;
+        setTracks(result);
+        setOwnedIds(result.filter((track) => track.isOwned || track.price === 0).map((track) => track.id));
+        setLoadError(false);
+      } catch {
+        if (requestId === musicSearchSequence.current) setLoadError(true);
+      }
+    }, 240);
+  }, [onBrowse, onSearch]);
 
   const openTrack = useCallback(async (track: AfuMusicTrack) => {
     const owned = ownedIds.includes(track.id) || track.isOwned || track.price === 0;
@@ -451,35 +645,36 @@ export default function AfuMusicApp({
       setPurchaseTrack(track);
       return;
     }
-    try {
-      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      if (!audioUrl) {
-        showAlert("Playback unavailable", "Audio is not available for this track yet.");
-        return;
-      }
-      const playableQueue = filteredTracks.filter((item) => ownedIds.includes(item.id) || item.isOwned || item.price === 0);
-      playMusic(track, audioUrl, playableQueue, onResolveAudio);
-    } catch (error) {
-      showAlert("Playback unavailable", error);
-    }
-  }, [filteredTracks, onResolveAudio, ownedIds, playMusic]);
+    await activateTrack(track, queueForTrack(track), section === "library" ? "My library" : section === "offline" ? "Offline" : "Discover", false);
+  }, [activateTrack, ownedIds, queueForTrack, section]);
 
   const playTrack = useCallback(async (track: AfuMusicTrack) => {
-    try {
-      await onPlay?.(track);
-      const audioUrl = onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
-      if (!audioUrl) {
-        showAlert("Playback unavailable", "Audio is not available for this track yet.");
-        return;
-      }
-      const playableQueue = filteredTracks.filter((item) => ownedIds.includes(item.id) || item.isOwned || item.price === 0);
-      playMusic(track, audioUrl, playableQueue, onResolveAudio);
-    } catch (error) {
-      showAlert("Playback unavailable", error);
+    await activateTrack(track, queueForTrack(track), section === "library" ? "My library" : section === "offline" ? "Offline" : "Discover", true);
+  }, [activateTrack, queueForTrack, section]);
+
+  const handlePlayNext = useCallback((track: AfuMusicTrack) => {
+    if (!selectedTrack) {
+      void playTrack(track);
+      return;
     }
-  }, [filteredTracks, onPlay, onResolveAudio, playMusic]);
+    setQueue((current) => {
+      const next = current.length ? current.filter((item) => item.id !== track.id) : [selectedTrack];
+      const currentIndex = next.findIndex((item) => item.id === selectedTrack.id);
+      next.splice(currentIndex < 0 ? next.length : currentIndex + 1, 0, track);
+      return next;
+    });
+  }, [playTrack, selectedTrack, setQueue]);
+
+  const startPlaylist = useCallback((playlist: AfuMusicPlaylist) => {
+    if (!playlist.tracks.length) {
+      showAlert("This playlist is empty", "Add tracks from your library to start listening.");
+      return;
+    }
+    void activateTrack(playlist.tracks[0], playlist.tracks, playlist.name, true);
+  }, [activateTrack]);
 
   const handleCache = useCallback(async (track: AfuMusicTrack) => {
+    setSavingIds((ids) => ids.includes(track.id) ? ids : [...ids, track.id]);
     try {
       if (cachedIds.includes(track.id)) {
         if (!onRemoveCache) throw new Error("Offline removal is unavailable.");
@@ -498,8 +693,26 @@ export default function AfuMusicApp({
         return;
       }
       showAlert("Could not save offline", "Try again when you have a stronger connection.");
+    } finally {
+      setSavingIds((ids) => ids.filter((id) => id !== track.id));
     }
   }, [cachedIds, onCache, onRemoveCache]);
+
+  const handleWebDownload = useCallback(async (track: AfuMusicTrack) => {
+    setDownloadingIds((ids) => ids.includes(track.id) ? ids : [...ids, track.id]);
+    try {
+      const filename = getMusicDownloadFilename(track);
+      const uri = onResolveDownload
+        ? await onResolveDownload(track, filename)
+        : onResolveAudio ? await onResolveAudio(track) : track.audioUrl ?? null;
+      if (!uri) throw new Error("The audio file is not available for this track.");
+      await downloadMusicFile(track, uri, filename);
+    } catch (error) {
+      showAlert("Download failed", error);
+    } finally {
+      setDownloadingIds((ids) => ids.filter((id) => id !== track.id));
+    }
+  }, [onResolveAudio, onResolveDownload]);
 
   const handleDeleteUpload = useCallback((track: AfuMusicTrack) => {
     showAlert("Remove this track?", "Listeners will no longer see it in AfuMusic.", [
@@ -509,15 +722,10 @@ export default function AfuMusicApp({
         style: "destructive",
         onPress: async () => {
           try {
-            if (!onDeleteUpload) throw new Error("Track removal is unavailable.");
-            await onDeleteUpload(track);
+            await onDeleteUpload?.(track);
             setTracks((current) => current.filter((item) => item.id !== track.id));
-            setStudioTracks((current) => current.filter((item) => item.id !== track.id));
-          } catch (error) {
-            showAlert(
-              "Could not remove track",
-              error instanceof Error ? error.message : "Try again in a moment.",
-            );
+          } catch {
+            showAlert("Could not remove track", "Try again in a moment.");
           }
         },
       },
@@ -526,7 +734,6 @@ export default function AfuMusicApp({
 
   const confirmPurchase = useCallback(async () => {
     if (!purchaseTrack) return;
-    if (purchasing) return;
     const price = Math.max(0, purchaseTrack.price);
     if (price > 0 && typeof acoinBalance === "number" && acoinBalance < price) {
       showAlert(
@@ -541,77 +748,34 @@ export default function AfuMusicApp({
     }
     setPurchasing(true);
     try {
-      if (!onPurchase) throw new Error("AfuPay purchase is unavailable.");
-      const result = await onPurchase(purchaseTrack);
+      if (!onPurchase) throw new Error("Music purchases are unavailable right now.");
+      await onPurchase(purchaseTrack);
       setOwnedIds((ids) => [...ids, purchaseTrack.id]);
       setTracks((current) => current.map((track) => (
         track.id === purchaseTrack.id ? { ...track, isOwned: true } : track
       )));
       setPurchaseTrack(null);
-      showAlert(
-        result?.alreadyOwned ? "Already in your library" : "Purchase complete",
-        result?.alreadyOwned
-          ? `${purchaseTrack.title} was already owned, so no ACoin was charged.`
-          : Platform.OS === "web"
-            ? `${purchaseTrack.title} is now in your library and ready to play on the web.`
-            : `${purchaseTrack.title} is now in your library and available offline.`,
-      );
     } catch {
       showAlert("Purchase could not be completed", "Your ACoin balance was not changed. Try again.");
     } finally {
       setPurchasing(false);
     }
-  }, [acoinBalance, onOpenWallet, onPurchase, purchaseTrack, purchasing]);
-
-  const closeUpload = useCallback(() => {
-    setUploadOpen(false);
-    setEditingTrack(null);
-    setUploadTitle("");
-    setUploadGenre("Ambient");
-    setUploadMode("free");
-    setUploadPrice("20");
-    setUploadFile(null);
-    setCoverFile(null);
-  }, []);
-
-  const openCreateUpload = useCallback(() => {
-    setEditingTrack(null);
-    setUploadTitle("");
-    setUploadGenre("Ambient");
-    setUploadMode("free");
-    setUploadPrice("20");
-    setUploadFile(null);
-    setCoverFile(null);
-    setUploadOpen(true);
-  }, []);
-
-  const openEditUpload = useCallback((track: AfuMusicTrack) => {
-    setEditingTrack(track);
-    setUploadTitle(track.title);
-    setUploadGenre(track.genre || "Ambient");
-    setUploadMode(track.price > 0 ? "paid" : "free");
-    setUploadPrice(String(track.price || 20));
-    setUploadFile(null);
-    setCoverFile(null);
-    setUploadOpen(true);
-  }, []);
+  }, [acoinBalance, onOpenWallet, onPurchase, purchaseTrack]);
 
   const pickAudio = useCallback(async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "audio/*",
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-      if (result.canceled) return;
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "audio/*",
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (!result.canceled) {
       const file = result.assets[0];
       setUploadFile(file);
-      const titleFromFile = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
-      if (!editingTrack || !uploadTitle.trim()) setUploadTitle(titleFromFile || file.name);
-    } catch (error) {
-      showAlert("Could not choose audio", error);
+      if (!uploadTitle.trim()) {
+        setUploadTitle(file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim());
+      }
     }
-  }, [editingTrack, uploadTitle]);
+  }, [uploadTitle]);
 
   const pickCover = useCallback(async () => {
     try {
@@ -619,186 +783,210 @@ export default function AfuMusicApp({
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.85,
+        quality: 0.88,
       });
-      if (!result.canceled) setCoverFile(result.assets[0]);
-    } catch (error) {
-      showAlert("Could not choose cover art", error);
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+          showAlert("Cover image is too large", "Choose an image smaller than 10 MB.");
+          return;
+        }
+        setUploadCover(asset);
+      }
+    } catch {
+      showAlert("Cover image unavailable", "Could not open your photos. Please try again.");
     }
   }, []);
 
-  const submitUpload = useCallback(async () => {
-    if (uploading) return;
-    if (!uploadTitle.trim() || (!editingTrack && !uploadFile)) {
-      showAlert(
-        editingTrack ? "Add a track title" : "Add a title and audio",
-        editingTrack
-          ? "Enter a title before saving your changes."
-          : "Choose the track you want to publish before continuing.",
-      );
-      return;
-    }
-
-    const price = uploadMode === "free" ? 0 : Number(uploadPrice);
-    if (uploadMode === "paid" && (!Number.isInteger(price) || price < 1 || price > 100000)) {
-      showAlert("Check the ACoin price", "Enter a whole-number price from 1 to 100,000 ACoin.");
-      return;
-    }
-    const keepingCurrentPrice = !!editingTrack && price === editingTrack.price;
-    if (price > 0 && !canMonetize && !keepingCurrentPrice) {
-      showAlert("Verified creator access required", "An active Standard or Pro plan, or an existing verified badge, is required to sell music.", [
+  const showPremiumRequired = useCallback(() => {
+    showAlert(
+      "Premium required",
+      "Paid music publishing requires AfuChat Premium. Upgrade your subscription to publish music for sale.",
+      [
         { text: "Not now", style: "cancel" },
-        ...(onOpenPlans ? [{ text: "View plans", onPress: onOpenPlans }] : []),
-      ]);
+        {
+          text: "Upgrade to Premium",
+          onPress: () => {
+            setUploadOpen(false);
+            onUpgradePremium?.();
+          },
+        },
+      ],
+    );
+  }, [onUpgradePremium]);
+
+  const submitUpload = useCallback(async () => {
+    if (!uploadTitle.trim() || !uploadFile) {
+      showAlert("Add a title and audio", "Choose the track you want to publish before continuing.");
       return;
     }
-
+    const price = uploadIsPaid ? Number(uploadPrice) : 0;
+    if (uploadIsPaid && !canPublishPaid) {
+      showPremiumRequired();
+      return;
+    }
+    if (uploadIsPaid && (!Number.isInteger(price) || price < 5 || price > 1000)) {
+      showAlert("Check the track price", "Paid music must cost between 5 and 1,000 ACoin.");
+      return;
+    }
+    if (!onUpload) {
+      showAlert("Publishing unavailable", "AfuMusic publishing is unavailable right now. Try again later.");
+      return;
+    }
     setUploading(true);
     try {
-      const payload: MusicTrackInput = {
+      const payload = {
         title: uploadTitle.trim(),
         genre: uploadGenre,
         price,
-        ...(uploadFile ? {
-          fileUri: uploadFile.uri,
-          fileName: uploadFile.name,
-          mimeType: uploadFile.mimeType ?? undefined,
-          fileSize: uploadFile.size ?? undefined,
-        } : {}),
-        ...(coverFile ? {
-          coverFileUri: coverFile.uri,
-          coverFileName: coverFile.fileName ?? undefined,
-          coverMimeType: coverFile.mimeType ?? undefined,
-          coverFileSize: coverFile.fileSize ?? undefined,
-        } : {}),
+        fileUri: uploadFile.uri,
+        fileName: uploadFile.name,
+        mimeType: uploadFile.mimeType,
+        fileSize: uploadFile.size,
+        videoUseAllowed: uploadVideoUseAllowed,
+        coverUri: uploadCover?.uri,
+        coverFileName: uploadCover?.fileName || "cover.jpg",
+        coverMimeType: uploadCover?.mimeType || undefined,
+        coverFileSize: uploadCover?.fileSize || undefined,
       };
-
-      if (editingTrack) {
-        if (!onUpdateUpload) throw new Error("Track editing is unavailable.");
-        const result = await onUpdateUpload(editingTrack, payload);
-        const savedTrack = {
+      const result = await onUpload(payload);
+      if (result) {
+        setTracks((current) => [{
           ...result,
           artist: result.artist || "You",
           handle: result.handle || "@you",
-        };
-        setTracks((current) => current.map((track) => track.id === savedTrack.id ? savedTrack : track));
-        setStudioTracks((current) => current.map((track) => track.id === savedTrack.id ? savedTrack : track));
-        const hadOfflineCopy = cachedIds.includes(savedTrack.id);
-        if (uploadFile && hadOfflineCopy) {
-          setCachedIds((ids) => ids.filter((id) => id !== savedTrack.id));
-          setOfflineTracks((current) => current.filter((track) => track.id !== savedTrack.id));
-        }
-        closeUpload();
-        showAlert(
-          "Track updated",
-          `${savedTrack.title} was updated in your catalog.${uploadFile && hadOfflineCopy ? " Download the new audio again for offline listening." : ""}`,
-        );
-      } else {
-        if (!onUpload || !uploadFile) throw new Error("Choose an audio file before publishing.");
-        const result = await onUpload({
-          ...payload,
-          fileUri: uploadFile.uri,
-          fileName: uploadFile.name,
-        });
-        const publishedTrack = {
-          ...result,
-          artist: result.artist || "You",
-          handle: result.handle || "@you",
-        };
-        setTracks((current) => [publishedTrack, ...current]);
-        setStudioTracks((current) => [publishedTrack, ...current.filter((item) => item.id !== publishedTrack.id)]);
-        closeUpload();
-        showAlert("Published to AfuMusic", "Your track is ready for listeners.");
+        }, ...current]);
       }
+      setUploadOpen(false);
+      setUploadTitle("");
+      setUploadFile(null);
+      setUploadCover(null);
+      setUploadIsPaid(false);
+      setUploadVideoUseAllowed(false);
+      showAlert("Published to AfuMusic", "Your track is ready for listeners.");
     } catch (error) {
-      showAlert(editingTrack ? "Could not update track" : "Upload failed", error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : String((error as { message?: unknown } | null)?.message ?? "");
+      if (errorMessage.includes("music_paid_publishing_requires_premium")) {
+        showPremiumRequired();
+        return;
+      }
+      if (/migration|private r2|private storage|private bucket/i.test(errorMessage)) {
+        showAlert(
+          "Publishing setup incomplete",
+          errorMessage || "AfuMusic needs a production setup step before this track can be published.",
+        );
+        return;
+      }
+      showAlert(
+        "Upload failed",
+        errorMessage || "Your track was not published. Try again.",
+      );
     } finally {
       setUploading(false);
     }
-  }, [
-    canMonetize,
-    cachedIds,
-    closeUpload,
-    coverFile,
-    editingTrack,
-    onOpenPlans,
-    onUpdateUpload,
-    onUpload,
-    uploadFile,
-    uploadGenre,
-    uploadMode,
-    uploadPrice,
-    uploadTitle,
-    uploading,
-  ]);
+  }, [canPublishPaid, onUpload, showPremiumRequired, uploadFile, uploadGenre, uploadIsPaid, uploadPrice, uploadTitle, uploadVideoUseAllowed]);
 
   const renderTrack = useCallback(({ item }: { item: AfuMusicTrack }) => (
     <TrackRow
       track={item}
       owned={ownedIds.includes(item.id) || item.isOwned || item.price === 0}
       cached={cachedIds.includes(item.id)}
+      webDownload={Platform.OS === "web"}
+      downloading={Platform.OS === "web" ? downloadingIds.includes(item.id) : savingIds.includes(item.id)}
       managed={section === "studio"}
       onOpen={() => { void openTrack(item); }}
       onPlay={() => { void playTrack(item); }}
-      onCache={() => handleCache(item)}
-      canCache={Platform.OS !== "web"}
-      onEdit={() => openEditUpload(item)}
+      onCache={() => { void handleCache(item); }}
+      onDownload={() => { void handleWebDownload(item); }}
+      onPlayNext={() => handlePlayNext(item)}
+      onAddToPlaylist={() => openPlaylistModal(item)}
       onDelete={() => handleDeleteUpload(item)}
     />
-  ), [cachedIds, handleCache, handleDeleteUpload, openEditUpload, openTrack, ownedIds, playTrack, section]);
+  ), [cachedIds, downloadingIds, handleCache, handleDeleteUpload, handlePlayNext, handleWebDownload, openPlaylistModal, openTrack, ownedIds, playTrack, savingIds, section]);
 
-  const sectionTitle = section === "discover" ? "Discover" :
-    section === "library" ? "Your library" :
-    section === "offline" ? "Downloads" : "Your tracks";
+  const sectionTitle = section === "discover" ? "Find your next repeat" :
+    section === "library" ? "Your listening library" :
+    section === "offline" ? "Ready without signal" :
+    section === "playlists" ? "Your playlists" :
+    section === "purchases" ? "Your purchase history" :
+    section === "earnings" ? "Your creator earnings" : "Your studio";
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <ScrollView
-        style={styles.pageScroll}
-        contentContainerStyle={styles.pageContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={accent} />}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
+    <View style={[styles.root, { backgroundColor: CANVAS, paddingTop: insets.top }]}>
       <View style={styles.topBar}>
-        <View style={styles.topBarStart}>
-          <GlassBackButton onPress={handleBack} accessibilityLabel="Go back" />
-          <View style={[styles.coinBadge, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="flash" size={13} color={GOLD} />
-            <Text style={[styles.coinText, { color: colors.text }]}>
-              {typeof acoinBalance === "number" ? `${Math.floor(acoinBalance)} AC` : "ACoin"}
-            </Text>
-          </View>
+        <View>
+          <Text style={styles.wordmark}>Afu<Text style={styles.wordmarkAccent}>Music</Text></Text>
+          <Text style={styles.privateLabel}>A PRIVATE LISTENING SPACE</Text>
+        </View>
+        <View style={styles.coinBadge}>
+          <Ionicons name="flash" size={13} color={GOLD} />
+          <Text style={styles.coinText}>
+            {typeof acoinBalance === "number" ? `${Math.floor(acoinBalance)} AC` : "ACoin"}
+          </Text>
         </View>
       </View>
 
-      <View style={[styles.searchWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-        <Ionicons name="search" size={18} color={colors.textMuted} />
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={18} color={MUTED} />
         <TextInput
           value={query}
           onChangeText={handleSearch}
           placeholder="Search tracks, artists, sounds"
-          placeholderTextColor={colors.textMuted}
-          style={[styles.searchInput, { color: colors.text }]}
+          placeholderTextColor={MUTED}
+          style={styles.searchInput}
           returnKeyType="search"
           accessibilityLabel="Search AfuMusic"
         />
-        {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={colors.textMuted} /></Pressable> : null}
+        {query ? <Pressable onPress={() => handleSearch("")} hitSlop={8}><Ionicons name="close-circle" size={18} color={MUTED} /></Pressable> : null}
       </View>
+
+      <View style={styles.sectionRail}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionRailContent}>
+          <SectionPill label="Discover" icon="sparkles-outline" active={section === "discover"} onPress={() => setSection("discover")} />
+          <SectionPill label="Library" icon="albums-outline" active={section === "library"} onPress={() => setSection("library")} />
+          <SectionPill label="Offline" icon="arrow-down-circle-outline" active={section === "offline"} onPress={() => setSection("offline")} />
+          <SectionPill label="Playlists" icon="list-outline" active={section === "playlists"} onPress={() => setSection("playlists")} />
+          <SectionPill label="Studio" icon="mic-outline" active={section === "studio"} onPress={() => setSection("studio")} />
+          <SectionPill label="Purchases" icon="receipt-outline" active={section === "purchases"} onPress={() => setSection("purchases")} />
+          <SectionPill label="Earnings" icon="cash-outline" active={section === "earnings"} onPress={() => setSection("earnings")} />
+        </ScrollView>
+      </View>
+
+      {section === "discover" && !query ? (
+        <View style={styles.heroCard}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroEyebrow}>AfuMusic / 001</Text>
+            <Text style={styles.heroTitle}>Songs worth{`\n`}keeping close.</Text>
+            <Text style={styles.heroBody}>Independent sounds, shared privately. Unlock a track once and keep it with you offline.</Text>
+            <Pressable onPress={() => setSection("library")} style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}>
+              <Text style={styles.heroButtonText}>Open my library</Text>
+              <Ionicons name="arrow-forward" size={16} color={INK} />
+            </Pressable>
+          </View>
+          <View style={styles.heroDisc}>
+            <View style={styles.discOuter}><View style={styles.discInner}><View style={styles.discLabel}><Ionicons name="musical-notes" size={22} color={CORAL} /></View></View></View>
+            <View style={styles.discNeedle} />
+          </View>
+        </View>
+      ) : null}
 
       {section === "discover" && !query && featuredTracks.length > 0 ? (
         <View style={styles.featuredBlock}>
           <View style={styles.featuredHeader}>
             <View>
-              <Text style={[styles.featuredTitle, { color: colors.text }]}>Featured tracks</Text>
+              <Text style={styles.sectionEyebrow}>EDITOR'S PICKS</Text>
+              <Text style={styles.featuredTitle}>Featured this week</Text>
             </View>
+            <Ionicons name="headset-outline" size={19} color={CORAL} />
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRail}>
             {featuredTracks.map((track) => (
               <Pressable key={track.id} onPress={() => { void openTrack(track); }} style={({ pressed }) => [styles.featuredCard, pressed && styles.pressed]}>
-                <TrackArt track={track} size={78} radius={6} />
-                <Text style={[styles.featuredCardTitle, { color: colors.text }]} numberOfLines={1}>{track.title}</Text>
-                <Text style={[styles.featuredCardArtist, { color: colors.textMuted }]} numberOfLines={1}>{track.artist}</Text>
+                <TrackArt track={track} size={78} radius={18} />
+                <Text style={styles.featuredCardTitle} numberOfLines={1}>{track.title}</Text>
+                <Text style={styles.featuredCardArtist} numberOfLines={1}>{track.artist}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -807,20 +995,20 @@ export default function AfuMusicApp({
 
       <View style={styles.contentHeader}>
         <View>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>{sectionTitle}</Text>
-          {section === "studio" ? (
-            <Text style={[styles.studioSummary, { color: colors.textMuted }]}>
-              {studioTracks.length} {studioTracks.length === 1 ? "release" : "releases"} in your catalog
-            </Text>
-          ) : null}
+          <Text style={styles.sectionEyebrow}>
+            {section === "studio" ? "PUBLISH & MANAGE" : section === "playlists" ? "YOUR COLLECTIONS" : section === "purchases" ? "LISTENING RECEIPTS" : section === "earnings" ? "TRACK SALES" : "YOUR NEXT LISTEN"}
+          </Text>
+          <Text style={styles.sectionTitle}>{sectionTitle}</Text>
         </View>
         {section === "studio" ? (
-          <Pressable
-            onPress={openCreateUpload}
-            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-          >
+          <Pressable onPress={() => setUploadOpen(true)} style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
             <Ionicons name="add" size={19} color={PAPER} />
             <Text style={styles.addButtonText}>Publish</Text>
+          </Pressable>
+        ) : section === "playlists" ? (
+          <Pressable onPress={() => openPlaylistModal()} style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
+            <Ionicons name="add" size={19} color={PAPER} />
+            <Text style={styles.addButtonText}>New playlist</Text>
           </Pressable>
         ) : null}
       </View>
@@ -828,51 +1016,100 @@ export default function AfuMusicApp({
       {section === "discover" && !query ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreRail}>
           {GENRES.map((item) => (
-            <Pressable key={item} onPress={() => setGenre(item)} style={[styles.genreChip, { backgroundColor: genre === item ? accent : colors.inputBg, borderColor: genre === item ? accent : colors.border }]}>
-              <Text style={[styles.genreText, { color: genre === item ? "#FFFFFF" : colors.text }]}>{item}</Text>
+            <Pressable key={item} onPress={() => setGenre(item)} style={[styles.genreChip, genre === item && styles.genreChipActive]}>
+              <Text style={[styles.genreText, genre === item && styles.genreTextActive]}>{item}</Text>
             </Pressable>
           ))}
         </ScrollView>
       ) : null}
 
-
-      {loading ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator size="small" color={accent} />
-          <Text style={[styles.loadingLabel, { color: colors.textMuted }]}>Loading your music</Text>
-        </View>
+      {section === "purchases" || section === "earnings" ? (
+        ledgerLoading ? (
+          <SkeletonRows />
+        ) : ledgerError ? (
+          <EmptyState icon="cloud-offline-outline" title="Ledger unavailable" message="We couldn't load your AfuMusic transactions." action={{ label: "Try again", onPress: () => { void loadLedger(); } }} />
+        ) : ledgerRows.length === 0 ? (
+          <EmptyState
+            icon={section === "purchases" ? "receipt-outline" : "cash-outline"}
+            title={section === "purchases" ? "No purchases yet" : "No track earnings yet"}
+            message={section === "purchases" ? "Tracks you unlock will appear here." : "Your paid track sales will appear here as they happen."}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={styles.ledgerList} showsVerticalScrollIndicator={false}>
+            {ledgerRows.map((row) => (
+              <View key={row.id} style={styles.ledgerRow}>
+                <View style={styles.ledgerIcon}><Ionicons name={section === "purchases" ? "musical-notes" : "cash-outline"} size={18} color={CORAL} /></View>
+                <View style={styles.ledgerCopy}>
+                  <Text style={styles.ledgerTitle} numberOfLines={1}>{row.title}</Text>
+                  <Text style={styles.ledgerMeta} numberOfLines={1}>
+                    {section === "purchases" ? `Creator: ${row.counterpartyName}` : `Buyer: ${row.counterpartyName}`} · {new Date(row.happenedAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={styles.ledgerAmount}>{section === "purchases" ? "−" : "+"}{row.amount} AC</Text>
+              </View>
+            ))}
+          </ScrollView>
+        )
+      ) : section === "playlists" ? (
+        playlistOwnerId && loadedPlaylistOwner !== playlistOwnerId ? (
+          <SkeletonRows />
+        ) : playlists.length === 0 ? (
+          <EmptyState
+            icon="list-outline"
+            title="Your playlists start here"
+            message="Create a playlist, then add tracks from Discover or your Library."
+            action={{ label: "Create a playlist", onPress: () => openPlaylistModal() }}
+          />
+        ) : (
+          <ScrollView contentContainerStyle={styles.playlistList} showsVerticalScrollIndicator={false}>
+            {playlists.map((playlist) => (
+              <PlaylistRow
+                key={playlist.id}
+                playlist={playlist}
+                onPlay={() => startPlaylist(playlist)}
+                onDelete={() => deletePlaylist(playlist)}
+              />
+            ))}
+          </ScrollView>
+        )
+      ) : loading ? (
+        <SkeletonRows />
       ) : loadError ? (
-        <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadCurrentSection }} />
+        <EmptyState icon="cloud-offline-outline" title="The signal slipped" message="We couldn't load your listening space." action={{ label: "Try again", onPress: loadTracks }} />
       ) : filteredTracks.length === 0 ? (
         <EmptyState
           icon={section === "offline" ? "cloud-download-outline" : section === "studio" ? "mic-outline" : "albums-outline"}
-          title={section === "offline" ? "Nothing saved offline" : section === "library" ? "Your library is waiting" : section === "studio" ? "Your studio is ready" : "No tracks found"}
-          message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : section === "studio" ? "Tracks you publish will appear here. Choose an audio file to release your first track." : "Try another search or publish your first track."}
-          action={section === "studio" ? { label: "Publish a track", onPress: openCreateUpload } : undefined}
+          title={section === "offline" ? "Nothing saved offline" : section === "library" ? "Your library is waiting" : section === "studio" ? "No published tracks" : "No tracks found"}
+          message={section === "offline" ? "Save purchased tracks here for flights, commutes, and quiet corners." : section === "library" ? "Unlock a track to make it part of your private collection." : section === "studio" ? "Try another search or publish your first track." : "Try another search."}
+          action={section === "studio" ? { label: "Publish a track", onPress: () => setUploadOpen(true) } : undefined}
         />
       ) : (
-        <View style={styles.trackList}>
-          {filteredTracks.map((track) => (
-            <React.Fragment key={track.id}>{renderTrack({ item: track })}</React.Fragment>
-          ))}
-        </View>
+        <FlatList
+          data={filteredTracks}
+          renderItem={renderTrack}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.trackList}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={CORAL} />}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={section === "discover" && !query ? <Text style={styles.listHint}>Fresh from independent creators</Text> : undefined}
+        />
       )}
-      </ScrollView>
 
       <Modal visible={!!purchaseTrack} animationType="slide" transparent onRequestClose={() => setPurchaseTrack(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={[styles.purchaseSheet, { backgroundColor: colors.surface }]}>
-            {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={6} /> : null}
+          <View style={styles.purchaseSheet}>
+            <View style={styles.sheetHandle} />
+            {purchaseTrack ? <TrackArt track={purchaseTrack} size={78} radius={20} /> : null}
             <Text style={styles.purchaseKicker}>UNLOCK THIS TRACK</Text>
-            <Text style={[styles.purchaseTitle, { color: colors.text }]}>{purchaseTrack?.title}</Text>
-            <Text style={[styles.purchaseArtist, { color: colors.textMuted }]}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
+            <Text style={styles.purchaseTitle}>{purchaseTrack?.title}</Text>
+            <Text style={styles.purchaseArtist}>{purchaseTrack?.artist} · {purchaseTrack?.genre}</Text>
             <View style={styles.purchaseRule} />
-            <View style={styles.purchaseRow}><Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>One-time access</Text><Text style={[styles.purchaseValue, { color: colors.text }]}>{purchaseTrack?.price} ACoin</Text></View>
-            <View style={styles.purchaseRow}><Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
+            <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>One-time access</Text><Text style={styles.purchaseValue}>{purchaseTrack?.price} ACoin</Text></View>
+            <View style={styles.purchaseRow}><Text style={styles.purchaseLabel}>Offline listening</Text><Ionicons name="checkmark-circle" size={19} color={COBALT} /></View>
             {typeof acoinBalance === "number" ? (
               <View style={styles.balanceRow}>
-                <Text style={[styles.purchaseLabel, { color: colors.textMuted }]}>Your balance</Text>
-                <Text style={[styles.purchaseValue, { color: colors.text }, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
+                <Text style={styles.purchaseLabel}>Your balance</Text>
+                <Text style={[styles.purchaseValue, acoinBalance < (purchaseTrack?.price ?? 0) && styles.insufficientValue]}>{Math.floor(acoinBalance)} ACoin</Text>
               </View>
             ) : null}
             {typeof acoinBalance === "number" && acoinBalance < (purchaseTrack?.price ?? 0) ? (
@@ -889,73 +1126,163 @@ export default function AfuMusicApp({
             >
               {purchasing ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="flash" size={16} color={PAPER} /><Text style={styles.purchaseButtonText}>Unlock for {purchaseTrack?.price} AC</Text></>}
             </Pressable>
-            <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={[styles.cancelText, { color: colors.text }]}>Not now</Text></Pressable>
+            <Pressable onPress={() => setPurchaseTrack(null)} style={styles.cancelButton}><Text style={styles.cancelText}>Not now</Text></Pressable>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => { if (!uploading) closeUpload(); }}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
-          <View style={[styles.uploadSheet, { backgroundColor: colors.surface }]}>
-            <ScrollView
-              style={styles.uploadFormScroll}
-              contentContainerStyle={styles.uploadFormContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={[styles.purchaseTitle, { color: colors.text }]}>{editingTrack ? "Edit track" : "Publish a track"}</Text></View><Pressable onPress={closeUpload} hitSlop={10} disabled={uploading} accessibilityLabel="Close track editor"><Ionicons name="close" size={23} color={colors.text} /></Pressable></View>
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>Track title</Text>
-            <TextInput value={uploadTitle} onChangeText={setUploadTitle} editable={!uploading} placeholder="Give it a name" placeholderTextColor={colors.textMuted} style={[styles.formInput, { color: colors.text, backgroundColor: colors.inputBg, borderColor: colors.border }]} />
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>Genre</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
-              {Array.from(new Set([...GENRES.slice(1), ...(editingTrack?.genre ? [editingTrack.genre] : [])])).map((item) => <Pressable key={item} disabled={uploading} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
-            </ScrollView>
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>Availability</Text>
-            <View style={[styles.uploadModeRow, { borderColor: colors.border }]}>
-              <Pressable disabled={uploading} onPress={() => setUploadMode("free")} style={[styles.uploadModeOption, uploadMode === "free" && { backgroundColor: accent }]}>
-                <Text style={[styles.uploadModeTitle, { color: uploadMode === "free" ? PAPER : colors.text }]}>Free</Text>
-                <Text style={[styles.uploadModeHint, { color: uploadMode === "free" ? PAPER : colors.textMuted }]}>Anyone can listen</Text>
-              </Pressable>
-              <Pressable disabled={uploading} onPress={() => setUploadMode("paid")} style={[styles.uploadModeOption, uploadMode === "paid" && { backgroundColor: accent }]}>
-                <Text style={[styles.uploadModeTitle, { color: uploadMode === "paid" ? PAPER : colors.text }]}>Paid</Text>
-                <Text style={[styles.uploadModeHint, { color: uploadMode === "paid" ? PAPER : colors.textMuted }]}>Unlock with ACoin</Text>
+      <Modal visible={playlistModalOpen} animationType="slide" transparent onRequestClose={() => setPlaylistModalOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.playlistSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.playlistModalHeader}>
+              <View>
+                <Text style={styles.purchaseKicker}>{playlistModalTrack ? "SAVE THIS TRACK" : "YOUR MUSIC"}</Text>
+                <Text style={styles.playlistModalTitle}>{playlistModalTrack ? "Add to playlist" : "New playlist"}</Text>
+              </View>
+              <Pressable onPress={() => setPlaylistModalOpen(false)} hitSlop={10} accessibilityLabel="Close playlist dialog">
+                <Ionicons name="close" size={23} color={INK} />
               </Pressable>
             </View>
-            {uploadMode === "paid" ? <>
-              <Text style={[styles.fieldLabel, { color: colors.text }]}>Price</Text>
-              <View style={[styles.priceInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} editable={!uploading} onChangeText={setUploadPrice} keyboardType="number-pad" keyboardAppearance={isDark ? "dark" : "light"} style={[styles.priceTextInput, { color: colors.text }]} /><Text style={[styles.acoinSuffix, { color: colors.textMuted }]}>ACoin</Text></View>
-              {!canMonetize ? <Text style={[styles.uploadEligibility, { color: colors.textMuted }]}>Paid uploads require an active Standard or Pro plan, or a verified badge.</Text> : null}
-            </> : null}
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>Cover art</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={coverFile ? "Change selected cover art" : "Choose cover art"}
-              disabled={uploading}
-              onPress={() => void pickCover()}
-              style={({ pressed }) => [styles.coverPicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}
-            >
-              <View style={[styles.coverPreview, { backgroundColor: colors.background }]}>
-                {coverFile?.uri || editingTrack?.coverUrl ? (
-                  <Image source={{ uri: coverFile?.uri || editingTrack?.coverUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                ) : (
-                  <Ionicons name="image-outline" size={21} color={colors.textMuted} />
-                )}
+            {playlistModalTrack ? (
+              <View style={styles.playlistTrackPreview}>
+                <TrackArt track={playlistModalTrack} size={44} radius={12} />
+                <View style={styles.playlistCopy}>
+                  <Text style={styles.playlistTitle} numberOfLines={1}>{playlistModalTrack.title}</Text>
+                  <Text style={styles.playlistMeta} numberOfLines={1}>{playlistModalTrack.artist}</Text>
+                </View>
               </View>
-              <View style={styles.filePickerCopy}>
-                <Text style={[styles.filePickerTitle, { color: colors.text }]} numberOfLines={1}>
-                  {coverFile?.fileName || (editingTrack?.coverUrl ? "Current cover art" : "Add cover art")}
+            ) : null}
+            <TextInput
+              value={playlistDraft}
+              onChangeText={setPlaylistDraft}
+              placeholder="Playlist name"
+              placeholderTextColor={MUTED}
+              style={styles.formInput}
+              maxLength={48}
+              returnKeyType="done"
+              accessibilityLabel="Playlist name"
+            />
+            <Pressable onPress={() => { void createPlaylist(); }} style={({ pressed }) => [styles.playlistCreateButton, pressed && styles.purchaseButtonPressed]}>
+              <Ionicons name="add-circle-outline" size={18} color={PAPER} />
+              <Text style={styles.purchaseButtonText}>{playlistModalTrack ? "Create playlist with track" : "Create playlist"}</Text>
+            </Pressable>
+            {playlistModalTrack && playlists.length > 0 ? (
+              <>
+                <Text style={styles.playlistListLabel}>OR ADD TO AN EXISTING PLAYLIST</Text>
+                <ScrollView style={styles.playlistChoices} keyboardShouldPersistTaps="handled">
+                  {playlists.map((playlist) => (
+                    <Pressable
+                      key={playlist.id}
+                      onPress={() => { void addTrackToPlaylist(playlist.id); }}
+                      style={({ pressed }) => [styles.playlistChoice, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="musical-notes-outline" size={18} color={CORAL} />
+                      <View style={styles.playlistCopy}>
+                        <Text style={styles.playlistTitle} numberOfLines={1}>{playlist.name}</Text>
+                        <Text style={styles.playlistMeta}>{playlist.tracks.length} {playlist.tracks.length === 1 ? "track" : "tracks"}</Text>
+                      </View>
+                      <Ionicons name={playlist.tracks.some((item) => item.id === playlistModalTrack.id) ? "checkmark-circle" : "add-circle-outline"} size={20} color={playlist.tracks.some((item) => item.id === playlistModalTrack.id) ? COBALT : MUTED} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={uploadOpen} animationType="slide" transparent onRequestClose={() => setUploadOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalBackdrop}>
+          <View style={styles.uploadSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.uploadHeader}><View><Text style={styles.purchaseKicker}>CREATOR STUDIO</Text><Text style={styles.purchaseTitle}>Publish a track</Text></View><Pressable onPress={() => setUploadOpen(false)} hitSlop={10}><Ionicons name="close" size={23} color={INK} /></Pressable></View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
+            <Text style={styles.fieldLabel}>Track title</Text>
+            <TextInput
+              value={uploadTitle}
+              onChangeText={setUploadTitle}
+              maxLength={120}
+              placeholder="Give it a name"
+              placeholderTextColor={MUTED}
+              style={styles.formInput}
+            />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 11, marginTop: 13 }}>
+              <AfuMusicArtwork
+                uri={uploadCover?.uri}
+                size={56}
+                radius={14}
+                iconColor={CORAL}
+                backgroundColor="#E8DED2"
+                accessibilityLabel={uploadCover ? "Selected track cover" : "No track cover selected"}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.fieldLabel}>Cover art (optional)</Text>
+                <Text style={styles.filePickerSub} numberOfLines={2}>
+                  {uploadCover ? "Ready to upload with this track" : "Square JPG, PNG or WebP · up to 10 MB"}
                 </Text>
-                <Text style={[styles.filePickerSub, { color: colors.textMuted }]}>Optional · square JPEG, PNG or WebP</Text>
               </View>
-              <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+              <Pressable
+                onPress={uploadCover ? () => setUploadCover(null) : () => { void pickCover(); }}
+                style={({ pressed }) => [styles.coverPickButton, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel={uploadCover ? "Remove cover art" : "Choose cover art"}
+              >
+                <Ionicons name={uploadCover ? "close" : "image-outline"} size={17} color={CORAL} />
+                <Text style={styles.coverPickText}>{uploadCover ? "Remove" : "Choose"}</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.fieldLabel}>Genre</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.formGenreRail}>
+              {GENRES.slice(1).map((item) => <Pressable key={item} onPress={() => setUploadGenre(item)} style={[styles.formGenreChip, uploadGenre === item && styles.formGenreChipActive]}><Text style={[styles.formGenreText, uploadGenre === item && styles.formGenreTextActive]}>{item}</Text></Pressable>)}
+            </ScrollView>
+            <Text style={styles.fieldLabel}>Publishing option</Text>
+            <View style={styles.publishModes}>
+              <Pressable onPress={() => setUploadIsPaid(false)} style={[styles.publishMode, !uploadIsPaid && styles.publishModeActive]}>
+                <Ionicons name="gift-outline" size={16} color={!uploadIsPaid ? PAPER : MUTED} />
+                <Text style={[styles.publishModeText, !uploadIsPaid && styles.publishModeTextActive]}>Free</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  if (!canPublishPaid) {
+                    showPremiumRequired();
+                    return;
+                  }
+                  setUploadIsPaid(true);
+                }}
+                style={[styles.publishMode, uploadIsPaid && styles.publishModeActive]}
+              >
+                <Ionicons name="flash-outline" size={16} color={uploadIsPaid ? PAPER : MUTED} />
+                <Text style={[styles.publishModeText, uploadIsPaid && styles.publishModeTextActive]}>Paid</Text>
+                {!canPublishPaid ? <Ionicons name="lock-closed" size={12} color={MUTED} /> : null}
+              </Pressable>
+            </View>
+            {uploadIsPaid ? (
+              <>
+                <Text style={styles.fieldLabel}>Price (5–1,000 ACoin)</Text>
+                <View style={styles.priceInput}><Ionicons name="flash" size={15} color={GOLD} /><TextInput value={uploadPrice} onChangeText={setUploadPrice} keyboardType="number-pad" style={styles.priceTextInput} /><Text style={styles.acoinSuffix}>ACoin</Text></View>
+              </>
+            ) : (
+              <Text style={styles.freePublishingNote}>Listeners can play this track without purchasing it.</Text>
+            )}
+            <Pressable
+              onPress={() => setUploadVideoUseAllowed((allowed) => !allowed)}
+              style={styles.videoUseToggle}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: uploadVideoUseAllowed }}
+            >
+              <Ionicons name={uploadVideoUseAllowed ? "checkbox" : "square-outline"} size={19} color={uploadVideoUseAllowed ? COBALT : MUTED} />
+              <View style={styles.videoUseCopy}>
+                <Text style={styles.videoUseTitle}>Allow use in AfuChat videos</Text>
+                <Text style={styles.videoUseNote}>Only tracks with this permission can be added to Shots.</Text>
+              </View>
             </Pressable>
-            <Text style={[styles.fieldLabel, { color: colors.text }]}>Audio file</Text>
-            <Pressable disabled={uploading} onPress={() => void pickAudio()} style={({ pressed }) => [styles.filePicker, { backgroundColor: colors.inputBg, borderColor: colors.border }, pressed && styles.pressed]}>
+            <Pressable onPress={pickAudio} style={({ pressed }) => [styles.filePicker, pressed && styles.pressed]}>
               <Ionicons name={uploadFile ? "checkmark-circle" : "cloud-upload-outline"} size={22} color={uploadFile ? COBALT : CORAL} />
-              <View style={styles.filePickerCopy}><Text style={[styles.filePickerTitle, { color: colors.text }]}>{uploadFile ? uploadFile.name : editingTrack ? "Replace audio (optional)" : "Choose an audio file"}</Text><Text style={[styles.filePickerSub, { color: colors.textMuted }]}>{uploadFile ? "New audio ready" : editingTrack ? "Current audio stays unless replaced" : "MP3, M4A, or WAV"}</Text></View>
-              <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+              <View style={styles.filePickerCopy}><Text style={styles.filePickerTitle}>{uploadFile ? uploadFile.name : "Choose an audio file"}</Text><Text style={styles.filePickerSub}>{uploadFile ? "Ready to publish" : "MP3, M4A, WAV, OGG, or AAC"}</Text></View>
+              <Ionicons name="chevron-forward" size={17} color={MUTED} />
             </Pressable>
-            <Pressable onPress={() => void submitUpload()} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name={editingTrack ? "checkmark-circle-outline" : "arrow-up-circle-outline"} size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>{editingTrack ? "Save changes" : `Publish ${uploadMode === "free" ? "free track" : "paid track"}`}</Text></>}</Pressable>
+            <Pressable onPress={submitUpload} disabled={uploading} style={({ pressed }) => [styles.publishButton, pressed && styles.purchaseButtonPressed]}>{uploading ? <ActivityIndicator color={PAPER} /> : <><Ionicons name="arrow-up-circle-outline" size={18} color={PAPER} /><Text style={styles.purchaseButtonText}>Publish to AfuMusic</Text></>}</Pressable>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -965,62 +1292,82 @@ export default function AfuMusicApp({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, width: "100%" },
-  pageScroll: { flex: 1, width: "100%" },
-  pageContent: { paddingBottom: 24, width: "100%", maxWidth: 1120, alignSelf: "center" },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 15, paddingBottom: 14 },
-  topBarStart: { flexDirection: "row", alignItems: "center", gap: 8 },
-  backButton: { minWidth: 66, height: 34, paddingHorizontal: 10, borderRadius: 17, borderWidth: 0.5, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
-  backLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  coinBadge: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 4, marginTop: 2 },
+  root: { flex: 1 },
+  topBar: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 15, paddingBottom: 14 },
+  wordmark: { color: INK, fontFamily: "Inter_700Bold", fontSize: 29, letterSpacing: -1.3 },
+  wordmarkAccent: { color: CORAL },
+  privateLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 8, letterSpacing: 1.4, marginTop: 3 },
+  coinBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F0E3C6", paddingHorizontal: 11, paddingVertical: 8, borderRadius: 16, marginTop: 2 },
   coinText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 20, height: 46, paddingHorizontal: 12, borderRadius: 4, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, marginHorizontal: 20, height: 45, paddingHorizontal: 13, borderRadius: 14, backgroundColor: PAPER, borderWidth: 1, borderColor: "#E9DED2" },
   searchInput: { flex: 1, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
-  pressed: { opacity: 0.72 },
-  loadingState: { alignItems: "center", justifyContent: "center", paddingVertical: 42, gap: 12 },
-  loadingLabel: { fontFamily: "Inter_500Medium", fontSize: 12 },
-  contentHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 24, marginBottom: 12 },
-  sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 25, letterSpacing: -0.8 },
-  studioSummary: { fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 4 },
+  sectionRail: { marginTop: 15 },
+  sectionRailContent: { paddingHorizontal: 20, gap: 8 },
+  sectionPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, height: 35, borderRadius: 18, backgroundColor: "#EFE7DE" },
+  sectionPillActive: { backgroundColor: INK },
+  sectionPillLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
+  sectionPillLabelActive: { color: PAPER },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  heroCard: { overflow: "hidden", flexDirection: "row", minHeight: 205, marginHorizontal: 20, marginTop: 17, borderRadius: 25, backgroundColor: INK, padding: 19 },
+  heroCopy: { flex: 1, zIndex: 2 },
+  heroEyebrow: { color: "#AFA9C9", fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.5, marginBottom: 10 },
+  heroTitle: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 27, lineHeight: 29, letterSpacing: -0.8 },
+  heroBody: { color: "#B8B2C4", fontFamily: "Inter_500Medium", fontSize: 11, lineHeight: 16, maxWidth: 205, marginTop: 10 },
+  heroButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 8, backgroundColor: "#F4C469", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 13, marginTop: 14 },
+  heroButtonPressed: { backgroundColor: CORAL },
+  heroButtonText: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
+  heroDisc: { width: 120, justifyContent: "center", alignItems: "center", marginRight: -5 },
+  discOuter: { width: 126, height: 126, borderRadius: 70, backgroundColor: "#2C294B", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#514D70" },
+  discInner: { width: 97, height: 97, borderRadius: 55, backgroundColor: "#211E3B", alignItems: "center", justifyContent: "center", borderWidth: 7, borderColor: "#373359" },
+  discLabel: { width: 38, height: 38, borderRadius: 23, backgroundColor: "#F1BE68", alignItems: "center", justifyContent: "center" },
+  discNeedle: { position: "absolute", width: 5, height: 62, backgroundColor: CORAL, right: 7, top: 23, borderRadius: 5, transform: [{ rotate: "31deg" }] },
+  contentHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 20, marginTop: 22, marginBottom: 10 },
+  sectionEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.25, marginBottom: 4 },
+  sectionTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, letterSpacing: -0.65 },
   featuredBlock: { marginTop: 20 },
   featuredHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", paddingHorizontal: 20, marginBottom: 10 },
-  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4 },
+  featuredTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, letterSpacing: -0.4, marginTop: 3 },
   featuredRail: { paddingHorizontal: 20, gap: 12 },
-  featuredCard: { width: 124, paddingBottom: 8 },
+  featuredCard: { width: 112, paddingBottom: 5 },
   featuredCardTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginTop: 8 },
   featuredCardArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
   addButton: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: CORAL, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 12 },
   addButtonPressed: { backgroundColor: INK },
   addButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 11 },
   genreRail: { paddingHorizontal: 20, gap: 8, paddingBottom: 6 },
-  genreChip: { borderWidth: 1, borderColor: "#E2D8CE", borderRadius: 4, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: PAPER },
+  genreChip: { borderWidth: 1, borderColor: "#E2D8CE", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: PAPER },
   genreChipActive: { borderColor: INK, backgroundColor: INK },
   genreText: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 10 },
   genreTextActive: { color: PAPER },
+  listHint: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 11, marginBottom: 4 },
   trackList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28 },
-  trackRow: { flexDirection: "row", alignItems: "center", gap: 14, minHeight: 88, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#E8DED4" },
+  trackRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 82, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
   trackRowPressed: { opacity: 0.7, transform: [{ translateX: 2 }] },
   trackArt: { overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  artInitials: { color: "#FFFFFF", fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
   trackCopy: { flex: 1, minWidth: 0, gap: 3 },
   trackTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 14 },
   trackArtist: { color: "#645C55", fontFamily: "Inter_500Medium", fontSize: 11 },
   trackMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10 },
-  rowActions: { flexDirection: "row", alignItems: "center", gap: 9 },
-  managedActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  removeTrackButton: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  rowActions: { flexDirection: "row", alignItems: "center", gap: 6 },
   miniPlay: { width: 27, height: 27, borderRadius: 14, backgroundColor: CORAL, alignItems: "center", justifyContent: "center" },
   miniPlayPressed: { backgroundColor: INK, transform: [{ scale: 0.9 }] },
   priceText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
-
+  skeletonStack: { paddingHorizontal: 20, paddingTop: 14, gap: 14 },
+  skeletonRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  skeletonArt: { width: 64, height: 64, borderRadius: 16, backgroundColor: "#E9DED2" },
+  skeletonCopy: { flex: 1, gap: 9 },
+  skeletonLong: { height: 12, width: "58%", borderRadius: 6, backgroundColor: "#E9DED2" },
+  skeletonShort: { height: 9, width: "37%", borderRadius: 5, backgroundColor: "#EDE3D9" },
+  skeletonDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: "#EDE3D9" },
   emptyState: { alignItems: "center", paddingHorizontal: 45, paddingTop: 55 },
-  emptyIcon: { width: 55, height: 55, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
+  emptyIcon: { width: 55, height: 55, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "#F5D8D0", marginBottom: 15 },
   emptyTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 18, textAlign: "center" },
   emptyMessage: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 7, maxWidth: 280 },
-  outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
+  outlineButton: { borderWidth: 1, borderColor: CORAL, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10, marginTop: 18 },
   outlineButtonText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 11 },
   modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(25,23,47,0.42)" },
-  purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 23, paddingTop: 24, paddingBottom: 30 },
+  purchaseSheet: { alignItems: "center", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 23, paddingTop: 10, paddingBottom: 30 },
+  sheetHandle: { width: 38, height: 4, borderRadius: 3, backgroundColor: "#D4C7BC", marginBottom: 21 },
   purchaseKicker: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.45, marginTop: 15 },
   purchaseTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 24, textAlign: "center", marginTop: 5, letterSpacing: -0.5 },
   purchaseArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 4 },
@@ -1037,33 +1384,46 @@ const styles = StyleSheet.create({
   purchaseButtonText: { color: PAPER, fontFamily: "Inter_700Bold", fontSize: 13 },
   cancelButton: { padding: 14 },
   cancelText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 12 },
-  playerSheet: { flex: 1, alignItems: "center", backgroundColor: CANVAS, paddingHorizontal: 22, paddingTop: 10 },
-  sheetHeader: { width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 30 },
-  sheetEyebrow: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.5 },
-  playerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 24, marginTop: 24, textAlign: "center" },
-  playerArtist: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 5, marginBottom: 24 },
-  playerUnavailable: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: INK, borderRadius: 22, paddingVertical: 14, paddingHorizontal: 18 },
-  playerUnavailableText: { color: "#D0CADC", fontFamily: "Inter_500Medium", fontSize: 11, textAlign: "center", flex: 1 },
-  playerNote: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 21 },
-  playerNoteText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
-  uploadSheet: { backgroundColor: CANVAS, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 21, paddingTop: 24, paddingBottom: 27, maxHeight: "92%" },
-  uploadFormScroll: { flexShrink: 1 },
-  uploadFormContent: { paddingBottom: 4 },
-  coverPicker: { flexDirection: "row", alignItems: "center", gap: 11, borderWidth: 1, borderStyle: "dashed", borderRadius: 15, padding: 10, marginTop: 2 },
-  coverPreview: { width: 56, height: 56, borderRadius: 10, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  playlistList: { paddingHorizontal: 20, paddingBottom: 28, gap: 9 },
+  playlistCard: { minHeight: 76, flexDirection: "row", alignItems: "center", gap: 13, padding: 9, borderRadius: 17, backgroundColor: PAPER },
+  playlistMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 11 },
+  playlistCopy: { flex: 1, minWidth: 0 },
+  playlistTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
+  playlistMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 4 },
+  playlistSheet: { maxHeight: "88%", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 27 },
+  playlistModalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 15 },
+  playlistModalTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 22, marginTop: 5 },
+  playlistTrackPreview: { flexDirection: "row", alignItems: "center", gap: 11, padding: 9, borderRadius: 14, backgroundColor: PAPER, marginBottom: 13 },
+  playlistCreateButton: { height: 46, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: CORAL, borderRadius: 14, marginTop: 10 },
+  playlistListLabel: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 9, letterSpacing: 1.1, marginTop: 17, marginBottom: 7 },
+  playlistChoices: { maxHeight: 210 },
+  playlistChoice: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "#E8DED4" },
+  ledgerList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28, gap: 8 },
+  ledgerRow: { minHeight: 68, flexDirection: "row", alignItems: "center", gap: 11, padding: 10, borderRadius: 15, backgroundColor: PAPER },
+  ledgerIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#F064511A" },
+  ledgerCopy: { flex: 1, minWidth: 0 },
+  ledgerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11 },
+  ledgerMeta: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 9, marginTop: 4 },
+  ledgerAmount: { color: INK, fontFamily: "Inter_700Bold", fontSize: 10 },
+  uploadSheet: { maxHeight: "92%", backgroundColor: CANVAS, borderTopLeftRadius: 29, borderTopRightRadius: 29, paddingHorizontal: 21, paddingTop: 10, paddingBottom: 12 },
   uploadHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
   fieldLabel: { color: INK, fontFamily: "Inter_700Bold", fontSize: 11, marginBottom: 7, marginTop: 10 },
   formInput: { height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13, color: INK, fontFamily: "Inter_500Medium", fontSize: 13 },
-  uploadModeRow: { flexDirection: "row", borderWidth: 1, borderRadius: 4, overflow: "hidden" },
-  uploadModeOption: { flex: 1, paddingVertical: 10, paddingHorizontal: 12 },
-  uploadModeTitle: { fontFamily: "Inter_700Bold", fontSize: 12 },
-  uploadModeHint: { fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
-  uploadEligibility: { fontFamily: "Inter_500Medium", fontSize: 11, marginTop: 7 },
   formGenreRail: { gap: 7, paddingBottom: 3 },
   formGenreChip: { borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, borderRadius: 13, paddingHorizontal: 11, paddingVertical: 8 },
   formGenreChipActive: { borderColor: INK, backgroundColor: INK },
   formGenreText: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 10 },
   formGenreTextActive: { color: PAPER },
+  publishModes: { flexDirection: "row", gap: 8 },
+  publishMode: { flex: 1, height: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER },
+  publishModeActive: { borderColor: INK, backgroundColor: INK },
+  publishModeText: { color: MUTED, fontFamily: "Inter_700Bold", fontSize: 12 },
+  publishModeTextActive: { color: PAPER },
+  freePublishingNote: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 8 },
+  videoUseToggle: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12, paddingVertical: 7 },
+  videoUseCopy: { flex: 1 },
+  videoUseTitle: { color: INK, fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  videoUseNote: { color: MUTED, fontFamily: "Inter_400Regular", fontSize: 9, marginTop: 3 },
   priceInput: { flexDirection: "row", alignItems: "center", height: 44, borderRadius: 13, borderWidth: 1, borderColor: "#E2D8CE", backgroundColor: PAPER, paddingHorizontal: 13 },
   priceTextInput: { flex: 1, color: INK, fontFamily: "Inter_700Bold", fontSize: 13, marginLeft: 7 },
   acoinSuffix: { color: MUTED, fontFamily: "Inter_600SemiBold", fontSize: 11 },
@@ -1071,5 +1431,7 @@ const styles = StyleSheet.create({
   filePickerCopy: { flex: 1 },
   filePickerTitle: { color: INK, fontFamily: "Inter_700Bold", fontSize: 12 },
   filePickerSub: { color: MUTED, fontFamily: "Inter_500Medium", fontSize: 10, marginTop: 3 },
+  coverPickButton: { minHeight: 36, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, borderRadius: 11, backgroundColor: PAPER },
+  coverPickText: { color: CORAL, fontFamily: "Inter_700Bold", fontSize: 10 },
   publishButton: { height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: CORAL, borderRadius: 15, marginTop: 17 },
 });

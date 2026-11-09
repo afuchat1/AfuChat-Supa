@@ -9,11 +9,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { router } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 
 type LegalPageKind = "terms" | "privacy" | "account-deletion" | "child-safety";
 
@@ -22,6 +19,11 @@ type Section = {
   paragraphs?: string[];
   bullets?: string[];
 };
+
+const INK = "#102033";
+const MUTED = "#607086";
+const BORDER = "#e5ebf2";
+const SOFT_BLUE = "#edf6ff";
 
 const PAGES: Record<
   LegalPageKind,
@@ -255,46 +257,19 @@ const PAGES: Record<
   },
 };
 
-/**
- * Export the exact public document copy shown by this page for AfuAI.
- * Keeping this derived from PAGES prevents the assistant's legal text from
- * drifting away from what users actually see.
- */
-export function getLegalPageKnowledge(): string {
-  return (Object.entries(PAGES) as [LegalPageKind, (typeof PAGES)[LegalPageKind]][])
-    .map(([kind, page]) => {
-      const lines = [
-        `Page: ${page.title}`,
-        `Page label: ${page.eyebrow}`,
-        `Introduction: ${page.intro}`,
-        page.updated ?? "Last updated: August 14, 2026",
-        "Review this document here in AfuChat. Related account and privacy controls are available in Settings.",
-      ];
-      for (const section of page.sections) {
-        lines.push(section.title);
-        if (section.paragraphs) lines.push(...section.paragraphs);
-        if (section.bullets) lines.push(...section.bullets.map((bullet) => `• ${bullet}`));
-      }
-      lines.push("Connect · Discover · Create");
-      return `## ${kind}\n${lines.join("\n")}`;
-    })
-    .join("\n\n");
-}
-
 function navigateTo(path: string) {
-  router.push(path as any);
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    window.location.assign(path);
+    return;
+  }
+  Linking.openURL(`https://afuchat.com${path}`).catch(() => {});
 }
 
-function navigateBack() {
-  if (router.canGoBack()) router.back();
-  else router.replace("/");
-}
-
-function LegalSection({ section, accent, colors }: { section: Section; accent: string; colors: any }) {
+function LegalSection({ section, accent }: { section: Section; accent: string }) {
   const renderParagraph = (paragraph: string) => {
     const parts = paragraph.split(/(support@afuchat\.com|hello@afuchat\.com)/g);
     return (
-      <Text style={[styles.paragraph, { color: colors.textSecondary }]}>
+      <Text style={styles.paragraph}>
         {parts.map((part, index) =>
           part === "support@afuchat.com" || part === "hello@afuchat.com" ? (
             <Text
@@ -315,8 +290,8 @@ function LegalSection({ section, accent, colors }: { section: Section; accent: s
   };
 
   return (
-    <View style={[styles.section, { borderBottomColor: colors.border }]}>
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{section.title}</Text>
       {section.paragraphs?.map((paragraph) => (
         <React.Fragment key={paragraph}>{renderParagraph(paragraph)}</React.Fragment>
       ))}
@@ -325,7 +300,7 @@ function LegalSection({ section, accent, colors }: { section: Section; accent: s
           {section.bullets.map((bullet) => (
             <View key={bullet} style={styles.bulletRow}>
               <View style={[styles.bullet, { backgroundColor: accent }]} />
-              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>{bullet}</Text>
+              <Text style={styles.bulletText}>{bullet}</Text>
             </View>
           ))}
         </View>
@@ -335,109 +310,91 @@ function LegalSection({ section, accent, colors }: { section: Section; accent: s
 }
 
 export default function LegalPage({ kind }: { kind: LegalPageKind }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const BRAND = colors.accent;
   const page = PAGES[kind];
   const { width } = useWindowDimensions();
   const compact = width < 720;
-  const insets = useSafeAreaInsets();
 
   return (
     <ScrollView
-      style={[styles.root, { backgroundColor: colors.background }]}
+      style={styles.root}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[
-        styles.header,
-        { backgroundColor: colors.background, borderBottomColor: colors.border },
-        Platform.OS !== "web" && { paddingTop: insets.top },
-      ]}>
-        <View style={[styles.nav, compact && styles.navCompact, Platform.OS !== "web" && styles.navNative]}>
-          {Platform.OS !== "web" && (
-            <Pressable
-              onPress={navigateBack}
-              style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={8}
-            >
-              <Ionicons name="arrow-back" size={20} color={isDark ? "#FFFFFF" : "#000000"} />
-            </Pressable>
-          )}
+      <View style={styles.header}>
+        <View style={[styles.nav, compact && styles.navCompact]}>
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
-            <AfuChatWordmark
-              style={[styles.logo, { color: colors.text }]}
-              accentColor={BRAND}
-            />
+            <Text style={styles.logo}>
+              Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
+            </Text>
           </Pressable>
           {!compact && (
             <View style={styles.navLinks}>
               <Pressable onPress={() => navigateTo("/terms")} accessibilityRole="link">
-                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Terms</Text>
+                <Text style={styles.navLink}>Terms</Text>
               </Pressable>
               <Pressable onPress={() => navigateTo("/privacy")} accessibilityRole="link">
-                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Privacy</Text>
+                <Text style={styles.navLink}>Privacy</Text>
               </Pressable>
               <Pressable onPress={() => navigateTo("/account-deletion")} accessibilityRole="link">
-                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Account deletion</Text>
+                <Text style={styles.navLink}>Account deletion</Text>
               </Pressable>
               <Pressable onPress={() => navigateTo("/child-safety")} accessibilityRole="link">
-                <Text style={[styles.navLink, { color: colors.textSecondary }]}>Child safety</Text>
+                <Text style={styles.navLink}>Child safety</Text>
               </Pressable>
             </View>
           )}
         </View>
       </View>
 
-      <View style={[styles.hero, { backgroundColor: colors.background }, compact && styles.heroCompact]}>
+      <View style={[styles.hero, compact && styles.heroCompact]}>
         <View style={styles.heroInner}>
-          <View style={[styles.iconCircle, { backgroundColor: colors.surface }]}>
+          <View style={styles.iconCircle}>
             <Ionicons name={page.icon} size={25} color={BRAND} />
           </View>
-          <Text style={[styles.eyebrow, { color: colors.accent }]}>{page.eyebrow}</Text>
-          <Text style={[styles.title, { color: colors.text }, compact && styles.titleCompact]}>{page.title}</Text>
-          <Text style={[styles.intro, { color: colors.textSecondary }]}>{page.intro}</Text>
-          <Text style={[styles.updated, { color: colors.textMuted }]}>{page.updated ?? "Last updated: August 14, 2026"}</Text>
+          <Text style={styles.eyebrow}>{page.eyebrow}</Text>
+          <Text style={[styles.title, compact && styles.titleCompact]}>{page.title}</Text>
+          <Text style={styles.intro}>{page.intro}</Text>
+          <Text style={styles.updated}>{page.updated ?? "Last updated: August 14, 2026"}</Text>
         </View>
       </View>
 
       <View style={[styles.content, compact && styles.contentCompact]}>
-        <View style={[styles.notice, { backgroundColor: colors.surface }]}>
+        <View style={styles.notice}>
           <Ionicons name="information-circle-outline" size={20} color={BRAND} />
-          <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-            {"Review this document here in AfuChat. Related account and privacy controls are available in Settings."}
+          <Text style={styles.noticeText}>
+            AfuChat’s legal pages are published for the web. Account actions and app settings remain inside the authenticated AfuChat app.
           </Text>
         </View>
         {page.sections.map((section) => (
-          <LegalSection key={section.title} section={section} accent={BRAND} colors={colors} />
+          <LegalSection key={section.title} section={section} accent={BRAND} />
         ))}
       </View>
 
-      <View style={[styles.footer, { backgroundColor: colors.background }]}>
-        <AfuChatWordmark
-          style={[styles.footerLogo, { color: colors.text }]}
-          accentColor={BRAND}
-        />
-        <Text style={[styles.footerText, { color: colors.textMuted }]}>Connect · Discover · Create</Text>
+      <View style={styles.footer}>
+           <Text style={styles.footerLogo}>
+           Afu<Text style={[styles.logoAccent, { color: BRAND }]}>Chat</Text>
+        </Text>
+        <Text style={styles.footerText}>Connect · Discover · Create</Text>
         <View style={styles.footerLinks}>
           <Pressable onPress={() => navigateTo("/terms")} accessibilityRole="link">
-            <Text style={[styles.footerLink, { color: colors.accent }]}>Terms</Text>
+            <Text style={styles.footerLink}>Terms</Text>
           </Pressable>
           <Pressable onPress={() => navigateTo("/privacy")} accessibilityRole="link">
-            <Text style={[styles.footerLink, { color: colors.accent }]}>Privacy</Text>
+            <Text style={styles.footerLink}>Privacy</Text>
           </Pressable>
           <Pressable onPress={() => navigateTo("/account-deletion")} accessibilityRole="link">
-            <Text style={[styles.footerLink, { color: colors.accent }]}>Account deletion</Text>
+            <Text style={styles.footerLink}>Account deletion</Text>
           </Pressable>
           <Pressable onPress={() => navigateTo("/child-safety")} accessibilityRole="link">
-            <Text style={[styles.footerLink, { color: colors.accent }]}>Child safety standards</Text>
+            <Text style={styles.footerLink}>Child safety standards</Text>
           </Pressable>
           <Pressable
             onPress={() => Linking.openURL("mailto:support@afuchat.com").catch(() => {})}
             accessibilityRole="link"
           >
-            <Text style={[styles.footerLink, { color: colors.accent }]}>Contact support</Text>
+            <Text style={styles.footerLink}>Contact support</Text>
           </Pressable>
         </View>
       </View>
@@ -446,10 +403,12 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#f7faff" },
   scrollContent: { minHeight: "100%" as any },
   header: {
+    backgroundColor: "#07111f",
     borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   nav: {
     width: "100%" as any,
@@ -462,19 +421,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   navCompact: { paddingHorizontal: 20, minHeight: 68 },
-  navNative: { justifyContent: "flex-start", gap: 12, minHeight: 60 },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   logo: { color: "#fff", fontSize: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.8 },
+  logoAccent: {},
   navLinks: { flexDirection: "row", alignItems: "center", gap: 26 },
   navLink: { color: "rgba(255,255,255,0.68)", fontSize: 13, fontFamily: "Inter_500Medium" },
-  hero: { paddingHorizontal: 28, paddingBottom: 58 },
+  hero: { backgroundColor: "#07111f", paddingHorizontal: 28, paddingBottom: 58 },
   heroCompact: { paddingHorizontal: 20, paddingBottom: 42 },
   heroInner: { width: "100%" as any, maxWidth: 820, alignSelf: "center", paddingTop: 42 },
   iconCircle: {
@@ -500,9 +451,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: -1.8,
     marginBottom: 16,
-    minWidth: 0,
-    flexShrink: 1,
-    textAlign: "left",
   },
   titleCompact: { fontSize: 36, lineHeight: 43, letterSpacing: -1.2 },
   intro: {
@@ -511,18 +459,12 @@ const styles = StyleSheet.create({
     lineHeight: 27,
     fontFamily: "Inter_400Regular",
     maxWidth: 720,
-    minWidth: 0,
-    flexShrink: 1,
-    textAlign: "left",
   },
   updated: {
     color: "rgba(255,255,255,0.42)",
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     marginTop: 22,
-    minWidth: 0,
-    flexShrink: 1,
-    textAlign: "left",
   },
   content: {
     width: "100%" as any,
@@ -537,39 +479,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
+    backgroundColor: SOFT_BLUE,
     borderRadius: 16,
     padding: 16,
     marginBottom: 26,
   },
   noticeText: {
     flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
     color: "#35516e",
     fontSize: 13,
     lineHeight: 20,
     fontFamily: "Inter_500Medium",
-    textAlign: "left",
   },
-  section: { paddingVertical: 20, borderBottomWidth: 1 },
+  section: { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: BORDER },
   sectionTitle: {
+    color: INK,
     fontSize: 20,
     lineHeight: 27,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.35,
     marginBottom: 12,
-    minWidth: 0,
-    flexShrink: 1,
-    textAlign: "left",
   },
   paragraph: {
+    color: MUTED,
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
     marginBottom: 11,
-    minWidth: 0,
-    flexShrink: 1,
-    textAlign: "left",
   },
   emailLink: {
     textDecorationLine: "underline",
@@ -585,14 +521,13 @@ const styles = StyleSheet.create({
   },
   bulletText: {
     flex: 1,
-    minWidth: 0,
-    flexShrink: 1,
+    color: MUTED,
     fontSize: 15,
     lineHeight: 25,
     fontFamily: "Inter_400Regular",
-    textAlign: "left",
   },
   footer: {
+    backgroundColor: "#07111f",
     alignItems: "center",
     paddingHorizontal: 24,
     paddingVertical: 36,

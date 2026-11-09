@@ -16,7 +16,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
@@ -202,7 +201,9 @@ export default function ArticleDetailScreen() {
         <>
           {/* Minimal header while loading */}
           <View style={[st.topBar, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
-            <GlassBackButton onPress={() => router.back()} style={st.topBarBtn} />
+            <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={st.topBarBtn}>
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
           </View>
           <View style={st.center}>
             <ActivityIndicator color={accent} size="large" />
@@ -211,7 +212,9 @@ export default function ArticleDetailScreen() {
       ) : !article ? (
         <>
           <View style={[st.topBar, { paddingTop: insets.top + 6, backgroundColor: colors.background }]}>
-            <GlassBackButton onPress={() => router.back()} style={st.topBarBtn} />
+            <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={st.topBarBtn}>
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
           </View>
           <View style={st.center}>
             <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
@@ -228,19 +231,25 @@ export default function ArticleDetailScreen() {
             {/* ── Hero cover image with floating back/share buttons ── */}
             <View>
               {coverImage ? (
-                <View style={[st.heroWrap, { backgroundColor: colors.backgroundSecondary }]}>
+                <View style={st.heroWrap}>
                   <CachedImage uri={coverImage} style={st.heroImage} contentFit="cover" priority="high" />
                   {/* Scrim so buttons are always readable */}
                   <View style={st.heroScrim} />
                 </View>
               ) : (
                 /* Spacer so back button has room even without an image */
-                <View style={[st.heroWrap, { backgroundColor: colors.backgroundSecondary, height: 120 }]} />
+                <View style={[st.heroWrap, { backgroundColor: isDark ? "#1a1a24" : "#e8e0d0", height: 120 }]} />
               )}
 
               {/* Floating action row over the hero */}
               <View style={[st.heroActions, { paddingTop: insets.top + 8 }]}>
-                <GlassBackButton onPress={() => router.back()} style={st.heroBtn} />
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  hitSlop={10}
+                  style={st.heroBtn}
+                >
+                  <Ionicons name="arrow-back" size={22} color="#fff" />
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => sharePost({ postId: article.id, authorName: article.profile.display_name, content: article.article_title || article.content })}
                   hitSlop={10}
@@ -357,7 +366,7 @@ const st = StyleSheet.create({
   center:     { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   topBar:     { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingBottom: 10 },
   topBarBtn:  { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  heroWrap:   { width: "100%", height: 260 },
+  heroWrap:   { width: "100%", height: 260, backgroundColor: "#111" },
   heroImage:  { width: "100%", height: 260 },
   heroScrim:  { ...StyleSheet.absoluteFill, backgroundColor: "transparent" },
   heroActions:{ position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 8 },

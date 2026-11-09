@@ -9,50 +9,23 @@
 import NetInfo from "@react-native-community/netinfo";
 
 export type NetworkType = "wifi" | "cellular" | "unknown";
-export type NetworkProfile = {
-  type: NetworkType;
-  connected: boolean | null;
-  cellularGeneration: string | null;
-  expensive: boolean | null;
-};
 
 // Cached value — updated by the subscriber below
 let _type: NetworkType = "unknown";
 let _connected: boolean | null = null;
-let _cellularGeneration: string | null = null;
-let _expensive: boolean | null = null;
 let _subscribed = false;
-const _profileListeners = new Set<(profile: NetworkProfile) => void>();
-
-function snapshot(): NetworkProfile {
-  return {
-    type: _type,
-    connected: _connected,
-    cellularGeneration: _cellularGeneration,
-    expensive: _expensive,
-  };
-}
-
-function updateFromState(state: any): void {
-  _type = state.type === "wifi" ? "wifi" : state.type === "cellular" ? "cellular" : "unknown";
-  _connected = state.isConnected ?? null;
-  _cellularGeneration = _type === "cellular"
-    ? (state.details?.cellularGeneration ?? null)
-    : null;
-  _expensive = typeof state.details?.isConnectionExpensive === "boolean"
-    ? state.details.isConnectionExpensive
-    : null;
-  const current = snapshot();
-  _profileListeners.forEach((listener) => {
-    try { listener(current); } catch {}
-  });
-}
 
 function ensureSubscribed() {
   if (_subscribed) return;
   _subscribed = true;
-  NetInfo.fetch().then(updateFromState).catch(() => {});
-  NetInfo.addEventListener(updateFromState);
+  NetInfo.fetch().then((s) => {
+    _type = s.type === "wifi" ? "wifi" : s.type === "cellular" ? "cellular" : "unknown";
+    _connected = s.isConnected;
+  });
+  NetInfo.addEventListener((state) => {
+    _type = state.type === "wifi" ? "wifi" : state.type === "cellular" ? "cellular" : "unknown";
+    _connected = state.isConnected;
+  });
 }
 
 /** Current network type (synchronous, cached). */
@@ -63,22 +36,6 @@ export function getNetworkType(): NetworkType {
   // eager NetInfo listener competing with offlineStore.
   ensureSubscribed();
   return _type;
-}
-
-/** Current cached network profile. No probe or network request is made. */
-export function getNetworkProfile(): NetworkProfile {
-  ensureSubscribed();
-  return snapshot();
-}
-
-/** Subscribe to changes in Wi-Fi/cellular generation and metering state. */
-export function subscribeToNetworkProfileChanges(
-  callback: (profile: NetworkProfile) => void,
-): () => void {
-  ensureSubscribed();
-  _profileListeners.add(callback);
-  callback(snapshot());
-  return () => _profileListeners.delete(callback);
 }
 
 export function isWifi(): boolean {
@@ -113,30 +70,16 @@ export function subscribeToNetworkChanges(callback: (offline: boolean) => void):
 }
 
 /**
- * Conservative video rendition height. Unknown and metered connections avoid
- * high-resolution sources until NetInfo confirms an unmetered Wi-Fi network.
+ * Preferred video rendition height for current network.
+ *  - WiFi      → 720p  (best quality)
+ *  - Cellular  → 360p  (save 75%+ data vs 720p)
+ *  - Unknown   → 480p  (safe middle ground)
  */
-export function getPreferredVideoHeight(profile = getNetworkProfile()): 240 | 360 | 720 {
-  if (profile.type === "wifi" && profile.expensive !== true) return 720;
-  if (profile.type === "cellular" && profile.cellularGeneration === "2g") return 240;
-  return 360;
-}
-
-/** Maximum preferred rendition bitrate; source selection still respects height. */
-export function getPreferredVideoMaxBitrateKbps(profile = getNetworkProfile()): number {
-  if (profile.type === "wifi" && profile.expensive !== true) return 4_000;
-  if (profile.type === "cellular") {
-    if (profile.cellularGeneration === "2g") return 400;
-    if (profile.cellularGeneration === "3g") return 700;
-    if (profile.cellularGeneration === "5g") return 1_500;
-    return 1_000;
-  }
-  return 650;
-}
-
-/** Only warm the next video on Wi-Fi; never prefetch on cellular/unknown. */
-export function shouldPreloadAdjacentVideo(profile = getNetworkProfile()): boolean {
-  return profile.type === "wifi" && profile.connected !== false && profile.expensive !== true;
+export function getPreferredVideoHeight(): 360 | 480 | 720 {
+  const t = getNetworkType();
+  if (t === "wifi") return 720;
+  if (t === "cellular") return 360;
+  return 480;
 }
 
 /**

@@ -2,16 +2,16 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -122,7 +122,9 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -137,7 +139,9 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -162,7 +166,9 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -192,7 +198,9 @@ export default function SellerApplyScreen() {
     return (
       <View style={[st.root, { backgroundColor: colors.background }]}>
         <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[st.headerTitle, { color: colors.text }]}>Seller Application</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -225,7 +233,9 @@ export default function SellerApplyScreen() {
   return (
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[st.header, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
+        </TouchableOpacity>
         <Text style={[st.headerTitle, { color: colors.text }]}>Become a Seller</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -244,7 +254,7 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Section: Business Info */}
-          <View style={[st.card, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.card, { backgroundColor: colors.surface }]}>
             <Text style={[st.sectionLabel, { color: colors.text }]}>Business Information</Text>
 
             <Label text="Business Name *" />
@@ -299,7 +309,7 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Section: Contact */}
-          <View style={[st.card, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.card, { backgroundColor: colors.surface }]}>
             <Text style={[st.sectionLabel, { color: colors.text }]}>Contact & Location</Text>
 
             <Label text="Phone Number *" />
@@ -343,14 +353,13 @@ export default function SellerApplyScreen() {
           </View>
 
           {/* Section: Social */}
-          <View style={[st.card, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.card, { backgroundColor: colors.surface }]}>
             <Text style={[st.sectionLabel, { color: colors.text }]}>Social Media (optional)</Text>
 
             <Label text="Instagram Handle" />
             <View style={[st.prefixInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[st.prefix, { color: colors.textMuted }]}>@</Text>
               <TextInput
-                appearance="embedded"
                 style={[st.prefixText, { color: colors.text }]}
                 placeholder="yourbusiness"
                 placeholderTextColor={colors.textMuted}
@@ -364,7 +373,6 @@ export default function SellerApplyScreen() {
             <View style={[st.prefixInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[st.prefix, { color: colors.textMuted }]}>fb.com/</Text>
               <TextInput
-                appearance="embedded"
                 style={[st.prefixText, { color: colors.text }]}
                 placeholder="yourbusiness"
                 placeholderTextColor={colors.textMuted}
@@ -378,7 +386,6 @@ export default function SellerApplyScreen() {
             <View style={[st.prefixInput, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
               <Text style={[st.prefix, { color: colors.textMuted }]}>@</Text>
               <TextInput
-                appearance="embedded"
                 style={[st.prefixText, { color: colors.text }]}
                 placeholder="yourbusiness"
                 placeholderTextColor={colors.textMuted}
@@ -392,7 +399,7 @@ export default function SellerApplyScreen() {
           {/* Terms note */}
           <TouchableOpacity
             style={[st.termsBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => router.push("/terms")}
+            onPress={() => Linking.openURL("https://afuchat.com/terms").catch(() => {})}
             activeOpacity={0.8}
           >
             <Ionicons name="shield-checkmark" size={15} color={colors.accent} />

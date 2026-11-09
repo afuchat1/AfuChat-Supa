@@ -1,92 +1,148 @@
 /**
  * AfuChat platform knowledge — injected into every AfuAI system prompt.
  *
- * Route paths are generated from Expo Router's app/ tree. This file adds
- * feature descriptions and user guidance without maintaining a second route
- * inventory that can drift out of sync.
- *
+ * This file is the single source of truth for:
+ *  - All navigation routes and what they do
  *  - All platform features and concepts
  *  - Common how-to guidance the AI uses to answer user questions
  */
-import { getLegalPageKnowledge } from "@/components/web/LegalPage";
-import { getAppRouteIndex, isValidInternalRoute } from "./routeCatalog";
-import { APP_ROUTE_IDS } from "./superapp/appRouteIds";
-
-const ROUTE_DESCRIPTIONS: Record<string, string> = {
-  "/": "Home feed",
-  "/about": "About AfuChat",
-  "/apps": "Apps directory",
-  "/app/[appId]": "AfuChat mini-app route; use a real app id from the list below.",
-  "/discover": "Discover posts, people, and trending content",
-  "/communities": "Communities and groups",
-  "/contacts": "Contacts",
-  "/search": "Search AfuChat",
-  "/me": "Your profile",
-  "/chat/new": "Start a direct message",
-  "/moments": "Moments feed",
-  "/post/[id]": "Open a post by its id",
-  "/premium": "Gold and Platinum subscription plans",
-  "/profile/edit": "Edit your profile",
-  "/settings": "Settings",
-  "/settings/security": "Security settings",
-  "/settings/privacy": "Privacy settings",
-  "/support": "Support",
-  "/terms": "Terms of Service",
-  "/privacy": "Privacy Policy",
-  "/account-deletion": "Account deletion instructions",
-  "/child-safety": "Child Safety Standards",
-};
-
-function routeSummary(route: string): string {
-  if (ROUTE_DESCRIPTIONS[route]) return ROUTE_DESCRIPTIONS[route];
-  if (route.includes("[")) return "Dynamic page; replace bracketed parameters with real values.";
-  return route
-    .split("/")
-    .filter(Boolean)
-    .map((part) => part.replaceAll("-", " "))
-    .join(" → ") || "Home";
-}
-
-const GENERATED_ROUTE_DIRECTORY = getAppRouteIndex()
-  .map((route) => `| ${route} | ${routeSummary(route)} |`)
-  .join("\n");
-const CONCRETE_APP_ROUTES = APP_ROUTE_IDS
-  .map((id) => `| /app/${id} | ${id.replaceAll("afu", "Afu")} |`)
-  .join("\n");
 
 export const PLATFORM_NAV_MAP = `
-## AFUCHAT — VERIFIED ROUTE DIRECTORY
+## AFUCHAT — COMPLETE NAVIGATION MAP
 
-The route table below is generated from the current Expo Router app/ files.
-Only these screens exist. Use the exact route spelling shown. Bracketed values
-are parameters and must be replaced with real values; never emit brackets as a
-literal destination. App destinations use only the concrete app ids listed
-below. Navigation knowledge does not bypass sign-in, permissions, or access
-controls on a destination.
+### MAIN TABS (bottom navigation bar)
+| Route | Name | What it does |
+|---|---|---|
+| / (home) | Home Feed | Posts, stories, and updates from people you follow |
+| /discover | Discover | Trending content, hashtags, new people to follow |
+| /communities | Communities | Groups/communities to join and chat in |
+| /contacts | Contacts | Your contacts and friend list |
+| /apps | Apps | Wallet, marketplace, games, music, events, and other AfuChat tools |
+| /search | Search | Find people, posts, videos, jobs, events, gifts, market items |
+| /me | My Profile | Your personal profile and stats |
 
-### Concrete app destinations
-| Route | App |
+### MESSAGING
+| Route | What it does |
 |---|---|
-${CONCRETE_APP_ROUTES}
+| /chat/[id] | Open a specific conversation |
+| /chat/new | Start a new direct message conversation |
+| /contact/[id] | View a specific contact's profile |
 
-### App route files
-| Route pattern | Page |
+### CONTENT CREATION & VIEWING
+| Route | What it does |
 |---|---|
-${GENERATED_ROUTE_DIRECTORY}
+| /moments | Short-form video feed (like TikTok/Reels) |
+| /moments/create | Create a new photo or text post |
+| /moments/create-video | Upload a video post |
+| /moments/create-article | Write a long-form article |
+| /moments/create-duet | Duet/collab with another user's video |
+| /shorts | Vertical short video feed |
+| /stories/view | View someone's 24-hour story |
+| /post/[id] | View a specific post and its comments |
+| /video/[id] | Full-screen video player |
+| /article/[id] | Read an article |
+| /p/[id] | Public/short link to any content |
+| /app/afusaved | Posts you have bookmarked/saved |
+| /my-posts | All posts you have created |
 
-### Common app sections
-| Destination | Supported section |
+### WALLET & FINANCE
+| Route | What it does |
 |---|---|
-| /app/afupay | home, history, topup, send, receive, exchange, requests, services, airtime, bills, data-bundles, fee-details, hotels, tickets, transfer, request |
-| /app/afumarket | cart, orders, manage, apply, storefront, product, order |
-| /app/afugifts | marketplace |
-| /app/afumatch | preferences, settings, profile, onboarding, view-profile, conversation |
-| /app/afumusic | discover, library, offline, studio |
+| /app/afupay | Main wallet — ACoins balance, transaction history |
+| /app/afupay?section=topup | Add ACoins to your wallet (buy credits) |
+| /app/afupay?section=requests | View and manage payment requests |
+| /app/afupay?section=send | Send ACoin or Nexa to another user |
+| /app/afupay?section=receive | Show your Wallet QR and AfuPay ID |
+| /red-envelope/[id] | Send or receive a red envelope (group money gift) |
 
-For an app section, use the same base path with ?section=<supported section>.
-Use query parameters only when the destination needs them, such as q for
-search, id for a specific product, or userId for a shop.
+### SOCIAL & DISCOVERY
+| Route | What it does |
+|---|---|
+| /[handle] or /@handle | View any user's public profile |
+| /profile/edit | Edit your own profile (name, bio, avatar, etc.) |
+| /followers | See your followers and following list |
+| /user-discovery | Discover new people to follow |
+| /digital-id | Your AfuChat digital identity card (shareable QR) |
+| /prestige | XP leaderboard and prestige rankings |
+| /app/afuusernames | Browse, buy, or sell rare usernames |
+| /app/afumatch | Social matching — find compatible people |
+| /app/afumatch?section=preferences | Set your matching preferences |
+| /app/afumatch?section=onboarding | Set up your match profile |
 
+### GIFTS
+| Route | What it does |
+|---|---|
+| /app/afugifts | Your gift overview and received gifts |
+| /app/afugifts?section=marketplace | Browse and buy virtual gifts to send to creators |
+
+### COMMERCE & SHOPPING
+| Route | What it does |
+|---|---|
+| /app/afumarket?section=storefront&userId=... | Browse a specific user's shop |
+| /app/afumarket?section=product&id=... | View a product listing |
+| /app/afumarket?section=cart | Your shopping cart |
+| /app/afumarket?section=orders | Track your past orders |
+| /app/afumarket?section=manage | Set up and manage your own shop |
+| /app/afumarket?section=apply | Apply to become a verified seller |
+
+### COMPANY & PROFESSIONAL
+| Route | What it does |
+|---|---|
+| /company | Browse all company/organisation pages |
+| /company/[slug] | View a specific company page |
+| /company/manage | Manage your own company page |
+| /app/afufreelance | Browse freelance opportunities and gigs |
+
+### WALLET SERVICES (built-in utilities — all inside Wallet)
+| Route | What it does |
+|---|---|
+| /app/afupay?section=airtime | Buy mobile airtime/top-up |
+| /app/afupay?section=bills | Pay electricity, water, TV bills |
+| /app/afupay?section=data-bundles | Buy internet data bundles |
+| /app/afupay?section=hotels | Book hotel rooms |
+| /app/afupay?section=tickets | Buy event/concert tickets |
+| /app/afupay?section=transfer | Send money to another person or bank |
+| /app/afupay?section=fee-details | View transaction fee schedules |
+
+### PREMIUM & MONETISATION
+| Route | What it does |
+|---|---|
+| /premium | View Gold and Platinum subscription plans and subscribe |
+| /monetize | Creator monetisation options |
+
+### SETTINGS
+| Route | What it does |
+|---|---|
+| /settings | Main settings menu |
+| /settings/security | Password, 2FA, linked accounts |
+| /settings/two-factor | Enable/disable two-factor authentication |
+| /settings/oauth-providers | Manage linked social accounts (GitHub, X) |
+| /settings/privacy | Privacy overview |
+| /settings/privacy-account | Who can see your account |
+| /settings/privacy-visibility | Profile visibility settings |
+| /settings/privacy-messages | Who can message you |
+| /settings/privacy-interactions | Who can interact with your posts |
+| /settings/privacy-download | Download your data |
+| /settings/privacy-data | Data usage settings |
+| /settings/privacy-restricted | Restricted accounts |
+| /settings/blocked | Manage blocked accounts |
+| /settings/chat | Chat appearance and preferences |
+| /language-settings | Change the app display language |
+
+### SUPPORT & ADMIN
+| Route | What it does |
+|---|---|
+| /support | Contact support and view your tickets |
+| /qr-scanner | Scan any QR code (profiles, payments, links) |
+| /device-security | Device-level security settings |
+| /status | Account and system status |
+
+### AUTHENTICATION (only shown when logged out)
+| Route | What it does |
+|---|---|
+| /login | Sign in to your account |
+| /register | Create a new account |
+| /onboarding | Complete your new profile (shown once after registration) |
 `;
 
 export const PLATFORM_FEATURES_GUIDE = `
@@ -224,8 +280,7 @@ export function buildNavigationContext(): string {
     "\n\n" + PLATFORM_FEATURES_GUIDE +
     "\n\n" + FOUNDER_AND_IDENTITY +
     "\n\n" + USERNAME_MARKET_KNOWLEDGE +
-    "\n\n" + VERIFICATION_KNOWLEDGE +
-    "\n\n" + getLegalPageKnowledge()
+    "\n\n" + VERIFICATION_KNOWLEDGE
   );
 }
 
@@ -234,17 +289,23 @@ export function buildNavigationContext(): string {
  * Kept as a compact string for injection into system prompts.
  */
 export const ACTION_ROUTES_GUIDE = `
-Only create [ACTION:Button label:/route] using destinations from the verified
-route directory. Route parameters in brackets must be replaced by real values.
-Never use a route that is not in that directory. For mini-app routes, choose
-one of the concrete app ids listed there.
+Valid routes for [ACTION:Button label:/route] tags:
+/app/afupay | /app/afupay?section=topup | /app/afupay?section=requests | /app/afupay?section=services
+/premium | /monetize | /prestige | /app/afuusernames
+/profile/edit | /settings | /settings/security | /settings/privacy | /settings/blocked | /settings/two-factor
+/moments/create | /moments/create-video | /moments/create-article | /shorts | /app/afusaved | /my-posts
+/search | /discover | /contacts | /communities | /me | /user-discovery
+/app/afumarket?section=cart | /app/afumarket?section=orders | /app/afumarket?section=manage | /app/afumarket?section=apply
+/app/afugifts | /app/afugifts?section=marketplace | /company | /company/manage | /app/afufreelance
+/app/afupay?section=airtime | /app/afupay?section=bills | /app/afupay?section=data-bundles | /app/afupay?section=hotels | /app/afupay?section=tickets | /app/afupay?section=transfer | /app/afupay?section=fee-details
+/support | /chat/new | /qr-scanner | /digital-id | /language-settings
 
 SEARCH WITH PRE-FILLED QUERY — open the search screen with text already entered:
-  Syntax: [ACTION:Search for X:/app/afusearch?q=X]
+  Syntax: [ACTION:Search for X:/search?q=X]
   Examples:
-    [ACTION:Search for @amkaweesi:/app/afusearch?q=amkaweesi]
-    [ACTION:Search "ugandan music":/app/afusearch?q=ugandan+music]
-    [ACTION:Find people named John:/app/afusearch?q=john]
+    [ACTION:Search for @amkaweesi:/search?q=amkaweesi]
+    [ACTION:Search "ugandan music":/search?q=ugandan+music]
+    [ACTION:Find people named John:/search?q=john]
   Use whenever the user asks you to search for a person, post, video, hashtag, or keyword.
 
 PROFILE NAVIGATION — link directly to any user's profile:
@@ -295,7 +356,7 @@ export const NAV_INTENT_MAP: { patterns: RegExp; route: string; label: string }[
   { patterns: /\b(book\s+(a\s+)?hotel|find\s+hotel|accommodation)\b/i, route: "/app/afupay?section=hotels", label: "Book Hotel" },
   { patterns: /\b(event\s+tickets?|buy\s+tickets?|concert)\b/i, route: "/app/afupay?section=tickets", label: "Event Tickets" },
   { patterns: /\b(send\s+money|money\s+transfer|transfer\s+funds?|bank\s+transfer)\b/i, route: "/app/afupay?section=transfer", label: "Money Transfer" },
-  { patterns: /\b(monetize|earn\s+money|creator\s+fund|get\s+paid)\b/i, route: "/app/afumusic?section=studio", label: "Creator Studio" },
+  { patterns: /\b(monetize|earn\s+money|creator\s+fund|get\s+paid)\b/i, route: "/monetize", label: "Monetise" },
   { patterns: /\b(freelance|gigs?|find\s+work|hire)\b/i, route: "/app/afufreelance", label: "Freelance" },
   { patterns: /\b(company\s+page|my\s+company|manage\s+company|business\s+page)\b/i, route: "/company/manage", label: "Company Page" },
   { patterns: /\b(browse\s+companies|companies|organisations?)\b/i, route: "/company", label: "Companies" },
@@ -305,7 +366,7 @@ export const NAV_INTENT_MAP: { patterns: RegExp; route: string; label: string }[
   { patterns: /\b(discover\s+people|find\s+people|find\s+new\s+people|user\s+discovery)\b/i, route: "/user-discovery", label: "Discover People" },
   { patterns: /\b(match(ing)?|find\s+(a\s+)?(match|partner|connection))\b/i, route: "/app/afumatch", label: "Matching" },
   { patterns: /\b(shorts?|reels?|short\s+videos?)\b/i, route: "/shorts", label: "Shorts" },
-  { patterns: /\b(search|look\s+for|find\s+(someone|something|a\s+user))\b/i, route: "/app/afusearch", label: "AfuSearch" },
+  { patterns: /\b(search|look\s+for|find\s+(someone|something|a\s+user))\b/i, route: "/search", label: "Search" },
 ];
 
 /**
@@ -315,7 +376,7 @@ export const NAV_INTENT_MAP: { patterns: RegExp; route: string; label: string }[
 export function detectNavIntent(query: string): { route: string; label: string } | null {
   const q = query.trim();
   for (const { patterns, route, label } of NAV_INTENT_MAP) {
-    if (patterns.test(q) && isValidInternalRoute(route)) return { route, label };
+    if (patterns.test(q)) return { route, label };
   }
   return null;
 }

@@ -20,25 +20,6 @@ import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 import * as FileSystem from "expo-file-system/legacy";
 import { FileSystemUploadType } from "expo-file-system/legacy";
 
-function getUploadStagingDirectory(): string | null {
-  return FileSystem.documentDirectory
-    ? `${FileSystem.documentDirectory}afuchat_upload_staging/`
-    : null;
-}
-
-async function ensureUploadStagingDirectory(directory: string): Promise<void> {
-  const info = await FileSystem.getInfoAsync(directory);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
-  }
-}
-
-export async function cleanupPreparedMediaForUpload(fileUri: string): Promise<void> {
-  const directory = getUploadStagingDirectory();
-  if (!directory || !fileUri.startsWith(directory)) return;
-  await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => {});
-}
-
 function getUploadsBase(): string {
   return `${supabaseUrl}/functions/v1/uploads`;
 }
@@ -124,19 +105,18 @@ export async function prepareMediaForUpload(
     return fileUri;
   }
 
-  const stagingDirectory = getUploadStagingDirectory();
-  if (!stagingDirectory) {
-    throw new Error("Persistent device storage is unavailable. Please try again.");
+  const cacheDirectory = FileSystem.cacheDirectory;
+  if (!cacheDirectory) {
+    throw new Error("Temporary storage is unavailable. Please try again.");
   }
-  await ensureUploadStagingDirectory(stagingDirectory);
 
   const normalizedExt = extension.replace(/[^a-z0-9]/gi, "").toLowerCase() || "bin";
-  const existingInfo = fileUri.startsWith(stagingDirectory)
+  const existingInfo = fileUri.startsWith(cacheDirectory)
     ? await FileSystem.getInfoAsync(fileUri).catch(() => ({ exists: false }))
     : null;
   if (existingInfo?.exists) return fileUri;
 
-  const destination = `${stagingDirectory}story_source_${Date.now()}_${Math.random()
+  const destination = `${cacheDirectory}story_source_${Date.now()}_${Math.random()
     .toString(36)
     .slice(2, 8)}.${normalizedExt}`;
   try {
@@ -218,14 +198,22 @@ async function fileUriToBlob(fileUri: string, mime: string): Promise<Blob> {
 
 interface SignedUpload {
   uploadUrl: string;
-  publicUrl: string;
+  publicUrl: string | null;
+  privateStoragePath?: string | null;
   key: string;
 }
+
+export type StorageUploadResult = {
+  publicUrl: string | null;
+  privateStoragePath?: string | null;
+  error: string | null;
+};
 
 async function getSignedUpload(
   bucket: string,
   filePath: string,
   contentType: string,
+  contentLength?: number,
 ): Promise<{ data: SignedUpload | null; error: string | null }> {
   const token = await getAccessToken();
   if (!token) return { data: null, error: "Not authenticated" };
@@ -238,7 +226,12 @@ async function getSignedUpload(
         "Content-Type": "application/json",
         ...(await edgeFnHeaders(token)),
       },
-      body: JSON.stringify({ bucket, path: filePath, contentType }),
+      body: JSON.stringify({
+        bucket,
+        path: filePath,
+        contentType,
+        ...(Number.isSafeInteger(contentLength) && (contentLength ?? 0) > 0 ? { contentLength } : {}),
+      }),
     });
   } catch (e: any) {
     return { data: null, error: `Network error: ${e?.message || e}` };
@@ -253,9 +246,20 @@ async function getSignedUpload(
     return { data: null, error: `Sign failed (HTTP ${resp.status}): ${text.slice(0, 120)}` };
   }
   if (!resp.ok) return { data: null, error: json?.error || `Sign failed (HTTP ${resp.status})` };
-  if (!json?.uploadUrl || !json?.publicUrl) return { data: null, error: "Sign endpoint returned no URL" };
+  const privateStoragePath = typeof json?.privateStoragePath === "string" ? json.privateStoragePath : null;
+  if (!json?.uploadUrl || (!json?.publicUrl && !privateStoragePath)) {
+    return { data: null, error: "Sign endpoint returned no usable upload destination" };
+  }
 
-  return { data: { uploadUrl: json.uploadUrl, publicUrl: json.publicUrl, key: json.key }, error: null };
+  return {
+    data: {
+      uploadUrl: json.uploadUrl,
+      publicUrl: json.publicUrl ?? null,
+      privateStoragePath,
+      key: json.key,
+    },
+    error: null,
+  };
 }
 
 async function proxyUpload(
@@ -263,7 +267,7 @@ async function proxyUpload(
   filePath: string,
   body: Blob | ArrayBuffer,
   contentType: string,
-): Promise<{ publicUrl: string | null; error: string | null }> {
+): Promise<StorageUploadResult> {
   const token = await getAccessToken();
   if (!token) return { publicUrl: null, error: "Not authenticated" };
 
@@ -294,9 +298,10 @@ async function proxyUpload(
     return { publicUrl: null, error: `Upload failed (HTTP ${resp.status}): ${text.slice(0, 120)}` };
   }
   if (!resp.ok) return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${resp.status})` };
-  if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
+  const privateStoragePath = typeof json?.privateStoragePath === "string" ? json.privateStoragePath : null;
+  if (!json?.publicUrl && !privateStoragePath) return { publicUrl: null, error: "Upload service returned no usable destination" };
 
-  return { publicUrl: json.publicUrl, error: null };
+  return { publicUrl: json.publicUrl ?? null, privateStoragePath, error: null };
 }
 
 /**
@@ -312,15 +317,8 @@ export async function uploadToStorage(
   filePath: string,
   fileUri: string,
   contentType?: string,
-): Promise<{ publicUrl: string | null; error: string | null }> {
-  let tempPath: string | null = null;
-  const cleanupTemp = () => {
-    if (!tempPath) return;
-    const path = tempPath;
-    tempPath = null;
-    FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
-  };
-
+  expectedSize?: number,
+): Promise<StorageUploadResult> {
   try {
     let resolvedMime = contentType;
     if (!resolvedMime && fileUri.startsWith("data:")) {
@@ -340,7 +338,7 @@ export async function uploadToStorage(
       } catch {
         return { publicUrl: null, error: "Could not read selected file. Please try again." };
       }
-      const sign = await getSignedUpload(realBucket, filePath, mime);
+      const sign = await getSignedUpload(realBucket, filePath, mime, body.size);
       if (sign.data) {
         try {
           const putResp = await fetch(sign.data.uploadUrl, {
@@ -348,7 +346,11 @@ export async function uploadToStorage(
             headers: { "Content-Type": mime },
             body: body as any,
           });
-          if (putResp.ok) return { publicUrl: sign.data.publicUrl, error: null };
+          if (putResp.ok) {
+            return realBucket === "music-private"
+              ? { publicUrl: null, privateStoragePath: filePath, error: null }
+              : { publicUrl: sign.data.publicUrl, error: null };
+          }
         } catch {}
       }
       return proxyUpload(realBucket, filePath, body, mime);
@@ -358,16 +360,17 @@ export async function uploadToStorage(
     // This is the critical path for video uploads: avoids loading the entire
     // file into JS memory (which would OOM on 50-100 MB videos).
     //
-    // Android quirk: on some devices the camera temp directory may not exist
+    // Android quirk: on some devices the camera cache directory may not exist
     // when ExponentFileSystem tries to open the source file, causing
     // "java.io.IOException: Directory for '...' doesn't exist".
-    // Copy user media to app-owned persistent staging before streaming it.
+    // Fix: copy the file to a known-accessible cacheDirectory temp path first.
     let uploadUri = fileUri;
+    let tempPath: string | null = null;
     try {
-      const stagingDirectory = getUploadStagingDirectory();
-      if (stagingDirectory) {
-        await ensureUploadStagingDirectory(stagingDirectory);
-        tempPath = `${stagingDirectory}upload_tmp_${Date.now()}.${ext}`;
+      // Copy to a stable cacheDirectory path so FileSystem.uploadAsync has a
+      // guaranteed-readable source (avoids volatile camera/temp dirs).
+      if (FileSystem.cacheDirectory) {
+        tempPath = `${FileSystem.cacheDirectory}upload_tmp_${Date.now()}.${ext}`;
         await FileSystem.copyAsync({ from: fileUri, to: tempPath });
         uploadUri = tempPath;
       }
@@ -386,8 +389,25 @@ export async function uploadToStorage(
       // uploadUri stays as the original fileUri
     }
 
+    const cleanupTemp = () => {
+      if (tempPath) {
+        FileSystem.deleteAsync(tempPath!, { idempotent: true }).catch(() => {});
+      }
+    };
+
     // 1. Try presigned PUT — bytes stream directly from disk to R2.
-    const sign = await getSignedUpload(realBucket, filePath, mime);
+    let contentLength = expectedSize;
+    if (realBucket === "music") {
+      try {
+        const info = await FileSystem.getInfoAsync(uploadUri) as { exists?: boolean; size?: number };
+        if (info.exists && Number.isSafeInteger(info.size) && (info.size ?? 0) > 0) {
+          contentLength = info.size;
+        }
+      } catch {
+        // Keep the verified picker size when filesystem metadata is unavailable.
+      }
+    }
+    const sign = await getSignedUpload(realBucket, filePath, mime, contentLength);
     if (sign.data) {
       try {
         const putResult = await FileSystem.uploadAsync(sign.data.uploadUrl, uploadUri, {
@@ -397,7 +417,9 @@ export async function uploadToStorage(
         });
         if (putResult.status >= 200 && putResult.status < 300) {
           cleanupTemp();
-          return { publicUrl: sign.data.publicUrl, error: null };
+          return realBucket === "music-private"
+            ? { publicUrl: null, privateStoragePath: filePath, error: null }
+            : { publicUrl: sign.data.publicUrl, error: null };
         }
         console.warn(
           `[Upload] Presigned PUT failed (${putResult.status}), falling back to proxy`,
@@ -439,8 +461,11 @@ export async function uploadToStorage(
       if (proxyResult.status < 200 || proxyResult.status >= 300) {
         return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${proxyResult.status})` };
       }
-      if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
-      return { publicUrl: json.publicUrl, error: null };
+      const privateStoragePath = typeof json?.privateStoragePath === "string" ? json.privateStoragePath : null;
+      if (!json?.publicUrl && !privateStoragePath) {
+        return { publicUrl: null, error: "Upload service returned no usable destination" };
+      }
+      return { publicUrl: json.publicUrl ?? null, privateStoragePath, error: null };
     } catch (e: any) {
       console.warn(`[Upload] Native proxy stream failed, trying readable URI fallback: ${e?.message || e}`);
     }
@@ -461,8 +486,23 @@ export async function uploadToStorage(
       };
     }
   } catch (e: any) {
-    cleanupTemp();
     return { publicUrl: null, error: e?.message || "Upload failed" };
+  }
+}
+
+export async function isPrivateMusicStorageReady(): Promise<boolean> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return false;
+    const response = await fetch(uploadsUrl("music-private-ready"), {
+      headers: await edgeFnHeaders(token),
+    });
+    const text = await response.text().catch(() => "");
+    if (!text || text.trimStart().startsWith("<")) return false;
+    const body = JSON.parse(text);
+    return response.ok && body?.ready === true;
+  } catch {
+    return false;
   }
 }
 
@@ -475,6 +515,7 @@ export async function getSignedR2ReadUrl(
   bucket: string,
   filePath: string,
   trackId?: string,
+  downloadFilename?: string,
 ): Promise<{ url: string | null; error: string | null }> {
   try {
     const token = await getAccessToken();
@@ -485,7 +526,12 @@ export async function getSignedR2ReadUrl(
         "Content-Type": "application/json",
         ...(await edgeFnHeaders(token)),
       },
-      body: JSON.stringify({ bucket, path: filePath, trackId }),
+      body: JSON.stringify({
+        bucket,
+        path: filePath,
+        trackId,
+        ...(downloadFilename ? { downloadFilename } : {}),
+      }),
     });
     const text = await response.text().catch(() => "");
     if (!text || text.trimStart().startsWith("<")) {

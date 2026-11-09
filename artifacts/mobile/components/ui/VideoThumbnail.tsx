@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import CachedImage from "./CachedImage";
-import { useTheme } from "@/hooks/useTheme";
 
 const SEEK_TIME = 1.0;
 
@@ -80,7 +79,6 @@ function VideoThumbnailNative({
   videoUrl, fallbackImageUrl, style, lowData,
   durationSeconds, showDuration = true, watchedFraction,
 }: Props) {
-  const { colors } = useTheme();
   const [thumbUri, setThumbUri] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,7 +120,7 @@ function VideoThumbnailNative({
           contentFit="cover"
         />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.backgroundSecondary }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0a0a0a" }]} />
       )}
       {hasFraction && <WatchProgressBar fraction={watchedFraction!} />}
       {!!durationLabel && (

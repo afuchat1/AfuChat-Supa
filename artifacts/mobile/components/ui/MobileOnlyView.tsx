@@ -1,10 +1,10 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import Colors from "@/constants/colors";
 
 type Props = {
   title: string;
@@ -18,9 +18,11 @@ export function MobileOnlyView({ title, description }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
-        <View style={{ width: 52 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.body}>
@@ -34,14 +36,14 @@ export function MobileOnlyView({ title, description }: Props) {
           {description ||
             `${title} is only available on the AfuChat mobile app. Download it from the Play Store or App Store to access this feature.`}
         </Text>
-        <View style={[styles.storeCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+        <View style={[styles.storeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="logo-google-playstore" size={28} color="#01875F" />
           <View>
             <Text style={[styles.storeLabel, { color: colors.textMuted }]}>Get it on</Text>
             <Text style={[styles.storeName, { color: colors.text }]}>Google Play</Text>
           </View>
         </View>
-        <View style={[styles.storeCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+        <View style={[styles.storeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="logo-apple" size={28} color={colors.text} />
           <View>
             <Text style={[styles.storeLabel, { color: colors.textMuted }]}>Download on the</Text>
@@ -63,6 +65,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerTitle: {
     flex: 1,

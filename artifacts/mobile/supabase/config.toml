@@ -17,12 +17,3 @@ enabled = true
 
 [functions.support-ai-reply]
 verify_jwt = true
-
-[functions.visual-image-search]
-verify_jwt = true
-
-[functions.call-turn-credentials]
-verify_jwt = true
-
-[functions.export-user-data]
-verify_jwt = true

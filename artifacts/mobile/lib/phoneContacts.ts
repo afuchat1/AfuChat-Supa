@@ -1,8 +1,6 @@
-import { Linking, NativeModules, Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
-import { COUNTRIES } from "@/constants/countries";
 import { supabase } from "@/lib/supabase";
-import { openExternalLink } from "@/lib/openExternalLink";
 import { isOnline } from "@/lib/offlineStore";
 import {
   getLocalPhoneContacts,
@@ -19,67 +17,23 @@ export const AFUCHAT_INVITE_MESSAGE =
   `Hey! I’m using AfuChat to stay connected through messaging, calls, and sharing. Join me there so we can connect on AfuChat: ${AFUCHAT_DOWNLOAD_URL}`;
 
 function countryRegion(value: unknown): CountryCode | undefined {
-  if (typeof value !== "string" || !value.trim()) return undefined;
-  const normalized = value.trim();
-  const code = normalized.toUpperCase();
-  // Accept only regions in the bundled country table; language tags such as
-  // "en" must never be mistaken for a country.
-  const countryByCode = COUNTRIES.find((item) => item.code === code);
-  if (countryByCode) return countryByCode.code as CountryCode;
-
-  // AfuChat stores the user's selected country as its display name. Resolve
-  // that form locally so this works without connectivity.
-  const country = COUNTRIES.find(
-    (item) => item.name.toLocaleLowerCase() === normalized.toLocaleLowerCase(),
-  );
-  return country?.code as CountryCode | undefined;
+  if (typeof value !== "string") return undefined;
+  const region = value.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(region) ? (region as CountryCode) : undefined;
 }
 
 /**
- * Resolve the phone's default region without a network lookup. A saved AfuChat
- * profile country is authoritative; the device locale is only a fallback for
- * older/incomplete profiles. Contacts may still override this per number.
+ * Matching uses E.164 whenever the device provides enough country information.
+ * The original device number is kept separately for display, so formatting
+ * never changes the contact's visible name or device ordering.
  */
-export function resolveDefaultPhoneRegion(profileCountry?: string | null): CountryCode | undefined {
-  const savedRegion = countryRegion(profileCountry);
-  if (savedRegion) return savedRegion;
-
-  const localeCandidates = [
-    NativeModules.PlatformConstants?.LocaleIdentifier,
-    NativeModules.SettingsManager?.settings?.AppleLocale,
-    NativeModules.SettingsManager?.settings?.AppleLanguages?.[0],
-    (() => {
-      try { return Intl.DateTimeFormat().resolvedOptions().locale; }
-      catch { return undefined; }
-    })(),
-  ];
-
-  for (const candidate of localeCandidates) {
-    if (typeof candidate !== "string") continue;
-    const localeParts = candidate.split(/[-_]/).reverse();
-    for (const part of localeParts) {
-      const region = countryRegion(part);
-      if (region) return region;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Return a validated E.164 number. Explicit international prefixes always win;
- * otherwise use the contact's own region, then the user's saved country, then
- * the device locale. Invalid/ambiguous local numbers remain visible but are
- * not used for matching, calling, or invitations.
- */
-export function normalizePhoneNumber(
-  raw: string,
-  region?: unknown,
-  defaultRegion?: CountryCode,
-): string {
+export function normalizePhoneNumber(raw: string, region?: unknown): string {
   const value = raw.trim();
   if (!value) return "";
 
-  const parsed = parsePhoneNumberFromString(value, countryRegion(region) ?? defaultRegion);
+  const parsed = parsePhoneNumberFromString(value, countryRegion(region));
+  // Never invent a country code for a local or malformed number. A guessed
+  // "+digits" value can point WhatsApp at a completely different person.
   if (!parsed || !parsed.isPossible() || !parsed.isValid()) return "";
   return parsed.number;
 }
@@ -116,61 +70,45 @@ export async function callPhoneNumber(phone: string): Promise<boolean> {
   }
 }
 
-async function readDevicePhoneContacts(profileCountry?: string | null): Promise<{
+async function readDevicePhoneContacts(): Promise<{
   contacts: DevicePhoneContact[];
   permission: "granted" | "denied" | "unavailable";
 }> {
   if (Platform.OS === "web") return { contacts: [], permission: "unavailable" };
 
   try {
-    const Contacts = require("expo-contacts/legacy") as typeof import("expo-contacts/legacy");
-    const currentPermission = await Contacts.getPermissionsAsync();
-    const permission = currentPermission.status === "granted"
-      ? currentPermission
-      : await Contacts.requestPermissionsAsync();
-    if (permission.status !== "granted") return { contacts: [], permission: "denied" };
+    const Contacts = require("expo-contacts") as typeof import("expo-contacts");
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== "granted") return { contacts: [], permission: "denied" };
 
+    const { data } = await Contacts.getContactsAsync({
+      fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
+    });
     const contacts: DevicePhoneContact[] = [];
-    const defaultRegion = resolveDefaultPhoneRegion(profileCountry);
-    const pageSize = 500;
-    let pageOffset = 0;
-    let position = 0;
-    let hasNextPage = true;
-    while (hasNextPage) {
-      const page = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
-        pageSize,
-        pageOffset,
+
+    data.forEach((contact, position) => {
+      const name = contact.name?.trim() || "Unknown";
+      (contact.phoneNumbers ?? []).forEach((phoneNumber, phoneIndex) => {
+        const raw = (phoneNumber.number ?? "").trim();
+        const normalized = normalizePhoneNumber(
+          raw,
+          (phoneNumber as { countryCode?: string | null }).countryCode,
+        );
+        if (!raw || !normalized) return;
+
+        contacts.push({
+          key: `${contact.id ?? position}:${phoneIndex}`,
+          name,
+          // Keep the device's exact display value. Only normalized_phone is
+          // used for matching, so local contacts never get reformatted.
+          phone: raw,
+          normalized_phone: normalized,
+          position,
+          phone_index: phoneIndex,
+        });
       });
-      for (const contact of page.data) {
-        const name = contact.name?.trim()
-          || [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim()
-          || "Unknown";
-        const numbers = (contact.phoneNumbers ?? [])
-          .map((phoneNumber, phoneIndex) => ({
-            phoneIndex,
-            raw: (phoneNumber.number ?? "").trim(),
-            region: (phoneNumber as { countryCode?: string | null }).countryCode,
-          }))
-          .filter((entry) => entry.raw.length > 0);
-        const entries = numbers.length > 0
-          ? numbers
-          : [{ phoneIndex: -1, raw: "", region: undefined }];
-        for (const entry of entries) {
-          contacts.push({
-            key: `${contact.id ?? position}:${entry.phoneIndex < 0 ? "none" : entry.phoneIndex}`,
-            name,
-            phone: entry.raw,
-            normalized_phone: entry.raw ? normalizePhoneNumber(entry.raw, entry.region, defaultRegion) : "",
-            position,
-            phone_index: entry.phoneIndex,
-          });
-        }
-        position += 1;
-      }
-      hasNextPage = !!page.hasNextPage && page.data.length > 0;
-      pageOffset += page.data.length;
-    }
+    });
+
     return { contacts, permission: "granted" };
   } catch {
     return { contacts: [], permission: "unavailable" };
@@ -184,11 +122,10 @@ async function readDevicePhoneContacts(profileCountry?: string | null): Promise<
  */
 export async function syncPhoneContacts(
   userId: string | undefined,
-  profileCountry?: string | null,
   onDeviceContacts?: (contacts: LocalPhoneContact[]) => void,
   onUpdatedContacts?: (contacts: LocalPhoneContact[]) => void,
 ): Promise<"granted" | "denied" | "unavailable"> {
-  const result = await readDevicePhoneContacts(profileCountry);
+  const result = await readDevicePhoneContacts();
   if (result.permission !== "granted") return result.permission;
 
   await saveDevicePhoneContacts(result.contacts);
@@ -197,7 +134,7 @@ export async function syncPhoneContacts(
   if (!userId || !isOnline()) return "granted";
 
   try {
-    const phones = [...new Set(result.contacts.map((contact) => contact.normalized_phone).filter(isValidInternationalPhoneNumber))];
+    const phones = [...new Set(result.contacts.map((contact) => contact.normalized_phone))];
     const matches = [];
     for (let index = 0; index < phones.length; index += 100) {
       const { data, error } = await supabase
@@ -292,7 +229,7 @@ export async function sendWhatsAppInvite(normalizedPhone: string): Promise<void>
   } catch {}
 
   try {
-    await openExternalLink(webUrl);
+    await Linking.openURL(webUrl);
   } catch {
     // Keep the invite action quiet when WhatsApp is not installed.
   }

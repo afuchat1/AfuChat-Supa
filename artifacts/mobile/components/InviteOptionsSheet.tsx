@@ -28,11 +28,11 @@ export default function InviteOptionsSheet({ visible, onClose, onSelect }: Props
       <View style={{ padding: 20, gap: 12 }}>
         <View style={{ alignItems: "center", gap: 5, marginBottom: 2 }}>
           <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.separator }} />
-          <Text style={{ width: "100%", color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" }}>
-            {"Invite via"}
+          <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold" }}>
+            Invite via
           </Text>
-          <Text style={{ width: "100%", color: colors.textMuted, fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" }}>
-            {"Choose where to send your AfuChat invite"}
+          <Text style={{ color: colors.textMuted, fontSize: 13, fontFamily: "Inter_400Regular" }}>
+            Choose where to send your AfuChat invite
           </Text>
         </View>
         {options.map(({ method, label, icon }) => (
@@ -53,7 +53,7 @@ export default function InviteOptionsSheet({ visible, onClose, onSelect }: Props
             activeOpacity={0.8}
           >
             <Ionicons name={icon} size={22} color="#fff" />
-            <Text style={{ flex: 1, minWidth: 0, color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold", textAlign: "left" }}>
+            <Text style={{ flex: 1, color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" }}>
               {label}
             </Text>
             <Ionicons name="chevron-forward" size={19} color="#fff" />

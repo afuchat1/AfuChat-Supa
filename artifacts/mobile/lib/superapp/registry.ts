@@ -21,6 +21,15 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     badge: "NEW",
   },
   {
+    id: "afugames",
+    name: "AfuGames",
+    description: "Play games and compete with friends.",
+    version: "1.0.0",
+    icon: "game-controller",
+    gradient: ["#FF3B30", "#FF6B35"] as const,
+    keepAlive: false,
+  },
+  {
     id: "afubusiness",
     name: "AfuBusiness",
     description: "Tools and analytics for your business.",
@@ -32,7 +41,7 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
   {
     id: "afusearch",
     name: "AfuSearch",
-    description: "Discover trending videos, posts, and creators.",
+    description: "Find people, posts, channels, events and more.",
     version: "1.0.0",
     icon: "search",
     gradient: ["#5856D6", "#6E6CD3"] as const,
@@ -84,7 +93,6 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     icon: "musical-notes",
     gradient: ["#19172F", "#F06451"] as const,
     keepAlive: false,
-    nativeOnly: true,
     badge: "NEW",
   },
   {
@@ -104,16 +112,6 @@ export const SUPER_APP_REGISTRY: ModuleManifest[] = [
     icon: "heart",
     gradient: ["#FF2D55", "#FF375F"] as const,
     keepAlive: false,
-  },
-  {
-    id: "afufootball",
-    name: "AfuFootball",
-    description: "Follow real fixtures, scores, teams and competitions.",
-    version: "1.0.0",
-    icon: "football",
-    gradient: ["#247A4B", "#69A85D"] as const,
-    keepAlive: false,
-    badge: "NEW",
   },
   {
     id: "afuevents",

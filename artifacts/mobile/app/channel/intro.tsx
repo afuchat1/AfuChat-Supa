@@ -16,7 +16,6 @@ const PHONE_H = Math.round(PHONE_W * 1.47);
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 
 import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
@@ -70,11 +69,13 @@ export default function ChannelIntroScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <GlassBackButton
+      <TouchableOpacity
         style={[styles.backBtn, { top: insets.top + 12 }]}
         onPress={() => router.back()}
-        icon="chevron-back"
-      />
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="chevron-back" size={24} color={colors.accent} />
+      </TouchableOpacity>
 
       <View style={styles.heroSection}>
         <PhoneIllustration />

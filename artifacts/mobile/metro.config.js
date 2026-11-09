@@ -64,6 +64,17 @@ config.resolver = {
   ],
 };
 
+// react-native-webrtc imports event-target-shim through "./index", but the
+// package only exports its root. Resolve that legacy subpath through the
+// package's declared root export instead of relying on Metro's fallback.
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "event-target-shim/index") {
+    return originalResolveRequest(context, "event-target-shim", platform);
+  }
+  return originalResolveRequest(context, moduleName, platform);
+};
+
 /**
  * Expo Go uses the normal Metro response mode. Keeping lazy bundling enabled is
  * important for this large Expo Router app because the complete web/server

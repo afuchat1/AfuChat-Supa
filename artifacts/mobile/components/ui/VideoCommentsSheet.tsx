@@ -3,8 +3,7 @@
  * Shared comment sheet for the video feed and discover.
  * Supports: text · voice notes (≤ 60 s) · image attachments
  */
-import { formatAlertMessage, type AlertButton } from "@/lib/alert";
-import { localizeUi } from "@/lib/i18n";
+import { showAlert } from "@/lib/alert";
 import React, {
   useCallback,
   useEffect,
@@ -13,14 +12,12 @@ import React, {
   useState,
 } from "react";
 import {
-  Alert,
   ActivityIndicator,
   Animated,
   Easing,
   FlatList,
   Image as RNImage,
   Keyboard,
-  Linking,
   Modal,
   PanResponder,
   Platform,
@@ -28,26 +25,28 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
-  type FlatListInstance,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
+import { GlassInputSurface } from "@/components/ui/GlassInputSurface";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
-import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioPlayer,
-  useAudioRecorder,
-} from "expo-audio";
-import type { AudioStatus, AudioRecorder } from "expo-audio";
+// expo-av: lazy-load on native only.
+// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
+// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
+// so that check always returns null and silently disables all audio.
+let Audio: typeof import("expo-av").Audio | null = null;
+type AudioSound = import("expo-av/build/Audio/Sound").Sound;
+type AudioRecording = import("expo-av/build/Audio/Recording").Recording;
+import { Platform as _AvPlatform } from "react-native";
+import { isExpoGo } from "@/lib/expoEnvironment";
+if (_AvPlatform.OS !== "web" && !isExpoGo()) {
+  try { Audio = require("expo-av").Audio; } catch {}
+}
 import * as ImagePicker from "expo-image-picker";
 
 import { supabase } from "@/lib/supabase";
@@ -69,23 +68,6 @@ const VID_THREAD_COLORS = ["#1018D8", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"
 export const QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
 export const MAX_VOICE_SECS = 60;
 const WAVEFORM_BARS = 30;
-
-function showCommentSheetAlert(title: string, message?: unknown, buttons?: AlertButton[]) {
-  const nativeButtons = (buttons?.length ? buttons : [{ text: "OK" }]).map((button) => ({
-    text: localizeUi(button.text),
-    style: button.style,
-    onPress: button.onPress,
-  }));
-  const localizedTitle = localizeUi(title);
-  const localizedMessage = message === undefined ? undefined : localizeUi(formatAlertMessage(message));
-
-  Alert.alert(
-    localizedTitle,
-    localizedMessage ?? "",
-    nativeButtons,
-    { cancelable: true },
-  );
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,6 +123,14 @@ function formatSecs(totalSecs: number): string {
   const m = Math.floor(totalSecs / 60);
   const s = Math.floor(totalSecs % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function parseCommentText(text: string, accent: string): React.ReactNode {
+  return text.split(/(@\w[\w.]*|#\w+)/g).map((p, i) => {
+    if (/^@\w/.test(p)) return <Text key={i} style={{ color: accent, fontFamily: "Inter_600SemiBold" }}>{p}</Text>;
+    if (/^#\w/.test(p)) return <Text key={i} style={{ color: accent + "BB" }}>{p}</Text>;
+    return <Text key={i}>{p}</Text>;
+  });
 }
 
 function genWaveHeights(seed: string): number[] {
@@ -235,7 +225,7 @@ function VoicePlayer({
 }: {
   uri: string; durationSecs: number; accent: string; isDark?: boolean;
 }) {
-  const sound = useAudioPlayer({ uri }, { updateInterval: 150 });
+  const [sound, setSound] = useState<AudioSound | null>(null);
   const [playing, setPlaying] = useState(false);
   const [positionMs, setPositionMs] = useState(0);
   const [durationMs, setDurationMs] = useState(Math.max(1000, durationSecs * 1000));
@@ -244,26 +234,37 @@ function VoicePlayer({
   const progress = durationMs > 0 ? positionMs / durationMs : 0;
 
   useEffect(() => {
-    const subscription = sound.addListener("playbackStatusUpdate", (status: AudioStatus) => {
-      if (!status.isLoaded) return;
-      setPositionMs(status.currentTime * 1000);
-      if (status.duration > 0) setDurationMs(status.duration * 1000);
-      if (status.didJustFinish) {
-        setPlaying(false);
-        setPositionMs(0);
-        void sound.seekTo(0).catch(() => {});
-      }
-    });
+    let mounted = true;
+    async function loadVoice() {
+      try {
+        if (!Audio || !Audio.Sound) return;
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false }).catch(() => {});
+        const { sound: s } = await Audio.Sound.createAsync({ uri }, { shouldPlay: false });
+        if (!mounted) { s.unloadAsync().catch(() => {}); return; }
+        s.setOnPlaybackStatusUpdate((st) => {
+          if (!st.isLoaded) return;
+          setPositionMs(st.positionMillis);
+          if (st.durationMillis) setDurationMs(st.durationMillis);
+          if (st.didJustFinish) {
+            setPlaying(false);
+            setPositionMs(0);
+            s.setPositionAsync(0).catch(() => {});
+          }
+        });
+        setSound(s);
+      } catch {}
+    }
+    loadVoice();
     return () => {
-      subscription.remove();
-      sound.pause();
+      mounted = false;
+      setSound((prev) => { prev?.unloadAsync().catch(() => {}); return null; });
     };
-  }, [sound]);
+  }, [uri]);
 
   useEffect(() => {
+    if (!sound) return;
     const unsubscribe = audioFocus.subscribe(() => {
-      sound.pause();
-      void sound.seekTo(0).catch(() => {});
+      sound.stopAsync().catch(() => {});
       setPlaying(false);
       setPositionMs(0);
     });
@@ -273,13 +274,15 @@ function VoicePlayer({
   }, [sound]);
 
   async function togglePlay() {
+    if (!sound) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (playing) {
-      sound.pause();
+      await sound.pauseAsync();
       setPlaying(false);
     } else {
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false, interruptionMode: "doNotMix" });
-      sound.play();
+      if (!Audio) return;
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false }).then(() => {}, () => {});
+      await sound.playAsync();
       setPlaying(true);
     }
   }
@@ -289,7 +292,7 @@ function VoicePlayer({
     const ratio = Math.max(0, Math.min(1, x / containerWidth.current));
     const seekMs = ratio * durationMs;
     setPositionMs(seekMs);
-    sound.seekTo(seekMs / 1000).catch(() => {});
+    sound.setPositionAsync(seekMs).catch(() => {});
   }
 
   const displayTime = positionMs > 100 ? formatSecs(Math.floor(positionMs / 1000)) : formatSecs(Math.ceil(durationMs / 1000));
@@ -534,7 +537,7 @@ export function VoicePreviewBar({
         <VoicePlayer uri={uri} durationSecs={durationSecs} accent={accent} />
       </View>
       <TouchableOpacity onPress={onDiscard} hitSlop={8} style={pvStyles.discard}>
-        <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.5)" />
+        <Ionicons name="close-circle" size={18} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
   );
@@ -565,25 +568,25 @@ export function VideoCommentsSheet({
   useEffect(() => { insetsRef.current = insets; }, [insets]);
 
   // ── Theme tokens ─────────────────────────────────────────────────────────
-  const sheetBg      = isDark ? "#111115" : colors.surface;
-  const handleClr    = isDark ? "rgba(255,255,255,0.34)" : colors.border;
-  const titleClr     = colors.text;
-  const titleCntClr  = colors.textSecondary;
-  const sortTabTxt   = colors.textSecondary;
-  const closeBtnClr  = colors.textSecondary;
-  const separatorClr = colors.separator;
-  const emptyIconClr = colors.textMuted;
-  const emptyTxtClr  = colors.textSecondary;
-  const emptySubClr  = colors.textMuted;
-  const replyToTxt   = colors.textSecondary;
-  const replyToIcon  = colors.textMuted;
-  const inputBg      = colors.inputBg;
-  const inputTxt     = colors.text;
-  const inputPH      = colors.textMuted;
-  const attachIconCl = colors.textSecondary;
-  const sendDisabled = isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.10)";
-  const borderTopClr = colors.separator;
-  const imgRmvClr    = colors.textSecondary;
+  const sheetBg      = isDark ? "#111115"                   : colors.background;
+  const handleClr    = isDark ? "rgba(255,255,255,0.2)"     : "rgba(0,0,0,0.18)";
+  const titleClr     = isDark ? "#fff"                      : "#1A1208";
+  const titleCntClr  = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
+  const sortTabTxt   = isDark ? "rgba(255,255,255,0.45)"    : "rgba(26,18,8,0.5)";
+  const closeBtnClr  = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.5)";
+  const separatorClr = isDark ? "rgba(255,255,255,0.1)"     : "rgba(26,18,8,0.1)";
+  const emptyIconClr = isDark ? "rgba(255,255,255,0.2)"     : "rgba(26,18,8,0.2)";
+  const emptyTxtClr  = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.5)";
+  const emptySubClr  = isDark ? "rgba(255,255,255,0.3)"     : "rgba(26,18,8,0.35)";
+  const replyToTxt   = isDark ? "rgba(255,255,255,0.5)"     : "rgba(26,18,8,0.55)";
+  const replyToIcon  = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
+  const inputBg      = isDark ? "rgba(255,255,255,0.08)"    : colors.inputBg;
+  const inputTxt     = colors.glassBarText;
+  const inputPH      = colors.glassBarMuted;
+  const attachIconCl = colors.glassBarMuted;
+  const sendDisabled = isDark ? "rgba(255,255,255,0.12)"    : "rgba(0,0,0,0.09)";
+  const borderTopClr = isDark ? "rgba(255,255,255,0.08)"    : "rgba(26,18,8,0.08)";
+  const imgRmvClr    = isDark ? "rgba(255,255,255,0.4)"     : "rgba(26,18,8,0.4)";
 
   const sheetTranslateY = useRef(new Animated.Value(1000)).current;
   // Animated keyboard offset — drives ONLY the input bar (no driver restrictions: useNativeDriver: false)
@@ -671,18 +674,11 @@ export function VideoCommentsSheet({
   const [kbHeight, setKbHeight] = useState(0);
 
   const [recordState, setRecordState] = useState<RecordState>("idle");
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const [recordingObj, setRecordingObj] = useState<AudioRecorder | null>(null);
+  const [recordingObj, setRecordingObj] = useState<AudioRecording | null>(null);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [recordElapsed, setRecordElapsed] = useState(0);
-  const recordingRef = useRef<AudioRecorder | null>(null);
-  const recordingSessionRef = useRef(0);
-  const stoppingRecordingRef = useRef(false);
-  const recordElapsedRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const recordingStartingRef = useRef(false);
-  const [inputAreaHeight, setInputAreaHeight] = useState(64);
 
   const [attachedImage, setAttachedImage] = useState<{ uri: string; width: number; height: number } | null>(null);
   const [showEmojiPanel, setShowEmojiPanel] = useState(false);
@@ -694,8 +690,8 @@ export function VideoCommentsSheet({
   const mentionQueryRef = useRef<string | null>(null);
   const mentionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const listRef = useRef<FlatListInstance>(null);
-  const inputRef = useRef<TextInputInstance>(null);
+  const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<AfuNativeRef.TextInput>(null);
   const sendScale = useRef(new Animated.Value(1)).current;
   const repliesLoadSeqRef = useRef(0);
   const repliesReloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -704,42 +700,6 @@ export function VideoCommentsSheet({
   useEffect(() => {
     visibleRef.current = visible;
   }, [visible]);
-
-  useEffect(() => {
-    if (visible) return;
-
-    recordingSessionRef.current += 1;
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    const activeRecording = recordingRef.current;
-    recordingRef.current = null;
-    if (activeRecording && !stoppingRecordingRef.current) {
-      activeRecording.stop().catch(() => {});
-    }
-    setRecordingObj(null);
-    setRecordState("idle");
-    setRecordedUri(null);
-    setRecordedDuration(0);
-    setRecordElapsed(0);
-    recordElapsedRef.current = 0;
-    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
-  }, [visible]);
-
-  useEffect(() => () => {
-    recordingSessionRef.current += 1;
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    const activeRecording = recordingRef.current;
-    recordingRef.current = null;
-    if (activeRecording && !stoppingRecordingRef.current) {
-      activeRecording.stop().catch(() => {});
-    }
-    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     // iOS fires Will* events with exact keyboard animation duration for perfect sync.
@@ -925,180 +885,98 @@ export function VideoCommentsSheet({
 
   function discardRecording() {
     stopTimer();
-    recordingSessionRef.current += 1;
-    const activeRecording = recordingRef.current ?? recordingObj;
-    recordingRef.current = null;
-    if (activeRecording && !stoppingRecordingRef.current) {
-      activeRecording.stop().catch(() => {});
+    if (recordingObj) {
+      recordingObj.stopAndUnloadAsync().catch(() => {});
+      setRecordingObj(null);
       // Restore audio session so playback (voice messages, video) works normally.
       // Without this reset, iOS stays in .playAndRecord category and routes
       // subsequent audio through the earpiece at near-zero volume.
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
+      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
     }
-    setRecordingObj(null);
     setRecordState("idle");
     setRecordedUri(null);
     setRecordedDuration(0);
     setRecordElapsed(0);
-    recordElapsedRef.current = 0;
   }
 
   async function startRecording() {
-    if (Platform.OS === "web") {
-      showCommentSheetAlert("Not supported", "Audio recording is not available in this environment.");
+    if (!Audio) {
+      showAlert("Not supported", "Audio recording is not available in this environment.");
       return;
     }
-    if (!visibleRef.current || recordingStartingRef.current || stoppingRecordingRef.current || recordState !== "idle") return;
-    recordingStartingRef.current = true;
-    const session = ++recordingSessionRef.current;
-    setShowEmojiPanel(false);
-    Keyboard.dismiss();
+    audioFocus.claimRecording();
+    const { granted } = await Audio.requestPermissionsAsync();
+    if (!granted) {
+      showAlert("Microphone access needed", "Please enable microphone access in Settings to record voice notes.");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const permission = await requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        const buttons = permission.canAskAgain === false
-          ? [
-              { text: "Not now", style: "cancel" as const },
-              { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
-            ]
-          : undefined;
-        showCommentSheetAlert(
-          "Microphone access needed",
-          permission.canAskAgain === false
-            ? "Enable microphone access in Settings to record a voice note."
-            : "Allow microphone access to record a voice note.",
-          buttons,
-        );
-        return;
-      }
-      if (session !== recordingSessionRef.current || !visibleRef.current) return;
-
-      audioFocus.claimRecording();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
       });
-      if (session !== recordingSessionRef.current || !visibleRef.current) {
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
-        return;
-      }
-      try {
-        await audioRecorder.prepareToRecordAsync();
-      } catch {
-        await audioRecorder.prepareToRecordAsync(RecordingPresets.LOW_QUALITY);
-      }
-      audioRecorder.record();
-      const recording = audioRecorder;
-      if (session !== recordingSessionRef.current || !visibleRef.current) {
-        await recording.stop().catch(() => {});
-        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
-        return;
-      }
-      recordingRef.current = recording;
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
       setRecordingObj(recording);
-      recordElapsedRef.current = 0;
       setRecordElapsed(0);
       setRecordState("recording");
-      timerRef.current = setInterval(() => {
-        if (session !== recordingSessionRef.current) return;
-        const next = recordElapsedRef.current + 1;
-        recordElapsedRef.current = next;
-        setRecordElapsed(next);
-        if (next >= MAX_VOICE_SECS) void stopRecording(recording, next);
+      timerRef.current = setInterval(async () => {
+        setRecordElapsed((prev) => {
+          const next = prev + 1;
+          if (next >= MAX_VOICE_SECS) {
+            stopRecording(recording, next);
+          }
+          return next;
+        });
       }, 1000);
     } catch (e: any) {
-      if (session === recordingSessionRef.current && visibleRef.current) {
-        setRecordState("idle");
-        setRecordingObj(null);
-        setRecordElapsed(0);
-        recordElapsedRef.current = 0;
-      }
-      await setAudioModeAsync({
-        allowsRecording: false,
-        playsInSilentMode: false,
-      }).catch(() => {});
-      if (session === recordingSessionRef.current && visibleRef.current) {
-        showCommentSheetAlert("Could not start recording", e?.message || "Check microphone access and try again.");
-      }
-    } finally {
-      recordingStartingRef.current = false;
+      showAlert("Could not start recording", e?.message || "Please try again.");
     }
   }
 
-  async function stopRecording(rec?: AudioRecorder | null, elapsed?: number) {
-    const activeRec = rec ?? recordingRef.current ?? recordingObj;
-    if (!activeRec) {
-      stopTimer();
-      setRecordingObj(null);
-      setRecordState("idle");
-      setRecordElapsed(0);
-      recordElapsedRef.current = 0;
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
-      return;
-    }
-    if (stoppingRecordingRef.current) return;
-    stoppingRecordingRef.current = true;
-    const session = recordingSessionRef.current;
+  async function stopRecording(rec?: AudioRecording | null, elapsed?: number) {
     stopTimer();
+    const activeRec = rec ?? recordingObj;
+    if (!activeRec) { setRecordState("idle"); return; }
     try {
-      const status = activeRec.getStatus();
-      await activeRec.stop();
-      const uri = activeRec.uri;
-      const durationMs = status.durationMillis;
+      const status = await activeRec.getStatusAsync();
+      await activeRec.stopAndUnloadAsync();
+      const uri = activeRec.getURI();
+      const durationMs = (status as any).durationMillis as number | undefined;
       const durationS = durationMs ? Math.ceil(durationMs / 1000) : (elapsed ?? recordElapsed);
-      if (recordingRef.current === activeRec) recordingRef.current = null;
-      if (session === recordingSessionRef.current && visibleRef.current && uri && durationS > 0) {
-        setRecordingObj(null);
+      setRecordingObj(null);
+      if (uri && durationS > 0) {
         setRecordedUri(uri);
         setRecordedDuration(durationS);
         setRecordState("recorded");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (session === recordingSessionRef.current && visibleRef.current) {
-        setRecordingObj(null);
+      } else {
         setRecordState("idle");
         setRecordElapsed(0);
-        recordElapsedRef.current = 0;
       }
     } catch {
-      if (session === recordingSessionRef.current && visibleRef.current) {
-        setRecordingObj(null);
-        setRecordState("idle");
-        setRecordElapsed(0);
-        recordElapsedRef.current = 0;
-      }
-    } finally {
-      if (recordingRef.current === activeRec) recordingRef.current = null;
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
-      stoppingRecordingRef.current = false;
+      setRecordState("idle");
+      setRecordElapsed(0);
     }
-  }
-
-  function toggleEmojiPanel() {
-    if (showEmojiPanel) {
-      setShowEmojiPanel(false);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    } else {
-      Keyboard.dismiss();
-      setShowEmojiPanel(true);
-    }
+    Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
   }
 
   async function pickImage() {
-    try {
-      // Let Android's system picker grant access to only the selected image;
-      // full library permission is not needed for a one-off attachment.
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        quality: 0.82,
-        allowsEditing: false,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        const a = result.assets[0];
-        setAttachedImage({ uri: a.uri, width: a.width, height: a.height });
-      }
-    } catch (error: any) {
-      showCommentSheetAlert("Could not open photos", error?.message || "Please try again.");
+    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) {
+      showAlert("Photos access needed", "Please enable photo library access in Settings.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.82,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets.length > 0) {
+      const a = result.assets[0];
+      setAttachedImage({ uri: a.uri, width: a.width, height: a.height });
     }
   }
 
@@ -1109,95 +987,91 @@ export function VideoCommentsSheet({
     if (!user || (!hasText && !hasVoice && !hasImage)) return;
 
     setSending(true);
-    try {
-      Animated.sequence([
-        Animated.spring(sendScale, { toValue: 0.78, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
-        Animated.spring(sendScale, { toValue: 1, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
-      ]).start();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.sequence([
+      Animated.spring(sendScale, { toValue: 0.78, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
+      Animated.spring(sendScale, { toValue: 1, tension: 400, friction: 8, useNativeDriver: USE_NATIVE }),
+    ]).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-      let finalVoiceUrl: string | null = null;
-      let finalImageUrl: string | null = null;
+    let finalVoiceUrl: string | null = null;
+    let finalImageUrl: string | null = null;
 
-      if (hasVoice && recordedUri) {
-        const ext = "m4a";
-        const path = `${user.id}/comment_${Date.now()}.${ext}`;
-        const { publicUrl, error } = await uploadToStorage("voice-messages", path, recordedUri, "audio/mp4");
-        if (error || !publicUrl) {
-          showCommentSheetAlert("Upload failed", "Could not upload voice note. Please try again.");
-          return;
-        }
-        finalVoiceUrl = publicUrl;
+    if (hasVoice && recordedUri) {
+      const ext = "m4a";
+      const path = `${user.id}/comment_${Date.now()}.${ext}`;
+      const { publicUrl, error } = await uploadToStorage("voice-messages", path, recordedUri, "audio/mp4");
+      if (error || !publicUrl) {
+        showAlert("Upload failed", "Could not upload voice note. Please try again.");
+        setSending(false);
+        return;
       }
-
-      if (hasImage && attachedImage) {
-        const uriLower = attachedImage.uri.toLowerCase();
-        const ext = uriLower.includes(".png") ? "png" : uriLower.includes(".webp") ? "webp" : "jpg";
-        const path = `${user.id}/comment_${postId}_${Date.now()}.${ext}`;
-        const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-        const { publicUrl, error } = await uploadToStorage("post-images", path, attachedImage.uri, mime);
-        if (error || !publicUrl) {
-          showCommentSheetAlert("Upload failed", "Could not upload image. Please try again.");
-          return;
-        }
-        finalImageUrl = publicUrl;
-      }
-
-      const payload: any = {
-        post_id: postId,
-        author_id: user.id,
-        content: text.trim(),
-      };
-      if (replyingTo) payload.parent_reply_id = replyingTo.id;
-      if (finalVoiceUrl) { payload.voice_url = finalVoiceUrl; payload.voice_duration = recordedDuration; }
-      if (finalImageUrl) payload.image_url = finalImageUrl;
-
-      const { data, error } = await supabase
-        .from("post_replies")
-        .insert(payload)
-        .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url")
-        .single();
-
-      if (!error && data) {
-        const newReply: Reply = {
-          id: data.id,
-          author_id: data.author_id,
-          content: data.content || "",
-          created_at: data.created_at,
-          parent_reply_id: data.parent_reply_id || null,
-          like_count: 0,
-          voice_url: data.voice_url || null,
-          voice_duration: data.voice_duration ?? null,
-          image_url: data.image_url || null,
-          profile: {
-            display_name: profile?.display_name || "You",
-            handle: profile?.handle || "you",
-            avatar_url: profile?.avatar_url || null,
-          },
-        };
-        setReplies((prev) => [...prev, newReply]);
-        setNewCommentIds((prev) => new Set([...prev, data.id]));
-        onReplyCountChange(postId, 1);
-        const wasThreaded = !!replyingTo;
-        setText("");
-        setReplyingTo(null);
-        discardRecording();
-        setAttachedImage(null);
-        if (!wasThreaded) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
-      } else if (error) {
-        console.error("[VideoCommentsSheet] sendReply:", error.message, error.code, error.details);
-        showCommentSheetAlert(
-          "Comment failed",
-          "Your comment could not be posted. Please try again.",
-          [{ text: "OK" }],
-        );
-      }
-    } catch (error) {
-      console.error("[VideoCommentsSheet] sendReply exception:", error);
-      showCommentSheetAlert("Comment failed", "Your comment could not be posted. Please try again.");
-    } finally {
-      setSending(false);
+      finalVoiceUrl = publicUrl;
     }
+
+    if (hasImage && attachedImage) {
+      const uriLower = attachedImage.uri.toLowerCase();
+      const ext = uriLower.includes(".png") ? "png" : uriLower.includes(".webp") ? "webp" : "jpg";
+      const path = `${user.id}/comment_${postId}_${Date.now()}.${ext}`;
+      const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+      const { publicUrl, error } = await uploadToStorage("post-images", path, attachedImage.uri, mime);
+      if (error || !publicUrl) {
+        showAlert("Upload failed", "Could not upload image. Please try again.");
+        setSending(false);
+        return;
+      }
+      finalImageUrl = publicUrl;
+    }
+
+    const payload: any = {
+      post_id: postId,
+      author_id: user.id,
+      content: text.trim(),
+    };
+    if (replyingTo) payload.parent_reply_id = replyingTo.id;
+    if (finalVoiceUrl) { payload.voice_url = finalVoiceUrl; payload.voice_duration = recordedDuration; }
+    if (finalImageUrl) payload.image_url = finalImageUrl;
+
+    const { data, error } = await supabase
+      .from("post_replies")
+      .insert(payload)
+      .select("id, author_id, content, created_at, parent_reply_id, voice_url, voice_duration, image_url")
+      .single();
+
+    if (!error && data) {
+      const newReply: Reply = {
+        id: data.id,
+        author_id: data.author_id,
+        content: data.content || "",
+        created_at: data.created_at,
+        parent_reply_id: data.parent_reply_id || null,
+        like_count: 0,
+        voice_url: data.voice_url || null,
+        voice_duration: data.voice_duration ?? null,
+        image_url: data.image_url || null,
+        profile: {
+          display_name: profile?.display_name || "You",
+          handle: profile?.handle || "you",
+          avatar_url: profile?.avatar_url || null,
+        },
+      };
+      setReplies((prev) => [...prev, newReply]);
+      setNewCommentIds((prev) => new Set([...prev, data.id]));
+      onReplyCountChange(postId, 1);
+      const wasThreaded = !!replyingTo;
+      setText("");
+      setReplyingTo(null);
+      discardRecording();
+      setAttachedImage(null);
+      if (!wasThreaded) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
+    } else if (error) {
+      console.error("[VideoCommentsSheet] sendReply:", error.message, error.code, error.details);
+      showAlert(
+        "Comment failed",
+        "Your comment could not be posted. Please try again.",
+        [{ text: "OK" }],
+      );
+    }
+    setSending(false);
   }
 
   const charLeft = 500 - text.length;
@@ -1227,9 +1101,18 @@ export function VideoCommentsSheet({
     animSheetH.setValue(peekSH);
   }
 
-  // Use the measured height of the pinned composer and preview rows so the
-  // final comment never scrolls underneath them.
-  const inputDynH = inputAreaHeight;
+  // Dynamic input bar height — mirrors the same calculation as post/[id].tsx so
+  // the FlatList paddingBottom always clears the absolutely-positioned input bar.
+  const inputBaseH = 56; // inputRow: avatar(32) + padding(8+8) + pill
+  const inputDynH =
+    inputBaseH +
+    (replyingTo ? 36 : 0) +
+    (showEmojiPanel ? 52 : 0) +
+    (attachedImage ? 72 : 0) +
+    (recordState === "recorded" && recordedUri ? 88 : 0) +
+    (mentionSuggestions.length > 0 ? 56 : 0);
+
+  const mediaBarH = (recordState === "recorded" && recordedUri) ? 88 : (attachedImage ? 72 : 0);
 
   const canSend = !sending && (text.trim().length > 0 || (recordState === "recorded" && !!recordedUri) || !!attachedImage);
   // ─── Native bottom sheet content ───────────────────────────────────────────
@@ -1237,17 +1120,11 @@ export function VideoCommentsSheet({
 
   // The bottom input area (always pinned at bottom of sheet)
   const bottomInputArea = (
-    <View
-      style={{ backgroundColor: sheetBg }}
-      onLayout={(event) => {
-        const nextHeight = event.nativeEvent.layout.height;
-        setInputAreaHeight((current) => Math.abs(current - nextHeight) > 1 ? nextHeight : current);
-      }}
-    >
+    <View style={{ backgroundColor: sheetBg }}>
       {replyingTo && (
         <View style={[cStyles.replyingTo, { borderTopColor: borderTopClr }]}>
           <Text style={[cStyles.replyingToText, { color: replyToTxt }]}>
-                    Replying to <Text style={{ color: accent }}>{replyingTo.profile.display_name || replyingTo.profile.handle}</Text>
+            Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
           </Text>
           <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={8}>
             <Ionicons name="close-circle" size={16} color={replyToIcon} />
@@ -1303,7 +1180,7 @@ export function VideoCommentsSheet({
               activeOpacity={0.7}
             >
               <Avatar uri={u.avatar_url} name={u.display_name} size={28} userId={u.id} />
-              <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
+              <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
                 @{u.handle}
               </Text>
             </TouchableOpacity>
@@ -1317,10 +1194,11 @@ export function VideoCommentsSheet({
           <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
 
           {/* ── Glass pill — text + all buttons on the right ── */}
-          <AfuInputSurface
+          <GlassInputSurface
             style={cStyles.inputGlassPill}
-            contentStyle={cStyles.inputBarRow}
+            borderColor={isDark ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.48)"}
           >
+            <View style={cStyles.inputBarRow}>
               {recordState === "recording" ? (
                 /* Active recording fills the whole pill */
                 <RecordingBar elapsed={recordElapsed} onStop={() => stopRecording()} accent={accent} />
@@ -1329,7 +1207,6 @@ export function VideoCommentsSheet({
                   {/* Text input — grows to fill available space */}
                   <TextInput
                     ref={inputRef}
-                    appearance="embedded"
                     style={[cStyles.input, { color: inputTxt }]}
                     placeholder={recordState === "recorded" ? "Add a caption… (optional)" : "Add a comment…"}
                     placeholderTextColor={inputPH}
@@ -1350,7 +1227,7 @@ export function VideoCommentsSheet({
                   {!canSend && (
                     <>
                       <TouchableOpacity
-                        onPress={toggleEmojiPanel}
+                        onPress={() => setShowEmojiPanel((p) => !p)}
                         hitSlop={6}
                         activeOpacity={0.7}
                         style={[cStyles.pillIconBtn, showEmojiPanel && { backgroundColor: accent + "25" }]}
@@ -1404,7 +1281,8 @@ export function VideoCommentsSheet({
                   )}
                 </>
               )}
-          </AfuInputSurface>
+            </View>
+          </GlassInputSurface>
         </View>
       ) : (
         <TouchableOpacity

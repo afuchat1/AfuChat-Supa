@@ -7,18 +7,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
   KeyboardAvoidingView,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
@@ -31,13 +29,8 @@ import { Avatar } from "@/components/ui/Avatar";
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { showAlert } from "@/lib/alert";
-import {
-  cleanupPreparedMediaForUpload,
-  prepareMediaForUpload,
-  uploadToStorage,
-} from "@/lib/mediaUpload";
+import { prepareMediaForUpload, uploadToStorage } from "@/lib/mediaUpload";
 import { consumeStoryMediaDraft } from "@/lib/storyMediaDraft";
-import { useTheme } from "@/hooks/useTheme";
 import * as FileSystem from "expo-file-system/legacy";
 import { isOnline } from "@/lib/offlineStore";
 import { getDailyUsage, recordDailyUsage } from "@/lib/featureUsage";
@@ -59,18 +52,12 @@ const PRIVACY_OPTIONS: { id: Privacy; label: string; icon: React.ComponentProps<
 
 export default function CreateStoryScreen() {
   const { accent } = useAppAccent();
-  const { colors } = useTheme();
   const { user, profile, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const params = useLocalSearchParams<{ mediaUri?: string; mediaType?: string }>();
   const mediaDraft = consumeStoryMediaDraft();
   const [mediaUri, setMediaUri] = useState<string | null>(params.mediaUri ?? mediaDraft?.uri ?? null);
-  useEffect(() => {
-    return () => {
-      if (mediaUri) void cleanupPreparedMediaForUpload(mediaUri);
-    };
-  }, [mediaUri]);
   const [mediaType, setMediaType] = useState<"image" | "video">(
     params.mediaType === "video" ? "video" : mediaDraft?.mediaType === "video" ? "video" : "image"
   );
@@ -85,7 +72,7 @@ export default function CreateStoryScreen() {
   const [tintColor, setTintColor] = useState<string | null>(null);
 
   const shareScale = useRef(new Animated.Value(1)).current;
-  const captionRef = useRef<TextInputInstance>(null);
+  const captionRef = useRef<AfuNativeRef.TextInput>(null);
   const previewRadius = 24;
   const previewMargin = 8;
   const previewW = screenW - previewMargin * 2;
@@ -124,7 +111,7 @@ export default function CreateStoryScreen() {
     const usage = await getDailyUsage("stories_create", tier);
     if (!usage.allowed) {
       setStarting(false);
-      const nextTier = tier === "free" ? "Standard" : tier === "silver" ? "Pro" : "Platinum";
+      const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
       showAlert(
         "Daily story limit reached",
         `You've shared all ${usage.limit} free stories for today. Upgrade to ${nextTier} for more.`,
@@ -146,9 +133,10 @@ export default function CreateStoryScreen() {
     const _userId = user.id;
 
     // ── Stable file copy (native) ──────────────────────────────────────────
-    // Picker URIs can point to volatile temp locations. Copy user media into
-    // persistent app storage before publishing so OS cache cleanup cannot
-    // remove the source while the upload is running.
+    // Camera and gallery URIs on Android (file://, content://, or bare paths)
+    // point to volatile temp locations that are wiped when the screen unmounts.
+    // Copy to a stable cacheDirectory file NOW — before dismissing — so the
+    // background upload always has a readable source.
     // We skip data: and blob: (already in-memory) and web (no FileSystem).
     //
     // IMPORTANT: In Expo Go on Android the ImagePicker writes temp files to the
@@ -164,25 +152,23 @@ export default function CreateStoryScreen() {
       Platform.OS !== "web" &&
       !mediaUri.startsWith("data:") &&
       !mediaUri.startsWith("blob:");
-    const stagingDirectory = FileSystem.documentDirectory
-      ? `${FileSystem.documentDirectory}afuchat_upload_staging/`
-      : null;
-    if (isNativeFileUri && stagingDirectory) {
+    if (isNativeFileUri && FileSystem.cacheDirectory) {
       try {
-        if (mediaUri.startsWith(stagingDirectory)) {
+        if (mediaUri.startsWith(FileSystem.cacheDirectory)) {
           const existing = await FileSystem.getInfoAsync(mediaUri);
           if (existing.exists) {
             _mediaUri = mediaUri;
           } else {
-            throw new Error("Saved story media is no longer available.");
+            throw new Error("Cached story media is no longer available.");
           }
         } else {
           const rawExt =
             mediaUri.split(".").pop()?.split("?")[0]?.toLowerCase() || (_mediaType === "video" ? "mp4" : "jpg");
-          await FileSystem.makeDirectoryAsync(stagingDirectory, { intermediates: true });
+          // Content URIs can contain query strings or non-path characters.
+          // Sanitize the extension before using it as a native cache filename.
           const safeExt = rawExt.replace(/[^a-z0-9]/gi, "").slice(0, 8) || (_mediaType === "video" ? "mp4" : "jpg");
           const uniqueSuffix = Math.random().toString(36).slice(2, 10);
-          const stablePath = `${stagingDirectory}story_src_${Date.now()}_${uniqueSuffix}.${safeExt}`;
+          const stablePath = `${FileSystem.cacheDirectory}story_src_${Date.now()}_${uniqueSuffix}.${safeExt}`;
           await FileSystem.copyAsync({ from: mediaUri, to: stablePath });
           _mediaUri = stablePath;
         }
@@ -260,7 +246,6 @@ export default function CreateStoryScreen() {
 
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
       await recordDailyUsage("stories_create");
-      await cleanupPreparedMediaForUpload(_mediaUri);
       finishStoryUpload();
 
       if (router.canDismiss()) {
@@ -289,7 +274,7 @@ export default function CreateStoryScreen() {
   const charColor = charPct > 0.9 ? "#FF3B30" : charPct > 0.75 ? "#FF9500" : "rgba(255,255,255,0.5)";
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View style={[styles.root, { backgroundColor: "#000" }]}>
       {starting && (
         <View style={[styles.progressBar, { top: insets.top }]}>
           <LinearGradient
@@ -302,12 +287,13 @@ export default function CreateStoryScreen() {
       )}
 
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton
+        <TouchableOpacity
           style={styles.topBtn}
           onPress={() => router.back()}
-          icon="close"
-          accessibilityLabel="Close"
-        />
+          hitSlop={12}
+        >
+          <Ionicons name="close" size={28} color="#fff" />
+        </TouchableOpacity>
 
         <View style={styles.topCenter}>
           {starting && (
@@ -336,7 +322,7 @@ export default function CreateStoryScreen() {
       >
         <View style={styles.previewContainer}>
           {mediaUri ? (
-            <View style={[styles.previewWrap, { width: previewW, height: previewH, borderRadius: previewRadius, backgroundColor: colors.backgroundSecondary }]}>
+            <View style={[styles.previewWrap, { width: previewW, height: previewH, borderRadius: previewRadius }]}>
               {mediaType === "video" ? (
                 <VideoPreview
                   uri={mediaUri!}
@@ -413,7 +399,7 @@ export default function CreateStoryScreen() {
                           borderColor: c === null ? "rgba(255,255,255,0.6)" : "#fff" }]}
                       onPress={() => { setTintColor(tintColor === c ? null : c); setShowColors(false); }}
                     >
-                      {c === null && <Ionicons name="close" size={14} color="rgba(255,255,255,0.7)" />}
+                      {c === null && <Ionicons name="close" size={14} color="#FFFFFF" />}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -480,11 +466,11 @@ export default function CreateStoryScreen() {
             >
               <Ionicons name={privacyOption.icon} size={14} color="#fff" />
               <Text style={styles.privacyText}>{privacyOption.label}</Text>
-              <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
+              <Ionicons name="chevron-down" size={12} color="#FFFFFF" />
             </TouchableOpacity>
 
             <View style={styles.expiryChip}>
-              <Ionicons name="time" size={13} color="rgba(255,255,255,0.5)" />
+              <Ionicons name="time" size={13} color="#FFFFFF" />
               <Text style={styles.expiryText}>24h</Text>
             </View>
           </View>
@@ -531,18 +517,18 @@ export default function CreateStoryScreen() {
           onPress={() => setShowPrivacy(false)}
         >
           <Pressable
-            style={[styles.modalSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}
+            style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}
             onPress={(e) => e.stopPropagation()}
           >
             <View style={styles.modalHandle} />
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Who can see your story?</Text>
+            <Text style={styles.modalTitle}>Who can see your story?</Text>
 
             {PRIVACY_OPTIONS.map((opt) => (
               <TouchableOpacity
                 key={opt.id}
                 style={[
                   styles.privacyRow,
-                  privacy === opt.id && [styles.privacyRowActive, { backgroundColor: colors.backgroundSecondary }],
+                  privacy === opt.id && styles.privacyRowActive,
                 ]}
                 onPress={() => {
                   Haptics.selectionAsync();
@@ -558,17 +544,17 @@ export default function CreateStoryScreen() {
                   <Ionicons
                     name={opt.icon}
                     size={20}
-                    color={privacy === opt.id ? accent : colors.textMuted}
+                    color={privacy === opt.id ? accent : "#999"}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[
                     styles.privacyLabel,
-                    { color: colors.text },
+                    privacy === opt.id && { color: "#fff" },
                   ]}>
                     {opt.label}
                   </Text>
-                  <Text style={[styles.privacyDesc, { color: colors.textMuted }]}>{opt.desc}</Text>
+                  <Text style={styles.privacyDesc}>{opt.desc}</Text>
                 </View>
                 {privacy === opt.id && (
                   <Ionicons name="checkmark-circle" size={22} color={accent} />
@@ -652,6 +638,7 @@ const styles = StyleSheet.create({
   },
   previewWrap: {
     overflow: "hidden",
+    backgroundColor: "#111",
     position: "relative",
   },
   sideToolbar: {
@@ -852,6 +839,7 @@ const styles = StyleSheet.create({
     zIndex: 200,
   },
   modalSheet: {
+    backgroundColor: "#1C1C1E",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,

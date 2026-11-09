@@ -286,7 +286,7 @@ export default function GiftMarketplaceScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.listingCard, { backgroundColor: colors.cardSurface, width: cardW }]}
+        style={[styles.listingCard, { backgroundColor: colors.surface, width: cardW }]}
         onPress={() => setSelectedListing(item)}
         activeOpacity={0.7}
       >

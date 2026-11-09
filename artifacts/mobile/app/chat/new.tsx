@@ -14,16 +14,14 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { FlatListInstance, TextInputInstance } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CHAT_FAST_DURATION } from "@/lib/chatMotion";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
@@ -31,7 +29,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { AnimatedSearchSurface } from "@/components/chat/AnimatedSearchSurface";
-import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import { Separator } from "@/components/ui/Separator";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -74,7 +71,7 @@ type ChannelItem = { id: string; name: string; avatar_url: string | null; is_ver
 
 export default function NewChatScreen() {
   const { colors, accent } = useTheme();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const keyboardOffsetAnim = useRef(new Animated.Value(0)).current;
@@ -107,7 +104,7 @@ export default function NewChatScreen() {
   const [channels, setChannels] = useState<ChannelItem[]>([]);
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<TextInputInstance>(null);
+  const inputRef = useRef<AfuNativeRef.TextInput>(null);
 
   useEffect(() => {
     getAllPhonebookNames().then(setPhonebookNames).catch(() => {});
@@ -244,8 +241,8 @@ export default function NewChatScreen() {
        );
     };
     applyCached(await getLocalPhoneContacts());
-    void syncPhoneContacts(user.id, profile?.country, applyCached, applyCached);
-  }, [user, profile?.country, phonebookNames]);
+    void syncPhoneContacts(user.id, applyCached, applyCached);
+  }, [user, phonebookNames]);
 
   useEffect(() => {
     loadContacts();
@@ -389,8 +386,16 @@ export default function NewChatScreen() {
           { paddingTop: insets.top + 6, backgroundColor: colors.background },
         ]}
       >
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" style={styles.backBtn} />
-        <Text style={[styles.headerTitle, { color: colors.text }]}>{"New Message"}</Text>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => router.back()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="chevron-back" size={26} color={accent} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          New Message
+        </Text>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => router.push("/app/afuqr")}
@@ -412,7 +417,7 @@ export default function NewChatScreen() {
       >
         <Text style={[styles.toLabel, { color: colors.textMuted }]}>To:</Text>
 
-        <AfuInputSurface style={styles.toPill}>
+        <View style={[styles.toPill, { backgroundColor: colors.inputBg, borderColor: colors.border, ...Platform.select({ web: { boxShadow: "0 2px 14px rgba(0,0,0,0.13)" } as any, default: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.13, shadowRadius: 8, elevation: 4 } }) }]}>
           {/* Selected chips */}
           {selected.size > 0 && (
             <FlatList
@@ -441,7 +446,6 @@ export default function NewChatScreen() {
           <AnimatedSearchSurface style={{ flex: 1 }}>
             <TextInput
               ref={inputRef}
-              appearance="embedded"
               style={[styles.toInput, { color: colors.text }]}
               placeholder={selected.size === 0 ? "Search name or @handle…" : ""}
               placeholderTextColor={colors.textMuted}
@@ -460,7 +464,7 @@ export default function NewChatScreen() {
               </View>
             </Pressable>
           )}
-        </AfuInputSurface>
+        </View>
       </View>
 
       <View style={styles.body}>
@@ -470,13 +474,19 @@ export default function NewChatScreen() {
             {searching ? (
               <View style={styles.searchingRow}>
                 <ActivityIndicator size="small" color={accent} />
-                <Text style={[styles.searchingText, { color: colors.textMuted }]}>{"Searching…"}</Text>
+                <Text style={[styles.searchingText, { color: colors.textMuted }]}>
+                  Searching…
+                </Text>
               </View>
             ) : searchResults.length === 0 ? (
               <View style={styles.emptySearch}>
                 <Ionicons name="search" size={44} color={colors.textMuted} />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>{`No results for "${query}"`}</Text>
-                <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{"Try a different name or handle"}</Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                  No results for "{query}"
+                </Text>
+                <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+                  Try a different name or handle
+                </Text>
               </View>
             ) : (
               <FlatList
@@ -573,8 +583,12 @@ export default function NewChatScreen() {
                     size={72}
                     color={colors.textMuted}
                   />
-                  <Text style={[styles.emptyTitle, { color: colors.text }]}>{"No contacts yet"}</Text>
-                  <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{"Follow people to start chatting with them"}</Text>
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                    No contacts yet
+                  </Text>
+                  <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+                    Follow people to start chatting with them
+                  </Text>
                 </View>
               ) : undefined
             }
@@ -583,7 +597,7 @@ export default function NewChatScreen() {
                 <View style={{ paddingBottom: 40 }}>
                   <View style={[styles.sectionHeader, { backgroundColor: colors.backgroundSecondary, marginTop: 8 }]}>
                     <Text style={[styles.sectionTitle, { color: accent }]}>
-                      {"INVITE FRIENDS: "}{phoneNotAfu.length}
+                      INVITE FRIENDS: {phoneNotAfu.length}
                     </Text>
                   </View>
                   {phoneNotAfu.map((item) => (
@@ -839,7 +853,7 @@ function ListHeader({
           ]}
         >
           <Text style={[styles.sectionTitle, { color: accent }]}>
-            {"CONTACTS: "}{contactCount}
+                    CONTACTS: {contactCount}
           </Text>
         </View>
       )}

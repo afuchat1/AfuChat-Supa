@@ -7,10 +7,10 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { safeRouter } from "@/lib/navUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -244,7 +244,6 @@ export default function ContactsScreen() {
         <View style={[styles.searchBox, { backgroundColor: colors.inputBg }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
-            appearance="embedded"
             style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search contacts"
             placeholderTextColor={colors.textMuted}
@@ -269,7 +268,6 @@ export default function ContactsScreen() {
           </View>
           <View style={[styles.addField, { backgroundColor: colors.inputBg }]}>
             <TextInput
-              appearance="embedded"
               style={[styles.addInput, { color: colors.text }]}
               placeholder="Search by handle or name"
               placeholderTextColor={colors.textMuted}

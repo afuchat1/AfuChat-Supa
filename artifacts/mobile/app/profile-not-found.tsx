@@ -17,7 +17,6 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useTheme } from "@/hooks/useTheme";
 import Colors from "@/constants/colors";
 
@@ -87,7 +86,7 @@ export default function ProfileNotFoundScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-        <GlassBackButton
+        <TouchableOpacity
           style={styles.backBtn}
           onPress={() => {
             if (router.canGoBack()) {
@@ -96,7 +95,10 @@ export default function ProfileNotFoundScreen() {
               router.replace("/(tabs)/discover" as any);
             }
           }}
-        />
+          hitSlop={{ top: 8, left: 8, right: 12, bottom: 8 }}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.accent} />
+        </TouchableOpacity>
       </View>
       <ProfileNotFoundView handle={handle} />
     </View>

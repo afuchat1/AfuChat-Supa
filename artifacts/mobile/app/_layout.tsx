@@ -1,25 +1,51 @@
-import { markStartupPhase, setCrashReporterUserId, setCrashNotificationHandler } from "@/lib/crashReporter";
+import "@/polyfills";
 import "react-native-gesture-handler";
 import "@/lib/navigationGuard";
 import * as SplashScreen from "expo-splash-screen";
+import { isExpoGo } from "@/lib/expoEnvironment";
 
-// Keep the native splash visible until we explicitly hide it
-SplashScreen.preventAutoHideAsync().catch(() => {});
+// Expo Go owns the host app's initial splash lifecycle. Do not hold it open
+// indefinitely if a native module fails before RootLayout mounts.
+if (!isExpoGo()) {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
+import { enableScreens } from "react-native-screens";
+import { initCrashReporter, setCrashReporterUserId, setCrashNotificationHandler } from "@/lib/crashReporter";
 import { showAlert } from "@/lib/alert";
-markStartupPhase("primary");
+initCrashReporter();
+let screensEnabled = false;
+
+// enableScreens() is intentionally moved out of module-evaluation scope.
+// Calling it synchronously at the top level (before any React component mounts)
+// made it run before the Android activity was fully initialized on some devices,
+// causing a native crash with no JS stack trace. Calling it once inside a
+// useEffect (or the component body) is safe and still early enough for
+// react-native-screens to intercept all route-level screen creation.
+// See: https://github.com/software-mansion/react-native-screens/issues/2086
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { runAfterIdle } from "@/lib/runAfterIdle";
+import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { scheduleAfterInteractions } from "@/lib/scheduleAfterInteractions";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { router, Stack, usePathname, useRootNavigationState } from "expo-router";
 import { setCurrentPage, resolvePageInfo } from "@/lib/pageTracker";
 import { StatusBar, setStatusBarHidden, setStatusBarStyle } from "expo-status-bar";
 import * as Font from "expo-font";
 import { useTheme } from "@/hooks/useTheme";
+import {
+  initUserIdCache,
+} from "@/lib/offlineStore";
 import { refreshAllPermissions } from "@/lib/permissionsManager";
+
+// ── Boot-time UID cache warm-up ──────────────────────────────────────────────
+// If MMKV fell back to an in-memory store (JNI init failure on some Android
+// devices), the cached user ID won't survive a process kill.  Reading the
+// AsyncStorage backup here — before AuthProvider mounts — pre-populates the
+// synchronous MMKV / in-memory mirror so getCachedUserId() can return the
+// correct value on the very first render.  This prevents the safety-timer in
+// index.tsx from routing a legitimately-logged-in user to the welcome screen.
+initUserIdCache().catch(() => {});
 
 import { handleIncomingUrl } from "@/lib/deepLinkHandler";
 import { verifyDeepLinks } from "@/lib/deepLinkVerifier";
@@ -30,16 +56,20 @@ import {
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
 
-// Use the same bundled Inter family on every platform. Font loading is
-// non-blocking for the web UI; native keeps the branded splash visible briefly
-// so the complete app switches to Inter together rather than rendering pages
-// with a mixture of loaded and fallback font faces.
-const APP_FONTS = {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} as Parameters<typeof Font.useFonts>[0];
+// The offline web preview can leave Expo's font observer pending until its
+// 12-second rejection. WebGlobalStyles already provides a system-font fallback,
+// so do not start the native font loader on web. Native builds still load the
+// bundled Inter files normally.
+const APP_FONTS = (
+  Platform.OS === "web"
+    ? {}
+    : {
+        Inter_400Regular,
+        Inter_500Medium,
+        Inter_600SemiBold,
+        Inter_700Bold,
+      }
+) as Parameters<typeof Font.useFonts>[0];
 
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { CallProvider } from "@/context/CallContext";
@@ -51,15 +81,17 @@ import { ChatPreferencesProvider } from "@/context/ChatPreferencesContext";
 import { DataModeProvider } from "@/context/DataModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastContainer } from "@/components/ui/ToastContainer";
+import { UsernameLoadingOverlay } from "@/components/ui/UsernameLoadingOverlay";
 import AlertModal from "@/components/ui/AlertModal";
 import { GlobalInboxListener } from "@/components/GlobalInboxListener";
 import { IncomingCallModal } from "@/components/IncomingCallModal";
 import PushNotificationManager from "@/components/PushNotificationManager";
-import PlayStoreUpdateManager from "@/components/PlayStoreUpdateManager";
+import UpdatePrompt from "@/components/UpdatePrompt";
 import { initActivityTracker } from "@/lib/activityTracker";
 import { MiniAppRuntimeProvider } from "@/lib/superapp/MiniAppRuntime";
-import { GlobalMusicPlayerProvider } from "@/components/GlobalMusicPlayer";
+import { AfuMusicPlayerProvider } from "@/modules/afumusic/MusicPlayerContext";
 import { AnimationGuardInit } from "@/components/AnimationGuardInit";
+import { SplashScreenView } from "@/components/ui/SplashScreenView";
 import NativeShareShortcutSync from "@/components/NativeShareShortcutSync";
 import DesktopShell from "@/components/web/DesktopShell";
 import { safeRouter } from "@/lib/navUtils";
@@ -74,10 +106,11 @@ import { getNativeShareChatId } from "@/lib/nativeShareShortcuts";
 // Conversations pre-warm remains in the useEffect below (not at module-eval time)
 // so MMKV is only accessed after the full native runtime is ready.
 
-// Keep Android text line boxes consistent across screens while allowing the
-// operating system's accessibility font-size setting to scale app content.
+// Lock out system-level font scaling so the app always renders at its
+// intended sizes regardless of the device's accessibility font-size setting.
 (Text as any).defaultProps = {
   ...((Text as any).defaultProps ?? {}),
+  allowFontScaling: false,
   // Android reserves extra top/bottom font space by default. That space is
   // useful for some native text editing scenarios, but it makes icon/text
   // rows appear to have gaps behind their visible glyphs throughout the app.
@@ -85,6 +118,7 @@ import { getNativeShareChatId } from "@/lib/nativeShareShortcuts";
 };
 (TextInput as any).defaultProps = {
   ...((TextInput as any).defaultProps ?? {}),
+  allowFontScaling: false,
   includeFontPadding: false,
 };
 
@@ -95,18 +129,14 @@ I18nManager.allowRTL(false);
 I18nManager.forceRTL(false);
 
 function ActivityTrackerSync() {
-  const { user, isAuthenticated } = useAuth();
-  useEffect(() => {
-    initActivityTracker(isAuthenticated ? user?.id ?? null : null);
-  }, [isAuthenticated, user?.id]);
+  const { user } = useAuth();
+  useEffect(() => { initActivityTracker(user?.id ?? null); }, [user?.id]);
   return null;
 }
 
 function CrashReporterUserSync() {
-  const { user, isAuthenticated } = useAuth();
-  useEffect(() => {
-    setCrashReporterUserId(isAuthenticated ? user?.id ?? null : null);
-  }, [isAuthenticated, user?.id]);
+  const { user } = useAuth();
+  useEffect(() => { setCrashReporterUserId(user?.id ?? null); }, [user?.id]);
   return null;
 }
 
@@ -189,38 +219,21 @@ function PageWatcher() {
  * through every page they actually entered.
  */
 function HardwareBackGuard() {
-  const { session, user } = useAuth();
-  const pathname = usePathname();
-  const isLoggedIn = Boolean(session?.user?.id || user?.id);
-
   useEffect(() => {
     if (Platform.OS === "web") return;
 
-    const fallbackRoute = isLoggedIn ? "/(tabs)/chats" : "/(tabs)/discover";
-    const isAlreadyAtFallback =
-      pathname === fallbackRoute ||
-      (isLoggedIn && pathname === "/chats") ||
-      (!isLoggedIn && pathname === "/discover");
-
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      // Preserve real navigation history first. Only use the role-appropriate
-      // home route when the user has reached the end of the stack.
-      if (router.canGoBack()) {
-        router.back();
-        return true;
-      }
+      // Let Android close the activity only when Expo Router confirms that
+      // there is no page left to pop. This preserves every entered page,
+      // including app pages and modal-like stack routes.
+      if (!router.canGoBack()) return false;
 
-      // If already on the fallback destination, allow Android to exit normally.
-      if (isAlreadyAtFallback) return false;
-
-      // Public/guest navigation falls back to Feed; authenticated navigation
-      // falls back to Chats. No extra navigation button is added to the UI.
-      safeRouter.replace(fallbackRoute as any);
+      router.back();
       return true;
     });
 
     return () => subscription.remove();
-  }, [isLoggedIn, pathname]);
+  }, []);
 
   return null;
 }
@@ -314,39 +327,9 @@ function WebGlobalStyles() {
         height: 100%;
         margin: 0;
       }
-      /* Keep every React Native Web text style on the same bundled
-         Inter family, with a consistent sans-serif fallback while it loads. */
-      @font-face {
-        font-family: "Inter_400Regular";
-        src: local("Inter"), local("Roboto"), local("Arial");
-        font-style: normal;
-        font-weight: 400;
-        font-display: swap;
-      }
-      @font-face {
-        font-family: "Inter_500Medium";
-        src: local("Inter Medium"), local("Roboto Medium"), local("Arial");
-        font-style: normal;
-        font-weight: 500;
-        font-display: swap;
-      }
-      @font-face {
-        font-family: "Inter_600SemiBold";
-        src: local("Inter Semi Bold"), local("Roboto Medium"), local("Arial");
-        font-style: normal;
-        font-weight: 600;
-        font-display: swap;
-      }
-      @font-face {
-        font-family: "Inter_700Bold";
-        src: local("Inter Bold"), local("Roboto Bold"), local("Arial");
-        font-style: normal;
-        font-weight: 700;
-        font-display: swap;
-      }
       body {
         overflow: hidden;
-        font-family: "Inter_400Regular", sans-serif;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         direction: ltr;
         text-align: left;
       }
@@ -357,21 +340,26 @@ function WebGlobalStyles() {
       button, input, textarea, select {
         font-family: inherit;
       }
-      button, input, textarea, select,
-      [role="button"], [role="radio"], [role="tab"], [role="link"], [role="textbox"] {
-        border: 0 !important;
-        box-shadow: none !important;
-      }
-      button::-moz-focus-inner, input::-moz-focus-inner {
-        border: 0;
-        padding: 0;
-      }
     `;
     document.head.appendChild(style);
     return () => style.remove();
   }, []);
 
   return null;
+}
+
+function WebFontGate({
+  ready,
+  children,
+}: {
+  ready: boolean;
+  children: React.ReactNode;
+}) {
+  const { colors } = useTheme();
+  if (Platform.OS === "web" && !ready) {
+    return <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.background }} />;
+  }
+  return <>{children}</>;
 }
 
 function LanguageDirectionShell({ children }: { children: React.ReactNode }) {
@@ -453,8 +441,8 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
     if (!navigationReady) return;
     let cancelled = false;
 
-    const processUrl = async (url: string | null | undefined) => {
-      const action = await handleIncomingUrl(url ?? null);
+    const processUrl = async (url: string | null) => {
+      const action = await handleIncomingUrl(url);
       if (cancelled || !action) return;
 
       const isChatDestination = action.type === "navigate" && action.path === "/chat/[id]";
@@ -468,7 +456,7 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
 
     // Read the launch URL once. Re-running getInitialURL whenever auth changes
     // can replay a shortcut after the normal root redirect has already fired.
-    Linking.getInitialURL().then(processUrl).catch(() => {});
+    Linking.getInitialURL().then((url) => processUrl(url ?? null)).catch(() => {});
     const subscription = Linking.addEventListener("url", ({ url }) => {
       processUrl(url).catch(() => {});
     });
@@ -488,21 +476,20 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
   return null;
 }
 
-
 export default function RootLayout() {
   const rootNavigationState = useRootNavigationState();
-  // Register the same bundled font family globally, but never make route
-  // visibility depend on font loading. Until Inter is ready, every route uses
-  // the platform sans-serif fallback; once ready, all routes switch together.
-  Font.useFonts(APP_FONTS);
+  const [fontsLoaded, fontError] = Font.useFonts(APP_FONTS);
+  const [webFontTimeout, setWebFontTimeout] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    if (!rootNavigationState?.key) return;
-    markStartupPhase("operational");
-    if (Platform.OS !== "web") {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [rootNavigationState?.key]);
+    console.info(`[AfuChat boot] RootLayout mounted (${Platform.OS})`);
+  }, []);
+
+  const handleSplashDone = useCallback(() => {
+    SplashScreen.hideAsync().catch(() => {});
+    setSplashDone(true);
+  }, []);
 
   // The visual splash overlay is intentionally native-only. Explicitly hide
   // the platform splash on web as well; otherwise preventAutoHideAsync() above
@@ -513,15 +500,46 @@ export default function RootLayout() {
     }
   }, []);
 
-  // Safety valve for a broken navigation bootstrap. In normal operation the
-  // splash is dismissed as soon as the root navigator is ready, independently
-  // of font or network activity.
+  // If a production bundle cannot load a font asset, do not leave the native
+  // splash covering a blank screen forever. System fonts keep layout usable.
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (fontError) {
+      SplashScreen.hideAsync().catch(() => {});
+      setSplashDone(true);
+    }
+  }, [fontError]);
+
+  // Expo's offline web asset resolver can leave useFonts pending without
+  // returning an error. Do not block the entire app in that state; the browser
+  // can render the layout with its normal font fallback.
+  useEffect(() => {
+    if (Platform.OS !== "web" || fontsLoaded || fontError) return;
+    const timeout = setTimeout(() => setWebFontTimeout(true), 1500);
+    return () => clearTimeout(timeout);
+  }, [fontsLoaded, fontError]);
+
+  // A broken or unusually slow font/asset load must never leave users behind
+  // the native splash forever in a production build. The normal path still
+  // waits for fonts and the short fade; this is only a bounded escape hatch.
+  useEffect(() => {
+    if (Platform.OS === "web" || splashDone) return;
     const timeout = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
+      setSplashDone(true);
     }, 5000);
     return () => clearTimeout(timeout);
+  }, [splashDone]);
+
+  // Enable react-native-screens optimisation. Called here (inside a component,
+  // not at module-eval time) so the Android activity is guaranteed to be fully
+  // initialized before the native call runs. Module-eval is too early on some
+  // Android devices and causes a native crash before any JS error handler exists.
+  useEffect(() => {
+    if (screensEnabled) return;
+    try {
+      enableScreens(true);
+      screensEnabled = true;
+    } catch {}
   }, []);
 
   // Run deep-link route verification once in dev mode to catch any routes
@@ -547,74 +565,64 @@ export default function RootLayout() {
     return () => sub.remove();
   }, []);
 
-  // Drop decoded bitmap cache after the app has been backgrounded for a short
-  // time. Keep the disk cache intact so returning to the app can reuse files
-  // without holding the image memory cache while Android may reclaim the app.
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    let trimTimer: ReturnType<typeof setTimeout> | null = null;
-    const sub = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") {
-        if (trimTimer) clearTimeout(trimTimer);
-        trimTimer = null;
-        return;
-      }
-      if (nextState !== "background") return;
-      if (trimTimer) clearTimeout(trimTimer);
-      trimTimer = setTimeout(() => {
-        trimTimer = null;
-        void import("expo-image")
-          .then(({ Image }) => Image.clearMemoryCache())
-          .catch(() => {});
-      }, 3_000);
-    });
-    return () => {
-      if (trimTimer) clearTimeout(trimTimer);
-      sub.remove();
-    };
-  }, []);
-
   useEffect(() => {
     if (!rootNavigationState?.key) return;
     // Do not compete with the first route for the JS/native bridge. Auth starts
     // sync only after identity restoration, while storage maintenance is delayed
     // until the first screen has had time to settle.
+    let purgeTimer: ReturnType<typeof setTimeout> | null = null;
     let storageTimer: ReturnType<typeof setTimeout> | null = null;
-    const idleTask = runAfterIdle(() => {
+    const interactionTask = scheduleAfterInteractions(() => {
       // Keep maintenance out of the first route's data and interaction window.
       storageTimer = setTimeout(() => {
         if (AppState.currentState !== "active") return;
         // Keep maintenance modules out of the critical startup bundle. These
         // imports are intentionally lazy because storage/index re-exports many
         // SQLite/cache modules.
-        import("@/lib/storage")
+        const storageReady = import("@/lib/storage")
           .then(({ initDeviceStorage }) => initDeviceStorage())
           .catch(() => undefined);
+
+        // Video cleanup can open the same SQLite database and touch the file
+        // system. Let the first storage pass settle before doing that work.
+        purgeTimer = setTimeout(() => {
+          if (AppState.currentState !== "active") return;
+          storageReady
+            .then(() => import("@/lib/videoCache"))
+            .then(({ runScheduledVideoPurge }) => runScheduledVideoPurge())
+            .catch(() => {});
+        }, 7000);
       }, 4500);
     });
 
     return () => {
-      idleTask.cancel();
+      interactionTask.cancel();
       if (storageTimer) clearTimeout(storageTimer);
+      if (purgeTimer) clearTimeout(purgeTimer);
     };
   }, [rootNavigationState?.key]);
 
 
   return (
-    <ErrorBoundary FallbackComponent={BootstrapErrorFallback}>
-      <ShareIntentProvider options={{ scheme: "afuchat" }}>
-        <ErrorBoundary>
+    <ShareIntentProvider options={{ scheme: "afuchat" }}>
+      <ErrorBoundary>
         <GestureHandlerRootView style={styles.root}>
+          {/* JS splash overlay — visible until fonts load, then fades out */}
+          {!splashDone && Platform.OS !== "web" && (
+            <SplashScreenView ready={fontsLoaded || !!fontError} onDone={handleSplashDone} />
+          )}
           <SafeAreaProvider>
             <ThemeProvider>
               <ThemedRoot>
                 <WebGlobalStyles />
-                <AppAccentProvider>
+                <WebFontGate ready={fontsLoaded || !!fontError || webFontTimeout}>
+                  <AppAccentProvider>
                 <ThemedStatusBar />
                 {/* OOM guard: cancels all animations on app-background / memory-pressure */}
                 <AnimationGuardInit />
                 <DataModeProvider>
                   <AuthProvider>
+                    <AfuMusicPlayerProvider>
                     <CallProvider>
                     <ActivityTrackerSync />
                       <CrashReporterUserSync />
@@ -623,77 +631,37 @@ export default function RootLayout() {
                        <HardwareBackGuard />
                       <GlobalInboxListener />
                       <PushNotificationManager />
-                      <PlayStoreUpdateManager />
+                      <UpdatePrompt />
                       <LanguageProvider>
                         <LanguageDirectionShell>
                           <AdvancedFeaturesProvider>
                             <ChatPreferencesProvider>
                               <MiniAppRuntimeProvider>
-                                <GlobalMusicPlayerProvider>
                                  <DeepLinkGate navigationReady={!!rootNavigationState?.key} />
                                 <IncomingShareGate navigationReady={!!rootNavigationState?.key} />
                                 <NativeShareShortcutSync />
                                 <AppNavigationStack />
                                 <IncomingCallModal />
+                                 <UsernameLoadingOverlay />
                                 <ToastContainer />
                                 <AlertModal />
-                                </GlobalMusicPlayerProvider>
                               </MiniAppRuntimeProvider>
                             </ChatPreferencesProvider>
                           </AdvancedFeaturesProvider>
                         </LanguageDirectionShell>
                       </LanguageProvider>
                     </CallProvider>
+                    </AfuMusicPlayerProvider>
                   </AuthProvider>
                 </DataModeProvider>
-                </AppAccentProvider>
+                  </AppAccentProvider>
+                </WebFontGate>
               </ThemedRoot>
             </ThemeProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
-        </ErrorBoundary>
-      </ShareIntentProvider>
-    </ErrorBoundary>
-  );
-}
-
-function BootstrapErrorFallback({
-  error,
-  resetError,
-}: {
-  error: Error;
-  resetError: () => void;
-}) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        padding: 24,
-        backgroundColor: "#F5F0E8",
-      }}
-    >
-      <Text style={{ color: "#171717", fontSize: 20, fontWeight: "700" }}>
-        AfuChat couldn’t finish starting
-      </Text>
-      <Text style={{ color: "#555", marginTop: 10 }}>
-        {__DEV__ ? error.message : "Restart the app and try again."}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={resetError}
-        style={{
-          alignSelf: "flex-start",
-          marginTop: 20,
-          paddingHorizontal: 18,
-          paddingVertical: 12,
-          borderRadius: 12,
-          backgroundColor: "#1018D8",
-        }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "600" }}>Try again</Text>
-      </Pressable>
-    </View>
+      </ErrorBoundary>
+    </ShareIntentProvider>
   );
 }
 

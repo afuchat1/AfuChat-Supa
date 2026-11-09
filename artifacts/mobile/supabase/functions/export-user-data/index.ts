@@ -1,348 +1,280 @@
-// Authenticated AfuChat account-data export.
+// export-user-data — Supabase Edge Function (Deno)
+// Collects the authenticated user's data from the DB and emails it via Resend.
 //
-// Returns normalized tables for a client-side JSON, XLSX, or CSV export.
-// An optional JSON email copy is sent from privacy@afuchat.com.
+// Secrets required (set in Supabase Dashboard → Settings → Edge Functions):
+//   SUPABASE_SERVICE_ROLE_KEY — service-role key for admin DB access
+//   RESEND_API_KEY            — Resend API key for sending the email
+//
+// Request:
+//   POST /functions/v1/export-user-data
+//   Authorization: Bearer <supabase_jwt>
+//   Content-Type: application/json
+//   Body: { types?: string[] }   e.g. ["profile","posts","messages","activity","transactions"]
+//
+// Response: { ok: true, email: string }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const PAGE_SIZE = 500;
-const MAX_PAGES_PER_QUERY = 200;
-const MAX_EMAIL_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const VALID_TYPES = new Set(["profile", "messages", "posts", "activity", "transactions"]);
+const TYPE_LABELS: Record<string, string> = {
+  profile:      "Profile Data",
+  messages:     "Messages",
+  posts:        "Posts & Moments",
+  activity:     "Activity History",
+  transactions: "Transactions",
+};
 
-type ExportRow = Record<string, unknown>;
-type ExportTable = { columns: string[]; rows: ExportRow[] };
+function escHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function toBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8" },
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function makeTable(rows: ExportRow[], emptyColumns: string[] = []): ExportTable {
-  const columns = rows.length
-    ? Array.from(new Set(rows.flatMap((row) => Object.keys(row))))
-    : emptyColumns;
-  return { columns, rows };
-}
-
-async function fetchAllRows(
-  queryForPage: () => any,
-  label: string,
-): Promise<ExportRow[]> {
-  const rows: ExportRow[] = [];
-
-  for (let page = 0; page < MAX_PAGES_PER_QUERY; page += 1) {
-    const from = page * PAGE_SIZE;
-    const { data, error } = await queryForPage().range(from, from + PAGE_SIZE - 1);
-    if (error) {
-      console.error(`[export-user-data] ${label} query failed:`, error.message);
-      throw new Error(`Could not read ${label}. No export file was created.`);
-    }
-    if (!Array.isArray(data)) {
-      throw new Error(`The ${label} query returned an invalid result.`);
-    }
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) return rows;
-  }
-
-  throw new Error(`${label} is too large to export in one request. Please contact support.`);
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return btoa(binary);
-}
-
-async function sendEmailCopy(
-  resendKey: string,
-  recipient: string,
-  jsonText: string,
-  exportedAt: string,
-): Promise<"accepted" | "not_configured" | "too_large" | "failed"> {
-  if (!resendKey) return "not_configured";
-
-  const content = new TextEncoder().encode(jsonText);
-  if (content.byteLength > MAX_EMAIL_ATTACHMENT_BYTES) return "too_large";
-
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: "AfuChat Privacy <privacy@afuchat.com>",
-        to: [recipient],
-        subject: "Your AfuChat data export is ready",
-        attachments: [{
-          filename: `afuchat-data-export-${exportedAt.slice(0, 10)}.json`,
-          content: bytesToBase64(content),
-        }],
-        html: `<p>Your AfuChat data export is attached as a JSON file.</p>
-          <p>It was requested from your signed-in AfuChat account.</p>
-          <p>If you did not request this export, contact
-          <a href="mailto:privacy@afuchat.com">privacy@afuchat.com</a>.</p>`,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error("[export-user-data] Email provider rejected export:", response.status, errorText);
-      return "failed";
-    }
-    return "accepted";
-  } catch (error) {
-    console.error("[export-user-data] Email provider request failed:", error);
-    return "failed";
-  }
-}
-
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS_HEADERS });
+  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
-    if (!supabaseUrl || !serviceRoleKey) {
-      return json({ error: "Data export service is not configured." }, 503);
-    }
 
+    if (!serviceRoleKey) return json({ error: "Service not configured" }, 503);
+    if (!resendKey)       return json({ error: "Email service not configured" }, 503);
+
+    // ── 1. Verify caller JWT ────────────────────────────────────────────────
     const authHeader = req.headers.get("authorization") ?? "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    if (!token) return json({ error: "Sign in again before exporting your data." }, 401);
-
-    let parsedBody: unknown;
-    try {
-      parsedBody = await req.json();
-    } catch {
-      return json({ error: "The export request was not valid JSON." }, 400);
-    }
-    if (!parsedBody || typeof parsedBody !== "object" || Array.isArray(parsedBody)) {
-      return json({ error: "The export request must be a JSON object." }, 400);
-    }
-    const body = parsedBody as { types?: unknown; emailCopy?: unknown };
-    const hasEmailChoice = Object.prototype.hasOwnProperty.call(body, "emailCopy");
-    if (hasEmailChoice && typeof body.emailCopy !== "boolean") {
-      return json({ error: "The email-copy option must be true or false." }, 400);
-    }
-
-    if (!Array.isArray(body.types) || body.types.length === 0) {
-      return json({ error: "Select at least one data category to export." }, 400);
-    }
-    if (body.types.some((type) => typeof type !== "string" || !VALID_TYPES.has(type))) {
-      return json({ error: "The export request contains an unsupported data category." }, 400);
-    }
-    const selectedTypes = Array.from(new Set(body.types as string[]));
+    if (!token) return json({ error: "Authorization header required" }, 401);
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { data: authData, error: authError } = await admin.auth.getUser(token);
-    const user = authData?.user;
-    if (authError || !user) return json({ error: "Your session expired. Please sign in again." }, 401);
 
-    const tables: Record<string, ExportTable> = {};
-    const work: Promise<void>[] = [];
+    const { data: { user }, error: authErr } = await admin.auth.getUser(token);
+    if (authErr || !user) return json({ error: "Invalid or expired session" }, 401);
 
-    if (selectedTypes.includes("profile")) {
-      work.push((async () => {
-        const { data, error } = await admin
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (error) {
-          console.error("[export-user-data] Profile query failed:", error.message);
-          throw new Error("Could not read your profile. No export file was created.");
+    const userId    = user.id;
+    const userEmail = user.email;
+    if (!userEmail) return json({ error: "No email address on this account" }, 400);
+
+    // ── 2. Validate requested types ─────────────────────────────────────────
+    let body: { types?: string[] } = {};
+    try { body = await req.json(); } catch { /* no body = fine */ }
+
+    const validTypes = new Set(["profile", "messages", "posts", "activity", "transactions"]);
+    const selectedTypes: string[] = (Array.isArray(body.types) ? body.types : ["profile"])
+      .filter((t: string) => validTypes.has(t));
+    if (selectedTypes.length === 0) selectedTypes.push("profile");
+
+    // ── 3. Fetch all requested data in parallel ─────────────────────────────
+    const dataPackage: Record<string, unknown> = {};
+
+    await Promise.all(selectedTypes.map(async (type) => {
+      try {
+        switch (type) {
+          case "profile": {
+            const { data } = await admin
+              .from("profiles")
+              .select("id, display_name, handle, bio, avatar_url, country, website_url, xp, acoin, current_grade, is_verified, is_organization_verified, created_at, last_seen")
+              .eq("id", userId)
+              .single();
+            dataPackage.profile = data ?? {};
+            break;
+          }
+
+          case "posts": {
+            const { data } = await admin
+              .from("posts")
+              .select("id, content, post_type, visibility, article_title, image_url, view_count, created_at, post_images(image_url, display_order)")
+              .eq("author_id", userId)
+              .order("created_at", { ascending: false })
+              .limit(500);
+            dataPackage.posts = data ?? [];
+            break;
+          }
+
+          case "messages": {
+            const { data } = await admin
+              .from("messages")
+              .select("id, chat_id, encrypted_content, created_at, message_type")
+              .eq("sender_id", userId)
+              .order("created_at", { ascending: false })
+              .limit(1000);
+            dataPackage.messages = (data ?? []).map((m: Record<string, unknown>) => ({
+              id:       m.id,
+              chat_id:  m.chat_id,
+              content:  m.encrypted_content,
+              type:     m.message_type,
+              sent_at:  m.created_at,
+            }));
+            break;
+          }
+
+          case "activity": {
+            const { data: follows } = await admin
+              .from("follows")
+              .select("following_id, created_at")
+              .eq("follower_id", userId)
+              .order("created_at", { ascending: false })
+              .limit(200);
+            dataPackage.activity = {
+              follows: follows ?? [],
+            };
+            break;
+          }
+
+          case "transactions": {
+            const [coinRes, xpRes] = await Promise.all([
+              admin
+                .from("acoin_transactions")
+                .select("id, amount, type, note, created_at")
+                .eq("user_id", userId)
+                .order("created_at", { ascending: false })
+                .limit(500),
+              admin
+                .from("xp_transfers")
+                .select("id, amount, reason, created_at")
+                .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+                .order("created_at", { ascending: false })
+                .limit(200),
+            ]);
+            dataPackage.transactions = {
+              acoin: coinRes.data ?? [],
+              xp:    xpRes.data ?? [],
+            };
+            break;
+          }
         }
-        if (!data) throw new Error("Your profile could not be found. No export file was created.");
-        tables.profiles = makeTable([data as ExportRow]);
-      })());
-    }
+      } catch {
+        dataPackage[type] = { error: "Could not fetch this data" };
+      }
+    }));
 
-    if (selectedTypes.includes("posts")) {
-      work.push((async () => {
-        const posts = await fetchAllRows(
-          () => admin.from("posts").select("*").eq("author_id", user.id)
-            .order("created_at", { ascending: true }).order("id", { ascending: true }),
-          "posts",
-        );
-        tables.posts = makeTable(posts, [
-          "id", "author_id", "content", "post_type", "visibility", "created_at",
-        ]);
-
-        const postIds = posts.map((post) => post.id).filter((id): id is string => typeof id === "string");
-        const imageRows: ExportRow[] = [];
-        for (let offset = 0; offset < postIds.length; offset += 100) {
-          const batchIds = postIds.slice(offset, offset + 100);
-          const batch = await fetchAllRows(
-            () => admin.from("post_images").select("*").in("post_id", batchIds)
-              .order("post_id", { ascending: true }).order("display_order", { ascending: true }),
-            "post images",
-          );
-          imageRows.push(...batch);
-        }
-        tables.post_images = makeTable(imageRows, ["id", "post_id", "image_url", "display_order"]);
-      })());
-    }
-
-    if (selectedTypes.includes("messages")) {
-      work.push((async () => {
-        const memberships = await fetchAllRows(
-          () => admin.from("chat_members").select("chat_id").eq("user_id", user.id)
-            .order("chat_id", { ascending: true }),
-          "chat memberships",
-        );
-        const chatIds = Array.from(new Set(
-          memberships.map((row) => row.chat_id).filter((id): id is string => typeof id === "string"),
-        ));
-        const messages: ExportRow[] = [];
-        for (let offset = 0; offset < chatIds.length; offset += 100) {
-          const batchIds = chatIds.slice(offset, offset + 100);
-          const batch = await fetchAllRows(
-            () => admin.from("messages")
-              .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at")
-              .in("chat_id", batchIds)
-              .order("sent_at", { ascending: true }).order("id", { ascending: true }),
-            "messages",
-          );
-          messages.push(...batch);
-        }
-        tables.messages = makeTable(messages, [
-          "id", "chat_id", "sender_id", "encrypted_content", "sent_at",
-          "reply_to_message_id", "attachment_url", "attachment_type", "edited_at",
-        ]);
-      })());
-    }
-
-    if (selectedTypes.includes("activity")) {
-      work.push((async () => {
-        const [following, followers, storyLikes, xpActivity, referrals] = await Promise.all([
-          fetchAllRows(
-            () => admin.from("follows").select("*").eq("follower_id", user.id)
-              .order("created_at", { ascending: true }).order("following_id", { ascending: true }),
-            "following relationships",
-          ),
-          fetchAllRows(
-            () => admin.from("follows").select("*").eq("following_id", user.id)
-              .order("created_at", { ascending: true }).order("follower_id", { ascending: true }),
-            "follower relationships",
-          ),
-          fetchAllRows(
-            () => admin.from("story_likes").select("*").eq("user_id", user.id)
-              .order("created_at", { ascending: true }).order("story_id", { ascending: true }),
-            "story likes",
-          ),
-          fetchAllRows(
-            () => admin.from("xp_activity_log").select("*").eq("user_id", user.id)
-              .order("created_at", { ascending: true }).order("id", { ascending: true }),
-            "XP activity",
-          ),
-          fetchAllRows(
-            () => admin.from("referrals").select("*")
-              .or(`referrer_id.eq.${user.id},referred_id.eq.${user.id}`)
-              .order("created_at", { ascending: true }).order("id", { ascending: true }),
-            "referrals",
-          ),
-        ]);
-        tables.following = makeTable(following, ["follower_id", "following_id", "created_at"]);
-        tables.followers = makeTable(followers, ["follower_id", "following_id", "created_at"]);
-        tables.story_likes = makeTable(storyLikes, ["story_id", "user_id", "created_at"]);
-        tables.xp_activity_log = makeTable(xpActivity, [
-          "id", "user_id", "activity_type", "xp_amount", "metadata", "created_at",
-        ]);
-        tables.referrals = makeTable(referrals, [
-          "id", "referrer_id", "referred_id", "reward_given", "created_at",
-        ]);
-      })());
-    }
-
-    if (selectedTypes.includes("transactions")) {
-      work.push((async () => {
-        const [acoinTransactions, xpTransfers] = await Promise.all([
-          fetchAllRows(
-            () => admin.from("acoin_transactions").select("*").eq("user_id", user.id)
-              .order("created_at", { ascending: true }).order("id", { ascending: true }),
-            "ACoin transactions",
-          ),
-          fetchAllRows(
-            () => admin.from("xp_transfers").select("*")
-              .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-              .order("created_at", { ascending: true }).order("id", { ascending: true }),
-            "XP transfers",
-          ),
-        ]);
-        tables.acoin_transactions = makeTable(acoinTransactions, [
-          "id", "user_id", "amount", "transaction_type", "created_at", "metadata",
-        ]);
-        tables.xp_transfers = makeTable(xpTransfers, [
-          "id", "sender_id", "receiver_id", "amount", "status", "reason", "created_at",
-        ]);
-      })());
-    }
-
-    await Promise.all(work);
-
-    const exportedAt = new Date().toISOString();
-    const exportData = {
-      schema_version: "1.0",
-      exported_at: exportedAt,
-      account: { user_id: user.id, email: user.email ?? null },
+    // ── 4. Build JSON attachment ─────────────────────────────────────────────
+    const now = new Date();
+    const exportPayload = {
+      exported_at:    now.toISOString(),
+      user_id:        userId,
+      email:          userEmail,
       included_types: selectedTypes,
-      tables,
+      data:           dataPackage,
     };
-    const jsonText = JSON.stringify(exportData, null, 2);
-    // Older installed clients omit emailCopy and expect the original emailed export.
-    const wantsEmail = hasEmailChoice ? body.emailCopy === true : true;
-    let emailStatus: "not_requested" | "unavailable" | "not_configured" | "too_large" | "failed" | "accepted" =
-      "not_requested";
 
-    if (wantsEmail) {
-      if (!user.email) emailStatus = "unavailable";
-      else emailStatus = await sendEmailCopy(resendKey, user.email, jsonText, exportedAt);
-    }
+    const jsonStr       = JSON.stringify(exportPayload, null, 2);
+    const base64Content = toBase64(jsonStr);
+    const dateStr       = now.toISOString().split("T")[0];
+    const filename      = `afuchat-data-export-${dateStr}.json`;
 
-    // Do not tell older email-only clients that delivery succeeded when it did not.
-    if (!hasEmailChoice && emailStatus !== "accepted") {
-      return json({
-        error: "The export was prepared, but its email could not be accepted. Please try again later.",
-        emailStatus,
-      }, 502);
-    }
+    // ── 5. Send email via Resend ─────────────────────────────────────────────
+    const typeList = selectedTypes.map((t) => TYPE_LABELS[t] || t).join(", ");
+    const humanDate = now.toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" });
 
-    return json({
-      ok: true,
-      email: user.email ?? null,
-      emailStatus,
-      export: exportData,
+    const emailBody = {
+      from:        "AfuChat <onboarding@resend.dev>",
+      to:          [userEmail],
+      subject:     "Your AfuChat data export is ready",
+      attachments: [{ filename, content: base64Content }],
+      html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a}
+  .wrapper{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .header{background:#00BCD4;padding:24px 32px;display:flex;align-items:center;gap:12px}
+  .header h1{color:#fff;font-size:20px;font-weight:700}
+  .logo{width:36px;height:36px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  .body{padding:32px}
+  .title{font-size:22px;font-weight:700;color:#1a1a1a;margin-bottom:12px}
+  .text{font-size:15px;color:#444;line-height:1.6;margin-bottom:16px}
+  .card{background:#f8f8f8;border-radius:8px;padding:20px;margin:20px 0;border-left:4px solid #00BCD4}
+  .card .label{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:6px}
+  .card .value{font-size:15px;color:#1a1a1a;font-weight:500}
+  .note{background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:14px 16px;font-size:13px;color:#614700;line-height:1.5;margin:16px 0}
+  .divider{height:1px;background:#eee;margin:24px 0}
+  .meta{font-size:13px;color:#888;line-height:1.6}
+  .footer{background:#f5f5f5;padding:20px 32px;font-size:12px;color:#888;text-align:center;border-top:1px solid #eee}
+  .footer a{color:#00BCD4;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="logo">💬</div>
+    <h1>AfuChat</h1>
+  </div>
+  <div class="body">
+    <p class="title">Your data export is attached 📦</p>
+    <p class="text">Hi there, your AfuChat data export has been prepared and is attached to this email as a JSON file.</p>
+    <div class="card">
+      <div class="label">Included data</div>
+      <div class="value">${escHtml(typeList)}</div>
+      <div class="label" style="margin-top:12px">File name</div>
+      <div class="value">${escHtml(filename)}</div>
+      <div class="label" style="margin-top:12px">Exported at</div>
+      <div class="value">${escHtml(humanDate)}</div>
+    </div>
+    <div class="note">
+      <strong>How to open:</strong> The attached <code>.json</code> file can be opened in any text editor, browser, or JSON viewer. It contains all the data you selected in a structured, readable format.
+    </div>
+    <p class="text">If you didn't request this export, please contact our support team immediately.</p>
+    <div class="divider"></div>
+    <p class="meta">This export was requested from your AfuChat account.<br/>Questions? Contact <a href="mailto:support@afuchat.com" style="color:#00BCD4">support@afuchat.com</a></p>
+  </div>
+  <div class="footer">
+    <p>This email was sent from <a href="mailto:support@afuchat.com">support@afuchat.com</a></p>
+    <p style="margin-top:6px">AfuChat · Making connections meaningful</p>
+  </div>
+</div>
+</body>
+</html>`,
+    };
+
+    const emailRes = await fetch("https://api.resend.com/emails", {
+      method:  "POST",
+      headers: {
+        "Authorization": `Bearer ${resendKey}`,
+        "Content-Type":  "application/json",
+      },
+      body: JSON.stringify(emailBody),
     });
-  } catch (error) {
-    console.error("[export-user-data] Export failed:", error);
-    const message = error instanceof Error ? error.message : "The export could not be completed.";
-    return json({ error: message }, 500);
+
+    if (!emailRes.ok) {
+      const errText = await emailRes.text().catch(() => "");
+      console.error("[export-user-data] Resend error:", emailRes.status, errText);
+      return json({ error: "Failed to send export email. Please try again later." }, 502);
+    }
+
+    console.log("[export-user-data] Export emailed to", userEmail, "types:", selectedTypes);
+    return json({ ok: true, email: userEmail });
+
+  } catch (err) {
+    console.error("[export-user-data] Unexpected error:", err);
+    return json({ error: "An unexpected error occurred. Please try again." }, 500);
   }
 });

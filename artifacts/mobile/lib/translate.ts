@@ -5,8 +5,6 @@
  * messages and posts. UI/page copy belongs in the bundled local i18n module.
  */
 
-import { protectAfuChatBrand } from "./brandName";
-
 const CACHE = new Map<string, string>();
 const IN_FLIGHT = new Map<string, Promise<string>>();
 const SOURCE_LANGUAGE_CACHE = new Map<string, string | null>();
@@ -28,11 +26,10 @@ export async function translateUserContent(text: string, targetLang: string): Pr
 
   const request = (async () => {
     try {
-      const brandProtected = protectAfuChatBrand(text);
       const url =
         `https://translate.googleapis.com/translate_a/single` +
         `?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t` +
-        `&q=${encodeURIComponent(brandProtected.text)}`;
+        `&q=${encodeURIComponent(text)}`;
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
@@ -50,12 +47,9 @@ export async function translateUserContent(text: string, targetLang: string): Pr
           .join("")
           .trim();
 
-        if (translated) {
-          const restored = brandProtected.restore(translated);
-          if (restored && restored !== text) {
-            CACHE.set(key, restored);
-            return restored;
-          }
+        if (translated && translated !== text) {
+          CACHE.set(key, translated);
+          return translated;
         }
       }
 

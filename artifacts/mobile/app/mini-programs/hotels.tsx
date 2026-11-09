@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { safeRouter } from "@/lib/navUtils";
@@ -132,7 +131,6 @@ export default function HotelsScreen() {
                 <Text style={[styles.label, { color: colors.text }]}>Nights</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
                   <TextInput
-                    appearance="embedded"
                     style={[styles.input, { color: colors.text, textAlign: "center" }]}
                     value={nights}
                     onChangeText={setNights}
@@ -145,7 +143,6 @@ export default function HotelsScreen() {
                 <Text style={[styles.label, { color: colors.text }]}>Guests</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
                   <TextInput
-                    appearance="embedded"
                     style={[styles.input, { color: colors.text, textAlign: "center" }]}
                     value={guests}
                     onChangeText={setGuests}
@@ -159,7 +156,7 @@ export default function HotelsScreen() {
         )}
 
         {fee && (
-          <View style={[styles.feeCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.feeCard, { backgroundColor: colors.surface }]}>
             <View style={styles.feeRow}>
               <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>{hotel?.name} ({room?.name} × {numNights})</Text>
               <Text style={[styles.feeValue, { color: colors.text }]}>{fee.subtotal} 🪙</Text>

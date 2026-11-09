@@ -8,15 +8,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
-  type ScrollViewInstance,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -60,7 +58,7 @@ export default function ProductDetailScreen() {
   const [buying, setBuying] = useState(false);
   const [deliveryNote, setDeliveryNote] = useState("");
   const [orderDone, setOrderDone] = useState<string | null>(null);
-  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollRef = useRef<AfuNativeRef.ScrollView>(null);
 
   const imgH = width * 0.78;
   const balance = profile?.acoin ?? 0;
@@ -142,12 +140,9 @@ export default function ProductDetailScreen() {
     return (
       <View style={[st.loadingWrap, { backgroundColor: colors.background, paddingTop: insets.top }]}>
         <Text style={[st.notFoundText, { color: colors.textMuted }]}>Product not found.</Text>
-        <GlassBackButton
-          onPress={() => router.back()}
-          label="Go back"
-          accessibilityLabel="Go back"
-          style={{ alignSelf: "center" }}
-        />
+        <TouchableOpacity style={[st.backBtnCenter, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
+          <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold" }}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -160,7 +155,9 @@ export default function ProductDetailScreen() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* ── Back + Cart header ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 4 }]}>
-        <GlassBackButton onPress={() => router.back()} />
+        <TouchableOpacity style={[st.topBarBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={20} color="#fff" />
+        </TouchableOpacity>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={[st.topBarBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/app/afumarket?section=cart" as any)}>
             <Ionicons name="cart" size={20} color="#fff" />
@@ -208,7 +205,7 @@ export default function ProductDetailScreen() {
         </View>
 
         {/* ── Product info ── */}
-        <View style={[st.infoCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[st.infoCard, { backgroundColor: colors.surface }]}>
           {/* Price + name */}
           <View style={st.priceRow}>
             <Text style={[st.priceMain, { color: colors.accent }]}>{formatShopAcoin(product.price_acoin)}</Text>
@@ -269,7 +266,7 @@ export default function ProductDetailScreen() {
 
         {/* ── Store section ── */}
         {shop && seller && (
-          <View style={[st.storeCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.storeCard, { backgroundColor: colors.surface }]}>
             <Text style={[st.storeCardTitle, { color: colors.textSecondary }]}>Sold by</Text>
             <TouchableOpacity
               style={st.storeRow}
@@ -303,7 +300,7 @@ export default function ProductDetailScreen() {
         )}
 
         {/* ── Checkout guarantee ── */}
-        <View style={[st.guaranteeCard, { backgroundColor: colors.cardSurface }]}>
+        <View style={[st.guaranteeCard, { backgroundColor: colors.surface }]}>
           {[
             { icon: "shield-checkmark", label: "Buyer Protection", desc: "Full refund if order doesn't arrive" },
             { icon: "wallet", label: "ACoins Wallet", desc: "Secure, instant payment from your wallet" },
@@ -368,7 +365,7 @@ export default function ProductDetailScreen() {
       {/* ── Order success modal ── */}
       <Modal visible={!!orderDone} transparent animationType="none">
         <View style={st.successOverlay}>
-          <View style={[st.successCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[st.successCard, { backgroundColor: colors.surface }]}>
             <View style={[st.successIcon, { backgroundColor: "#34C75920" }]}>
               <Ionicons name="checkmark-circle" size={56} color="#34C759" />
             </View>
@@ -392,7 +389,7 @@ export default function ProductDetailScreen() {
               <Text style={[st.checkoutTitle, { color: colors.text }]}>Confirm Order</Text>
 
               {/* Product summary */}
-              <View style={[st.checkoutProduct, { backgroundColor: colors.cardSurface }]}>
+              <View style={[st.checkoutProduct, { backgroundColor: colors.surface }]}>
                 {images[0] && (
                   <Image source={{ uri: images[0] }} style={st.checkoutProductImg} />
                 )}
@@ -404,7 +401,7 @@ export default function ProductDetailScreen() {
               </View>
 
               {/* Fee breakdown */}
-              <View style={[st.feeCard, { backgroundColor: colors.cardSurface }]}>
+              <View style={[st.feeCard, { backgroundColor: colors.surface }]}>
                 <Text style={[st.feeTitle, { color: colors.textSecondary }]}>Order Summary</Text>
                 <View style={st.feeRow}>
                   <Text style={[st.feeLabel, { color: colors.textMuted }]}>Subtotal ({qty} item{qty > 1 ? "s" : ""})</Text>
@@ -498,6 +495,7 @@ const st = StyleSheet.create({
   root: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular" },
+  backBtnCenter: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
   topBar: {
     position: "absolute",
     top: 0,

@@ -16,25 +16,22 @@ import {
   FlatList,
   Image as RNImage,
   Keyboard,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { FlatListInstance, TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
+import { GlassInputSurface } from "@/components/ui/GlassInputSurface";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { openExternalLink } from "@/lib/openExternalLink";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
-import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
-import AfuTextInput from "@/components/ui/AfuTextInput";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 
@@ -44,20 +41,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { Avatar } from "@/components/ui/Avatar";
+import { GLASS } from "@/constants/glass";
 import CachedImage from "@/components/ui/CachedImage";
 import { RichText } from "@/components/ui/RichText";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
 import { ImageViewer, useImageViewer } from "@/components/ImageViewer";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { showAlert } from "@/lib/alert";
-import {
-  RecordingPresets,
-  requestRecordingPermissionsAsync,
-  setAudioModeAsync,
-  useAudioRecorder,
-} from "expo-audio";
-import type { AudioRecorder } from "expo-audio";
 import {
   VideoReplyItem,
   CommentSkeleton,
@@ -69,6 +61,19 @@ import {
   MAX_VOICE_SECS,
   type Reply,
 } from "@/components/ui/VideoCommentsSheet";
+
+// ─── Audio lazy import (safe on web + Expo Go SDK 55) ─────────────────────────
+// expo-av: lazy-load on native only.
+// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
+// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
+// so that check always returns null and silently disables all audio.
+let Audio: typeof import("expo-av").Audio | null = null;
+type AudioRecording = import("expo-av/build/Audio/Recording").Recording;
+import { Platform as _AvPlatform } from "react-native";
+import { isExpoGo } from "@/lib/expoEnvironment";
+if (_AvPlatform.OS !== "web" && !isExpoGo()) {
+  try { Audio = require("expo-av").Audio; } catch {}
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -137,8 +142,8 @@ function LinkPreviewCard({ url, colors }: { url: string; colors: any }) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
-      style={[st.linkCard, { backgroundColor: colors.cardSurface }]}
-      onPress={() => { openExternalLink(url).catch(() => {}); }}
+      style={[st.linkCard, { backgroundColor: colors.card }]}
+      onPress={() => { Linking.openURL(url).catch(() => {}); }}
     >
       <View style={[st.linkThumb, { backgroundColor: colors.backgroundSecondary }]}>
         {ogImage
@@ -249,6 +254,7 @@ type Post = {
   view_count: number;
   like_count: number;
   post_type: string;
+  music_track_id?: string | null;
   is_verified: boolean;
   is_organization_verified: boolean;
   profile: { display_name: string; handle: string; avatar_url: string | null };
@@ -258,7 +264,6 @@ type RecordState = "idle" | "recording" | "recorded";
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function PostDetailScreen() {
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const { id, org } = useLocalSearchParams<{ id: string; org?: string }>();
   const { colors, isDark } = useTheme();
   const { accent } = useAppAccent();
@@ -299,7 +304,7 @@ export default function PostDetailScreen() {
 
   // ── Recording state ──────────────────────────────────────────────────────────
   const [recordState, setRecordState] = useState<RecordState>("idle");
-  const [recordingObj, setRecordingObj] = useState<AudioRecorder | null>(null);
+  const [recordingObj, setRecordingObj] = useState<AudioRecording | null>(null);
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [recordedDuration, setRecordedDuration] = useState(0);
   const [recordElapsed, setRecordElapsed] = useState(0);
@@ -310,8 +315,8 @@ export default function PostDetailScreen() {
   const sendScale = useRef(new Animated.Value(1)).current;
 
   // ── Refs ─────────────────────────────────────────────────────────────────────
-  const listRef = useRef<FlatListInstance>(null);
-  const inputRef = useRef<TextInputInstance>(null);
+  const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<AfuNativeRef.TextInput>(null);
   const { images: viewerImages, index: viewerIndex, visible: viewerOpen, meta: viewerMeta, openViewer, closeViewer } = useImageViewer();
 
   // ── Keyboard listener ────────────────────────────────────────────────────────
@@ -369,7 +374,7 @@ export default function PostDetailScreen() {
           const result = await supabase
             .from("posts")
             .select(`
-              id, author_id, content, image_url, created_at, view_count, like_count, post_type,
+              id, author_id, content, image_url, created_at, view_count, like_count, post_type, music_track_id,
               profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified),
               post_images(image_url, display_order)
             `)
@@ -396,6 +401,7 @@ export default function PostDetailScreen() {
             view_count: (data as any).view_count ?? 0,
             like_count: data.like_count ?? 0,
             post_type: data.post_type ?? "text",
+            music_track_id: (data as any).music_track_id ?? null,
             is_verified: prof.is_verified ?? false,
             is_organization_verified: prof.is_organization_verified ?? false,
             profile: {
@@ -619,22 +625,22 @@ export default function PostDetailScreen() {
   function discardRecording() {
     stopTimer();
     if (recordingObj) {
-      recordingObj.stop().catch(() => {});
+      recordingObj.stopAndUnloadAsync().catch(() => {});
       setRecordingObj(null);
       // Restore audio session so playback (voice messages, video) works normally.
       // Without this reset, iOS stays in .playAndRecord category and routes
       // subsequent audio through the earpiece at near-zero volume.
-      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
+      Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
     }
     setRecordState("idle"); setRecordedUri(null); setRecordedDuration(0); setRecordElapsed(0);
   }
 
   async function startRecording() {
-    if (Platform.OS === "web") { showAlert("Not supported", "Audio recording is not available here."); return; }
+    if (!Audio) { showAlert("Not supported", "Audio recording is not available here."); return; }
     audioFocus.claimRecording();
     let granted = false;
     try {
-      const result = await requestRecordingPermissionsAsync();
+      const result = await Audio.requestPermissionsAsync();
       granted = result.granted;
     } catch {
       showAlert("Microphone access needed", "Please enable microphone access in Settings.");
@@ -643,16 +649,15 @@ export default function PostDetailScreen() {
     if (!granted) { showAlert("Microphone access needed", "Please enable microphone access in Settings."); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.prepareToRecordAsync();
-      audioRecorder.record();
-      setRecordingObj(audioRecorder);
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecordingObj(recording);
       setRecordElapsed(0);
       setRecordState("recording");
       timerRef.current = setInterval(async () => {
         setRecordElapsed((prev) => {
           const next = prev + 1;
-          if (next >= MAX_VOICE_SECS) stopRecording(audioRecorder, next);
+          if (next >= MAX_VOICE_SECS) stopRecording(recording, next);
           return next;
         });
       }, 1000);
@@ -661,15 +666,15 @@ export default function PostDetailScreen() {
     }
   }
 
-  async function stopRecording(rec?: AudioRecorder | null, elapsed?: number) {
+  async function stopRecording(rec?: AudioRecording | null, elapsed?: number) {
     stopTimer();
     const activeRec = rec ?? recordingObj;
     if (!activeRec) { setRecordState("idle"); return; }
     try {
-      const status = activeRec.getStatus();
-      await activeRec.stop();
-      const uri = activeRec.uri;
-      const durationMs = status.durationMillis;
+      const status = await activeRec.getStatusAsync();
+      await activeRec.stopAndUnloadAsync();
+      const uri = activeRec.getURI();
+      const durationMs = (status as any).durationMillis as number | undefined;
       const durationS = durationMs ? Math.ceil(durationMs / 1000) : (elapsed ?? recordElapsed);
       setRecordingObj(null);
       if (uri && durationS > 0) {
@@ -680,7 +685,7 @@ export default function PostDetailScreen() {
         setRecordState("idle"); setRecordElapsed(0);
       }
     } catch { setRecordState("idle"); setRecordElapsed(0); }
-    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
+    Audio?.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: false }).catch(() => {});
   }
 
   async function pickImage() {
@@ -783,13 +788,13 @@ export default function PostDetailScreen() {
   const inputBarH = replyBannerH + imagePreviewH + voicePreviewH + emojiPanelH + mentionRowH + inputRowH;
 
   // ── Theme colours for input bar ───────────────────────────────────────────────
-  const inputBg = isDark ? "rgba(255,255,255,0.08)" : "#EDE8DC";
-  const inputTxt = isDark ? "#fff" : "#1A1208";
-  const inputPH = isDark ? "rgba(255,255,255,0.3)" : "rgba(26,18,8,0.35)";
-  const attachIconCl = isDark ? "rgba(255,255,255,0.45)" : "rgba(26,18,8,0.45)";
+  const inputBg = isDark ? GLASS.input.fillDark : colors.inputBg;
+  const inputTxt = colors.glassBarText;
+  const inputPH = colors.glassBarMuted;
+  const attachIconCl = colors.glassBarMuted;
   const borderTopClr = isDark ? "rgba(255,255,255,0.08)" : "rgba(26,18,8,0.08)";
-  const replyToTxt = isDark ? "rgba(255,255,255,0.5)" : "rgba(26,18,8,0.55)";
-  const imgRmvClr = isDark ? "rgba(255,255,255,0.4)" : "rgba(26,18,8,0.4)";
+  const replyToTxt = colors.glassBarMuted;
+  const imgRmvClr = colors.glassBarMuted;
   const separatorClr = isDark ? "rgba(255,255,255,0.08)" : "rgba(26,18,8,0.08)";
   const emptyIconClr = isDark ? "rgba(255,255,255,0.2)" : "rgba(26,18,8,0.2)";
   const emptyTxtClr = isDark ? "rgba(255,255,255,0.5)" : "rgba(26,18,8,0.5)";
@@ -831,6 +836,12 @@ export default function PostDetailScreen() {
           </RichText>
         </View>
       )}
+
+      {post.music_track_id ? (
+        <View style={{ paddingHorizontal: 16, marginTop: 10 }}>
+          <MusicTrackCard trackId={post.music_track_id} mode="post" />
+        </View>
+      ) : null}
 
       {/* Images */}
       {allImages.length > 0 && (
@@ -881,14 +892,16 @@ export default function PostDetailScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  ) : null;
+  ) : undefined;
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Floating header — overlays the scroll content, true edge-to-edge */}
       <View style={[st.header, { paddingTop: insets.top + 2, pointerEvents: "box-none" }]}>
-        <GlassBackButton onPress={() => router.back()} style={st.headerBtn} />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={st.headerBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       {/* Body */}
@@ -912,7 +925,7 @@ export default function PostDetailScreen() {
           scrollEventThrottle={16}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          ListHeaderComponent={listHeader ?? undefined}
+          ListHeaderComponent={listHeader}
           ListEmptyComponent={
             commentsLoading ? (
               <CommentSkeleton isDark={isDark} />
@@ -956,7 +969,7 @@ export default function PostDetailScreen() {
               {replyingTo && (
                 <View style={[st.replyBanner, { borderBottomColor: separatorClr }]}>
                   <Text style={[st.replyBannerText, { color: replyToTxt }]}>
-                    Replying to <Text style={{ color: accent }}>{replyingTo.profile.display_name || replyingTo.profile.handle}</Text>
+                    Replying to <Text style={{ color: accent }}>@{replyingTo.profile.handle}</Text>
                   </Text>
                   <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={8}>
                     <Ionicons name="close-circle" size={16} color={replyToTxt} />
@@ -1014,7 +1027,7 @@ export default function PostDetailScreen() {
                   activeOpacity={0.7}
                 >
                   <Avatar uri={u.avatar_url} name={u.display_name} size={28} userId={u.id} />
-                  <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }} numberOfLines={1}>
+                  <Text style={{ color: accent, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
                     @{u.handle}
                   </Text>
                 </TouchableOpacity>
@@ -1028,17 +1041,16 @@ export default function PostDetailScreen() {
               <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
 
               {/* Glass pill — text + secondary icons + send */}
-              <FloatingGlassSurface
-                fill={false}
+              <GlassInputSurface
                 style={st.inputPill}
-                contentStyle={st.inputPillInner}
+                borderColor={isDark ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.48)"}
               >
+                <View style={st.inputPillInner}>
                   {recordState === "recording" ? (
                     <RecordingBar elapsed={recordElapsed} onStop={() => stopRecording()} accent={accent} />
                   ) : (
                     <>
-                      <AfuTextInput
-                        appearance="embedded"
+                      <TextInput
                         ref={inputRef}
                         style={[st.textInput, { color: inputTxt }]}
                         placeholder={recordState === "recorded" ? "Add a caption… (optional)" : "Add a comment…"}
@@ -1086,7 +1098,8 @@ export default function PostDetailScreen() {
                       )}
                     </>
                   )}
-              </FloatingGlassSurface>
+                </View>
+              </GlassInputSurface>
 
               {/* Mic — standalone circle button, separated from the pill */}
               <TouchableOpacity
@@ -1106,7 +1119,7 @@ export default function PostDetailScreen() {
                         ? "#FF2D55" + "22"
                         : recordState === "recorded"
                         ? accent + "22"
-                        : inputBg,
+                        : isDark ? colors.glassButtonBg : inputBg,
                     borderColor:
                       recordState === "recording"
                         ? "#FF2D55" + "60"
@@ -1210,9 +1223,15 @@ const st = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 6,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20,
   },
-  inputPill: { flex: 1 },
-  inputPillInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 5, paddingVertical: 2, gap: 4 },
-  textInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 15, lineHeight: 20, maxHeight: 120, paddingVertical: 6, paddingHorizontal: 0 },
+  inputPill: {
+    flex: 1, borderRadius: 999, borderWidth: 0.5, overflow: "hidden",
+    ...Platform.select({
+      web: { boxShadow: "0 4px 20px rgba(0,0,0,0.14)" } as any,
+      default: { shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 12, elevation: 10 },
+    }),
+  },
+  inputPillInner: { flexDirection: "row", alignItems: "center", paddingHorizontal: 6, paddingVertical: 4, gap: 2 },
+  textInput: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 14, maxHeight: 100, paddingVertical: 4, paddingHorizontal: 4 },
   charCounter: { fontSize: 10, fontFamily: "Inter_500Medium" },
   iconBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   sendBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", marginRight: 2 },

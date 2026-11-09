@@ -4,12 +4,11 @@ import {
   Keyboard,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -50,7 +49,7 @@ export default function CreateChannelScreen() {
   const [creating, setCreating] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 
-  const descRef = useRef<TextInputInstance>(null);
+  const descRef = useRef<AfuNativeRef.TextInput>(null);
 
   useEffect(() => {
     if (!isPublic) {
@@ -134,7 +133,7 @@ export default function CreateChannelScreen() {
       const { data: currentCount } = await supabase.rpc("count_my_channels");
       const current = Number(currentCount ?? 0);
       if (current >= limit) {
-        const nextTier = tier === "free" ? "Standard" : tier === "silver" ? "Pro" : "Platinum";
+        const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
         showAlert(
           "Channel limit reached",
           `You can create up to ${limit} channel${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to broadcast to more audiences.`,
@@ -255,7 +254,6 @@ export default function CreateChannelScreen() {
         <View style={styles.nameInputWrap}>
           {step === 1 ? (
             <TextInput
-              appearance="embedded"
               style={[styles.nameInput, { color: colors.text, borderBottomColor: PURPLE }]}
               placeholder="Channel name"
               placeholderTextColor={colors.textMuted}
@@ -268,7 +266,6 @@ export default function CreateChannelScreen() {
           ) : (
             <>
               <TextInput
-                appearance="embedded"
                 style={[styles.handleInput, { color: colors.text, borderBottomColor: PURPLE }]}
                 placeholder={isPublic ? "Channel username" : "Username (optional)"}
                 placeholderTextColor={colors.textMuted}
@@ -302,7 +299,6 @@ export default function CreateChannelScreen() {
           <View style={[styles.descSection, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
             <TextInput
               ref={descRef}
-              appearance="embedded"
               style={[styles.descInput, { color: colors.text }]}
               placeholder="Description (optional)"
               placeholderTextColor={colors.textMuted}

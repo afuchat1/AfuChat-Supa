@@ -5,12 +5,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -211,7 +210,9 @@ export default function BusinessVerificationScreen() {
 
   const NavBar = () => (
     <View style={[st.navBar, { paddingTop: headerTopPad, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-      <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+      <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <Ionicons name="chevron-back" size={24} color={colors.accent} />
+      </TouchableOpacity>
       <Text style={[st.navTitle, { color: colors.text }]}>Business Verification</Text>
       <View style={{ width: 24 }} />
     </View>
@@ -523,12 +524,14 @@ export default function BusinessVerificationScreen() {
           )}
         </View>
         <View style={[st.stepFooter, { backgroundColor: colors.surface, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <GlassBackButton
+          <TouchableOpacity
+            style={[st.backBtn, { borderColor: colors.border, opacity: step === 1 ? 0.45 : 1 }]}
             onPress={() => step === 1 ? router.back() : setStep((current) => current - 1)}
-            icon={step === 1 ? "close" : "chevron-back"}
-            label={step === 1 ? "Cancel" : "Back"}
-            style={{ opacity: step === 1 ? 0.45 : 1 }}
-          />
+            activeOpacity={0.75}
+          >
+            <Ionicons name={step === 1 ? "close" : "chevron-back"} size={18} color={colors.text} />
+            <Text style={[st.backBtnText, { color: colors.text }]}>{step === 1 ? "Cancel" : "Back"}</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[st.nextBtn, { backgroundColor: GOLD, opacity: submitting ? 0.7 : 1 }]}
             onPress={goNext}
@@ -617,7 +620,6 @@ export default function BusinessVerificationScreen() {
             <View style={[st.countrySearchBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
               <Ionicons name="search" size={17} color={colors.textMuted} />
               <TextInput
-                appearance="embedded"
                 style={[st.countrySearchInput, { color: colors.text }]}
                 placeholder="Search countries"
                 placeholderTextColor={colors.textMuted}
@@ -706,7 +708,7 @@ const st = StyleSheet.create({
   sectionMicro: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.9, marginBottom: 2 },
   criteriaRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   criteriaIconWrap: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  criteriaText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular", textAlign: "left" },
+  criteriaText: { flex: 1, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular" },
   groupLabel: { fontSize: 15, fontFamily: "Inter_700Bold" },
   optionalTag: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#888" },
   fieldWrap: { borderRadius: 14, borderWidth: 0.5, paddingHorizontal: 14, paddingVertical: 12 },
@@ -732,6 +734,8 @@ const st = StyleSheet.create({
   submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 999 },
   submitBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   stepFooter: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 0.5 },
+  backBtn: { flex: 0.8, minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderRadius: 999, borderWidth: 1 },
+  backBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   nextBtn: { flex: 1.5, minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 999 },
   nextBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
   disclaimer: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 17, marginTop: 4 },

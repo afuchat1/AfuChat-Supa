@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -10,7 +9,6 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -20,13 +18,11 @@ import FaceFilterOverlay from "@/components/camera/FaceFilterOverlay";
 import { FilterId } from "@/components/camera/filterDefs";
 import { prepareMediaForUpload } from "@/lib/mediaUpload";
 import { setStoryMediaDraft } from "@/lib/storyMediaDraft";
-import { useTheme } from "@/hooks/useTheme";
 
 type CameraMode = "photo" | "video";
 
 function NativeCameraScreen() {
   const { accent } = useAppAccent();
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<any>(null);
 
@@ -37,7 +33,6 @@ function NativeCameraScreen() {
   const [flash, setFlash] = useState<"off" | "on">("off");
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
   const [filter, setFilter] = useState<FilterId>("normal");
 
   useFocusEffect(
@@ -48,7 +43,7 @@ function NativeCameraScreen() {
   );
 
   const takePicture = useCallback(async () => {
-    if (!cameraRef.current || processing || !cameraReady) return;
+    if (!cameraRef.current || processing) return;
     setProcessing(true);
     try {
       // Keep camera photos as native files. Converting them to base64 sends
@@ -67,30 +62,18 @@ function NativeCameraScreen() {
       showAlert("Error", e?.message || "Failed to take photo.");
       setProcessing(false);
     }
-  }, [processing, cameraReady]);
+  }, [processing]);
 
   const toggleRecord = useCallback(async () => {
-    if (!cameraRef.current || !cameraReady) return;
+    if (!cameraRef.current) return;
     if (recording) {
       cameraRef.current.stopRecording();
       return;
     }
     if (!micPermission?.granted) {
-      const permission = await requestMicPermission();
-      if (!permission.granted) {
-        const buttons = permission.canAskAgain === false
-          ? [
-              { text: "Not now", style: "cancel" as const },
-              { text: "Open Settings", onPress: () => { void Linking.openSettings().catch(() => {}); } },
-            ]
-          : undefined;
-        showAlert(
-          "Microphone Required",
-          permission.canAskAgain === false
-            ? "Enable microphone access in AfuChat settings to record video with audio."
-            : "Allow microphone access to record video with audio.",
-          buttons,
-        );
+      const { granted } = await requestMicPermission();
+      if (!granted) {
+        showAlert("Microphone Required", "Microphone access is needed to record video with audio.");
         return;
       }
     }
@@ -108,7 +91,7 @@ function NativeCameraScreen() {
       setRecording(false);
       showAlert("Error", e?.message || "Failed to record video.");
     }
-  }, [recording, micPermission, cameraReady]);
+  }, [recording, micPermission]);
 
   const openGallery = useCallback(async () => {
     try {
@@ -134,56 +117,49 @@ function NativeCameraScreen() {
 
   if (!camPermission) {
     return (
-      <View style={[st.root, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={colors.accent} size="large" />
+      <View style={[st.root, { backgroundColor: "#000", alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator color="#fff" size="large" />
       </View>
     );
   }
 
   if (!camPermission.granted) {
     return (
-      <View style={[st.root, { backgroundColor: colors.background }]}>
+      <View style={[st.root, { backgroundColor: "#000" }]}>
         <View style={st.permWrap}>
-          <Ionicons name="camera" size={56} color={colors.textMuted} />
-          <Text style={[st.permText, { color: colors.text }]}>Camera access is needed to take photos and videos for stories.</Text>
-          <TouchableOpacity
-            style={[st.permBtn, { backgroundColor: accent }]}
-            onPress={() => camPermission.canAskAgain === false
-              ? void Linking.openSettings().catch(() => {})
-              : void requestCamPermission()}
-          >
-            <Text style={st.permBtnText}>{camPermission.canAskAgain === false ? "Open Settings" : "Allow Camera"}</Text>
+          <Ionicons name="camera" size={56} color="#FFFFFF" />
+          <Text style={st.permText}>Camera access is needed to take photos and videos for stories.</Text>
+          <TouchableOpacity style={[st.permBtn, { backgroundColor: accent }]} onPress={requestCamPermission}>
+            <Text style={st.permBtnText}>Allow Camera</Text>
           </TouchableOpacity>
           <TouchableOpacity style={st.permSecondary} onPress={openGallery}>
-            <Ionicons name="images" size={18} color={colors.textMuted} />
-            <Text style={[st.permBtnText, { color: colors.textMuted }]}>Choose from Gallery</Text>
+            <Ionicons name="images" size={18} color="#FFFFFF" />
+            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.7)" }]}>Choose from Gallery</Text>
           </TouchableOpacity>
-          <GlassBackButton
-            onPress={() => router.back()}
-            label="Go back"
-            accessibilityLabel="Go back"
-            style={{ marginTop: 8, alignSelf: "center" }}
-          />
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={[st.permBtnText, { color: "rgba(255,255,255,0.4)", marginTop: 8 }]}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={[st.root, { backgroundColor: colors.background }]}>
+    <View style={[st.root, { backgroundColor: "#000" }]}>
       <CameraView
         ref={cameraRef}
         style={st.camera}
         facing={facing}
         flash={flash}
         mode={mode === "video" ? "video" : "picture"}
-        onCameraReady={() => setCameraReady(true)}
       />
 
       <FaceFilterOverlay filter={filter} />
 
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton onPress={() => router.back()} style={st.topBtn} />
+        <TouchableOpacity onPress={() => router.back()} style={st.topBtn}>
+          <Ionicons name="arrow-back" size={26} color="#fff" />
+        </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity
           onPress={() => setFlash(flash === "off" ? "on" : "off")}
@@ -201,14 +177,14 @@ function NativeCameraScreen() {
       <View style={[st.bottomBar, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity style={st.galleryThumb} onPress={openGallery}>
           <View style={[st.galleryImg, { backgroundColor: "rgba(255,255,255,0.15)" }]}>
-            <Ionicons name="images" size={20} color="rgba(255,255,255,0.5)" />
+            <Ionicons name="images" size={20} color="#FFFFFF" />
           </View>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[st.shutter, recording && st.shutterRec]}
           onPress={mode === "photo" ? takePicture : toggleRecord}
-          disabled={processing || !cameraReady}
+          disabled={processing}
           activeOpacity={0.7}
         >
           {processing ? (

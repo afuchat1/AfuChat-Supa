@@ -7,8 +7,8 @@ import {
   Text,
   useWindowDimensions,
   View,
+  TextInput,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { safeRouter } from "@/lib/navUtils";
@@ -65,22 +65,21 @@ const CATEGORIES: Category[] = [
         featuredSub: "Shop from verified stores and sellers.",
       },
       {
+        id: "afugames",
+        label: "AfuGames",
+        icon: "game-controller",
+        gradient: ["#FF3B30", "#FF6B35"],
+         route: "/app/afugames",
+        featuredSub: "Play mini games and compete with friends.",
+      },
+      {
         id: "afumusic",
         label: "Music",
         icon: "musical-notes",
         gradient: ["#19172F", "#F06451"],
         route: "/app/afumusic",
         badge: "NEW",
-        featuredSub: "Discover independent sounds, stream tracks and manage your library.",
-      },
-      {
-        id: "afufootball",
-        label: "AfuFootball",
-        icon: "football",
-        gradient: ["#247A4B", "#69A85D"],
-        route: "/app/afufootball",
-        badge: "NEW",
-        featuredSub: "Real fixtures, scores, teams and competitions from your provider.",
+        featuredSub: "Discover independent sounds and keep your library offline.",
       },
       {
         id: "afubusiness",
@@ -208,7 +207,7 @@ const CATEGORIES: Category[] = [
 ];
 
 const ALL_PAGES = CATEGORIES.flatMap((c) => c.pages);
-const FEATURED_IDS = ["afupay", "afumarket", "afumatch", "afufreelance"];
+const FEATURED_IDS = ["afupay", "afumarket", "afugames", "afumatch", "afufreelance"];
 
 function resolveGradient(gradient: [string, string], accent: string): [string, string] {
   return gradient.map((c) => (c === "#1018D8" ? accent : c)) as [string, string];
@@ -423,7 +422,6 @@ export default function AppsScreen() {
           <View style={[styles.searchBox, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }]}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
-              appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
               placeholder={t("Search pages…")}
               placeholderTextColor={colors.textMuted}

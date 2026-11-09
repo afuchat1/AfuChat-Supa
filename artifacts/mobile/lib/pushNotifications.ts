@@ -1,12 +1,7 @@
-import { AppState, Platform } from "react-native";
+import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { supabase } from "@/lib/supabase";
-import { getActiveChatId } from "@/lib/chatVisited";
-import { isExpoGo } from "@/lib/expoEnvironment";
-import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
-import { enqueue } from "@/lib/storage/syncQueue";
-import { isOnline } from "@/lib/offlineStore";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
@@ -105,54 +100,21 @@ function getTarget(response: PushResponse) {
 async function markRead(response: PushResponse, userId: string) {
   const { chatId, messageId } = getTarget(response);
   if (!chatId && !messageId) return;
-  let messageIds = messageId ? [messageId] : [];
-  if (!messageIds.length && chatId) {
-    const { data } = await supabase
-      .from("messages")
-      .select("id")
-      .eq("chat_id", chatId)
-      .neq("sender_id", userId)
-      .limit(200);
-    messageIds = (data ?? []).map((message) => message.id);
-  }
-  if (!messageIds.length) return;
-
-  if (!isOnline()) {
-    await enqueue("mark_read", {
-      chat_id: chatId,
-      user_id: userId,
-      message_ids: messageIds,
-      read_receipts: true,
-    }).catch(() => {});
+  const now = new Date().toISOString();
+  if (messageId) {
+    await supabase.from("message_status").upsert(
+      { message_id: messageId, user_id: userId, delivered_at: now, read_at: now },
+      { onConflict: "message_id,user_id" },
+    );
     return;
   }
-
-  await acknowledgeMessagesDelivered(messageIds, userId);
-  const now = new Date().toISOString();
-  const { error } = await supabase.from("message_status").upsert(
-    messageIds.map((id) => ({ message_id: id, user_id: userId, read_at: now })),
-    { onConflict: "message_id,user_id" },
-  );
-  if (error) {
-    await enqueue("mark_read", {
-      chat_id: chatId,
-      user_id: userId,
-      message_ids: messageIds,
-      read_receipts: true,
-    }).catch(() => {});
+  const { data } = await supabase.from("messages").select("id").eq("chat_id", chatId).neq("sender_id", userId).limit(200);
+  if (data?.length) {
+    await supabase.from("message_status").upsert(
+      data.map((message) => ({ message_id: message.id, user_id: userId, delivered_at: now, read_at: now })),
+      { onConflict: "message_id,user_id" },
+    );
   }
-}
-
-export async function acknowledgeNotificationDelivery(
-  notification: PushResponse,
-  userId: string,
-) {
-  const { categoryId, messageId } = getTarget(notification);
-  if (
-    !messageId ||
-    (categoryId !== null && categoryId !== PUSH_CATEGORY_MESSAGE)
-  ) return;
-  await acknowledgeMessagesDelivered([messageId], userId);
 }
 
 async function markNotificationRead(response: PushResponse, userId: string) {
@@ -165,47 +127,16 @@ async function markNotificationRead(response: PushResponse, userId: string) {
     .eq("recipient_id", userId);
 }
 
-async function sendSuggestedReply(
-  response: PushResponse,
-  userId: string,
-  text: string,
-  userName: string,
-  userAvatar: string | null,
-) {
+async function sendSuggestedReply(response: PushResponse, userId: string, text: string) {
   const { chatId, messageId } = getTarget(response);
   if (!chatId) return;
-  const { data: sentMessage, error: sendError } = await supabase
-    .from("messages")
-    .insert({
-      chat_id: chatId,
-      sender_id: userId,
-      encrypted_content: text,
-      ...(messageId ? { reply_to_message_id: messageId } : {}),
-    })
-    .select("id")
-    .single();
-  if (sendError) throw sendError;
+  await supabase.from("messages").insert({
+    chat_id: chatId,
+    sender_id: userId,
+    encrypted_content: text,
+    ...(messageId ? { reply_to_message_id: messageId } : {}),
+  });
   await markRead(response, userId);
-
-  if (sentMessage?.id) {
-    const { data: members, error: membersError } = await supabase
-      .from("chat_members")
-      .select("user_id")
-      .eq("chat_id", chatId);
-    if (membersError) {
-      if (__DEV__) console.warn("[push] could not load quick-reply recipients", membersError.message);
-    } else {
-      await notifyChatRecipients({
-        recipientIds: (members ?? []).map((member) => member.user_id),
-        senderId: userId,
-        senderName: userName,
-        senderAvatarUrl: userAvatar,
-        body: text,
-        chatId,
-        messageId: sentMessage.id,
-      });
-    }
-  }
 }
 
 async function muteChat(response: PushResponse, userId: string) {
@@ -259,7 +190,7 @@ export async function handleNotificationResponse(
   }
   if (response.actionIdentifier === PUSH_ACTION_REPLY) {
     const text = response.userText?.trim();
-    if (text) await sendSuggestedReply(response, userId, text, userName, userAvatar);
+    if (text) await sendSuggestedReply(response, userId, text);
     return;
   }
   if (response.actionIdentifier === PUSH_ACTION_MUTE) {
@@ -279,28 +210,22 @@ function defineBackgroundTask() {
   try {
     const TaskManager = require("expo-task-manager") as typeof import("expo-task-manager");
     TaskManager.defineTask(PUSH_BACKGROUND_TASK, async ({ data, error }: any) => {
-      if (error || !data) return;
+      if (error || !data || !data.actionIdentifier) return;
+      if (
+        data.actionIdentifier !== PUSH_ACTION_REPLY &&
+        data.actionIdentifier !== PUSH_ACTION_MUTE &&
+        data.actionIdentifier !== PUSH_ACTION_MARK_READ &&
+        data.actionIdentifier !== PUSH_ACTION_DECLINE_CALL
+      ) return;
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id;
-      if (!userId) return;
-      if (typeof data.actionIdentifier === "string") {
-        if (
-          data.actionIdentifier === PUSH_ACTION_REPLY ||
-          data.actionIdentifier === PUSH_ACTION_MUTE ||
-          data.actionIdentifier === PUSH_ACTION_MARK_READ ||
-          data.actionIdentifier === PUSH_ACTION_DECLINE_CALL
-        ) {
-          await handleNotificationResponse(data as PushResponse, userId);
-        }
-        await acknowledgeNotificationDelivery(data as PushResponse, userId);
-        return;
-      }
-      await acknowledgeNotificationDelivery(data as PushResponse, userId);
+      if (userId) await handleNotificationResponse(data as PushResponse, userId);
     });
 
-    // Register once for both incoming background notifications and their
-    // action responses. This module can be imported by the root layout and
-    // notification manager, so registration must remain idempotent.
+    // Defining a task is not enough: Expo only delivers background action
+    // responses to tasks that have also been registered with the notifications
+    // module. Keep this registration idempotent because this module can be
+    // imported by both the root layout and a notification manager.
     const notifications = getNotifications();
     if (notifications?.registerTaskAsync) {
       backgroundTaskRegistration = notifications.registerTaskAsync(PUSH_BACKGROUND_TASK)
@@ -328,21 +253,12 @@ export function configurePushNotifications() {
       });
   }
   notifications.setNotificationHandler({
-    handleNotification: async (notification) => {
-      const data = notification.request.content.data ?? {};
-      const categoryId = data.categoryId ?? data.category_id;
-      const chatId = data.chatId ?? data.chat_id;
-      const isOpenMessageChat = AppState.currentState === "active" &&
-        typeof chatId === "string" &&
-        chatId === getActiveChatId() &&
-        (categoryId == null || categoryId === PUSH_CATEGORY_MESSAGE);
-      return {
-        shouldShowBanner: !isOpenMessageChat,
-        shouldShowList: !isOpenMessageChat,
-        shouldPlaySound: !isOpenMessageChat,
-        shouldSetBadge: !isOpenMessageChat,
-      };
-    },
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
   });
   const categories = [
     notifications.setNotificationCategoryAsync(PUSH_CATEGORY_MESSAGE, [
@@ -383,8 +299,6 @@ export function configurePushNotifications() {
 }
 
 export async function registerPushToken(): Promise<string | null> {
-  // Expo Go on Android no longer exposes remote push token registration.
-  if (isExpoGo()) return null;
   const notifications = getNotifications();
   if (!notifications || Platform.OS === "web" || !Device.isDevice) return null;
   configurePushNotifications();
@@ -406,10 +320,6 @@ export function addNotificationResponseListener(listener: (response: PushRespons
   return getNotifications()?.addNotificationResponseReceivedListener(listener as any) ?? null;
 }
 
-export function addNotificationReceivedListener(listener: (notification: any) => void) {
-  return getNotifications()?.addNotificationReceivedListener(listener) ?? null;
-}
-
 export async function getLastNotificationResponse() {
   const response = await getNotifications()?.getLastNotificationResponseAsync();
   if (!response) return response as null | undefined;
@@ -417,66 +327,11 @@ export async function getLastNotificationResponse() {
 }
 
 export function clearLastNotificationResponse() {
-  try {
-    getNotifications()?.clearLastNotificationResponse?.();
-  } catch (error) {
-    if (__DEV__) console.warn("[push] could not clear last response", error);
-  }
+  getNotifications()?.clearLastNotificationResponse?.();
 }
 
 export function getNotificationTarget(response: PushResponse) {
   return getTarget(response);
-}
-
-export async function dismissChatNotifications(chatId: string) {
-  const notifications = getNotifications();
-  if (!notifications || !chatId) return;
-  try {
-    const presented = await notifications.getPresentedNotificationsAsync();
-    const identifiers = presented
-      .filter((notification) => {
-        const data = notification.request.content.data ?? {};
-        const notificationChatId = data.chatId ?? data.chat_id;
-        const categoryId = data.categoryId ?? data.category_id;
-        return notificationChatId === chatId &&
-          (categoryId == null || categoryId === PUSH_CATEGORY_MESSAGE);
-      })
-      .map((notification) => notification.request.identifier)
-      .filter((identifier): identifier is string => Boolean(identifier));
-    await Promise.all(identifiers.map((identifier) => notifications.dismissNotificationAsync(identifier)));
-  } catch (error) {
-    if (__DEV__) console.warn("[push] could not clear chat notifications", error);
-  }
-}
-
-export async function syncActiveChatNotificationPresence(
-  userId: string,
-  chatId: string,
-  isActive: boolean,
-) {
-  // Presence only suppresses remote pushes, which are unavailable in Expo Go.
-  if (!userId || !chatId || isExpoGo()) return;
-  try {
-    if (isActive) {
-      const now = new Date();
-      const { error } = await supabase.from("active_chat_notification_presence").upsert({
-        user_id: userId,
-        chat_id: chatId,
-        updated_at: now.toISOString(),
-        expires_at: new Date(now.getTime() + 60_000).toISOString(),
-      }, { onConflict: "user_id" });
-      if (error && __DEV__) console.warn("[push] active-chat presence update failed", error.message);
-      return;
-    }
-    const { error } = await supabase
-      .from("active_chat_notification_presence")
-      .delete()
-      .eq("user_id", userId)
-      .eq("chat_id", chatId);
-    if (error && __DEV__) console.warn("[push] active-chat presence clear failed", error.message);
-  } catch (error) {
-    if (__DEV__) console.warn("[push] active-chat presence sync failed", error);
-  }
 }
 
 export type NotifyChatRecipientsParams = {

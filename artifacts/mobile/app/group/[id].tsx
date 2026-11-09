@@ -9,12 +9,12 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -681,7 +681,6 @@ export default function GroupManageScreen() {
             <View style={[s.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Ionicons name="search" size={16} color={colors.textMuted} style={{ marginRight: 6 }} />
               <TextInput
-                appearance="embedded"
                 style={[s.searchInput, { color: colors.text }]}
                 placeholder={`Search ${isChannel ? "subscribers" : "members"}…`}
                 placeholderTextColor={colors.textMuted}
@@ -693,7 +692,7 @@ export default function GroupManageScreen() {
             </View>
           )}
 
-          <View style={[s.membersCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+          <View style={[s.membersCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {filteredMembers.length === 0 ? (
               <View style={{ padding: 24, alignItems: "center" }}>
                 <Text style={{ color: colors.textMuted, fontSize: 14, fontFamily: "Inter_400Regular" }}>

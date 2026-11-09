@@ -7,10 +7,10 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,7 +39,7 @@ function Section({
   return (
     <View style={sec.section}>
       <Text style={[sec.sectionLabel, { color: colors.textMuted }]}>{t(title)}</Text>
-      <View style={[sec.card, { backgroundColor: colors.cardSurface }]}>{children}</View>
+      <View style={[sec.card, { backgroundColor: colors.card }]}>{children}</View>
     </View>
   );
 }
@@ -103,7 +103,7 @@ const sec = StyleSheet.create({
   card: { borderRadius: 18, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
   iconWrap: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
-  rowText: { flex: 1, minWidth: 0 },
+  rowText: { flex: 1 },
   rowLabel: { fontSize: 15, fontFamily: "Inter_500Medium" },
   rowSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 17 },
   divider: { height: 0.5, marginHorizontal: 16 },
@@ -151,12 +151,35 @@ export default function SecuritySettingsScreen() {
     }
   }
 
-  // ── Download data (identity checked before opening the export screen) ────────
+  // ── Download data (via Supabase Edge Function → email) ──────────────────────
   const [showDownloadGate, setShowDownloadGate] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
-  function handleDownloadData() {
+  async function handleDownloadData() {
     if (!user) return;
-    router.push({ pathname: "/settings/privacy-download", params: { preset: "all" } } as any);
+    setDownloading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-user-data", {
+        body: { types: ["profile", "posts", "messages", "activity", "transactions"] },
+      });
+
+      if (error || data?.error) {
+        const msg = data?.error ?? error?.message ?? "Something went wrong. Please try again.";
+        showAlert("Export Failed", msg);
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const email = data?.email ?? user.email ?? "your registered email";
+      showAlert(
+        "Export Sent",
+        `Your data export has been sent to ${email}. Check your inbox for the attached JSON file.`
+      );
+    } catch {
+      showAlert("Error", "Failed to request data export. Please check your connection and try again.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   // ── Sign Out (3-step — buried here intentionally) ────────────────────────────
@@ -268,6 +291,7 @@ export default function SecuritySettingsScreen() {
             iconColor="#0A84FF"
             label="settings.download_data"
             sublabel="security.export_data_description"
+            loading={downloading}
             onPress={() => setShowDownloadGate(true)}
             last
             colors={colors}
@@ -288,7 +312,7 @@ export default function SecuritySettingsScreen() {
         </Section>
 
         <Text style={[styles.footerNote, { color: colors.textMuted }]}>
-          {"Your account data is synced to the cloud and stays safe when you sign out."}
+          Your account data is synced to the cloud and stays safe when you sign out.
         </Text>
 
         {/* ── Deeply buried account closure link ────────────────────── */}
@@ -360,7 +384,8 @@ export default function SecuritySettingsScreen() {
             <View style={styles.warningBox}>
               <Ionicons name="information-circle" size={22} color={colors.accent} />
               <Text style={[styles.warningText, { color: colors.text }]}>
-                {"Signing out will permanently erase all local data from this device. This includes messages, media, and settings. Your account remains active and you can log back in anytime."}
+                Signing out will permanently erase all local data from this device. This includes messages, media, and settings.
+                Your account remains active and you can log back in anytime.
               </Text>
             </View>
 
@@ -403,9 +428,9 @@ export default function SecuritySettingsScreen() {
             </View>
 
             <Text style={[styles.confirmLabel, { color: colors.textMuted }]}>
-              {"Type "}
+              Type{" "}
               <Text style={{ fontFamily: "Inter_700Bold", color: colors.text, letterSpacing: 1 }}>SIGN OUT</Text>
-              {" to confirm:"}
+              {" "}to confirm:
             </Text>
             <TextInput
               style={[styles.input, { color: colors.text, backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)", borderColor: colors.border }]}
@@ -474,15 +499,15 @@ const styles = StyleSheet.create({
   modalBtnGradient: { paddingVertical: 15, alignItems: "center", justifyContent: "center" },
   modalBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   warningBox: { flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: "rgba(255,59,48,0.10)", borderRadius: 14, padding: 14 },
-  warningText: { flex: 1, minWidth: 0, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20, textAlign: "left" },
-  confirmLabel: { fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "left" },
+  warningText: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  confirmLabel: { fontSize: 14, fontFamily: "Inter_500Medium" },
 
   closureLink:     { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 20 },
   closureLinkText: { fontSize: 11, fontFamily: "Inter_400Regular", textDecorationLine: "underline", opacity: 0.45 },
 
   logoutChecklist: { gap: 10 },
   checklistRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  checklistText: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, textAlign: "left" },
+  checklistText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
   logoutContinueBtn: { borderRadius: 14, borderWidth: 1, paddingVertical: 14, alignItems: "center" },
   logoutContinueBtnText: { fontSize: 15, fontFamily: "Inter_500Medium" },
 });

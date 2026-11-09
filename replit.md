@@ -1,6 +1,6 @@
 # AfuChat mobile app with an Expo web surface
 
-AfuChat is an Expo application built with Expo SDK 58, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
+AfuChat is an Expo application built with Expo SDK 57, Expo Router, Hermes, and the React Native New Architecture. Its web build is the same Expo Router app and UI as mobile, exported as static route HTML so public pages are discoverable without requiring JavaScript to parse the site. The app connects directly to a live Supabase project for auth, database, realtime, storage, and Edge Functions.
 
 ## Quick start on Replit
 
@@ -26,7 +26,7 @@ node scripts/serve-static-web.mjs
 
 ### 3. Open on device
 
-Start the **Expo Go** workflow and scan its QR code with an Expo Go client that supports SDK 58. The SDK 58 store clients may take a few weeks to become available. This workflow uses an Expo tunnel so the device can reach Metro without relying on the Replit proxy. The Expo static web export is the Replit preview surface. The EAS workflows remain available separately for Android cloud builds.
+Start the **Expo Go** workflow and scan its QR code with Expo Go SDK 57. This workflow uses an Expo tunnel so the device can reach Metro without relying on the Replit proxy. The Expo static web export is the Replit preview surface. The EAS workflows remain available separately for Android cloud builds.
 
 ## Environment variables and secrets
 
@@ -55,7 +55,7 @@ artifacts/mobile/
   modules/      Native mini-app modules
   web/          Legacy public web surface retained during the Expo web migration
   supabase/     Existing Supabase migrations and Edge Function source
-  scripts/      build and maintenance scripts
+  scripts/      postinstall.sh — patches native modules for New Arch
 ```
 
 The `supabase/` directory is part of the existing backend. Do not modify its migrations or Edge Functions during app-only work.
@@ -81,7 +81,7 @@ pnpm run typecheck
 
 ## Important conventions
 
-- For anonymous Expo Go testing, use `expo start --go --tunnel` with `EXPO_OFFLINE`, `EXPO_TOKEN`, `EXPO_ACCESS_TOKEN`, and `REPLIT_EXPO_SESSION_SECRET` unset. Pipe CLI output through a non-interactive stream so Expo proceeds anonymously. Keep `CI` unset because it breaks native bundle serving. In this workspace, `EXPO_OFFLINE=1` makes Expo fall back to a LAN URL instead of connecting the tunnel. Do not add the separate `--offline` CLI flag because Expo rejects it together with `--tunnel`.
+- The Expo Go workflow uses `EXPO_OFFLINE=1 --tunnel`; this skips EAS development code-signing/account prompts while the local ngrok tunnel provides device access. Do not add the separate `--offline` CLI flag because Expo rejects it together with `--tunnel`.
 - Keep `NODE_OPTIONS=--max-old-space-size=4096` on the Expo Go workflow because this route graph exceeds Node's default heap during Metro startup.
 - Do not use `CI=1` — it breaks native bundle serving.
 - EAS cloud builds require `EAS_NO_VCS=1` (Replit blocks `git stash`).

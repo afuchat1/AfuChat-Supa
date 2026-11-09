@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -12,11 +13,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
+import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -34,7 +34,9 @@ import { showToast } from "@/lib/toast";
 import * as Haptics from "@/lib/haptics";
 import { getPrestigeTier } from "@/lib/prestige";
 import { LinearGradient } from "@/components/ui/SafeGradient";
-import { openExternalLink } from "@/lib/openExternalLink";
+import MusicTrackCard from "@/components/music/MusicTrackCard";
+import { listMusicTracksByCreator } from "@/lib/afuMusic";
+import type { AfuMusicTrack } from "@/modules/afumusic";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,7 +65,7 @@ type Counts = { followers: number; following: number; posts: number };
 type GridPost = { id: string; image_url: string | null; article_cover_url: string | null; video_url: string | null; post_type: string | null; content?: string | null; article_title?: string | null };
 type MutualUser = { id: string; handle: string; avatar_url: string | null };
 type ExpandUser = { id: string; display_name: string; handle: string; avatar_url: string | null; bio: string | null; is_verified: boolean; is_organization_verified: boolean; acoin: number };
-type TabId = "posts" | "articles" | "videos";
+type TabId = "posts" | "articles" | "videos" | "music";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -153,6 +155,10 @@ export default function ContactScreen() {
   const [mutualExpanded,  setMutualExpanded]  = useState(false);
   const [allGridPosts,  setAllGridPosts]  = useState<GridPost[]>([]);
   const [gridLoading,   setGridLoading]   = useState(false);
+  const [creatorMusic, setCreatorMusic] = useState<AfuMusicTrack[]>([]);
+  const [musicLoading, setMusicLoading] = useState(true);
+  const [musicLoadError, setMusicLoadError] = useState(false);
+  const [musicRetry, setMusicRetry] = useState(0);
   const [activeTab,         setActiveTab]         = useState<TabId>("posts");
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [expandedStat,      setExpandedStat]      = useState<"followers" | "following" | null>(null);
@@ -187,7 +193,7 @@ export default function ContactScreen() {
 
   // ── Load aliases + mutuals ────────────────────────────────────────────────
   useEffect(() => {
-    if (!id || loading || typeof profile?.is_private !== "boolean") return;
+    if (!id || loading) return;
     setMutualExpanded(false);
     (async () => {
       const dismissed = await AsyncStorage.getItem(`afu_mutuals_dismissed_${id}`).catch(() => null);
@@ -214,16 +220,11 @@ export default function ContactScreen() {
         }
       }
     })().catch(() => {});
-  }, [id, loading, user?.id, isSelf, profile?.handle, profile?.is_private]);
+  }, [id, loading, user?.id, isSelf, profile?.handle]);
 
   // ── Load grid (fetch all post types once so tab switching is instant) ────
   useEffect(() => {
-    if (!id || loading || typeof profile?.is_private !== "boolean") return;
-    if (profile.is_private && !isSelf && !isFollowing) {
-      setAllGridPosts([]);
-      setGridLoading(false);
-      return;
-    }
+    if (!id || loading) return;
     setGridLoading(true);
     supabase.from("posts")
       .select("id,image_url,article_cover_url,video_url,post_type,content,article_title")
@@ -232,7 +233,41 @@ export default function ContactScreen() {
       .order("created_at", { ascending: false })
       .limit(90)
       .then(({ data }) => { setAllGridPosts((data as GridPost[]) ?? []); setGridLoading(false); }, () => { setAllGridPosts([]); setGridLoading(false); });
-  }, [id, loading, profile?.is_private, isFollowing, isSelf]);
+  }, [id, loading]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const canSeeProfileMusic = !!profile && (!profile.is_private || isSelf || isFollowing);
+    if (!id || loading || !canSeeProfileMusic) {
+      setCreatorMusic([]);
+      setMusicLoading(false);
+      setMusicLoadError(false);
+      return () => { cancelled = true; };
+    }
+
+    setMusicLoading(true);
+    setMusicLoadError(false);
+    listMusicTracksByCreator(id).then(
+      (tracks) => {
+        if (!cancelled) setCreatorMusic(tracks);
+      },
+      () => {
+        if (!cancelled) {
+          setCreatorMusic([]);
+          setMusicLoadError(true);
+        }
+      },
+    ).finally(() => {
+      if (!cancelled) setMusicLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [id, isFollowing, isSelf, loading, musicRetry, profile?.is_private]);
+
+  useEffect(() => {
+    if (!musicLoading && !musicLoadError && creatorMusic.length === 0 && activeTab === "music") {
+      setActiveTab("posts");
+    }
+  }, [activeTab, creatorMusic.length, musicLoadError, musicLoading]);
 
   // ── Derive visible posts for the active tab (instant, no network) ─────────
   const gridPosts = React.useMemo(() => {
@@ -400,6 +435,9 @@ export default function ContactScreen() {
     { id: "posts",    icon: "grid",           label: "Posts"    },
     { id: "articles", icon: "document-text",  label: "Articles" },
     { id: "videos",   icon: "videocam",       label: "Videos"   },
+    ...(musicLoading || musicLoadError || creatorMusic.length > 0
+      ? [{ id: "music" as const, icon: "musical-notes", label: "Music" }]
+      : []),
   ];
 
   const isOrg = profile.is_organization_verified || profile.is_business_mode;
@@ -431,10 +469,11 @@ export default function ContactScreen() {
           />
           {/* Nav row: back (left) + more (right) */}
           <View style={[s.navRow, { top: 6 }]}>
-            <GlassBackButton
-              style={s.navBtn}
+            <TouchableOpacity style={s.navBtn}
               onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
-            />
+              hitSlop={{ top: 8, left: 8, right: 10, bottom: 8 }}>
+              <Ionicons name="arrow-back" size={20} color="#fff" />
+            </TouchableOpacity>
             {!isSelf && (
               <TouchableOpacity style={s.navBtn}
                 onPress={() => showAlert(profile.display_name, undefined, [
@@ -696,7 +735,7 @@ export default function ContactScreen() {
                   return (
                     <TouchableOpacity
                       key={eu.id}
-                      style={[s.expandCard, { backgroundColor: colors.cardSurface, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
+                      style={[s.expandCard, { backgroundColor: colors.surface, borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
                       activeOpacity={0.75}
                       onPress={() => {
                         setExpandedStat(null);
@@ -769,7 +808,7 @@ export default function ContactScreen() {
                 const url = /^https?:\/\//i.test(profile.website_url!)
                   ? profile.website_url!
                   : `https://${profile.website_url!}`;
-                openExternalLink(url).catch(() => {});
+                Linking.openURL(url).catch(() => {});
               }}
               activeOpacity={0.75}>
               <Ionicons name="link" size={11} color={accent} />
@@ -820,7 +859,7 @@ export default function ContactScreen() {
               </View>
 
               {/* Label */}
-              <View style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
+              <View style={{ flex: 1, paddingLeft: 10 }}>
                 <Text style={[s.mutualsTitle, { color: colors.text }]} numberOfLines={2}>
                   {(() => {
                     const names = mutuals.slice(0, 2).map(m => `@${m.handle}`);
@@ -864,7 +903,7 @@ export default function ContactScreen() {
                     onPress={() => router.push({ pathname: "/contact/[id]", params: { id: m.id } })}
                     activeOpacity={0.7}>
                     <Avatar uri={m.avatar_url} name={m.handle} size={34} />
-                    <View style={{ flex: 1, minWidth: 0 }}>
+                    <View style={{ flex: 1 }}>
                       <Text style={[s.mutualRowName, { color: colors.text }]} numberOfLines={1}>
                         {(m as any).display_name || `@${m.handle}`}
                       </Text>
@@ -905,7 +944,25 @@ export default function ContactScreen() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {/* PHOTO GRID                                                       */}
         {/* ════════════════════════════════════════════════════════════════ */}
-        {gridLoading ? (
+        {activeTab === "music" ? (
+          musicLoading ? (
+            <View style={s.gridCenter}><ActivityIndicator color={accent} size="large" /></View>
+          ) : musicLoadError ? (
+            <View style={s.gridCenter}>
+              <Ionicons name="cloud-offline-outline" size={30} color={colors.textMuted} />
+              <Text style={[s.emptyTitle, { color: colors.text }]}>Music could not be loaded</Text>
+              <TouchableOpacity onPress={() => setMusicRetry((value) => value + 1)} style={{ paddingHorizontal: 16, paddingVertical: 10 }}>
+                <Text style={{ color: accent, fontFamily: "Inter_700Bold", fontSize: 13 }}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ paddingHorizontal: 14, paddingTop: 12, gap: 9 }}>
+              {creatorMusic.map((track) => (
+                <MusicTrackCard key={track.id} trackId={track.id} mode="post" />
+              ))}
+            </View>
+          )
+        ) : gridLoading ? (
           <View style={s.gridCenter}><ActivityIndicator color={accent} size="large" /></View>
         ) : gridPosts.length === 0 ? (
           <View style={s.gridCenter}>
@@ -1017,7 +1074,6 @@ const s = StyleSheet.create({
   },
   identityLeft: {
     flex: 1,
-    minWidth: 0,
     gap: 4,
   },
   identityRight: {
@@ -1045,9 +1101,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     marginTop: 2,
-    minWidth: 0,
   },
-  displayName: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2, flexShrink: 1, minWidth: 0, textAlign: "left" },
+  displayName: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2, flexShrink: 1 },
   prestigePill: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 8, paddingVertical: 3,
@@ -1066,7 +1121,7 @@ const s = StyleSheet.create({
   handleRow: {
     flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap",
   },
-  handle: { fontSize: 12.5, fontFamily: "Inter_400Regular", flexShrink: 1, minWidth: 0, textAlign: "left" },
+  handle: { fontSize: 12.5, fontFamily: "Inter_400Regular" },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11.5, fontFamily: "Inter_400Regular" },
 
@@ -1122,7 +1177,7 @@ const s = StyleSheet.create({
     paddingVertical: 11,
     gap: 6,
   },
-  expandTitle: { fontSize: 14, fontFamily: "Inter_700Bold", minWidth: 0, textAlign: "left" },
+  expandTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
   expandCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
   expandViewAll: {
     flexDirection: "row",
@@ -1192,7 +1247,6 @@ const s = StyleSheet.create({
   bio: {
     fontSize: 14, fontFamily: "Inter_400Regular",
     lineHeight: 21, marginHorizontal: 16, marginBottom: 8,
-    minWidth: 0, textAlign: "left",
   },
   metaStrip: {
     flexDirection: "row", flexWrap: "wrap", gap: 6,
@@ -1207,7 +1261,7 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     gap: 5, marginHorizontal: 16, marginBottom: 6, flexWrap: "wrap",
   },
-  metaBodyText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, textAlign: "left" },
+  metaBodyText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
 
   // ── Mutual followers — advanced card ───────────────────────────────────────
   mutualsCard: {
@@ -1228,8 +1282,8 @@ const s = StyleSheet.create({
     zIndex: 0,
   },
   mutualMoreText: { fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" },
-  mutualsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 17, minWidth: 0, textAlign: "left" },
-  mutualsSubtitle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1, textAlign: "left" },
+  mutualsTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", lineHeight: 17 },
+  mutualsSubtitle: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },
   mutualsControls: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 6 },
   mutualsExpandBtn: {
     width: 28, height: 28, borderRadius: 14,
@@ -1246,8 +1300,8 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 14, paddingVertical: 10, gap: 10,
   },
-  mutualRowName: { fontSize: 13, fontFamily: "Inter_600SemiBold", minWidth: 0, textAlign: "left" },
-  mutualRowHandle: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "left" },
+  mutualRowName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  mutualRowHandle: { fontSize: 11, fontFamily: "Inter_400Regular" },
   mutualSeeAll: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14, paddingVertical: 11,

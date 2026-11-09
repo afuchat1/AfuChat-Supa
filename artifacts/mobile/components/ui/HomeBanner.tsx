@@ -9,10 +9,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router, useFocusEffect } from "expo-router";
@@ -316,7 +316,6 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
         <View style={[sh.searchRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
-            appearance="embedded"
             style={[sh.searchInput, { color: colors.text }]}
             placeholder="Search contacts..."
             placeholderTextColor={colors.textMuted}
@@ -636,7 +635,7 @@ export function HomeBanner() {
               onPress={() => handleDismiss(banner.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={15} color="rgba(255,255,255,0.85)" />
+              <Ionicons name="close" size={15} color="#FFFFFF" />
             </TouchableOpacity>
           </TouchableOpacity>
         </LinearGradient>

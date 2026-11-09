@@ -95,15 +95,10 @@ export async function refreshAllPermissions(): Promise<void> {
 export async function requestPermission(type: PermissionType): Promise<PermissionStatus> {
   if (Platform.OS === "web") return _requestWeb(type);
 
-  // Fast path: already granted. Re-check a cached block before returning it:
-  // older app versions treated every denial as permanent, even when Android
-  // still allowed another prompt.
+  // Fast path: already granted or hard-blocked → no native call needed.
   const cached = getPermissionStatus(type);
   if (cached === "granted") return "granted";
-  if (cached === "blocked") {
-    const current = await checkPermission(type);
-    if (current === "granted" || current === "blocked") return current;
-  }
+  if (cached === "blocked") return "blocked";
 
   try {
     switch (type) {
@@ -145,17 +140,11 @@ export async function checkPermission(type: PermissionType): Promise<PermissionS
 
 // ─── Internal: normalise + cache ───────────────────────────────────────────────
 
-function _norm(raw: string, type: PermissionType, canAskAgain?: boolean): PermissionStatus {
+function _norm(raw: string, type: PermissionType): PermissionStatus {
   let s: PermissionStatus;
-  if (raw === "granted") {
-    s = "granted";
-  } else if (raw === "restricted" || (raw === "denied" && canAskAgain === false)) {
-    s = "blocked";
-  } else if (raw === "denied") {
-    s = "denied";
-  } else {
-    s = "undetermined";
-  }
+  if      (raw === "granted")                  s = "granted";
+  else if (raw === "denied" || raw === "restricted") s = "blocked";
+  else                                         s = "undetermined";
   setPermissionStatus(type, s);
   return s;
 }
@@ -176,8 +165,8 @@ async function _requestCamera(): Promise<PermissionStatus> {
     const expoCamera = require("expo-camera") as any;
     const fn = expoCamera.Camera?.requestCameraPermissionsAsync
       ?? expoCamera.requestCameraPermissionsAsync;
-    const permission = await fn();
-    return _norm(permission.status, "camera", permission.canAskAgain);
+    const { status } = await fn();
+    return _norm(status, "camera");
   } catch { return "undetermined"; }
 }
 
@@ -186,8 +175,8 @@ async function _checkCamera(): Promise<PermissionStatus> {
     const expoCamera = require("expo-camera") as any;
     const fn = expoCamera.Camera?.getCameraPermissionsAsync
       ?? expoCamera.getCameraPermissionsAsync;
-    const permission = await fn();
-    return _norm(permission.status, "camera", permission.canAskAgain);
+    const { status } = await fn();
+    return _norm(status, "camera");
   } catch { return getPermissionStatus("camera"); }
 }
 
@@ -198,8 +187,8 @@ async function _requestMicrophone(): Promise<PermissionStatus> {
     const expoCamera = require("expo-camera") as any;
     const fn = expoCamera.Camera?.requestMicrophonePermissionsAsync
       ?? expoCamera.requestMicrophonePermissionsAsync;
-    const permission = await fn();
-    return _norm(permission.status, "microphone", permission.canAskAgain);
+    const { status } = await fn();
+    return _norm(status, "microphone");
   } catch { return "undetermined"; }
 }
 
@@ -208,8 +197,8 @@ async function _checkMicrophone(): Promise<PermissionStatus> {
     const expoCamera = require("expo-camera") as any;
     const fn = expoCamera.Camera?.getMicrophonePermissionsAsync
       ?? expoCamera.getMicrophonePermissionsAsync;
-    const permission = await fn();
-    return _norm(permission.status, "microphone", permission.canAskAgain);
+    const { status } = await fn();
+    return _norm(status, "microphone");
   } catch { return getPermissionStatus("microphone"); }
 }
 
@@ -218,16 +207,16 @@ async function _checkMicrophone(): Promise<PermissionStatus> {
 async function _requestMediaLibrary(): Promise<PermissionStatus> {
   try {
     const { requestPermissionsAsync } = require("expo-media-library") as typeof import("expo-media-library");
-    const permission = await requestPermissionsAsync();
-    return _norm(permission.status, "mediaLibrary", permission.canAskAgain);
+    const { status } = await requestPermissionsAsync();
+    return _norm(status, "mediaLibrary");
   } catch { return "undetermined"; }
 }
 
 async function _checkMediaLibrary(): Promise<PermissionStatus> {
   try {
     const { getPermissionsAsync } = require("expo-media-library") as typeof import("expo-media-library");
-    const permission = await getPermissionsAsync();
-    return _norm(permission.status, "mediaLibrary", permission.canAskAgain);
+    const { status } = await getPermissionsAsync();
+    return _norm(status, "mediaLibrary");
   } catch { return getPermissionStatus("mediaLibrary"); }
 }
 
@@ -236,16 +225,16 @@ async function _checkMediaLibrary(): Promise<PermissionStatus> {
 async function _requestContacts(): Promise<PermissionStatus> {
   try {
     const { requestPermissionsAsync } = require("expo-contacts") as typeof import("expo-contacts");
-    const permission = await requestPermissionsAsync();
-    return _norm(permission.status, "contacts", permission.canAskAgain);
+    const { status } = await requestPermissionsAsync();
+    return _norm(status, "contacts");
   } catch { return "undetermined"; }
 }
 
 async function _checkContacts(): Promise<PermissionStatus> {
   try {
     const { getPermissionsAsync } = require("expo-contacts") as typeof import("expo-contacts");
-    const permission = await getPermissionsAsync();
-    return _norm(permission.status, "contacts", permission.canAskAgain);
+    const { status } = await getPermissionsAsync();
+    return _norm(status, "contacts");
   } catch { return getPermissionStatus("contacts"); }
 }
 
@@ -254,16 +243,16 @@ async function _checkContacts(): Promise<PermissionStatus> {
 async function _requestLocation(): Promise<PermissionStatus> {
   try {
     const Location = require("expo-location") as typeof import("expo-location");
-    const permission = await Location.requestForegroundPermissionsAsync();
-    return _norm(permission.status, "location", permission.canAskAgain);
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    return _norm(status, "location");
   } catch { return "undetermined"; }
 }
 
 async function _checkLocation(): Promise<PermissionStatus> {
   try {
     const Location = require("expo-location") as typeof import("expo-location");
-    const permission = await Location.getForegroundPermissionsAsync();
-    return _norm(permission.status, "location", permission.canAskAgain);
+    const { status } = await Location.getForegroundPermissionsAsync();
+    return _norm(status, "location");
   } catch { return getPermissionStatus("location"); }
 }
 

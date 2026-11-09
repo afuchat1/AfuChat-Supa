@@ -18,7 +18,8 @@ import {
 } from "@/lib/alert";
 import { useTheme } from "@/hooks/useTheme";
 import { T } from "@/constants/theme";
-import { STATUS } from "@/constants/colors";
+import { BlurView } from "expo-blur";
+import { GLASS, glassTokens } from "@/constants/glass";
 
 type AlertState = {
   visible: boolean;
@@ -29,6 +30,7 @@ type AlertState = {
 
 export default function AlertModal() {
   const { colors, isDark } = useTheme();
+  const glass = glassTokens(isDark);
   const [state, setState] = useState<AlertState>({ visible: false, title: "" });
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.88)).current;
@@ -78,7 +80,6 @@ export default function AlertModal() {
   }, [dismiss, cancelBtn]);
 
   // Use theme surface colors — no hardcoded hex
-  const cardBg = isDark ? colors.backgroundTertiary : colors.surface;
   const divider = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.09)";
 
   return (
@@ -97,9 +98,28 @@ export default function AlertModal() {
         <Animated.View
           style={[
             styles.card,
-            { backgroundColor: cardBg, opacity, transform: [{ scale }] },
+            {
+              backgroundColor: "transparent",
+              borderColor: glass.border,
+              opacity,
+              transform: [{ scale }],
+            },
           ]}
         >
+          <BlurView
+            pointerEvents="none"
+            intensity={GLASS.blur.medium}
+            tint={isDark ? "dark" : "light"}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: glass.fillStrong }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.cardHighlight, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.58)" }]}
+          />
           {/* Content */}
           <View style={styles.content}>
             <Text style={[styles.title, { color: colors.text }]}>
@@ -176,6 +196,7 @@ const styles = StyleSheet.create({
     width: Math.min(288, Dimensions.get("window").width - 48),
     borderRadius: T.radius.lg,
     overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
     ...Platform.select({
       web: { boxShadow: "0 24px 32px rgba(0,0,0,0.28)" } as any,
       default: {
@@ -186,6 +207,13 @@ const styles = StyleSheet.create({
         elevation: T.elevation.overlay,
       },
     }),
+  },
+  cardHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
   },
   content: {
     paddingTop: T.space.xxl,

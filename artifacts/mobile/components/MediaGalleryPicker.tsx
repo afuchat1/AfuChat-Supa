@@ -303,11 +303,11 @@ export default function MediaGalleryPicker({
                   onPress={() => toggleSelect(item)}
                   style={({ pressed }) => [
                     s.thumb,
-                    { width: THUMB, height: THUMB, backgroundColor: colors.backgroundSecondary, opacity: pressed ? 0.85 : 1 },
+                    { width: THUMB, height: THUMB, opacity: pressed ? 0.85 : 1 },
                   ]}
                 >
                   {isAudio ? (
-                    <View style={[s.audioBox, { backgroundColor: colors.surface }]}>
+                    <View style={[s.audioBox, { backgroundColor: isDark ? "#1e1e2e" : "#f4f4f8" }]}>
                       <Ionicons name="musical-note" size={30} color={colors.accent} />
                       <Text style={[s.audioName, { color: colors.text }]} numberOfLines={3}>
                         {item.filename.replace(/\.[^.]+$/, "")}
@@ -392,7 +392,7 @@ const s = StyleSheet.create({
   emptyTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   emptyBody: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
 
-  thumb: { margin: 1, overflow: "hidden", borderRadius: 2 },
+  thumb: { margin: 1, overflow: "hidden", borderRadius: 2, backgroundColor: "#111" },
   thumbImg: { width: "100%", height: "100%" },
 
   audioBox: {

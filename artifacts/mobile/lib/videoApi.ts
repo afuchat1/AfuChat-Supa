@@ -112,77 +112,30 @@ async function safeJson<T>(res: Response): Promise<T | null> {
   }
 }
 
-// Manifests are tiny metadata, so keep them in memory only. This avoids
-// duplicate requests when a virtualized feed remounts nearby video cards.
-const MANIFEST_CACHE_LIMIT = 256;
-const READY_MANIFEST_TTL_MS = 5 * 60_000;
-const PENDING_MANIFEST_TTL_MS = 8_000;
-const EMPTY_MANIFEST_TTL_MS = 5_000;
-const manifestCache = new Map<string, { expiresAt: number; value: VideoManifest | null }>();
-const manifestRequests = new Map<string, Promise<VideoManifest | null>>();
-
-function readManifestCache(key: string): { hit: boolean; value: VideoManifest | null } {
-  const entry = manifestCache.get(key);
-  if (!entry) return { hit: false, value: null };
-  if (entry.expiresAt <= Date.now()) {
-    manifestCache.delete(key);
-    return { hit: false, value: null };
-  }
-  manifestCache.delete(key);
-  manifestCache.set(key, entry);
-  return { hit: true, value: entry.value };
-}
-
-function writeManifestCache(key: string, value: VideoManifest | null, ttlMs: number): void {
-  manifestCache.delete(key);
-  manifestCache.set(key, { value, expiresAt: Date.now() + ttlMs });
-  while (manifestCache.size > MANIFEST_CACHE_LIMIT) {
-    const oldestKey = manifestCache.keys().next().value;
-    if (oldestKey === undefined) break;
-    manifestCache.delete(oldestKey);
-  }
-}
-
-async function getVideoManifest(key: string, url: string): Promise<VideoManifest | null> {
-  const cached = readManifestCache(key);
-  if (cached.hit) return cached.value;
-  const inFlight = manifestRequests.get(key);
-  if (inFlight) return inFlight;
-
-  const request = (async () => {
-    try {
-      const res = await fetch(url);
-      const manifest = res.ok ? await safeJson<VideoManifest>(res) : null;
-      const ttl = manifest
-        ? (manifest.sources.length > 0 ? READY_MANIFEST_TTL_MS : PENDING_MANIFEST_TTL_MS)
-        : EMPTY_MANIFEST_TTL_MS;
-      writeManifestCache(key, manifest, ttl);
-      return manifest;
-    } catch {
-      // A failed connection is not cached; a later network event can retry.
-      return null;
-    }
-  })();
-  manifestRequests.set(key, request);
-  try {
-    return await request;
-  } finally {
-    if (manifestRequests.get(key) === request) manifestRequests.delete(key);
-  }
-}
-
 export async function getAssetVideoManifest(
   assetId: string,
 ): Promise<VideoManifest | null> {
   if (!EDGE_BASE || !assetId) return null;
-  return getVideoManifest(`asset:${assetId}`, `${EDGE_BASE}/${assetId}/manifest`);
+  try {
+    const res = await fetch(`${EDGE_BASE}/${assetId}/manifest`);
+    if (!res.ok) return null;
+    return await safeJson<VideoManifest>(res);
+  } catch {
+    return null;
+  }
 }
 
 export async function getPostVideoManifest(
   postId: string,
 ): Promise<VideoManifest | null> {
   if (!EDGE_BASE || !postId) return null;
-  return getVideoManifest(`post:${postId}`, `${EDGE_BASE}/by-post/${postId}/manifest`);
+  try {
+    const res = await fetch(`${EDGE_BASE}/by-post/${postId}/manifest`);
+    if (!res.ok) return null;
+    return await safeJson<VideoManifest>(res);
+  } catch {
+    return null;
+  }
 }
 
 // ─── Capability detection ─────────────────────────────────────────────────
@@ -209,7 +162,7 @@ export function isAv1Supported(): boolean {
  */
 export function pickBestSource(
   manifest: VideoManifest | null,
-  opts: { targetHeight?: number; maxBitrateKbps?: number } = {},
+  opts: { targetHeight?: number } = {},
 ): { url: string; codec: "h264" | "av1" | "source"; height: number | null } {
   const target = opts.targetHeight ?? 720;
   if (!manifest) {
@@ -223,23 +176,11 @@ export function pickBestSource(
   function pickFor(codec: "av1" | "h264"): VideoSource | null {
     const candidates = ready.filter((s) => s.codec === codec);
     if (!candidates.length) return null;
-    const bitrateCandidates = opts.maxBitrateKbps
-      ? candidates.filter((s) => s.bitrate_kbps == null || s.bitrate_kbps <= opts.maxBitrateKbps!)
-      : candidates;
-    if (opts.maxBitrateKbps && bitrateCandidates.length === 0) {
-      return candidates.reduce((best, candidate) => {
-        const bestBitrate = best.bitrate_kbps ?? Number.POSITIVE_INFINITY;
-        const candidateBitrate = candidate.bitrate_kbps ?? Number.POSITIVE_INFINITY;
-        if (candidateBitrate !== bestBitrate) return candidateBitrate < bestBitrate ? candidate : best;
-        return candidate.height < best.height ? candidate : best;
-      });
-    }
-    const available = bitrateCandidates.length > 0 ? bitrateCandidates : candidates;
-    const atOrBelow = available.filter((s) => s.height <= target);
+    const atOrBelow = candidates.filter((s) => s.height <= target);
     if (atOrBelow.length) {
       return atOrBelow.reduce((a, b) => (a.height >= b.height ? a : b));
     }
-    return available.reduce((a, b) => (a.height <= b.height ? a : b));
+    return candidates.reduce((a, b) => (a.height <= b.height ? a : b));
   }
 
   const av1 = av1Ok ? pickFor("av1") : null;

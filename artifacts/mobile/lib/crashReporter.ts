@@ -13,14 +13,14 @@
  *  - Marks dev builds with `is_dev: true` so dashboards can filter them.
  *
  * Usage (already done in _layout.tsx):
- *   import "@/lib/crashReporter";   // Global handlers initialize on import.
+ *   import "@/lib/crashReporter";   // ← side-effect import; call initCrashReporter()
+ *   initCrashReporter();
  *
  * Auth integration (done via CrashReporterUserSync component in _layout.tsx):
  *   setCrashReporterUserId(user?.id ?? null);
  */
 
 import { Platform } from "react-native";
-import { getStorageDiagnostics } from "./storage/mmkv";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,20 +43,6 @@ export interface CrashReport {
 let _initialized         = false;
 let _userId: string | null = null;
 let _isStandalone        = false;
-let _queueFlushScheduled = false;
-let _appOperational      = false;
-const _startupStartedAt  = Date.now();
-let _startupPhase: StartupPhase = "critical";
-const _startupMilestones: Array<{ phase: StartupPhase; elapsed_ms: number }> = [
-  { phase: "critical", elapsed_ms: 0 },
-];
-
-export type StartupPhase =
-  | "critical"
-  | "primary"
-  | "auth_restoration"
-  | "operational"
-  | "deferred";
 
 /**
  * Optional callback set by the UI layer to notify the user when a crash is
@@ -69,8 +55,6 @@ let _crashNotificationHandler: ((errorMessage: string) => void) | null = null;
 const _recentHashes = new Map<string, number>();
 const DEDUP_WINDOW_MS  = 10_000;
 const QUEUE_KEY        = "afuchat:crash_queue_v1";
-const CRASH_LOG_KEY    = "afuchat_last_crash_log";
-const PREV_CRASH_KEY   = "afuchat_prev_crash_log";
 const MAX_QUEUE        = 10;
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -110,42 +94,13 @@ export function initCrashReporter(): void {
     if (typeof prevRejection === "function") prevRejection(event);
   };
 
-}
-
-/**
- * Flush persisted reports only after the root UI has mounted. The delayed,
- * fire-and-forget work cannot hold up first render or native startup.
- */
-function scheduleQueuedCrashReportFlush(): void {
-  if (!_initialized || !_isStandalone || !_appOperational || _queueFlushScheduled) return;
-  _queueFlushScheduled = true;
-  setTimeout(() => {
-    _queueFlushScheduled = false;
-    markStartupPhase("deferred");
-    void _flushQueue();
-  }, 6000);
-}
-
-/** Record startup progress without blocking rendering or touching native modules. */
-export function markStartupPhase(phase: StartupPhase): void {
-  if (_appOperational && phase !== "deferred") return;
-  _startupPhase = phase;
-  _startupMilestones.push({
-    phase,
-    elapsed_ms: Math.max(0, Date.now() - _startupStartedAt),
-  });
-  if (_startupMilestones.length > 8) _startupMilestones.shift();
-
-  if (phase === "operational") {
-    _appOperational = true;
-    scheduleQueuedCrashReportFlush();
-  }
+  // Flush any reports that were queued while offline last session.
+  _flushQueue();
 }
 
 /** Call whenever auth state changes (user login / logout). */
 export function setCrashReporterUserId(id: string | null): void {
   _userId = id;
-  if (id) scheduleQueuedCrashReportFlush();
 }
 
 /**
@@ -172,7 +127,6 @@ export function reportCrash(report: CrashReport): void {
 // ─── Internal helpers ──────────────────────────────────────────────────────────
 
 function _checkIsStandalone(): boolean {
-  if (Platform.OS === "web") return false;
   try {
     const Constants = require("expo-constants").default;
     const env = Constants?.executionEnvironment;
@@ -211,60 +165,18 @@ async function _enqueue(report: CrashReport): Promise<void> {
     if (_isDuplicate(hash)) return;
 
     const payload = _buildPayload(report);
-    void _persistGlobalCrashLog(report, payload);
 
     // Notify the UI so the user can choose to send a support report.
     if (_crashNotificationHandler && report.error_message) {
-      try { _crashNotificationHandler(safeCrashSummary(report.error_message)); } catch {}
+      try { _crashNotificationHandler(report.error_message); } catch {}
     }
 
-    // Startup errors are persisted locally first. Never attempt network I/O
-    // until navigation has rendered and the app has entered its operational phase.
-    if (!_appOperational) {
-      await _addToQueue(payload);
-      return;
-    }
-
+    // Try immediate send; fall back to queue on failure.
     const sent = await _send(payload);
-    if (!sent) await _addToQueue(payload);
-  } catch {}
-}
-
-export function redactCrashText(value: string): string {
-  return value
-    .replace(/\bBearer\s+[^\s"'`]+/gi, "Bearer [REDACTED]")
-    .replace(
-      /\b(access[_-]?token|refresh[_-]?token|token|password|secret|authorization)\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;&]+)/gi,
-      "$1=[REDACTED]",
-    )
-    .replace(
-      /([?&](?:access_token|refresh_token|token|password|secret)=)[^&\s]+/gi,
-      "$1[REDACTED]",
-    )
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL]");
-}
-
-export function safeCrashSummary(message: string): string {
-  const errorName = /(?:^|\b)([A-Za-z_$][\w$]*Error)\b/.exec(message)?.[1];
-  return `Error details redacted${errorName ? ` (${errorName})` : ""}`;
-}
-
-function _sanitizeExtra(value: unknown, depth = 0): unknown {
-  if (typeof value === "string") return redactCrashText(value).slice(0, 1000);
-  if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
-  if (depth >= 3) return undefined;
-  if (Array.isArray(value)) return value.slice(0, 20).map((item) => _sanitizeExtra(item, depth + 1));
-  if (typeof value !== "object") return undefined;
-
-  const result: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 40)) {
-    if (/(token|password|secret|authorization|message|content|body)/i.test(key)) {
-      result[key] = "[REDACTED]";
-    } else {
-      result[key] = _sanitizeExtra(item, depth + 1);
+    if (!sent) {
+      await _addToQueue(payload);
     }
-  }
-  return result;
+  } catch {}
 }
 
 function _buildPayload(report: CrashReport): Record<string, unknown> {
@@ -299,81 +211,24 @@ function _buildPayload(report: CrashReport): Record<string, unknown> {
     };
   } catch {}
 
-  const storageDiagnostics = getStorageDiagnostics();
-  const sanitizedExtra = _sanitizeExtra(report.extra);
-  const extra =
-    sanitizedExtra && typeof sanitizedExtra === "object" && !Array.isArray(sanitizedExtra)
-      ? (sanitizedExtra as Record<string, unknown>)
-      : {};
   return {
     error_type:      report.error_type,
-    // Do not upload arbitrary exception text: native/network errors can echo
-    // credentials or private user content. The type and stack remain useful.
-    error_message:   `${report.error_type}: ${safeCrashSummary(report.error_message)}`,
-    stack_trace:     report.stack_trace ? redactCrashText(report.stack_trace).slice(0, 8000) : undefined,
-    component_stack: report.component_stack ? redactCrashText(report.component_stack).slice(0, 4000) : undefined,
+    error_message:   report.error_message?.slice(0, 2000) ?? "",
+    stack_trace:     report.stack_trace?.slice(0, 8000),
+    component_stack: report.component_stack?.slice(0, 4000),
     platform:        Platform.OS,
     app_version:     appVersion,
     build_number:    buildNumber,
     user_id:         _userId ?? null,
     device_info:     deviceInfo,
     is_dev:          __DEV__,
-    extra: {
-      ...extra,
-      startup: {
-        phase: _startupPhase,
-        elapsed_ms: Math.max(0, Date.now() - _startupStartedAt),
-        milestones: _startupMilestones.map((milestone) => ({ ...milestone })),
-        native: {
-          platform_version: String(Platform.Version),
-          storage_backend: storageDiagnostics.backend,
-          persistent_storage_init_failed: storageDiagnostics.persistentStoreInitFailed,
-        },
-      },
-    },
+    extra:           report.extra ?? null,
   };
-}
-
-async function _persistGlobalCrashLog(
-  report: CrashReport,
-  payload: Record<string, unknown>,
-): Promise<void> {
-  if (report.error_type === "react_render") return;
-  try {
-    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
-    const previous = await AsyncStorage.getItem(CRASH_LOG_KEY);
-    if (previous) await AsyncStorage.setItem(PREV_CRASH_KEY, previous);
-    const extra = payload.extra as Record<string, any> | null;
-    const startup = extra?.startup;
-    const log = [
-      "AfuChat Global Crash Report",
-      `Time: ${new Date().toISOString()}`,
-      `Type: ${report.error_type}`,
-      `Platform: ${Platform.OS} ${Platform.Version}`,
-      `Startup phase: ${startup?.phase ?? "unknown"}`,
-      `Startup elapsed: ${startup?.elapsed_ms ?? "unknown"}ms`,
-      `Native storage: ${startup?.native?.storage_backend ?? "unknown"}`,
-      "",
-      String(payload.error_message ?? "Error details redacted"),
-      "",
-      "Stack trace:",
-      String(payload.stack_trace ?? "(no stack trace)"),
-    ].join("\n");
-    await AsyncStorage.setItem(CRASH_LOG_KEY, log);
-  } catch {}
 }
 
 async function _send(payload: Record<string, unknown>): Promise<boolean> {
   try {
-    const { getLiveSupabaseSession, supabase } = require("@/lib/supabase");
-    const session = await getLiveSupabaseSession();
-    if (!session) return false;
-    if (
-      typeof payload.user_id === "string" &&
-      payload.user_id !== session.user.id
-    ) {
-      return false;
-    }
+    const { supabase } = require("@/lib/supabase");
     const { error } = await supabase.from("crash_logs").insert(payload);
     return !error;
   } catch {
@@ -395,8 +250,6 @@ async function _addToQueue(payload: Record<string, unknown>): Promise<void> {
 
 async function _flushQueue(): Promise<void> {
   try {
-    const { getLiveSupabaseSession } = require("@/lib/supabase");
-    if (!(await getLiveSupabaseSession())) return;
     const AsyncStorage = require("@react-native-async-storage/async-storage").default;
     const raw = await AsyncStorage.getItem(QUEUE_KEY);
     if (!raw) return;
@@ -417,7 +270,3 @@ async function _flushQueue(): Promise<void> {
     }
   } catch {}
 }
-
-// Install the single global handler owner before the root layout and its
-// remaining imports begin application startup.
-initCrashReporter();

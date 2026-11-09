@@ -4,10 +4,10 @@
 
 | Setting | Value |
 |---|---|
-| R8 enabled | **Yes** (release DEX optimization, code shrinking, and obfuscation) |
+| R8 enabled | **No** (disabled for startup-compatible release builds) |
 | Resource shrinking | **No** (`enableShrinkResourcesInReleaseBuilds: false`) |
-| Android code minification | **Yes** (`enableMinifyInReleaseBuilds: true`) |
-| Android Gradle Plugin | Expo SDK 58 generated version catalog (not overridden) |
+| JS minification | **No** (`enableMinifyInReleaseBuilds: false`) |
+| Android Gradle Plugin | **8.10.1** (forced by the CNG config plugin) |
 | Mapping file | Generated automatically on every release build |
 | Config mechanism | Expo config plugin (`plugins/withProguardRules.js`) |
 
@@ -15,12 +15,8 @@
 
 ## Release shrinker status
 
-R8 is enabled in Android release builds to meet Google Play's upcoming DEX
-optimization requirement. The supported `expo-build-properties` config plugin
-sets `enableMinifyInReleaseBuilds` to `true`. Expo SDK 58's generated Android
-template uses the optimized Android ProGuard template. Resource shrinking
-remains disabled because it is a separate optimization and is not required for
-DEX coverage:
+R8 is intentionally disabled via `expo-build-properties` in `app.json`
+while Android startup stability is being diagnosed:
 
 ```json
 {
@@ -28,7 +24,7 @@ DEX coverage:
     "plugins": [
       ["expo-build-properties", {
         "android": {
-          "enableMinifyInReleaseBuilds": true,
+          "enableMinifyInReleaseBuilds": false,
           "enableShrinkResourcesInReleaseBuilds": false
         }
       }]
@@ -37,11 +33,12 @@ DEX coverage:
 }
 ```
 
-Before publishing the next Android release, build and smoke-test a release
-artifact. R8 can expose reflection/JNI assumptions that do not appear in a
-development build. After uploading the AAB, confirm the measured DEX
-optimization coverage in Play Console; enabling R8 alone does not guarantee
-the required 25% coverage for every bundle.
+These flags instruct Expo's prebuild step to keep `minifyEnabled false` and
+`shrinkResources false` in the `release` buildType inside
+`android/app/build.gradle`.
+
+This avoids release-only class/resource removal while native startup is being
+isolated. The custom rules remain available for a later controlled re-enable.
 
 ---
 
@@ -137,7 +134,7 @@ injected into `android/app/proguard-rules.pro` at prebuild time by the
 
 ### Why custom rules are needed
 
-Expo SDK 58 and most React Native libraries ship their own
+Expo SDK 55 and most React Native libraries ship their own
 `consumer-rules.pro` / `proguard.txt` files.  The rules below are needed
 because:
 

@@ -23,6 +23,7 @@ import {
   getOfflineCacheStats,
   clearAllOfflineVideos,
   removeOfflineVideo,
+  clearExpiredOfflineVideos,
   type OfflineVideoEntry,
 } from "@/lib/videoCache";
 import { useLanguage } from "@/context/LanguageContext";
@@ -73,6 +74,7 @@ export default function OfflineVideosScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      await clearExpiredOfflineVideos();
       const [recent, all, st] = await Promise.all([
         getRecentlyWatchedVideos(24),
         getOfflineVideos(),
@@ -146,7 +148,7 @@ export default function OfflineVideosScreen() {
   const StatsHeader = (
     <>
       {/* Stats card */}
-      <View style={[styles.statsCard, { backgroundColor: colors.cardSurface }]}>
+      <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
         <View style={styles.statsTop}>
           <View style={[styles.iconBadge, { backgroundColor: accent + "22" }]}>
             <Ionicons name="cloud-download" size={22} color={accent} />
@@ -192,7 +194,7 @@ export default function OfflineVideosScreen() {
   );
 
   const EmptyState = (
-    <View style={[styles.emptyCard, { backgroundColor: colors.cardSurface }]}>
+    <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
       <View style={[styles.emptyIconWrap, { backgroundColor: colors.backgroundSecondary }]}>
         <Ionicons name="cloud-offline" size={40} color={colors.textMuted} />
       </View>
@@ -232,12 +234,12 @@ export default function OfflineVideosScreen() {
         isLast && styles.rowLast,
       ]}>
         {/* Thumbnail */}
-        <View style={[styles.thumb, { backgroundColor: colors.backgroundSecondary }]}>
+        <View style={styles.thumb}>
           {item.thumbnail ? (
             <Image source={{ uri: item.thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           ) : (
             <View style={[StyleSheet.absoluteFill, styles.thumbPlaceholder]}>
-              <Ionicons name="videocam" size={22} color="rgba(255,255,255,0.4)" />
+              <Ionicons name="videocam" size={22} color="#FFFFFF" />
             </View>
           )}
           {/* Offline ready badge */}
@@ -387,9 +389,11 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 8,
     overflow: "hidden",
+    backgroundColor: "#111",
     flexShrink: 0,
   },
   thumbPlaceholder: {
+    backgroundColor: "#1a1a2e",
     alignItems: "center",
     justifyContent: "center",
   },

@@ -1,7 +1,6 @@
 import React from "react";
-import { Redirect, useLocalSearchParams } from "expo-router";
-import AppPageShell, { normalizeAppNavKey } from "@/components/superapp/AppPageShell";
-import { isFullAppId, type FullAppId } from "@/lib/superapp/appRouteIds";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import AppPageShell, { normalizeAppNavKey, type FullAppId } from "@/components/superapp/AppPageShell";
 import AfuPayApp from "@/modules/afupay";
 import AfuMarketApp from "@/modules/afumarket";
 import AfuBusinessApp from "@/modules/afubusiness";
@@ -12,6 +11,9 @@ import AfuEventsApp from "@/modules/afuevents";
 import AfuUsernamesApp from "@/modules/afuusernames";
 import QRScannerScreen from "@/app/qr-scanner";
 import AfuSavedApp from "@/modules/afusaved";
+import GamesScreen from "@/app/games";
+import PlayRouter from "@/app/games/play";
+import KampalaHustleGame from "@/app/games/lifesim";
 import { SearchScreen } from "@/app/(tabs)/search";
 import FileManagerScreen from "@/app/file-manager";
 import GiftsScreen from "@/app/gifts";
@@ -39,23 +41,32 @@ import TicketsScreen from "@/app/mini-programs/tickets";
 import TransferScreen from "@/app/mini-programs/transfer";
 import MoneyRequestScreen from "@/app/wallet/request";
 import AfuMusicApp from "@/modules/afumusic";
-import { AfuFootballApp } from "@/modules/afufootball";
 import {
   cacheMusicTrackOffline,
+  getMusicDownloadUri,
   getMusicPlaybackUri,
-  listCreatorMusicTracks,
   listMusicTracks,
+  listMusicEarnings,
+  listMusicPurchases,
   listOfflineMusicTracks,
   publishMusicTrack,
   purchaseMusicTrack,
   removeMusicTrack,
   removeMusicTrackOffline,
   searchMusicTracks,
-  updateMusicTrack,
 } from "@/lib/afuMusic";
 import { useAuth } from "@/context/AuthContext";
-import { isVerifiedCreator } from "@/lib/creatorEntitlements";
-import { safeRouter } from "@/lib/navUtils";
+
+const APP_IDS: FullAppId[] = [
+  "afupay", "afumarket", "afugames", "afubusiness", "afusearch",
+  "afufreelance", "afufiles", "afugifts",
+  "afuevents", "afumatch", "afucollections", "afuusernames",
+  "afuqr", "afusaved", "afumusic",
+];
+
+function isAppId(value: string): value is FullAppId {
+  return APP_IDS.includes(value as FullAppId);
+}
 
 function AppContent({
   appId,
@@ -92,10 +103,14 @@ function AppContent({
       if (section === "product") return <ProductDetailScreen />;
       if (section === "order") return <OrderDetailScreen />;
       return <AfuMarketApp initialScreen={section as any} />;
+    case "afugames":
+      if (section === "progress") return <KampalaHustleGame />;
+      if (section === "play") return <PlayRouter />;
+      return <GamesScreen />;
     case "afubusiness":
       return <AfuBusinessApp initialScreen={section as any} />;
     case "afusearch":
-      return <SearchScreen title="AfuSearch" initialTab={section as any} hasAppBottomNav={false} />;
+      return <SearchScreen title="AfuSearch" initialTab={section as any} />;
     case "afufreelance":
       if (section === "detail") return <FreelanceDetailScreen />;
       return <AfuFreelanceApp initialScreen={section as any} />;
@@ -127,8 +142,6 @@ function AppContent({
       return <AfuSavedApp />;
     case "afumusic":
       return <ConnectedAfuMusic initialSection={section} />;
-    case "afufootball":
-      return <AfuFootballApp initialSection={section} />;
   }
 }
 
@@ -148,39 +161,37 @@ export default function FullAppRoute() {
       return normalized == null ? [] : [[key, normalized]];
     }),
   ) as Record<string, string>;
-  if (!rawId || !isFullAppId(rawId)) return <Redirect href="/apps" />;
+  if (!rawId || !isAppId(rawId)) return null;
   return (
-    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afupay"}>
+    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afumusic"}>
       <AppContent appId={rawId} section={section} params={routeParams} />
     </AppPageShell>
   );
 }
 
 function ConnectedAfuMusic({ initialSection }: { initialSection?: string }) {
-  const { profile, subscription, refreshProfile } = useAuth();
-  const canMonetize = isVerifiedCreator(profile?.is_verified, subscription);
+  const { profile, isPremium } = useAuth();
+  const router = useRouter();
   return (
     <AfuMusicApp
       initialSection={(initialSection as any) || "discover"}
+      playlistOwnerId={profile?.id}
       acoinBalance={profile?.acoin}
+      canPublishPaid={isPremium}
       onBrowse={listMusicTracks}
-      onListStudio={listCreatorMusicTracks}
       onSearch={searchMusicTracks}
-      onPurchase={async (track) => {
-        const result = await purchaseMusicTrack(track.id);
-        await refreshProfile();
-        return { alreadyOwned: result.alreadyOwned };
-      }}
+      onPurchase={(track) => purchaseMusicTrack(track.id)}
       onCache={cacheMusicTrackOffline}
       onRemoveCache={removeMusicTrackOffline}
       onListOffline={listOfflineMusicTracks}
+      onListPurchases={listMusicPurchases}
+      onListEarnings={listMusicEarnings}
       onResolveAudio={getMusicPlaybackUri}
+      onResolveDownload={getMusicDownloadUri}
       onUpload={publishMusicTrack}
-      onUpdateUpload={updateMusicTrack}
       onDeleteUpload={removeMusicTrack}
-      onOpenWallet={() => safeRouter.push("/app/afupay")}
-      onOpenPlans={() => safeRouter.push("/premium")}
-      canMonetize={canMonetize}
+      onOpenWallet={() => router.push("/app/afupay")}
+      onUpgradePremium={() => router.push("/premium")}
     />
   );
 }

@@ -21,7 +21,6 @@
  */
 
 import { handleIncomingUrl } from "./deepLinkHandler";
-import { isKnownInternalRoutePattern } from "./routeCatalog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,11 +39,11 @@ type NavTest = {
 
 const WORD_ROUTES = [
   // a–c
-  "about", "achievements", "ai", "app", "apps", "article",
+  "about", "achievements", "ai", "article",
   "business", "channel", "chat", "collections", "company", "contact",
   // f–j
-  "call", "football", "followers", "freelance", "games", "gifts", "group",
-  "help", "id", "join", "login", "share",
+  "followers", "freelance", "games", "gifts", "group",
+  "help", "id", "join", "login",
   // m–r
   "match", "moments", "onboarding", "p", "post", "premium", "prestige",
   "privacy", "profile", "register", "report",
@@ -54,9 +53,9 @@ const WORD_ROUTES = [
 ] as const;
 
 const HYPHEN_ROUTES = [
-  "account-deletion", "business-verification", "chat-info", "child-safety",
+  "business-verification", "chat-info",
   "create-post", "device-security", "digital-events", "digital-id",
-  "file-manager", "language-select", "language-settings", "mini-programs",
+  "file-manager", "language-settings", "mini-programs",
   "my-posts", "paid-communities", "phone-contacts", "profile-not-found",
   "profile-private", "qr-scanner", "red-envelope", "reset-password",
   "saved-posts", "update-password", "user-discovery", "username-market",
@@ -69,7 +68,7 @@ const NAV_TESTS: NavTest[] = [
   // ── Tab screens ─────────────────────────────────────────────────────────
   { url: "afuchat://discover",     expectedType: "navigate", expectedPath: "/(tabs)/discover",   description: "Discover tab" },
   { url: "afuchat://chats",        expectedType: "navigate", expectedPath: "/(tabs)/chats",      description: "Chats tab" },
-  { url: "afuchat://search",       expectedType: "navigate", expectedPath: "/app/afusearch",     description: "AfuSearch app" },
+  { url: "afuchat://search",       expectedType: "navigate", expectedPath: "/(tabs)/search",     description: "Search tab" },
   { url: "afuchat://new-chat",     expectedType: "navigate", expectedPath: "/chat/new",          description: "New chat shortcut" },
   { url: "afuchat://shorts",       expectedType: "navigate", expectedPath: "/(tabs)/shorts",     description: "Shorts tab" },
   { url: "afuchat://communities",  expectedType: "navigate", expectedPath: "/(tabs)/communities",description: "Communities tab" },
@@ -102,7 +101,8 @@ const NAV_TESTS: NavTest[] = [
   { url: "afuchat://my-posts",     expectedType: "navigate", expectedPath: "/my-posts",          description: "My posts" },
   { url: "afuchat://watch-history",expectedType: "navigate", expectedPath: "/watch-history",     description: "Watch history" },
   // ── Commerce & mini-apps ────────────────────────────────────────────────
-  { url: "afuchat://shop",         expectedType: "navigate", expectedPath: "/app/afumarket",     description: "Shop" },
+  { url: "afuchat://shop",         expectedType: "navigate", expectedPath: "/shop",              description: "Shop" },
+  { url: "afuchat://games",        expectedType: "navigate", expectedPath: "/app/afugames",      description: "Games" },
   { url: "afuchat://freelance",    expectedType: "navigate", expectedPath: "/app/afufreelance",  description: "Freelance" },
   { url: "afuchat://gifts",        expectedType: "navigate", expectedPath: "/app/afugifts",      description: "Gifts" },
   { url: "afuchat://business",     expectedType: "navigate", expectedPath: "/app/afubusiness",   description: "Business" },
@@ -181,14 +181,13 @@ async function runNavTests() {
 
       const typeMatch = gotType === tc.expectedType;
       const pathMatch = tc.expectedPath == null || gotPath === tc.expectedPath;
-      const availableRoute = gotPath == null || isKnownInternalRoutePattern(gotPath);
 
-      if (!typeMatch || !pathMatch || !availableRoute) {
+      if (!typeMatch || !pathMatch) {
         failures.push({
           desc: tc.description,
           url: tc.url,
           got: action === null ? "null" : `${action.type}${gotPath ? ` → ${gotPath}` : ""}`,
-          expected: tc.expectedPath ? `${tc.expectedType} → ${tc.expectedPath}${availableRoute ? "" : " (existing route)"}` : tc.expectedType,
+          expected: tc.expectedPath ? `${tc.expectedType} → ${tc.expectedPath}` : tc.expectedType,
         });
       }
     } catch (err) {

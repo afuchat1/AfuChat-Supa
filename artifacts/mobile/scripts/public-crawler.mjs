@@ -4,7 +4,7 @@ const CACHE_TTL_MS = 60_000;
 const cache = new Map();
 
 const RESERVED_HANDLES = new Set([
-  "browser", "onboarding", "welcome", "settings", "wallet", "shop", "chat", "music",
+  "browser", "onboarding", "welcome", "settings", "wallet", "shop", "chat",
   "discover", "video", "shorts", "moments", "match", "games", "ai", "support",
   "company", "freelance", "article", "channel", "group", "join", "my-posts",
   "profile", "post", "stories", "red-envelope", "mini-programs", "gifts", "p",
@@ -197,29 +197,6 @@ export function profileContent(data) {
       ${postsMarkup ? `<h2>Public posts</h2>${postsMarkup}` : ""}
     `,
   };
-}
-
-export async function publicMusicTracks() {
-  // Only explicitly free, published tracks are exposed to logged-out visitors and crawlers.
-  const tracks = await rows(
-    "music_tracks",
-    "id,title,artist,genre,price_acoin,audio_url,duration_seconds,play_count,usage_count,created_at,creator_id,status",
-    [
-      ["status", "eq.published"],
-      ["price_acoin", "eq.0"],
-      ["order", "created_at.desc"],
-      ["limit", "1000"],
-    ],
-  );
-  const eligible = (Array.isArray(tracks) ? tracks : []).filter(
-    (track) => Number(track.price_acoin) === 0 && track.status === "published",
-  );
-  const creatorIds = [...new Set(eligible.map((track) => track.creator_id).filter(Boolean))];
-  const profiles = creatorIds.length
-    ? await rows("profiles", "id,display_name,handle", [["id", `in.(${creatorIds.join(",")})`]])
-    : [];
-  const profileMap = new Map((Array.isArray(profiles) ? profiles : []).map((profile) => [profile.id, profile]));
-  return eligible.map((track) => ({ ...track, creator: profileMap.get(track.creator_id) || null }));
 }
 
 export async function publicProfileSummaries() {

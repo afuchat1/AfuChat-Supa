@@ -14,14 +14,13 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router, useLocalSearchParams } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -386,7 +385,9 @@ export default function CompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Company Page</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -401,7 +402,9 @@ export default function CompanyPageScreen() {
     return (
       <View style={[styles.root, { backgroundColor: colors.background }]}>
         <View style={[styles.navBar, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[styles.navTitle, { color: colors.text }]}>Not Found</Text>
           <View style={{ width: 24 }} />
         </View>
@@ -410,12 +413,9 @@ export default function CompanyPageScreen() {
             <Ionicons name="business" size={36} color={colors.textMuted} />
           </View>
           <Text style={{ color: colors.textMuted, fontSize: 16, fontFamily: "Inter_400Regular" }}>This page doesn't exist.</Text>
-          <GlassBackButton
-            onPress={() => router.back()}
-            label="Go back"
-            accessibilityLabel="Go back"
-            style={{ alignSelf: "center" }}
-          />
+          <TouchableOpacity onPress={() => router.back()} style={[styles.emptyBtn, { backgroundColor: colors.accent }]} activeOpacity={0.8}>
+            <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -466,7 +466,7 @@ export default function CompanyPageScreen() {
       </View>
 
       {/* Info Card */}
-      <View style={[styles.infoCard, { backgroundColor: colors.cardSurface }]}>
+      <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
         {/* Name + verified */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <Text style={[styles.pageName, { color: colors.text }]}>{page.name}</Text>
@@ -724,7 +724,13 @@ export default function CompanyPageScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Floating NavBar over cover */}
       <View style={[styles.navBarFloat, { paddingTop: headerTop }]}>
-        <GlassBackButton onPress={() => router.back()} />
+        <TouchableOpacity
+          style={styles.navIconBtn}
+          onPress={() => router.back()}
+          hitSlop={12}
+        >
+          <Ionicons name="arrow-back" size={22} color="#fff" />
+        </TouchableOpacity>
         <View style={{ flex: 1 }} />
         {isAdmin ? (
           <TouchableOpacity
@@ -934,7 +940,7 @@ export default function CompanyPageScreen() {
             };
             const jColor = jobTypeColors[job.job_type] ?? { bg: colors.accent + "18", text: colors.accent };
             return (
-              <View style={[styles.jobCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+              <View style={[styles.jobCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <View style={styles.jobCardHeader}>
                   <View style={[styles.jobLogoSmall, { backgroundColor: colors.accent }]}>
                     {page.logo_url

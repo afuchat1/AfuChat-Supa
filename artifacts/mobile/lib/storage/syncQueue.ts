@@ -3,8 +3,8 @@
 // device reconnects. Exactly how Instagram/WhatsApp defer network operations.
 
 import { getDB } from "./db";
-import { getLiveSupabaseSession, supabase } from "@/lib/supabase";
-import { beginDataSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
+import { supabase } from "@/lib/supabase";
+import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 
 export type QueueActionType =
   | "send_message"
@@ -15,7 +15,6 @@ export type QueueActionType =
   | "follow_user"
   | "unfollow_user"
   | "add_reaction"
-  | "mark_delivered"
   | "mark_read"
   | "delete_message";
 
@@ -42,9 +41,7 @@ export async function enqueue(
        VALUES (?, ?, ?, ?, 0, NULL)`,
       [id, actionType, JSON.stringify(payload), Date.now()],
     );
-  } catch (error) {
-    throw error;
-  }
+  } catch {}
   return id;
 }
 
@@ -65,12 +62,8 @@ function scheduleRetry(retryCount: number): void {
 export async function drainQueue(maxItems = 50): Promise<void> {
   if (_draining || !isOnline()) return;
   _draining = true;
-  let finishDataSync: (() => void) | null = null;
 
   try {
-    const session = await getLiveSupabaseSession();
-    if (!session) return;
-
     const db = await getDB();
     const limit = Number.isFinite(maxItems)
       ? Math.max(1, Math.min(50, Math.floor(maxItems)))
@@ -78,22 +71,12 @@ export async function drainQueue(maxItems = 50): Promise<void> {
     const items = await db.getAllAsync<QueueItem>(
       `SELECT * FROM offline_queue ORDER BY created_at ASC LIMIT ${limit}`,
     );
-    if (items.length > 0) finishDataSync = beginDataSync();
 
     for (const item of items) {
       let payload: Record<string, any> = {};
       try { payload = JSON.parse(item.payload as unknown as string); } catch {}
 
-      const actionUserId =
-        typeof payload.user_id === "string"
-          ? payload.user_id
-          : typeof payload.follower_id === "string"
-            ? payload.follower_id
-            : null;
-      if (actionUserId && actionUserId !== session.user.id) continue;
-
-      const success = await executeAction(item.action_type, payload, session.user.id);
-      if (success === "wrong_user") continue;
+      const success = await executeAction(item.action_type, payload);
       if (success) {
         await db.runAsync("DELETE FROM offline_queue WHERE id = ?", [item.id]);
       } else {
@@ -113,7 +96,6 @@ export async function drainQueue(maxItems = 50): Promise<void> {
     }
   } catch {
   } finally {
-    finishDataSync?.();
     _draining = false;
   }
 }
@@ -121,8 +103,7 @@ export async function drainQueue(maxItems = 50): Promise<void> {
 async function executeAction(
   type: QueueActionType,
   payload: Record<string, any>,
-  authenticatedUserId: string,
-): Promise<boolean | "wrong_user"> {
+): Promise<boolean> {
   try {
     switch (type) {
       case "like_post": {
@@ -156,10 +137,10 @@ async function executeAction(
         return !error;
       }
       case "follow_user": {
-        const { error } = await supabase.from("follows").upsert({
+        const { error } = await supabase.from("follows").insert({
           follower_id: payload.follower_id,
           following_id: payload.following_id,
-        }, { onConflict: "follower_id,following_id", ignoreDuplicates: true });
+        });
         return !error;
       }
       case "unfollow_user": {
@@ -175,30 +156,16 @@ async function executeAction(
           ? payload.message_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
           : [];
         if (messageIds.length === 0) return true;
-        const { error: deliveryError } = await supabase.rpc("acknowledge_message_delivery", {
-          p_message_ids: messageIds,
-        });
-        if (deliveryError) return false;
-        if (payload.read_receipts === false) return true;
         const now = new Date().toISOString();
         const rows = messageIds.map((messageId) => ({
           message_id: messageId,
           user_id: payload.user_id,
-          read_at: now,
+          delivered_at: now,
+          ...(payload.read_receipts !== false ? { read_at: now } : {}),
         }));
         const { error } = await supabase
           .from("message_status")
           .upsert(rows, { onConflict: "message_id,user_id" });
-        return !error;
-      }
-      case "mark_delivered": {
-        const messageIds = Array.isArray(payload.message_ids)
-          ? payload.message_ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
-          : [];
-        if (messageIds.length === 0) return true;
-        const { error } = await supabase.rpc("acknowledge_message_delivery", {
-          p_message_ids: messageIds,
-        });
         return !error;
       }
       case "add_reaction": {
@@ -225,7 +192,6 @@ async function executeAction(
               (payload.content == null || m.content === payload.content),
             );
         if (!msg) return true; // already sent or not found — remove from queue
-        if (msg.sender_id !== authenticatedUserId) return "wrong_user";
         const { data, error } = await supabase
           .from("messages")
           .insert({

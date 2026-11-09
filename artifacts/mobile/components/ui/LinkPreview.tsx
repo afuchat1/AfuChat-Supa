@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { Image as ExpoImage } from "expo-image";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -176,6 +176,11 @@ function ProfilePreviewCard({
               <Ionicons name="checkmark-circle" size={13} color={accent} />
             )}
           </View>
+          <Text
+            style={[st.profileHandle, { color: isMe ? "rgba(255,255,255,0.65)" : colors.textMuted }]}
+          >
+            @{card.handle}
+          </Text>
           {card.followers_count > 0 && (
             <Text
               style={[st.profileMeta, { color: isMe ? "rgba(255,255,255,0.55)" : colors.textMuted }]}

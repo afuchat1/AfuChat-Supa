@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Device from "expo-device";
@@ -399,7 +398,9 @@ export default function DeviceSecurityScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+          <Ionicons name="chevron-back" size={24} color={colors.accent} />
+        </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Device Security</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -446,7 +447,7 @@ export default function DeviceSecurityScreen() {
             }
             renderItem={({ item }) => (
               <View style={[styles.deviceCard, {
-                backgroundColor: colors.cardSurface,
+                backgroundColor: colors.surface,
                 borderColor: item.is_current ? colors.accent + "55" : colors.border,
               }]}>
                 <View style={[styles.platformIconWrap, {
@@ -501,7 +502,7 @@ export default function DeviceSecurityScreen() {
         <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
           <Text style={[styles.secGroup, { color: colors.textMuted }]}>APP LOCK</Text>
 
-          <View style={[styles.prefCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
             <PrefRow
               icon="finger-print"
               iconColor="#5856D6"
@@ -540,7 +541,7 @@ export default function DeviceSecurityScreen() {
           </View>
 
           <Text style={[styles.secGroup, { color: colors.textMuted }]}>ACCOUNT SECURITY</Text>
-          <View style={[styles.prefCard, { backgroundColor: colors.cardSurface }]}>
+          <View style={[styles.prefCard, { backgroundColor: colors.surface }]}>
             <TouchableOpacity
               style={styles.actionRow}
               onPress={() => router.push("/settings/security" as any)}

@@ -17,8 +17,8 @@ type SkeletonProps = {
 function SkeletonFallback({ width, height, borderRadius = 8, style, forceDark }: SkeletonProps) {
   const { isDark } = useTheme();
   const useDark = forceDark ?? isDark;
-  const baseColor      = useDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.09)";
-  const highlightColor = useDark ? "rgba(255,255,255,0.24)" : "rgba(0,0,0,0.15)";
+  const baseColor      = useDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
+  const highlightColor = useDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.09)";
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export function ContactRowSkeleton() {
 export function PostSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.postCard, { backgroundColor: colors.cardSurface }]}>
+    <View style={[sk.postCard, { backgroundColor: colors.surface }]}>
       <View style={sk.postHeader}>
         <Skeleton width={40} height={40} borderRadius={20} />
         <View style={{ marginLeft: 10, flex: 1, gap: 6 }}>
@@ -248,7 +248,7 @@ export function ContactProfileSkeleton() {
 export function GiftCardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.giftCard, { backgroundColor: colors.cardSurface }]}>
+    <View style={[sk.giftCard, { backgroundColor: colors.surface }]}>
       <Skeleton width={40} height={40} borderRadius={8} />
       <Skeleton width={60} height={12} style={{ marginTop: 6 }} />
       <Skeleton width={50} height={10} style={{ marginTop: 4 }} />
@@ -334,7 +334,7 @@ export function ListRowSkeleton() {
 export function GameCardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.gameCard, { backgroundColor: colors.cardSurface }]}>
+    <View style={[sk.gameCard, { backgroundColor: colors.surface }]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <Skeleton width={60} height={20} borderRadius={8} />
         <Skeleton width={100} height={14} />
@@ -382,7 +382,7 @@ export function AdminSkeleton() {
 export function MarketplaceCardSkeleton() {
   const { colors } = useTheme();
   return (
-    <View style={[sk.marketCard, { backgroundColor: colors.cardSurface }]}>
+    <View style={[sk.marketCard, { backgroundColor: colors.surface }]}>
       <Skeleton width="100%" height={100} borderRadius={10} />
       <View style={{ padding: 8, gap: 6 }}>
         <Skeleton width={80} height={14} />
@@ -499,17 +499,16 @@ export function MeTabSkeleton() {
 }
 
 export function VideoFeedSkeleton() {
-  const { colors } = useTheme();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, flexDirection: "column" }}>
+    <View style={{ flex: 1, backgroundColor: "#000", flexDirection: "column" }}>
 
       {/* ── Video area (fills remaining space) ── */}
-      <View style={{ flex: 1, backgroundColor: colors.background }} />
+      <View style={{ flex: 1, backgroundColor: "#000" }} />
 
       {/* ── Caption strip (56 px, matches CAPTION_H in VideoFeed) ── */}
       <View style={{
         height: 56,
-        backgroundColor: colors.background,
+        backgroundColor: "#000",
         paddingHorizontal: 14,
         paddingVertical: 10,
         justifyContent: "center",
@@ -528,7 +527,7 @@ export function VideoFeedSkeleton() {
         alignItems: "center",
         paddingHorizontal: 12,
         paddingVertical: 10,
-        backgroundColor: colors.background,
+        backgroundColor: "#000",
         gap: 10,
         borderTopWidth: 0.5,
         borderTopColor: "rgba(255,255,255,0.08)",
@@ -568,7 +567,7 @@ export function VideoFeedSkeleton() {
 
 export function ShortsFeedSkeleton({ dark = true }: { dark?: boolean }) {
   const { colors } = useTheme();
-  const bg = colors.background;
+  const bg = dark ? "#000" : colors.background;
   return (
     <View style={{ flex: 1, backgroundColor: bg, flexDirection: "column" }}>
 
@@ -597,7 +596,7 @@ export function ShortsFeedSkeleton({ dark = true }: { dark?: boolean }) {
         alignItems: "center",
         paddingHorizontal: 12,
         paddingVertical: 10,
-        backgroundColor: dark ? colors.background : colors.card,
+        backgroundColor: dark ? "#000" : colors.card,
         gap: 10,
         borderTopWidth: 0.5,
         borderTopColor: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",

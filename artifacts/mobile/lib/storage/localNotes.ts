@@ -132,7 +132,7 @@ export async function saveLocalNotesMessage(
   const current = await getLocalNotesMessages(userId);
   const next = [...current.filter((item) => item.id !== message.id), { ...message, chat_id: chatId }]
     .sort((a, b) => a.sent_at.localeCompare(b.sent_at));
-  await AsyncStorage.setItem(key, JSON.stringify(next));
+  await AsyncStorage.setItem(key, JSON.stringify(next)).catch(() => {});
   await updateLocalNotesLastMessage(userId, message.encrypted_content, message.sent_at);
 }
 

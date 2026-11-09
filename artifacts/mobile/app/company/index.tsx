@@ -8,13 +8,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -119,7 +118,7 @@ export default function CompanyIndexScreen() {
     const isOwned = item.admin_id === user?.id;
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}
+        style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
         onPress={() => router.push(`/company/${item.slug}` as any)}
         activeOpacity={0.88}
       >
@@ -203,7 +202,9 @@ export default function CompanyIndexScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: headerTop, backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerRow}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+            <Ionicons name="chevron-back" size={24} color={colors.accent} />
+          </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Company Pages</Text>
           {canCreate && myPages.length === 0 && !loading ? (
             <TouchableOpacity
@@ -223,7 +224,6 @@ export default function CompanyIndexScreen() {
         <View style={[styles.searchBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
-            appearance="embedded"
             style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search pages…"
             placeholderTextColor={colors.textMuted}
@@ -290,7 +290,6 @@ export default function CompanyIndexScreen() {
         </View>
       ) : (
         <FlatList
-          removeClippedSubviews={false}
           data={displayedPages}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}

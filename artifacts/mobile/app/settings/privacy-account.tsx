@@ -60,7 +60,7 @@ function ToggleRow({
         <Switch
           value={value}
           onValueChange={onToggle}
-          trackColor={{ true: accent, false: colors.backgroundTertiary }}
+          trackColor={{ true: accent, false: colors.border }}
           thumbColor="#fff"
         />
       )}

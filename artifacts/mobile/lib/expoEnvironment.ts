@@ -6,8 +6,6 @@ import Constants from "expo-constants";
  * without logging a runtime error during app startup.
  */
 export function isExpoGo(): boolean {
-  if (process.env.EXPO_PUBLIC_IS_EXPO_GO === "1") return true;
-
   return (
     Constants?.appOwnership === "expo" ||
     (Constants as any)?.executionEnvironment === "storeClient"

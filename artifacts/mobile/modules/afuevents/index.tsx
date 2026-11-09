@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { safeRouter } from "@/lib/navUtils";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
@@ -70,7 +69,7 @@ export default function AfuEventsApp({ initialTab }: { initialTab?: "upcoming" |
   function renderEvent({ item }: { item: Event }) {
     const freeOrPaid = item.price === 0 ? "Free" : `${item.price} AC`;
     return (
-      <TouchableOpacity style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]} onPress={() => showAlert(item.title, `${item.description || ""}\n\n📍 ${item.location || (item.is_online ? "Online" : "TBD")}\n🕐 ${formatEventDate(item.starts_at)}\n💰 ${freeOrPaid}`)} activeOpacity={0.8}>
+      <TouchableOpacity style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => showAlert(item.title, `${item.description || ""}\n\n📍 ${item.location || (item.is_online ? "Online" : "TBD")}\n🕐 ${formatEventDate(item.starts_at)}\n💰 ${freeOrPaid}`)} activeOpacity={0.8}>
         {item.cover_url ? (
           <Image source={{ uri: item.cover_url }} style={s.cover} resizeMode="cover" />
         ) : (
@@ -117,7 +116,9 @@ export default function AfuEventsApp({ initialTab }: { initialTab?: "upcoming" |
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
         <View style={[s.header, { borderBottomColor: colors.border, paddingTop: insets.top + 14 }]}>
-        <GlassBackButton onPress={() => safeRouter.back("/apps")} accessibilityLabel="Go back" />
+        <TouchableOpacity onPress={() => safeRouter.back("/apps")} hitSlop={10} style={{ width: 34, height: 40, alignItems: "center", justifyContent: "center" }} accessibilityRole="button" accessibilityLabel="Go back">
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
         <Text style={[s.headerTitle, { color: colors.text, flex: 1, textAlign: "center" }]}>Events</Text>
         <TouchableOpacity style={[s.createBtn, { backgroundColor: "#FF9500" }]} onPress={() => showAlert("Create Event", "Event creation coming soon!")}>
           <Ionicons name="add" size={18} color="#fff" />

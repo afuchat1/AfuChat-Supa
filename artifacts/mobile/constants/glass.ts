@@ -19,23 +19,36 @@ export const GLASS = {
     dark:         "rgba(22, 22, 26,  0.65)",
     darkMedium:   "rgba(28, 28, 32,  0.75)",
     darkStrong:   "rgba(16, 16, 20,  0.88)",
-    light:        "rgba(255,255,255, 0.60)",
-    lightMedium:  "rgba(255,255,255, 0.72)",
-    lightStrong:  "rgba(255,255,255, 0.88)",
+    light:        "rgba(255,255,255, 0.72)",
+    lightMedium:  "rgba(255,255,255, 0.84)",
+    lightStrong:  "rgba(255,255,255, 0.94)",
   },
 
   // ── Border (hairline specular edge) ───────────────────────────────────────
   border: {
-    dark:         "transparent",
-    darkSubtle:   "transparent",
-    light:        "transparent",
-    lightSubtle:  "transparent",
+    dark:         "rgba(255,255,255, 0.12)",
+    darkSubtle:   "rgba(255,255,255, 0.07)",
+    light:        "rgba(255,255,255, 0.48)",
+    lightSubtle:  "rgba(255,255,255, 0.30)",
   },
 
   // ── Specular highlight gradient (top-edge shine) ──────────────────────────
   specular: {
     dark:  ["rgba(255,255,255,0.12)", "rgba(255,255,255,0.00)"] as [string, string],
     light: ["rgba(255,255,255,0.80)", "rgba(255,255,255,0.00)"] as [string, string],
+  },
+
+  // ── Frosted input panels, inspired by modern system control surfaces ──────
+  input: {
+    blur: 72,
+    fillLight: "rgba(255,255,255,0.70)",
+    fillDark: "rgba(245,240,232,0.94)",
+    fillOverlay: "rgba(245,240,232,0.94)",
+    borderLight: "rgba(255,255,255,0.48)",
+    borderDark: "rgba(255,255,255,0.22)",
+    borderOverlay: "rgba(255,255,255,0.30)",
+    specularLight: ["rgba(255,255,255,0.40)", "rgba(255,255,255,0.00)"] as [string, string],
+    specularDark: ["rgba(255,255,255,0.22)", "rgba(255,255,255,0.00)"] as [string, string],
   },
 
   // ── Shadows (platform-safe) ───────────────────────────────────────────────
@@ -93,23 +106,6 @@ export const GLASS = {
     pill:50,
   },
 };
-
-export function floatingNavigationShadow(isDark: boolean) {
-  return Platform.select({
-    ios: {
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: isDark ? 0.35 : 0.12,
-      shadowRadius: 16,
-    },
-    android: { elevation: 8 },
-    web: {
-      boxShadow: isDark
-        ? "0 4px 20px rgba(0,0,0,0.45)"
-        : "0 4px 20px rgba(0,0,0,0.10)",
-    } as any,
-  });
-}
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────
 

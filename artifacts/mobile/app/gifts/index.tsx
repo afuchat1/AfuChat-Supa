@@ -5,11 +5,11 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { useLocalSearchParams } from "expo-router";
 import { safeRouter } from "@/lib/navUtils";
@@ -338,7 +338,7 @@ export default function GiftsScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.giftCard, { backgroundColor: colors.cardSurface, width: cardW }]}
+        style={[styles.giftCard, { backgroundColor: colors.surface, width: cardW }]}
         onPress={() => setSelectedGift(item)}
         onLongPress={isOwnProfile ? () => togglePin(item) : undefined}
         activeOpacity={0.7}

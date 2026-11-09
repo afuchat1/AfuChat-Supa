@@ -1,6 +1,4 @@
 import { SUPABASE_URL as supabaseUrl, SUPABASE_ANON_KEY as supabaseAnonKey } from "./env";
-import { protectAfuChatBrand } from "./brandName";
-import { supabase } from "@/lib/supabase";
 
 /**
  * Returns the Supabase edge function base URL.
@@ -58,47 +56,6 @@ export async function askAi(prompt: string, systemPrompt?: string, options?: Ask
   }
   const data = await response.json();
   return data.reply || "Sorry, I couldn't generate a response.";
-}
-
-export async function aiGenerateImage(prompt: string): Promise<string> {
-  const safePrompt = prompt.trim().slice(0, 1200);
-  if (!safePrompt) throw new Error("Describe the image you want to create.");
-
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) throw sessionError;
-  const accessToken = sessionData.session?.access_token;
-  if (!accessToken) throw new Error("Sign in to generate an image.");
-
-  const response = await fetch(`${getEdgeFnBase()}/generate-ai-image`, {
-    method: "POST",
-    headers: edgeHeadersWithAuth(accessToken),
-    body: JSON.stringify({ prompt: safePrompt }),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`Image generation failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ""}`);
-  }
-
-  const data = await response.json();
-  const firstImage = Array.isArray(data?.images) ? data.images[0] : null;
-  const firstDataImage = Array.isArray(data?.data) ? data.data[0] : null;
-  const imageUrl = [
-    data?.image_url,
-    data?.imageUrl,
-    data?.generated_image_url,
-    data?.generatedImageUrl,
-    data?.url,
-    typeof data?.image === "string" ? data.image : data?.image?.url,
-    typeof firstImage === "string" ? firstImage : firstImage?.url,
-    typeof firstDataImage === "string" ? firstDataImage : firstDataImage?.url,
-  ].find((value) => typeof value === "string" && value.length > 0);
-  if (imageUrl) return String(imageUrl);
-
-  const base64 = data?.b64_json ?? data?.image_base64 ?? data?.imageBase64 ?? firstDataImage?.b64_json;
-  if (typeof base64 === "string" && base64.length > 0) {
-    return base64.startsWith("data:") ? base64 : `data:image/png;base64,${base64}`;
-  }
-  throw new Error(String(data?.error || "The image service returned no image."));
 }
 
 export async function aiEnhancePost(content: string): Promise<string> {
@@ -175,22 +132,28 @@ export async function aiSummarizeThread(post: string, replies: { author: string;
 
 export async function transcribeAudio(audioUrl: string): Promise<string> {
   try {
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) throw sessionError;
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken) throw new Error("Sign in to transcribe this voice message.");
-
-    const response = await fetch(`${getEdgeFnBase()}/transcribe-audio`, {
+    // Route to afu-ai-reply (verify_jwt:false, handles {audioUrl} natively via Groq).
+    // Falls back to the dedicated transcribe-audio function if the primary fails.
+    const primary = await fetch(`${getEdgeFnBase()}/afu-ai-reply`, {
       method: "POST",
-      headers: edgeHeadersWithAuth(accessToken),
+      headers: edgeHeaders(),
       body: JSON.stringify({ audioUrl }),
     });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      throw new Error(`Transcription failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ""}`);
+
+    if (primary.ok) {
+      const data = await primary.json();
+      if (data.text !== undefined) return data.text || "";
     }
-    const data = await response.json();
-    return String(data?.text ?? data?.transcript ?? "").trim();
+
+    // Fallback: dedicated transcribe-audio function (requires user JWT via supabase client)
+    const fallback = await fetch(`${getEdgeFnBase()}/transcribe-audio`, {
+      method: "POST",
+      headers: edgeHeaders(),
+      body: JSON.stringify({ audioUrl }),
+    });
+    if (!fallback.ok) throw new Error(`Transcription failed: ${fallback.status}`);
+    const data = await fallback.json();
+    return data.text || "";
   } catch (err) {
     throw err instanceof Error ? err : new Error("Transcription network error");
   }
@@ -232,13 +195,11 @@ export async function aiEmojifyText(text: string): Promise<string> {
 }
 
 export async function aiTranslateMessage(text: string, targetLang: string): Promise<string> {
-  const brandProtected = protectAfuChatBrand(text);
-  const translated = await askAi(
-    `Translate to ${targetLang}. Keep every placeholder exactly unchanged. Return ONLY the translation:\n\n${brandProtected.text}`,
+  return askAi(
+    `Translate to ${targetLang}. Return ONLY the translation:\n\n${text}`,
     "Translator. Return ONLY translated text.",
     { fast: true, maxTokens: 200 }
   );
-  return brandProtected.restore(translated) ?? text;
 }
 
 export async function aiGenerateCaption(imageDescription?: string): Promise<string> {

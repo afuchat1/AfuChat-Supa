@@ -11,7 +11,6 @@ import { ActivityIndicator, Animated, Platform, Text, TouchableOpacity, View } f
 import { router, useLocalSearchParams, useRootNavigationState } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -38,11 +37,6 @@ const RESERVED_ROUTES = new Set([
   "collections", "language-settings", "device-security",
   "phone-contacts", "user-discovery", "username-market", "digital-events",
   "file-manager", "business", "business-verification", "paid-communities", "help",
-  // Every top-level app route is reserved before the public-handle resolver.
-  // This prevents valid feature paths from being mistaken for usernames.
-  "account-deletion", "app", "apps", "call", "chat-info", "child-safety",
-  "football", "id", "language-select", "privacy", "profile-not-found",
-  "profile-private", "report", "share", "terms",
 ]);
 
 type ResolvedTarget =
@@ -224,7 +218,7 @@ export default function HandleScreen() {
     if (!denied || hasNavigated.current || deniedHandleRef.current === cleanHandle) return;
 
     deniedHandleRef.current = cleanHandle;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     denyShake.setValue(0);
     Animated.sequence([
       Animated.timing(denyShake, { toValue: 9, duration: 55, useNativeDriver: Platform.OS !== "web" }),
@@ -298,15 +292,16 @@ export default function HandleScreen() {
           <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 21, textAlign: "center" }}>
             @{cleanHandle || "username"} could not be opened.
           </Text>
-          <GlassBackButton
+          <TouchableOpacity
             onPress={() => {
               if (router.canGoBack()) router.back();
               else safeNavigate(session ? "/(tabs)/discover" : "/welcome");
             }}
-            label="Go back"
-            accessibilityLabel="Go back"
-            style={{ alignSelf: "center" }}
-          />
+            style={{ minWidth: 150, alignItems: "center", paddingVertical: 13, paddingHorizontal: 22, borderRadius: 12, backgroundColor: colors.accent }}
+            activeOpacity={0.85}
+          >
+            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Go back</Text>
+          </TouchableOpacity>
         </View>
       </Animated.View>
     );

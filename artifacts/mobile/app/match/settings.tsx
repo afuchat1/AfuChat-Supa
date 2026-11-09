@@ -48,7 +48,7 @@ function ToggleRow({ icon, iconBg, label, description, value, onToggle, saving, 
         <Text style={[styles.rowDesc, { color: colors.textMuted }]}>{description}</Text>
       </View>
       {saving ? <ActivityIndicator size="small" color={BRAND} /> : (
-        <Switch value={value} onValueChange={onToggle} trackColor={{ true: danger ? "#FF3B30" : BRAND, false: colors.backgroundTertiary }} />
+        <Switch value={value} onValueChange={onToggle} trackColor={{ true: danger ? "#FF3B30" : BRAND, false: colors.border }} />
       )}
     </View>
   );
@@ -215,7 +215,7 @@ export default function MatchSettingsScreen() {
             />
           </View>
 
-          <View style={[styles.infoCard, { backgroundColor: colors.cardSurface, marginHorizontal: 16, marginTop: 8 }]}>
+          <View style={[styles.infoCard, { backgroundColor: colors.surface, marginHorizontal: 16, marginTop: 8 }]}>
             <Ionicons name="lock-closed" size={18} color={BRAND} />
             <Text style={[styles.infoText, { color: colors.textMuted }]}>
               Your AfuMatch profile is completely separate from your main AfuChat profile. What you share here is only visible within AfuMatch and to people you match with.

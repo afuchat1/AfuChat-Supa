@@ -5,11 +5,11 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  StatusBar,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import Svg, {
   Circle,
   ClipPath,
@@ -23,14 +23,13 @@ import Svg, {
 } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLanguage } from "@/context/LanguageContext";
-import { useTheme } from "@/hooks/useTheme";
 import { LANG_LABELS, BUNDLED_UI_LANGUAGES } from "@/lib/i18n";
 import AfuLogo from "@/components/ui/AfuLogo";
 import OnboardingBackdrop, { ONBOARDING_THEME } from "@/components/onboarding/OnboardingBackdrop";
 
 const FLAGS: Record<string, string> = {
   en: "🇬🇧", zh: "🇨🇳", es: "🇪🇸", fr: "🇫🇷", ar: "🇸🇦", sw: "🇰🇪",
-  am: "🇪🇹", rw: "🇷🇼", lg: "🇺🇬",
+  am: "🇪🇹", rw: "🇷🇼",
 };
 
 const LANGUAGES = BUNDLED_UI_LANGUAGES
@@ -103,7 +102,6 @@ type LanguageSelectionStepProps = {
 };
 
 export default function LanguageSelectionStep({ onComplete }: LanguageSelectionStepProps) {
-  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const { setPreferredLang, t } = useLanguage();
@@ -136,8 +134,8 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" />
       <OnboardingBackdrop />
 
       <View style={styles.headerPositioner}>
@@ -145,11 +143,7 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           style={[
             styles.header,
             isMobile && styles.headerMobile,
-            {
-              width: headerWidth,
-              paddingTop: insets.top + (isMobile ? 16 : 24),
-              backgroundColor: colors.background,
-            },
+            { width: headerWidth, paddingTop: insets.top + (isMobile ? 16 : 24) },
           ]}
           onLayout={(event) => {
             const measuredHeight = Math.ceil(event.nativeEvent.layout.height);
@@ -161,10 +155,10 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           <View style={styles.headerInner}>
             <View style={styles.brandLockup}>
               <View style={styles.brandIconFrame}>
-                <AfuLogo size={24} forceTheme={isDark ? "dark" : "light"} />
+                <AfuLogo size={24} forceTheme="dark" />
               </View>
               <View>
-                <Text style={[styles.brandText, { color: colors.text }]}>AfuChat</Text>
+                <Text style={styles.brandText}>AfuChat</Text>
               </View>
             </View>
 
@@ -173,14 +167,14 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
                 <PlanetIcon />
               </View>
               <Text
-                style={[styles.title, { color: colors.text }]}
+                style={styles.title}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.72}
               >
                 {t("Choose your language")}
               </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              <Text style={styles.subtitle}>
                 {t("Select the language you understand best. We will use it to make your AfuChat experience easier to follow.")}
               </Text>
             </View>
@@ -210,16 +204,15 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
                 accessibilityState={{ checked: isSelected }}
                 style={({ pressed }) => [
                   styles.languageRow,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
                   isSelected && styles.languageRowSelected,
                   pressed && styles.languageRowPressed,
                 ]}
               >
-                <View style={[styles.badgeBubble, { backgroundColor: colors.inputBg }, isSelected && styles.badgeBubbleSelected]}>
+                <View style={[styles.badgeBubble, isSelected && styles.badgeBubbleSelected]}>
                   <Text style={styles.flag}>{language.flag}</Text>
                 </View>
                 <View style={styles.languageInfo}>
-                  <Text style={[styles.languageName, { color: colors.text }, isSelected && styles.languageNameSelected]}>
+                  <Text style={[styles.languageName, isSelected && styles.languageNameSelected]}>
                     {language.name}
                   </Text>
                 </View>
@@ -232,25 +225,13 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
         </View>
       </ScrollView>
 
-      <View
-        style={[
-          styles.bottomFooter,
-          {
-            backgroundColor: colors.background,
-            paddingBottom: Math.max(insets.bottom, 8),
-          },
-        ]}
-      >
+      <View style={[styles.bottomFooter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <Pressable
           onPress={continueSelection}
           disabled={!selected || saving}
           style={({ pressed }) => [
             styles.continueButton,
-            { backgroundColor: colors.accent },
-            !selected && [
-              styles.continueButtonDisabled,
-              { backgroundColor: colors.cardSurface },
-            ],
+            !selected && styles.continueButtonDisabled,
             pressed && selected && styles.continueButtonPressed,
           ]}
           accessibilityRole="button"
@@ -262,28 +243,18 @@ export default function LanguageSelectionStep({ onComplete }: LanguageSelectionS
           ) : (
             <>
               <Text
-                style={[
-                  styles.continueText,
-                  !selected && { color: colors.textSecondary },
-                ]}
+                style={[styles.continueText, !selected && styles.continueTextDisabled]}
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.78}
               >
                 {continueLabel}
               </Text>
-              <Text
-                style={[
-                  styles.continueArrow,
-                  !selected && { color: colors.textSecondary },
-                ]}
-              >
-                →
-              </Text>
+              <Text style={[styles.continueArrow, !selected && styles.continueTextDisabled]}>→</Text>
             </>
           )}
         </Pressable>
-        <Text style={[styles.requiredHint, { color: colors.textSecondary }]}>
+        <Text style={styles.requiredHint}>
           {selected ? t("You can change this later in Settings.") : t("Select one option to continue.")}
         </Text>
       </View>
@@ -301,7 +272,8 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 22,
-    // Keep the header opaque; its rendered background follows the selected theme.
+    // Keep the language header opaque while matching the shared onboarding
+    // backdrop's visible dark-blue top tone.
     backgroundColor: ONBOARDING_THEME.gradientTop,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
@@ -322,6 +294,7 @@ const styles = StyleSheet.create({
     position: "relative",
     alignItems: "center",
     paddingTop: 18, paddingHorizontal: 22,
+    backgroundColor: "transparent",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
@@ -405,6 +378,7 @@ const styles = StyleSheet.create({
     }),
   },
   continueButtonDisabled: {
+    backgroundColor: "rgba(255,255,255,0.18)",
     ...Platform.select({
       ios: { shadowOpacity: 0 },
       android: { elevation: 0 },
@@ -423,6 +397,7 @@ const styles = StyleSheet.create({
       web: { whiteSpace: "nowrap" } as any,
     }),
   },
+  continueTextDisabled: { color: "rgba(255,255,255,0.62)" },
   continueArrow: { color: "#FFFFFF", fontSize: 21, lineHeight: 24, fontFamily: "Inter_700Bold" },
   requiredHint: { color: "rgba(255,255,255,0.38)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 10 },
 });

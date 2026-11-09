@@ -8,12 +8,11 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
-import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +20,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 
@@ -571,7 +569,7 @@ function PostChrome({
   const [following, setFollowing]   = useState(!!meta.isFollowing);
   const [replyText, setReplyText]   = useState("");
   const [sending, setSending]       = useState(false);
-  const inputRef = useRef<TextInputInstance>(null);
+  const inputRef = useRef<AfuNativeRef.TextInput>(null);
   const heartScale = useRef(new Animated.Value(1)).current;
   const kbOffset   = useRef(new Animated.Value(0)).current;
 
@@ -687,7 +685,7 @@ function PostChrome({
         {/* Action bar */}
         <View style={styles.actionBar}>
           <TouchableOpacity style={styles.actionStat} onPress={onNavigateToPost} activeOpacity={0.7}>
-            <Ionicons name="chatbubble-outline" size={20} color="rgba(255,255,255,0.75)" />
+            <Ionicons name="chatbubble-outline" size={20} color="#FFFFFF" />
             <Text style={styles.actionCount}>{fmtCount(meta.replyCount)}</Text>
           </TouchableOpacity>
 
@@ -703,7 +701,7 @@ function PostChrome({
           </TouchableOpacity>
 
           <View style={styles.actionStat}>
-            <Ionicons name="eye-outline" size={20} color="rgba(255,255,255,0.75)" />
+            <Ionicons name="eye-outline" size={20} color="#FFFFFF" />
             <Text style={styles.actionCount}>{fmtCount(meta.viewCount)}</Text>
           </View>
 
@@ -724,10 +722,9 @@ function PostChrome({
           <View style={styles.replyPill}>
             <TextInput
               ref={inputRef}
-              appearance="embedded"
               style={styles.replyInput}
               placeholder="Post your reply…"
-              placeholderTextColor="rgba(255,255,255,0.56)"
+              placeholderTextColor="rgba(255,255,255,0.38)"
               value={replyText}
               onChangeText={setReplyText}
               multiline={false}
@@ -746,7 +743,7 @@ function PostChrome({
 
           {/* Expand: navigate to full comment page */}
           <TouchableOpacity onPress={onNavigateToPost} hitSlop={8} style={styles.expandBtn} activeOpacity={0.7}>
-            <Ionicons name="expand-outline" size={19} color="rgba(255,255,255,0.65)" />
+            <Ionicons name="expand-outline" size={19} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </Animated.View>
@@ -762,21 +759,17 @@ function TopBar({
   hasMultiple,
   insets,
   onClose,
-  onVisualSearch,
 }: {
   images: string[];
   index: number;
   hasMultiple: boolean;
   insets: ReturnType<typeof useSafeAreaInsets>;
   onClose: () => void;
-  onVisualSearch: () => void;
 }) {
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
-      <GlassBackButton onPress={onClose} accessibilityLabel="Go back" />
-
-      <TouchableOpacity onPress={onVisualSearch} hitSlop={12} style={styles.glassBtn} accessibilityRole="button" accessibilityLabel="Find similar images with AfuSearch">
-        <Ionicons name="scan-outline" size={20} color="#fff" />
+      <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.glassBtn}>
+        <Ionicons name="arrow-back" size={20} color="#fff" />
       </TouchableOpacity>
 
       {hasMultiple ? (
@@ -870,20 +863,13 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
     setTimeout(() => router.push({ pathname: "/post/[id]", params: { id: meta.postId } } as any), 120);
   }, [meta?.postId, onClose]);
 
-  const openVisualSearch = useCallback(() => {
-    const imageUrl = images[index];
-    onClose();
-    setTimeout(() => router.push({ pathname: "/app/afusearch", params: { imageUrl } } as any), 120);
-  }, [images, index, onClose]);
-
   if (!visible || images.length === 0) return null;
   const hasMultiple = images.length > 1;
-
 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose} hardwareAccelerated>
       <StatusBar style="light" />
-      <View style={[styles.root, styles.viewerBackground]}>
+      <View style={styles.root}>
         {/* Ambient blurred background */}
         <Image
           source={{ uri: images[index] }}
@@ -919,7 +905,7 @@ function AnimatedImageViewer({ images, initialIndex = 0, visible, onClose, meta 
           {/* Top bar */}
           <TopBar
             images={images} index={index} hasMultiple={hasMultiple}
-            insets={insets} onClose={onClose} onVisualSearch={openVisualSearch}
+            insets={insets} onClose={onClose}
           />
 
           {/* Side nav arrows */}
@@ -993,19 +979,13 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
     setTimeout(() => router.push({ pathname: "/post/[id]", params: { id: meta.postId } } as any), 120);
   }, [meta?.postId, onClose]);
 
-  const openVisualSearch = useCallback(() => {
-    const imageUrl = images[index];
-    onClose();
-    setTimeout(() => router.push({ pathname: "/app/afusearch", params: { imageUrl } } as any), 120);
-  }, [images, index, onClose]);
-
   if (!visible || images.length === 0) return null;
   const hasMultiple = images.length > 1;
 
   return (
     <Modal transparent visible={visible} animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <StatusBar style="light" />
-      <View style={[styles.root, styles.viewerBackground]}>
+      <View style={styles.root}>
         <Image
           source={{ uri: images[index] }}
           style={StyleSheet.absoluteFill}
@@ -1038,7 +1018,7 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
         >
           <TopBar
             images={images} index={index} hasMultiple={hasMultiple}
-            insets={insets} onClose={onClose} onVisualSearch={openVisualSearch}
+            insets={insets} onClose={onClose}
           />
 
           {hasMultiple && (
@@ -1110,10 +1090,10 @@ export function useImageViewer() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },
-  viewerBackground: { backgroundColor: "rgba(0,0,0,1)" },
 
   header: {
     position: "absolute",
@@ -1234,7 +1214,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 20,
-    backgroundColor: "rgba(0,0,0,0.88)",
+    backgroundColor: "rgba(0,0,0,0.50)",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(255,255,255,0.1)",
   },
@@ -1274,10 +1254,10 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(24,27,32,0.96)",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.16)",
+    borderColor: "rgba(255,255,255,0.15)",
     paddingHorizontal: 14,
     paddingVertical: 8,
     minHeight: 38,

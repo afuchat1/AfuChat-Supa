@@ -9,9 +9,18 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { isExpoGo } from "@/lib/expoEnvironment";
 import { audioFocus } from "@/lib/audioFocus";
-import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
-import type { AudioStatus } from "expo-audio";
+// expo-av: lazy-load on native only.
+// Do NOT gate on NativeModules.ExponentAV — in Expo SDK 55 + New Architecture
+// production builds expo-av uses TurboModules/JSI and is absent from NativeModules,
+// so that check always returns null and silently disables all audio.
+let Audio: typeof import("expo-av").Audio | null = null;
+if (Platform.OS !== "web" && !isExpoGo()) {
+  try { Audio = require("expo-av").Audio; } catch {}
+}
+type AVPlaybackStatus = import("expo-av").AVPlaybackStatus;
+type AudioSound = import("expo-av/build/Audio/Sound").Sound;
 
 interface AudioPlayerProps {
   uri: string;
@@ -19,7 +28,6 @@ interface AudioPlayerProps {
   waveColor?: string;
   backgroundColor?: string;
   onError?: () => void;
-  autoPlay?: boolean;
 }
 
 const SPEEDS = [1, 1.5, 2] as const;
@@ -113,7 +121,7 @@ function AudioPlayerActive({
   backgroundColor,
   onError,
 }: AudioPlayerProps & { playerId: string }) {
-  const audioPlayer = useAudioPlayer(Platform.OS === "web" ? null : { uri }, { updateInterval: 80 });
+  const soundRef = useRef<AudioSound | null>(null);
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const mountedRef = useRef(true);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -130,10 +138,11 @@ function AudioPlayerActive({
     mountedRef.current = true;
     const unsubscribe = audioFocus.subscribe(() => {
       // Stop immediately when the microphone takes audio focus. Unmounting
-      // alone is not enough because the native player's cleanup is asynchronous.
-      if (Platform.OS === "web") return;
-      audioPlayer.pause();
-      void audioPlayer.seekTo(0).catch(() => {});
+      // alone is not enough because expo-av cleanup is asynchronous.
+      const sound = soundRef.current;
+      if (!sound) return;
+      sound.stopAsync().catch(() => {});
+      soundRef.current = null;
       if (mountedRef.current) {
         setIsPlaying(false);
         setPositionMs(0);
@@ -144,12 +153,11 @@ function AudioPlayerActive({
       mountedRef.current = false;
       unsubscribe();
     };
-  }, [audioPlayer, playerId]);
+  }, [playerId]);
 
   useEffect(() => {
     let mounted = true;
     let webAudio: HTMLAudioElement | null = null;
-    let statusSubscription: { remove: () => void } | null = null;
 
     async function loadAudio() {
       try {
@@ -182,34 +190,38 @@ function AudioPlayerActive({
           return;
         }
 
-        await setAudioModeAsync({
-          allowsRecording: false,
-          playsInSilentMode: true,
-          interruptionMode: "doNotMix",
-          shouldPlayInBackground: false,
+        if (!Audio) { if (mounted) { setHasError(true); onError?.(); } return; }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: false,
+          staysActiveInBackground: false,
         }).then(() => {}, () => {});
 
-        statusSubscription = audioPlayer.addListener("playbackStatusUpdate", (status: AudioStatus) => {
-          if (!mounted) return;
-          if (!status.isLoaded) {
-            if (status.error) {
-              setHasError(true);
-              onError?.();
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: true, progressUpdateIntervalMillis: 80 },
+          (status: AVPlaybackStatus) => {
+            if (!mounted) return;
+            if (status.isLoaded) {
+              setIsLoaded(true);
+              setIsPlaying(status.isPlaying);
+              setPositionMs(status.positionMillis ?? 0);
+              setDurationMs(status.durationMillis ?? 0);
+              if (status.didJustFinish) {
+                 if (!finishedRef.current) {
+                   finishedRef.current = true;
+                   setIsPlaying(false);
+                   setPositionMs(status.durationMillis ?? status.positionMillis ?? 0);
+                   voicePlaybackCoordinator.finished(playerId);
+                 }
+              }
             }
-            return;
           }
-          setIsLoaded(true);
-          setIsPlaying(status.playing);
-          setPositionMs(status.currentTime * 1000);
-          setDurationMs(status.duration * 1000);
-          if (status.didJustFinish && !finishedRef.current) {
-            finishedRef.current = true;
-            setIsPlaying(false);
-            setPositionMs(status.duration * 1000);
-            voicePlaybackCoordinator.finished(playerId);
-          }
-        });
-        if (mounted) audioPlayer.play();
+        );
+
+        if (mounted) soundRef.current = sound;
+        else sound.unloadAsync().catch(() => {});
       } catch {
         // Audio load failed — notify parent so it can reset to idle (tap-to-retry).
         if (mounted) { setHasError(true); onError?.(); }
@@ -225,10 +237,9 @@ function AudioPlayerActive({
         webAudio.src = "";
         webAudioRef.current = null;
       }
-      statusSubscription?.remove();
-      if (Platform.OS !== "web") audioPlayer.pause();
+      soundRef.current?.unloadAsync().catch(() => {});
     };
-  }, [audioPlayer, uri]);
+  }, [uri]);
 
   const togglePlay = useCallback(async () => {
     if (!isLoaded) return;
@@ -243,17 +254,18 @@ function AudioPlayerActive({
         else audio.pause();
         return;
       }
+      if (!soundRef.current) return;
       if (isPlaying) {
-        audioPlayer.pause();
+        await soundRef.current.pauseAsync();
       } else {
         if (positionMs >= durationMs && durationMs > 0) {
-          await audioPlayer.seekTo(0);
+          await soundRef.current.setPositionAsync(0);
           finishedRef.current = false;
         }
-        audioPlayer.play();
+        await soundRef.current.playAsync();
       }
     } catch {}
-  }, [audioPlayer, isPlaying, positionMs, durationMs, isLoaded]);
+  }, [isPlaying, positionMs, durationMs, isLoaded]);
 
   const cycleSpeed = useCallback(async () => {
     if (!isLoaded) return;
@@ -265,9 +277,10 @@ function AudioPlayerActive({
         if (webAudioRef.current) webAudioRef.current.playbackRate = next;
         return;
       }
-      audioPlayer.setPlaybackRate(next, "medium");
+      if (!soundRef.current) return;
+      await soundRef.current.setRateAsync(next, true);
     } catch {}
-  }, [audioPlayer, speed, isLoaded]);
+  }, [speed, isLoaded]);
 
   const seekFromTouch = useCallback(
     async (e: GestureResponderEvent) => {
@@ -279,10 +292,11 @@ function AudioPlayerActive({
           if (webAudioRef.current) webAudioRef.current.currentTime = ratio * durationMs / 1000;
           return;
         }
-        await audioPlayer.seekTo(ratio * durationMs / 1000);
+        if (!soundRef.current) return;
+        await soundRef.current.setPositionAsync(ratio * durationMs);
       } catch {}
     },
-    [audioPlayer, isLoaded, durationMs]
+    [isLoaded, durationMs]
   );
 
   const onTrackLayout = useCallback((e: LayoutChangeEvent) => {
@@ -337,7 +351,7 @@ function AudioPlayerActive({
   );
 }
 
-export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor, backgroundColor, autoPlay = false }: AudioPlayerProps) {
+export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor, backgroundColor }: AudioPlayerProps) {
   const [active, setActive] = useState(false);
   const playerIdRef = useRef<string | null>(null);
 
@@ -347,11 +361,10 @@ export default function AudioPlayer({ uri, tintColor = "#FFFFFF", waveColor, bac
       deactivate: () => setActive(false),
     });
     playerIdRef.current = id;
-    if (autoPlay) voicePlaybackCoordinator.play(id);
     return () => {
       voicePlaybackCoordinator.unregister(id);
     };
-  }, [autoPlay]);
+  }, []);
 
   if (!active) {
     return (

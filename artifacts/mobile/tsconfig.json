@@ -4,7 +4,6 @@
     "baseUrl": ".",
     "strict": true,
     "ignoreDeprecations": "6.0",
-    "customConditions": ["react-native"],
     "paths": {
       "@/*": [
         "./*"

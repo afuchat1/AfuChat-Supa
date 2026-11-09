@@ -15,7 +15,6 @@ import { dismissToast, registerToastListener, type ToastItem } from "@/lib/toast
 import { impactAsync, notificationAsync, ImpactFeedbackStyle, NotificationFeedbackType } from "@/lib/haptics";
 import { STATUS } from "@/constants/colors";
 import { T } from "@/constants/theme";
-import { useTheme } from "@/hooks/useTheme";
 
 // ─── Type-based defaults ──────────────────────────────────────────────────────
 
@@ -34,7 +33,7 @@ const TYPE_COLOR: Record<ToastItem["type"], string> = {
   warning: STATUS.warning,
 };
 
-// ─── Default toast ────────────────────────────────────────────────────────────
+// ─── Default toast (dark pill) ────────────────────────────────────────────────
 
 function DefaultToast({
   item,
@@ -43,7 +42,6 @@ function DefaultToast({
   item: ToastItem;
   onAnimatedOut: (id: string) => void;
 }) {
-  const { colors } = useTheme();
   const translateY    = useRef(new Animated.Value(60)).current;
   const opacity       = useRef(new Animated.Value(0)).current;
   const scale         = useRef(new Animated.Value(0.92)).current;
@@ -76,13 +74,7 @@ function DefaultToast({
   }, [item.duration, animateOut]);
 
   return (
-    <Animated.View
-      style={[
-        s.pill,
-        { backgroundColor: colors.surface, borderColor: colors.border },
-        { opacity, transform: [{ translateY }, { scale }] },
-      ]}
-    >
+    <Animated.View style={[s.pill, { opacity, transform: [{ translateY }, { scale }] }]}>
       <Pressable
         onPress={() => { impactAsync(ImpactFeedbackStyle.Light); animateOut(); dismissToast(item.id); }}
         style={s.pillInner}
@@ -91,7 +83,7 @@ function DefaultToast({
         <View style={[s.pillIconWrap, { backgroundColor: TYPE_COLOR[item.type] + "22" }]}>
           <Ionicons name={icon} size={16} color={TYPE_COLOR[item.type]} />
         </View>
-        <Text style={[s.pillText, { color: colors.text }]} numberOfLines={2}>
+        <Text style={s.pillText} numberOfLines={2}>
           {item.message}
         </Text>
       </Pressable>
@@ -251,12 +243,15 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
 
+  // ── Default (dark pill) ────────────────────────────────────────────────────
   pill: {
     alignSelf: "center",
+    backgroundColor: "#1C1C1F",
     borderRadius: T.radius.pill,
     maxWidth: 340,
     minWidth: 120,
     borderWidth: T.border.hairline,
+    borderColor: "rgba(255,255,255,0.09)",
     overflow: "hidden",
     ...SHADOW,
   },

@@ -12,20 +12,18 @@
  *  3. Auto-reconnects on CLOSED / CHANNEL_ERROR with exponential backoff
  *     (max 15 s) so the ~20 ms fast path survives network hiccups.
  *
- * Each accepted inbox message is also acknowledged to Supabase as delivered.
- * This remains distinct from the recipient opening or reading the chat.
+ * The listener only delivers messages to the in-app event bus.
  */
 
 import { useCallback, useEffect, useRef } from "react";
-import { runAfterIdle } from "@/lib/runAfterIdle";
+import { scheduleAfterInteractions } from "@/lib/scheduleAfterInteractions";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { emitIncomingMessage, IncomingMessage } from "@/lib/globalMessageEvents";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
-import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
 
 export function GlobalInboxListener() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const recentIds = useRef(new Set<string>());
   const evictionTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const userIdRef = useRef(user?.id);
@@ -45,18 +43,13 @@ export function GlobalInboxListener() {
     }, 15_000);
     evictionTimers.current.set(msg.id, timer);
 
-    const recipientId = userIdRef.current;
-    if (recipientId) {
-      void acknowledgeMessagesDelivered([msg.id], recipientId);
-    }
-
     // Emit to global event bus → chat/[id].tsx fast path picks it up
     emitIncomingMessage(msg);
   }, []);
 
   // ── Supabase Broadcast subscription with auto-reconnect ────────────────────
   useEffect(() => {
-    if (!isAuthenticated || !user?.id) return;
+    if (!user?.id) return;
 
     let destroyed = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,7 +111,7 @@ export function GlobalInboxListener() {
       }, delay);
     };
 
-    const idleTask = runAfterIdle(() => {
+    const interactionTask = scheduleAfterInteractions(() => {
       // Let the initial route and its primary data requests settle before
       // opening another realtime channel on release Android builds.
       scheduleConnect(2000);
@@ -140,7 +133,7 @@ export function GlobalInboxListener() {
 
     return () => {
       destroyed = true;
-      idleTask.cancel();
+      interactionTask.cancel();
       connectivityCleanup();
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (currentChannel) supabase.removeChannel(currentChannel).catch(() => {});
@@ -148,7 +141,7 @@ export function GlobalInboxListener() {
       evictionTimers.current.forEach((timer) => clearTimeout(timer));
       evictionTimers.current.clear();
     };
-  }, [isAuthenticated, user?.id, handlePayload]);
+  }, [user?.id, handlePayload]);
 
   return null;
 }

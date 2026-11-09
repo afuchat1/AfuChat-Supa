@@ -22,10 +22,11 @@ import {
   StyleSheet,
   View,
   useWindowDimensions,
-  type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
+import { BlurView } from "expo-blur";
+import { GLASS, glassTokens } from "@/constants/glass";
 
 interface Props {
   visible: boolean;
@@ -77,9 +78,10 @@ type MobileProps = {
 function MobileSheet({ visible, onClose, children, backgroundColor, maxHeight = "62%", overlayColor }: MobileProps) {
   const { height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { isDark } = useTheme();
+  const glass = glassTokens(isDark);
 
-  const mobileBg = backgroundColor ?? colors.surface;
+  const mobileBg = backgroundColor ?? glass.fillStrong;
   const mobileOverlay = overlayColor ?? "rgba(0,0,0,0.5)";
 
   // Resolve the maximum collapsed height from maxHeight. The actual opening
@@ -112,7 +114,7 @@ function MobileSheet({ visible, onClose, children, backgroundColor, maxHeight = 
   const [isFull, setIsFull] = useState(false);
   const isFullRef = useRef(false);
   const scrollYRef = useRef(0);
-  const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollRef = useRef<AfuNativeRef.ScrollView>(null);
 
   // ── Snap helpers (in refs so PanResponder always calls the latest) ────────
   const snapToFullRef = useRef<() => void>(() => {});
@@ -236,11 +238,25 @@ function MobileSheet({ visible, onClose, children, backgroundColor, maxHeight = 
 
       {/* Sheet */}
       <Animated.View
-        style={[ms.sheet, { height: sheetH, backgroundColor: mobileBg, paddingBottom: insets.bottom }]}
+        style={[ms.sheet, { height: sheetH, backgroundColor: "transparent", paddingBottom: insets.bottom }]}
         {...panResponder.panHandlers}
       >
+        <BlurView
+          pointerEvents="none"
+          intensity={GLASS.blur.heavy}
+          tint={isDark ? "dark" : "light"}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: mobileBg }]}
+        />
         {/* Subtle top border glow */}
-        <View style={[ms.sheetBorder, { pointerEvents: "none" } as any]} />
+        <View style={[ms.sheetBorder, { borderColor: glass.border, pointerEvents: "none" } as any]} />
+        <View
+          pointerEvents="none"
+          style={[ms.sheetHighlight, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.58)" }]}
+        />
 
         {/* Drag handle */}
         <View style={ms.handleArea}>
@@ -295,7 +311,13 @@ const ms = StyleSheet.create({
     borderLeftWidth: 0.5,
     borderRightWidth: 0.5,
     borderTopWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.10)",
+  },
+  sheetHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 1,
   },
   handleArea: { alignItems: "center", paddingTop: 12, paddingBottom: 4 },
   handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.20)" },

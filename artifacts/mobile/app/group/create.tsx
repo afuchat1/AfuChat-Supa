@@ -6,10 +6,10 @@ import {
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { TextInput } from "@/components/ui/AfuTextInput";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -113,7 +113,7 @@ export default function CreateGroupScreen() {
       const { data: currentCount } = await supabase.rpc("count_my_groups");
       const current = Number(currentCount ?? 0);
       if (current >= limit) {
-        const nextTier = tier === "free" ? "Standard" : tier === "silver" ? "Pro" : "Platinum";
+        const nextTier = tier === "free" ? "Silver" : tier === "silver" ? "Gold" : "Platinum";
         showAlert(
           "Group limit reached",
           `You can create up to ${limit} group${limit === 1 ? "" : "s"} on your current plan. Upgrade to ${nextTier} to create more.`,
@@ -196,7 +196,6 @@ export default function CreateGroupScreen() {
         </View>
         <View style={styles.nameInputWrap}>
           <TextInput
-            appearance="embedded"
             style={[styles.nameInput, { color: colors.text }]}
             placeholder="Group name"
             placeholderTextColor={colors.textMuted}
@@ -205,7 +204,6 @@ export default function CreateGroupScreen() {
             autoFocus
           />
           <TextInput
-            appearance="embedded"
             style={[styles.handleInput, { color: colors.text, borderBottomColor: colors.accent }]}
             placeholder="Public group username"
             placeholderTextColor={colors.textMuted}

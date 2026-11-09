@@ -5,13 +5,13 @@ import {
   Image as RNImage,
   PanResponder,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import Image from "@/components/ui/OptimizedImage";
 import AfuLogo from "@/components/ui/AfuLogo";
 
@@ -26,12 +26,11 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useAuth } from "@/context/AuthContext";
 import { LANGUAGE_PREFERENCE_KEY } from "@/context/LanguageContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { useTheme } from "@/hooks/useTheme";
 import { storage, KEYS } from "@/lib/storage/mmkv";
 import * as Haptics from "@/lib/haptics";
 import Colors from "@/constants/colors";
 import LanguageSelectionStep from "@/components/onboarding/LanguageSelectionStep";
-import OnboardingBackdrop from "@/components/onboarding/OnboardingBackdrop";
+import OnboardingBackdrop, { ONBOARDING_THEME } from "@/components/onboarding/OnboardingBackdrop";
 
 // ─── Slide data ────────────────────────────────────────────────────────────────
 const SLIDES = [
@@ -82,6 +81,7 @@ const SLIDES = [
 ];
 
 const SWIPE_THRESHOLD = 52;
+const BG = ONBOARDING_THEME.background;
 
 // ─── Illustration sources (all pre-loaded at require time) ────────────────────
 const IL_SOURCES: { key: string; src: any }[] = [
@@ -122,10 +122,9 @@ function OnboardingPage({
 }: OnboardingPageProps) {
   const isLast = pageIndex === totalPages - 1;
   const { t } = useLanguage();
-  const { colors, isDark } = useTheme();
 
   return (
-    <View style={[s.page, { width, height, backgroundColor: colors.background }]}>
+    <View style={[s.page, { width, height, backgroundColor: BG }]}>
       {/* Every page owns its illustration, background orbs, header, and CTA.
           The parent track moves this complete surface as one unit. */}
       <OnboardingBackdrop />
@@ -139,13 +138,13 @@ function OnboardingPage({
 
       <View style={[s.topBar, { paddingTop: topInset + 12 }]}>
         <View style={s.logoRow}>
-          <AfuLogo size={22} forceTheme={isDark ? "dark" : "light"} />
-          <Text style={[s.logoText, { color: colors.text }]}>AfuChat</Text>
+          <AfuLogo size={22} forceTheme="dark" />
+          <Text style={s.logoText}>AfuChat</Text>
         </View>
         <TouchableOpacity onPress={onSkip} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}>
-            <View style={[s.skipPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.skipPill}>
             <Text
-              style={[s.skipText, { color: colors.textSecondary }]}
+              style={s.skipText}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.82}
@@ -164,8 +163,8 @@ function OnboardingPage({
         />
 
         <View>
-          <Text style={[s.title, { color: colors.text }]}>{t(slide.title)}</Text>
-          <Text style={[s.subtitle, { color: colors.textSecondary }]}>{t(slide.subtitle)}</Text>
+          <Text style={s.title}>{t(slide.title)}</Text>
+          <Text style={s.subtitle}>{t(slide.subtitle)}</Text>
         </View>
 
         <View style={s.progressRow}>
@@ -177,7 +176,7 @@ function OnboardingPage({
                 onPress={() => onSelect(i)}
                 hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
               >
-                <View style={[s.progressSegment, { backgroundColor: colors.border }]}>
+                <View style={[s.progressSegment, { backgroundColor: "rgba(255,255,255,0.12)" }]}>
                   <LinearGradient
                     colors={active ? [slide.accent, slide.accentAlt] : ["transparent", "transparent"]}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
@@ -203,15 +202,15 @@ function OnboardingPage({
             >
               {t(slide.action)}
             </Text>
-          <View style={[s.ctaArrowCircle, { backgroundColor: colors.surface }]}>
-              <Ionicons name={isLast ? "checkmark" : "arrow-forward"} size={22} color={colors.text} />
+            <View style={s.ctaArrowCircle}>
+              <Ionicons name={isLast ? "checkmark" : "arrow-forward"} size={22} color="#111827" />
             </View>
           </LinearGradient>
         </TouchableOpacity>
 
         <View style={s.hintRow}>
           <Text
-            style={[s.hintText, { color: colors.textMuted }]}
+            style={s.hintText}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.78}
@@ -237,7 +236,6 @@ function OnboardingPage({
 // ─── Main component ────────────────────────────────────────────────────────────
 export default function WelcomeScreen() {
   const { user } = useAuth();
-  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: SW, height: SH } = useWindowDimensions();
   const [languageStep, setLanguageStep] = useState<boolean | null>(null);
@@ -287,7 +285,7 @@ export default function WelcomeScreen() {
 
   if (languageStep === null) {
     return (
-      <View style={[s.root, { backgroundColor: colors.background }]}>
+      <View style={[s.root, { backgroundColor: BG }]}>
         <OnboardingBackdrop />
       </View>
     );
@@ -327,8 +325,8 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background }]} {...panResponder.panHandlers}>
-      <StatusBar style={isDark ? "light" : "dark"} />
+    <View style={[s.root, { backgroundColor: BG }]} {...panResponder.panHandlers}>
+      <StatusBar barStyle="light-content" />
       <Animated.View
         style={[
           s.pageTrack,
