@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getLocalPhoneContacts,
   type LocalPhoneContact,
@@ -10,6 +10,7 @@ export function usePhoneContacts(userId: string | undefined): {
   permission: "idle" | "granted" | "denied" | "unavailable";
   refresh: () => Promise<"granted" | "denied" | "unavailable">;
 } {
+  const mountedRef = useRef(true);
   const [contacts, setContacts] = useState<LocalPhoneContact[]>([]);
   const [permission, setPermission] = useState<
     "idle" | "granted" | "denied" | "unavailable"
@@ -19,26 +20,27 @@ export function usePhoneContacts(userId: string | undefined): {
     try {
       const result = await syncPhoneContacts(
         userId,
-        (deviceContacts) => setContacts(deviceContacts),
-        (updatedContacts) => setContacts(updatedContacts),
+        (deviceContacts) => { if (mountedRef.current) setContacts(deviceContacts); },
+        (updatedContacts) => { if (mountedRef.current) setContacts(updatedContacts); },
       );
-      setPermission(result);
+      if (mountedRef.current) setPermission(result);
       return result;
     } catch {
-      setPermission("unavailable");
+      if (mountedRef.current) setPermission("unavailable");
       return "unavailable" as const;
     }
   }, [userId]);
 
   useEffect(() => {
     let active = true;
+    mountedRef.current = true;
     void getLocalPhoneContacts()
       .then((cached) => { if (active) setContacts(cached); })
       .catch(() => { if (active) setPermission("unavailable"); });
     void refresh().then((result) => {
       if (active) setPermission(result);
     });
-    return () => { active = false; };
+    return () => { active = false; mountedRef.current = false; };
   }, [refresh]);
 
   return { contacts, permission, refresh };
