@@ -116,6 +116,8 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const draftRef = useRef<Record<string, any> | null>(null);
+  const draftCompletedRef = useRef(false);
+  const handleInputRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ChatTheme>(appTheme);
 
@@ -155,7 +157,7 @@ export default function OnboardingScreen() {
     }
     setHydratedUserId(null);
     AsyncStorage.getItem(activeDraftKey)
-      .then((raw) => {
+      .then(async (raw) => {
         if (!active || !raw) return;
         const draft = JSON.parse(raw);
         if (!draft || draft.version !== 1) return;
@@ -173,9 +175,8 @@ export default function OnboardingScreen() {
         setSelectedTheme(restoredTheme);
         setAppTheme(restoredTheme);
         if (typeof draft.avatarUri === "string" && draft.avatarUri) {
-          FileSystem.getInfoAsync(draft.avatarUri).then((info) => {
-            if (active && info.exists) setAvatarUri(draft.avatarUri);
-          }).catch(() => {});
+          const info = await FileSystem.getInfoAsync(draft.avatarUri).catch(() => ({ exists: false }));
+          if (active && info.exists) setAvatarUri(draft.avatarUri);
         }
       })
       .catch((error) => console.warn("[Onboarding] Could not restore saved draft:", error))
@@ -192,7 +193,7 @@ export default function OnboardingScreen() {
 
   // Save changes continuously, with a small debounce to avoid disk writes per keystroke.
   useEffect(() => {
-    if (!activeDraftKey || hydratedUserId !== userId) return;
+    if (!activeDraftKey || hydratedUserId !== userId || draftCompletedRef.current) return;
     const timer = setTimeout(() => {
       AsyncStorage.setItem(activeDraftKey, JSON.stringify(draftRef.current)).catch((error) => {
         console.warn("[Onboarding] Could not save progress:", error);
@@ -203,9 +204,9 @@ export default function OnboardingScreen() {
 
   // Flush the latest form snapshot when Android backgrounds or interrupts the app.
   useEffect(() => {
-    if (!activeDraftKey || hydratedUserId !== userId) return;
+    if (!activeDraftKey || hydratedUserId !== userId || draftCompletedRef.current) return;
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state !== "active" && draftRef.current) {
+      if (!draftCompletedRef.current && state !== "active" && draftRef.current) {
         AsyncStorage.setItem(activeDraftKey, JSON.stringify(draftRef.current)).catch(() => {});
       }
     });
@@ -482,7 +483,8 @@ export default function OnboardingScreen() {
 
     const fullPhone = getPhoneValidation().e164 ?? null;
     if (fullPhone) {
-      const { data: existingPhone } = await supabase.from("profiles").select("id").eq("phone_number", fullPhone).neq("id", userId).limit(1).maybeSingle();
+        const { data: existingPhone, error: phoneLookupError } = await supabase.from("profiles").select("id").eq("phone_number", fullPhone).neq("id", userId).limit(1).maybeSingle();
+      if (phoneLookupError) throw phoneLookupError;
       if (existingPhone) {
         setLoading(false);
         showAlert("Phone number taken", "This phone number is already linked to another account.");
@@ -526,7 +528,6 @@ export default function OnboardingScreen() {
             `@${cleanHandle} is reserved and can only be used after purchase.`,
             usernamePurchasePrompt(cleanHandle, listedHandle?.price, () => router.push("/app/afuusernames")),
           );
-          setStep(1);
         } else {
           showAlert("Error", profileError.message || "Could not save your profile. Please try again.");
         }
@@ -563,6 +564,7 @@ export default function OnboardingScreen() {
       throw completionError || new Error("Your profile was saved, but setup could not be finalized. Please try again.");
     }
 
+    draftCompletedRef.current = true;
     if (activeDraftKey) await AsyncStorage.removeItem(activeDraftKey).catch(() => {});
     try { const { rewardXp } = await import("../../lib/rewardXp"); await rewardXp("profile_completed"); } catch (_) {}
     try { await supabase.from("chat_preferences").upsert({ user_id: userId, chat_theme: selectedTheme }, { onConflict: "user_id" }); } catch (_) {}
@@ -613,7 +615,8 @@ export default function OnboardingScreen() {
                 value={displayName}
                 onChangeText={setDisplayName}
                 autoCapitalize="words"
-                autoFocus
+                returnKeyType="next"
+                onSubmitEditing={() => handleInputRef.current?.focus()}
                 onFocus={() => setFocusedField("displayName")}
                 onBlur={() => setFocusedField(null)}
               />
@@ -630,6 +633,7 @@ export default function OnboardingScreen() {
                 style={st.fieldIcon}
               />
               <TextInput
+                ref={handleInputRef}
                 appearance="embedded"
                 style={[st.input, { color: colors.text }]}
                 placeholder="e.g. johndoe"
