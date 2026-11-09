@@ -118,6 +118,7 @@ export default function OnboardingScreen() {
   const draftRef = useRef<Record<string, any> | null>(null);
   const draftCompletedRef = useRef(false);
   const handleInputRef = useRef<any>(null);
+  const scrollRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ChatTheme>(appTheme);
 
@@ -214,6 +215,10 @@ export default function OnboardingScreen() {
   }, [activeDraftKey, hydratedUserId, userId]);
 
   // ── Navigation helpers ────────────────────────────────────────────────────────
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [step]);
+
   function goNext() {
     if (step >= TOTAL_STEPS) return;
     Keyboard.dismiss();
@@ -1052,6 +1057,7 @@ export default function OnboardingScreen() {
       {/* A single vertical scroll container avoids nested pager/keyboard gesture
           conflicts on Android OEM keyboards and keeps the active form mounted. */}
       <ScrollView
+        ref={scrollRef}
         style={st.pagerOuter}
         contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 140 }]}
         keyboardShouldPersistTaps="always"
