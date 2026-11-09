@@ -30,7 +30,7 @@ export function GlassBackButton({
   size = 40,
   style,
 }: Props) {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { t } = useLanguage();
   const translatedLabel = label ? t(label) : undefined;
   const translatedAccessibilityLabel = t(accessibilityLabel ?? label ?? "Go back");
