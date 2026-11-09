@@ -1801,8 +1801,10 @@ export default function DiscoverScreen() {
         });
 
         if (isRefresh) {
-          tabPostsCache.current[activeTab] = mapped;
+          tabPostsCache.current[activeTab] = mapped.slice(0, pageSize);
           tabCacheTimestamp.current[activeTab] = Date.now();
+          // Persist the full fetched delta; SQLite retains only the newest 200.
+          // Keep React state to one page so large bursts do not cause a slow render.
           saveFeedPosts(mapped, activeTab as LocalFeedTab).catch(() => {});
           // Delta sync: prepend new posts to existing local posts (don't wipe them)
           if (background) {
@@ -1827,7 +1829,7 @@ export default function DiscoverScreen() {
             setPosts((prev) => {
               const existingIds = new Set(prev.map((p) => p.id));
               const brandNew = mapped.filter((p) => !existingIds.has(p.id));
-              return brandNew.length > 0 ? [...brandNew, ...prev] : prev;
+              return brandNew.length > 0 ? [...brandNew.slice(0, pageSize), ...prev] : prev;
             });
           } else if (!followNewerThan) {
             setPosts(mapped);
@@ -2245,7 +2247,13 @@ export default function DiscoverScreen() {
       if (isRefresh) {
         tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
-        saveFeedPosts(merged, activeTab as LocalFeedTab).catch(() => {});
+        // Persist up to the newest 200 fetched items, not just the randomized
+        // 30-card presentation sample, so the next delta cursor cannot skip
+        // posts that were fetched but not selected for the first screen.
+        const offlineFeedWindow = [...scored, ...orgPostItems]
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+          .slice(0, 200);
+        saveFeedPosts(offlineFeedWindow, activeTab as LocalFeedTab).catch(() => {});
         if (background) {
           const prevIds = new Set(postsRef.current.map((p) => p.id));
           const brandNew = merged.filter((p) => !prevIds.has(p.id));
@@ -2664,6 +2672,8 @@ export default function DiscoverScreen() {
     // ① Snapshot + eagerly deduplicate against the live feed (postsRef = no stale closure)
     const existIds = new Set(postsRef.current.map((p) => p.id));
     const fresh = pendingPostsRef.current.filter((p) => !existIds.has(p.id));
+    // Persist the newest bounded offline window before clearing the pending buffer.
+    saveFeedPosts(fresh.slice(0, 200), feedTabRef.current as LocalFeedTab).catch(() => {});
 
     // ② Dismiss pill and arm the cooldown clock
     _resetPill(true);
