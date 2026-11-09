@@ -726,7 +726,7 @@ export default function EditProfileScreen() {
               <Text style={[styles.handleAt, { color: colors.textMuted }]}>@</Text>
               <TextInput
                 appearance="embedded"
-                style={[styles.fieldInput, { color: handleLockedDays > 0 ? colors.textMuted : colors.text, flex: 1 }]}
+                style={[styles.fieldInput, { color: colors.text, flex: 1 }]}
                 value={handle}
                 onChangeText={setHandle}
                 placeholder="your_handle"
@@ -734,25 +734,17 @@ export default function EditProfileScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
-                editable={handleLockedDays === 0}
+                editable={true}
               />
-              {handleLockedDays > 0
-                ? <Ionicons name="lock-closed" size={14} color={colors.textMuted} />
-                : <HandleStatus status={handleStatus} colors={colors} accent={accent} />
-              }
+              <HandleStatus status={handleStatus} colors={colors} accent={accent} />
             </AfuInputSurface>
-            {handleLockedDays > 0 && (
-              <Text style={[styles.handleHint, { color: colors.textMuted }]}>
-                {`Can change in ${handleLockedDays} day${handleLockedDays !== 1 ? "s" : ""} · changes every ${HANDLE_COOLDOWN_DAYS} days`}
-              </Text>
-            )}
-            {handleLockedDays === 0 && handleStatus === "taken" && (
+            {handleStatus === "taken" && (
               <Text style={[styles.handleHint, { color: "#FF3B30" }]}>That handle is already taken. Try another.</Text>
             )}
-            {handleLockedDays === 0 && handleStatus === "invalid_format" && (
+            {handleStatus === "invalid_format" && (
               <Text style={[styles.handleHint, { color: "#FF9F0A" }]}>Only letters, numbers and underscores, minimum 3 characters.</Text>
             )}
-            {handleLockedDays === 0 && handleStatus === "available" && (
+            {handleStatus === "available" && (
               <Text style={[styles.handleHint, { color: "#34C759" }]}>@{handle.trim().toLowerCase()} is available!</Text>
             )}
           </FieldRow>
