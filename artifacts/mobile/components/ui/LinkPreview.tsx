@@ -157,7 +157,7 @@ function ProfilePreviewCard({
             source={{ uri: card.avatar_url }}
             style={st.avatar}
             contentFit="cover"
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
           />
         ) : (
           <View style={[st.avatarPlaceholder, { backgroundColor: accent + "30" }]}>
@@ -254,7 +254,7 @@ function UrlPreviewCard({
             source={{ uri: ogImage }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
           />
         ) : (
           /* favicon via Google CDN — always returns a 16×16+ icon */
@@ -262,7 +262,7 @@ function UrlPreviewCard({
             source={{ uri: faviconUrl(card.hostname) }}
             style={st.faviconImg}
             contentFit="contain"
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
           />
         )}
       </View>
@@ -275,7 +275,7 @@ function UrlPreviewCard({
             source={{ uri: faviconUrl(card.hostname) }}
             style={st.faviconInline}
             contentFit="contain"
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
           />
           <Text style={[st.urlHost, { color: mutedColor }]} numberOfLines={1}>
             {card.hostname}
