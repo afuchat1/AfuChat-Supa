@@ -724,7 +724,7 @@ export default function CompanyPageScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Floating NavBar over cover */}
       <View style={[styles.navBarFloat, { paddingTop: headerTop }]}>
-        <GlassBackButton onPress={() => router.back()} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} />
         <View style={{ flex: 1 }} />
         {isAdmin ? (
           <TouchableOpacity
