@@ -431,7 +431,7 @@ export default function OnboardingScreen() {
         if (!directoryInfo.exists) await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
         const extension = sourceUri.split("?")[0].split(".").pop()?.replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
         const safeUserId = (userId || "guest").replace(/[^a-z0-9_-]/gi, "");
-        const stableUri = `${directory}avatar_${safeUserId}.${extension}`;
+        const stableUri = `${directory}avatar_${safeUserId}_${Date.now()}.${extension}`;
         await FileSystem.copyAsync({ from: sourceUri, to: stableUri });
         const copied = await FileSystem.getInfoAsync(stableUri);
         if (!copied.exists) throw new Error("The selected photo could not be saved on this device.");
