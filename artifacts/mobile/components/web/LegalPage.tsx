@@ -335,7 +335,7 @@ function LegalSection({ section, accent, colors }: { section: Section; accent: s
 }
 
 export default function LegalPage({ kind }: { kind: LegalPageKind }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const BRAND = colors.accent;
   const page = PAGES[kind];
   const { width } = useWindowDimensions();
@@ -362,7 +362,7 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
               accessibilityLabel="Go back"
               hitSlop={8}
             >
-              <Ionicons name="arrow-back" size={20} color={colors.text} />
+              <Ionicons name="arrow-back" size={20} color={isDark ? "#FFFFFF" : "#000000"} />
             </Pressable>
           )}
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
