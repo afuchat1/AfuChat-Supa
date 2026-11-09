@@ -185,7 +185,7 @@ function ScreenFrame({
   children: React.ReactNode;
   action?: React.ReactNode;
 }) {
-  const { colors } = usePalette();
+  const { colors, backIconColor } = usePalette();
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
