@@ -79,37 +79,52 @@ async function readDevicePhoneContacts(): Promise<{
 
   try {
     const Contacts = require("expo-contacts") as typeof import("expo-contacts");
-    const { status } = await Contacts.requestPermissionsAsync();
-    if (status !== "granted") return { contacts: [], permission: "denied" };
+    const currentPermission = await Contacts.getPermissionsAsync();
+    const permission = currentPermission.status === "granted"
+      ? currentPermission
+      : await Contacts.requestPermissionsAsync();
+    if (permission.status !== "granted") return { contacts: [], permission: "denied" };
 
-    const { data } = await Contacts.getContactsAsync({
-      fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
-    });
     const contacts: DevicePhoneContact[] = [];
-
-    data.forEach((contact, position) => {
-      const name = contact.name?.trim() || "Unknown";
-      (contact.phoneNumbers ?? []).forEach((phoneNumber, phoneIndex) => {
-        const raw = (phoneNumber.number ?? "").trim();
-        const normalized = normalizePhoneNumber(
-          raw,
-          (phoneNumber as { countryCode?: string | null }).countryCode,
-        );
-        if (!raw || !normalized) return;
-
-        contacts.push({
-          key: `${contact.id ?? position}:${phoneIndex}`,
-          name,
-          // Keep the device's exact display value. Only normalized_phone is
-          // used for matching, so local contacts never get reformatted.
-          phone: raw,
-          normalized_phone: normalized,
-          position,
-          phone_index: phoneIndex,
-        });
+    const pageSize = 500;
+    let pageOffset = 0;
+    let position = 0;
+    let hasNextPage = true;
+    while (hasNextPage) {
+      const page = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
+        pageSize,
+        pageOffset,
       });
-    });
-
+      for (const contact of page.data) {
+        const name = contact.name?.trim()
+          || [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim()
+          || "Unknown";
+        const numbers = (contact.phoneNumbers ?? [])
+          .map((phoneNumber, phoneIndex) => ({
+            phoneIndex,
+            raw: (phoneNumber.number ?? "").trim(),
+            region: (phoneNumber as { countryCode?: string | null }).countryCode,
+          }))
+          .filter((entry) => entry.raw.length > 0);
+        const entries = numbers.length > 0
+          ? numbers
+          : [{ phoneIndex: -1, raw: "", region: undefined }];
+        for (const entry of entries) {
+          contacts.push({
+            key: `${contact.id ?? position}:${entry.phoneIndex < 0 ? "none" : entry.phoneIndex}`,
+            name,
+            phone: entry.raw,
+            normalized_phone: entry.raw ? normalizePhoneNumber(entry.raw, entry.region) : "",
+            position,
+            phone_index: entry.phoneIndex,
+          });
+        }
+        position += 1;
+      }
+      hasNextPage = !!page.hasNextPage && page.data.length > 0;
+      pageOffset += page.data.length;
+    }
     return { contacts, permission: "granted" };
   } catch {
     return { contacts: [], permission: "unavailable" };
@@ -135,7 +150,7 @@ export async function syncPhoneContacts(
   if (!userId || !isOnline()) return "granted";
 
   try {
-    const phones = [...new Set(result.contacts.map((contact) => contact.normalized_phone))];
+    const phones = [...new Set(result.contacts.map((contact) => contact.normalized_phone).filter(isValidInternationalPhoneNumber))];
     const matches = [];
     for (let index = 0; index < phones.length; index += 100) {
       const { data, error } = await supabase

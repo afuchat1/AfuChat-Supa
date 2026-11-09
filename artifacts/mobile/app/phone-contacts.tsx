@@ -39,6 +39,7 @@ type NonAfuContact = {
   name: string;
   phone: string;
   normalized_phone: string;
+  canInvite: boolean;
 };
 
 export default function PhoneContactsScreen() {
@@ -46,7 +47,7 @@ export default function PhoneContactsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { contacts: cachedContacts, permission, refresh } = usePhoneContacts(user?.id);
-  const [state, setState] = useState<"idle" | "loading" | "done" | "denied">("idle");
+  const [state, setState] = useState<"idle" | "loading" | "done" | "denied" | "unavailable">("idle");
   const [onAfuChat, setOnAfuChat] = useState<AfuContact[]>([]);
   const [notOnAfuChat, setNotOnAfuChat] = useState<NonAfuContact[]>([]);
   const [inviteTarget, setInviteTarget] = useState<NonAfuContact | null>(null);
@@ -59,9 +60,10 @@ export default function PhoneContactsScreen() {
   }, []);
 
   const findContacts = useCallback(async () => {
-    setState(permission === "denied" ? "denied" : "done");
-    await refresh();
-  }, [permission, refresh]);
+    setState("loading");
+    const result = await refresh();
+    setState(result === "denied" ? "denied" : result === "unavailable" ? "unavailable" : "done");
+  }, [refresh]);
 
   useEffect(() => {
     const found: AfuContact[] = [];
@@ -69,9 +71,6 @@ export default function PhoneContactsScreen() {
     const seenUsers = new Set<string>();
     const seenInvitePhones = new Set<string>();
     for (const row of cachedContacts) {
-      // Cached data can predate the strict scanner. Never show rows without
-      // a valid full international number, even during refresh.
-      if (!isValidInternationalPhoneNumber(row.normalized_phone)) continue;
       if (row.matched_user_id && row.matched_user_id !== user?.id) {
         if (seenUsers.has(row.matched_user_id)) continue;
         seenUsers.add(row.matched_user_id);
@@ -85,13 +84,15 @@ export default function PhoneContactsScreen() {
           phonebook_name: row.name,
         });
       } else if (!row.matched_user_id) {
-        if (seenInvitePhones.has(row.normalized_phone)) continue;
-        seenInvitePhones.add(row.normalized_phone);
+        const validPhone = isValidInternationalPhoneNumber(row.normalized_phone);
+        if (validPhone && seenInvitePhones.has(row.normalized_phone)) continue;
+        if (validPhone) seenInvitePhones.add(row.normalized_phone);
         notFound.push({
           key: row.key,
           name: row.name,
           phone: row.phone,
           normalized_phone: row.normalized_phone,
+          canInvite: validPhone,
         });
       }
     }
@@ -105,9 +106,11 @@ export default function PhoneContactsScreen() {
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
       ),
     );
-    if (cachedContacts.length > 0 || permission !== "idle") {
-      setState(permission === "denied" ? "denied" : "done");
-    }
+    if (permission === "denied") setState("denied");
+    else if (cachedContacts.length > 0) setState("done");
+    else if (permission === "unavailable") setState("unavailable");
+    else if (permission === "idle") setState("loading");
+    else setState("done");
   }, [cachedContacts, permission, user?.id]);
 
   return (
@@ -124,6 +127,19 @@ export default function PhoneContactsScreen() {
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent} size="large" />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Scanning your contacts…</Text>
+        </View>
+      )}
+
+      {state === "unavailable" && cachedContacts.length === 0 && (
+        <View style={styles.center}>
+          <Ionicons name="alert-circle" size={56} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Contacts unavailable</Text>
+          <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+            AfuChat could not read or save your phone contacts. Check the app permission and available device storage, then try again.
+          </Text>
+          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.accent }]} onPress={findContacts}>
+            <Text style={styles.retryBtnText}>Try Again</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -245,25 +261,29 @@ export default function PhoneContactsScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.displayName, { color: colors.text }]}>{item.name}</Text>
-                        <Text style={[styles.handle, { color: colors.textMuted }]}>{item.phone}</Text>
+                        <Text style={[styles.handle, { color: colors.textMuted }]}>{item.phone || "No phone number"}</Text>
                       </View>
-                      <View style={styles.actionGroup}>
-                        <TouchableOpacity
-                          style={[styles.actionBtn, { backgroundColor: "#34C759" }]}
-                          onPress={() => void handleCall(item.normalized_phone)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Call ${item.name}`}
-                        >
-                          <Ionicons name="call" size={16} color="#fff" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.inviteButton, { backgroundColor: colors.accent }]}
-                          onPress={() => setInviteTarget(item)}
-                        >
-                          <Ionicons name="paper-plane" size={15} color="#fff" />
-                          <Text style={styles.inviteButtonText}>Invite</Text>
-                        </TouchableOpacity>
-                      </View>
+                      {item.canInvite && (
+                        <View style={styles.actionGroup}>
+                          <TouchableOpacity
+                            style={[styles.actionBtn, { backgroundColor: "#34C759" }]}
+                            onPress={() => void handleCall(item.normalized_phone)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Call ${item.name}`}
+                          >
+                            <Ionicons name="call" size={16} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.inviteButton, { backgroundColor: colors.accent }]}
+                            onPress={() => setInviteTarget(item)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Invite ${item.name} to AfuChat`}
+                          >
+                            <Ionicons name="paper-plane" size={15} color="#fff" />
+                            <Text style={styles.inviteButtonText}>Invite</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   ))}
                 </>
