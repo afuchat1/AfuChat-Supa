@@ -362,7 +362,7 @@ export default function LegalPage({ kind }: { kind: LegalPageKind }) {
               accessibilityLabel="Go back"
               hitSlop={8}
             >
-              <Ionicons name="arrow-back" size={20} color={colors.icon} />
+              <Ionicons name="arrow-back" size={20} color={colors.text} />
             </Pressable>
           )}
           <Pressable onPress={() => navigateTo("/")} accessibilityRole="link">
