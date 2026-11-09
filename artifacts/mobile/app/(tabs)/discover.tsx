@@ -1112,6 +1112,21 @@ type FeedEntry =
   | { _kind: "user_recs"; id: string; seed: number }
   | { _kind: "premium"; id: string; variant: "ai" | "creator" | "wallet" };
 
+// Fetch every page of a new-post delta before advancing the local feed cursor.
+// A fixed one-page limit can permanently skip older posts in a large burst.
+async function fetchAllDeltaPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const pageSize = 500;
+  const allRows: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    allRows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return allRows;
+}
+
 export default function DiscoverScreen() {
   "use no memo";
   const { horizontalScrollActive } = React.useContext(TabSwipeContext);
@@ -1711,7 +1726,7 @@ export default function DiscoverScreen() {
       const followDeltaSince = followNewerThan
         ? new Date(Math.max(0, Date.parse(followNewerThan) - 1000)).toISOString()
         : null;
-      const followBaseQ = supabase
+      const buildFollowBaseQuery = () => supabase
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
@@ -1722,12 +1737,24 @@ export default function DiscoverScreen() {
         `)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
-        .order("created_at", { ascending: false });
-      const { data } = await (followOlderThan
-        ? followBaseQ.lt("created_at", followOlderThan).limit(pageSize)
-        : followNewerThan
-          ? followBaseQ.gt("created_at", followDeltaSince).limit(100)
-          : followBaseQ.limit(pageSize));
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+      let data: any[] | null;
+      if (followOlderThan) {
+        const result = await buildFollowBaseQuery().lt("created_at", followOlderThan).limit(pageSize);
+        if (result.error) throw result.error;
+        data = result.data;
+      } else if (followNewerThan) {
+        // Read all delta pages before saving; otherwise a burst larger than one
+        // page would advance the newest-post cursor and hide the remaining posts.
+        data = await fetchAllDeltaPages((from, to) =>
+          buildFollowBaseQuery().gt("created_at", followDeltaSince!).range(from, to),
+        );
+      } else {
+        const result = await buildFollowBaseQuery().limit(pageSize);
+        if (result.error) throw result.error;
+        data = result.data;
+      }
 
       if (data) {
         if (data.length < pageSize) setHasMore(false); else setHasMore(true);
@@ -1873,9 +1900,18 @@ export default function DiscoverScreen() {
     } else {
       fyQ = fyQ.gte("created_at", fourDaysAgo);
     }
-    // New-post delta can be larger than the normal first-page sample.
-    // Fetch a generous metadata batch so bursts of posts are not silently skipped.
-    fyQ = fyQ.limit(fyDeltaSince ? 100 : RECENT_SIZE);
+    fyQ = fyQ.limit(RECENT_SIZE);
+    // Fetch every delta page; do not advance the local watermark after only
+    // the first page, or older posts from a burst would never be discovered.
+    const recentPromise = fyDeltaSince
+      ? fetchAllDeltaPages((from, to) =>
+          supabase.from("posts").select(fySelect).eq("visibility", "public")
+            .gt("created_at", fyDeltaSince)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to),
+        ).then((rows) => ({ data: rows }))
+      : fyQ;
 
     // ── Stream 2: Mid posts (4–30 days old, random window) ──
     const mdOffset = midOffsetRef.current;
@@ -1916,7 +1952,7 @@ export default function DiscoverScreen() {
             return res;
           });
 
-    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([fyQ, midPromise, throwbackPromise]);
+    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([recentPromise, midPromise, throwbackPromise]);
 
     // Merge all streams, deduplicate, then Fisher-Yates shuffle so the scoring
     // algorithm picks the best content from a randomly ordered pool — making
@@ -2488,15 +2524,15 @@ export default function DiscoverScreen() {
       let newPostsData: any[] = [];
 
       if (activeTab === "for_you") {
-        const { data } = await supabase
-          .from("posts")
-          .select(fySelect)
-          .eq("visibility", "public")
-          .gt("created_at", newestAt)
-          .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-          .order("created_at", { ascending: false })
-          .limit(100);
-        newPostsData = data ?? [];
+        newPostsData = await fetchAllDeltaPages((from, to) =>
+          supabase.from("posts").select(fySelect)
+            .eq("visibility", "public")
+            .gt("created_at", newestAt)
+            .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to),
+        );
       } else if (activeTab === "following" && user?.id) {
         const { data: followData } = await supabase
           .from("follows")
@@ -2505,15 +2541,15 @@ export default function DiscoverScreen() {
           .limit(500);
         const followingIds = (followData ?? []).map((f: any) => f.following_id);
         if (followingIds.length > 0) {
-          const { data } = await supabase
-            .from("posts")
-            .select(fySelect)
-            .in("author_id", followingIds)
-            .in("visibility", ["public", "followers"])
-            .gt("created_at", newestAt)
-            .order("created_at", { ascending: false })
-            .limit(100);
-          newPostsData = data ?? [];
+          newPostsData = await fetchAllDeltaPages((from, to) =>
+            supabase.from("posts").select(fySelect)
+              .in("author_id", followingIds)
+              .in("visibility", ["public", "followers"])
+              .gt("created_at", newestAt)
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: false })
+              .range(from, to),
+          );
         }
       }
 
