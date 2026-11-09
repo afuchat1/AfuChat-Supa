@@ -82,7 +82,7 @@ function isOnline(lastSeen: string | null) {
 
 function Avatar({ person, accent, size = 70 }: { person: Person; accent: string; size?: number }) {
   return person.avatar_url ? (
-    <ExpoImage source={{ uri: person.avatar_url }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} contentFit="cover" cachePolicy="memory" />
+    <ExpoImage source={{ uri: person.avatar_url }} style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]} contentFit="cover" cachePolicy="memory-disk" />
   ) : (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: accent + "20" }]}>
       <Text style={[styles.initial, { color: accent, fontSize: size * 0.3 }]}>
@@ -723,7 +723,7 @@ export default function FindPeopleTab() {
                           source={{ uri: person.banner_url }}
                           style={StyleSheet.absoluteFill}
                           contentFit="cover"
-                          cachePolicy="memory"
+                          cachePolicy="memory-disk"
                         />
                       ) : (
                         <View style={[styles.bannerFallback, { backgroundColor: accent + "18" }]}>
@@ -792,7 +792,7 @@ export default function FindPeopleTab() {
                                   source={{ uri: mutual.avatar_url }}
                                   style={styles.mutualAvatarImage}
                                   contentFit="cover"
-                                  cachePolicy="memory"
+                                  cachePolicy="memory-disk"
                                 />
                               ) : (
                                 <View style={[styles.mutualAvatarFallback, { backgroundColor: colors.inputBg }]}>
