@@ -233,7 +233,7 @@ export default function SupportCenter() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[st.header, { paddingTop: insets.top + 8 }]}
       >
-        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} />
         <View style={{ flex: 1 }}>
           <Text style={st.headerTitle}>Support Center</Text>
           <View style={st.headerSubRow}>
