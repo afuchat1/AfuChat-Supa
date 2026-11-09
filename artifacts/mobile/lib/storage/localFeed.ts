@@ -185,6 +185,16 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
         ],
       );
     }
+    // Keep the offline feed useful but bounded: retain only the newest 200
+    // lightweight post records per tab. Image/video bytes are never copied here.
+    await db.runAsync(
+      `DELETE FROM feed_posts
+       WHERE tab = ? AND id NOT IN (
+         SELECT id FROM feed_posts WHERE tab = ?
+         ORDER BY created_at DESC LIMIT 200
+       )`,
+      [tab, tab],
+    );
   } catch {}
 }
 
