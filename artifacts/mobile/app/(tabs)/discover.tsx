@@ -2965,7 +2965,7 @@ export default function DiscoverScreen() {
                                   source={{ uri: track.coverUrl }}
                                   style={StyleSheet.absoluteFill}
                                   contentFit="cover"
-                                  cachePolicy="memory"
+                                  cachePolicy="memory-disk"
                                 />
                               ) : (
                                 <Ionicons name="musical-notes" size={20} color={track.accentColor || colors.accent} />
