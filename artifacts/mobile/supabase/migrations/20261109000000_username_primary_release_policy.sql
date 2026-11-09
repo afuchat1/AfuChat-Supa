@@ -32,6 +32,25 @@ WHERE owned.acquired_at IS NULL
     )
   );
 
+-- A free handle that was left listed after its owner changed names is no
+-- longer eligible for sale. Close those stale listings before releasing it.
+UPDATE public.username_listings listing
+SET is_active = false
+WHERE listing.is_active = true
+  AND EXISTS (
+    SELECT 1
+    FROM public.owned_usernames owned
+    WHERE lower(owned.handle) = lower(listing.username)
+      AND owned.owner_id = listing.seller_id
+      AND owned.acquired_at IS NULL
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.profiles profile
+    WHERE profile.id = listing.seller_id
+      AND lower(profile.handle) = lower(listing.username)
+  );
+
 -- Remove orphaned free reservations left behind by previous username changes.
 -- Keep current primary handles and every alias proven to have been purchased.
 DELETE FROM public.owned_usernames owned
