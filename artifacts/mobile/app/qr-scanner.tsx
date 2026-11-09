@@ -497,7 +497,7 @@ export default function QRScannerScreen() {
 
       {/* Top bar */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton style={s.iconBtn} onPress={() => router.back()} color="#fff" />
+        <GlassBackButton style={s.iconBtn} onPress={() => router.back()} />
         <Text style={s.topTitle}>QR Scanner</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={s.iconBtn} onPress={() => setTorch((t) => !t)}>
