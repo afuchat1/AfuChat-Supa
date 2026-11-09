@@ -43,10 +43,10 @@ type NonAfuContact = {
 };
 
 export default function PhoneContactsScreen() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { contacts: cachedContacts, permission, refresh } = usePhoneContacts(user?.id);
+  const { contacts: cachedContacts, permission, refresh } = usePhoneContacts(user?.id, profile?.country);
   const [state, setState] = useState<"idle" | "loading" | "done" | "denied" | "unavailable">("idle");
   const [onAfuChat, setOnAfuChat] = useState<AfuContact[]>([]);
   const [notOnAfuChat, setNotOnAfuChat] = useState<NonAfuContact[]>([]);
