@@ -538,24 +538,6 @@ export default function OnboardingScreen() {
       }
       return;
     }
-    // Re-check and persist ownership through the protected RPC. The trigger
-    // also guards the upsert, but this makes ownership explicit and prevents a
-    // future profile write path from silently skipping the alias record.
-    const { error: claimError } = await supabase.rpc("claim_username", { p_username: cleanHandle });
-    if (claimError) {
-      setLoading(false);
-      if (claimError.message.toLowerCase().includes("listed for sale")) {
-        showAlert(
-          "Username listed for sale",
-          `@${cleanHandle} is reserved and can only be used after purchase.`,
-            usernamePurchasePrompt(cleanHandle, listedHandle?.price, () => router.push("/app/afuusernames")),
-        );
-      } else {
-        showAlert("Username unavailable", claimError.message);
-      }
-      return;
-    }
-
     // Do not mark the account complete until profile persistence and username
     // ownership have both succeeded. A failed finalization keeps the local draft.
     const { data: completedProfile, error: completionError } = await supabase
