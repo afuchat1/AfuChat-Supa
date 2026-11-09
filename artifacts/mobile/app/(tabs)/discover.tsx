@@ -1804,8 +1804,7 @@ export default function DiscoverScreen() {
           tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
           // Persist the full fetched delta; SQLite retains only the newest 200.
-          // Keep React state to one page so large bursts do not cause a slow render.
-          saveFeedPosts(mapped, activeTab as LocalFeedTab).catch(() => {});
+          // The virtualized feed keeps every fetched post available for scrolling.
           // Delta sync: prepend new posts to existing local posts (don't wipe them)
           if (background) {
             const prevIds = new Set(postsRef.current.map((p) => p.id));
