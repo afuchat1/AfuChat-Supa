@@ -5,7 +5,7 @@ import {
 } from "@/lib/storage/localPhoneContacts";
 import { syncPhoneContacts } from "@/lib/phoneContacts";
 
-export function usePhoneContacts(userId: string | undefined): {
+export function usePhoneContacts(userId: string | undefined, profileCountry?: string | null): {
   contacts: LocalPhoneContact[];
   permission: "idle" | "granted" | "denied" | "unavailable";
   refresh: () => Promise<"granted" | "denied" | "unavailable">;
@@ -20,6 +20,7 @@ export function usePhoneContacts(userId: string | undefined): {
     try {
       const result = await syncPhoneContacts(
         userId,
+        profileCountry,
         (deviceContacts) => { if (mountedRef.current) setContacts(deviceContacts); },
         (updatedContacts) => { if (mountedRef.current) setContacts(updatedContacts); },
       );
@@ -29,7 +30,7 @@ export function usePhoneContacts(userId: string | undefined): {
       if (mountedRef.current) setPermission("unavailable");
       return "unavailable" as const;
     }
-  }, [userId]);
+  }, [userId, profileCountry]);
 
   useEffect(() => {
     let active = true;
