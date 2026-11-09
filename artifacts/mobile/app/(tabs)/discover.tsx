@@ -53,7 +53,7 @@ import PostUploadBanner from "@/components/ui/PostUploadBanner";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getNetworkProfile } from "@/lib/networkQuality";
 import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
-import { getCachedFeedTab, getCachedMoments, cacheMoments } from "@/lib/offlineStore";
+import { getCachedFeedTab, getCachedMoments } from "@/lib/offlineStore";
 import { timeAgo as formatRelative, formatPostDate } from "@/lib/timeAgo";
 import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, getSeenPostIds, markPostsSeen, weightedSample, type FeedSignals } from "@/lib/feedAlgorithm";
@@ -1733,7 +1733,7 @@ export default function DiscoverScreen() {
         if (data.length < pageSize) setHasMore(false); else setHasMore(true);
 
         const postIds = data.map((p: any) => p.id);
-        const _followLimit = pageSize * 3;
+        const _followLimit = Math.max(pageSize * 3, postIds.length * 3);
         const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
           postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
           postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
@@ -1958,7 +1958,7 @@ export default function DiscoverScreen() {
         .limit(6);
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
 
-      const _fyLimit = pageSize * 3;
+      const _fyLimit = Math.max(pageSize * 3, postIds.length * 3);
       const [
         { data: myLikes },
         { data: replyCounts },
@@ -2209,7 +2209,6 @@ export default function DiscoverScreen() {
       if (isRefresh) {
         tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
-        cacheMoments(merged);
         saveFeedPosts(merged, activeTab as LocalFeedTab).catch(() => {});
         if (background) {
           const prevIds = new Set(postsRef.current.map((p) => p.id));
