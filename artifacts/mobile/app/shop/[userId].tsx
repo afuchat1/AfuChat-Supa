@@ -139,7 +139,7 @@ export default function StoreStorefront() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Floating back + cart */}
       <View style={[st.floatBar, { paddingTop: insets.top + 4 }]}>
-        <GlassBackButton onPress={() => router.back()} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} />
         <TouchableOpacity style={[st.floatBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/app/afumarket?section=cart" as any)}>
           <Ionicons name="cart" size={20} color="#fff" />
           {cartCount > 0 && (
