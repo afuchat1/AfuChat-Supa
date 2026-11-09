@@ -2170,7 +2170,7 @@ export default function DiscoverScreen() {
       const recommendationPool = topPool.filter((item) => !guaranteedIds.has(item.id));
       const sampled = [
         ...guaranteedRecent,
-        ...weightedSample(recommendationPool, Math.max(0, 30 - guaranteedRecent.length)),
+        ...weightedSample(recommendationPool, Math.min(recommendationPool.length, Math.max(0, 30 - guaranteedRecent.length))),
       ];
 
       // Diversify: no same-author back-to-back, no 3 same post-types in a row
