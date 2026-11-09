@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system/legacy";
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
-  Image as RNImage,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -13,8 +15,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
-  type ScrollViewInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
@@ -110,11 +110,12 @@ export default function OnboardingScreen() {
   const { user, refreshProfile } = useAuth();
   const { appTheme, setAppTheme } = useAppAccent();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{ userId?: string }>();
 
   // ── Form state (identical to original) ──────────────────────────────────────
   const [step, setStep] = useState(1);
+  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
+  const draftRef = useRef<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ChatTheme>(appTheme);
 
@@ -143,15 +144,73 @@ export default function OnboardingScreen() {
   const [selectedInterests, setSelectedInterests] = useState<Set<string>>(new Set());
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const userId = params.userId || user?.id;
+  const activeDraftKey = userId ? `afuchat:onboarding:draft:${userId}` : null;
 
-  // ── Pager — native horizontal ScrollView with pagingEnabled ──────────────────
-  // Uses React Native's built-in paging (no Reanimated transform arrays needed).
-  const pagerRef = useRef<ScrollViewInstance>(null);
-
-  // Scroll to the current step whenever it changes
+  // Restore this account's saved progress before enabling autosave or country detection.
   useEffect(() => {
-    pagerRef.current?.scrollTo({ x: (step - 1) * screenWidth, animated: true });
-  }, [step, screenWidth]);
+    let active = true;
+    if (!userId || !activeDraftKey) {
+      setHydratedUserId(null);
+      return () => { active = false; };
+    }
+    setHydratedUserId(null);
+    AsyncStorage.getItem(activeDraftKey)
+      .then((raw) => {
+        if (!active || !raw) return;
+        const draft = JSON.parse(raw);
+        if (!draft || draft.version !== 1) return;
+        setStep(Math.max(1, Math.min(TOTAL_STEPS, Number(draft.step) || 1)));
+        setDisplayName(typeof draft.displayName === "string" ? draft.displayName : "");
+        setHandle(typeof draft.handle === "string" ? draft.handle : "");
+        setSelectedCountry(draft.selectedCountry && typeof draft.selectedCountry === "object" ? draft.selectedCountry : null);
+        setPhoneNumber(typeof draft.phoneNumber === "string" ? draft.phoneNumber : "");
+        setDobDay(Number(draft.dobDay) || 0);
+        setDobMonth(Number(draft.dobMonth) || 0);
+        setDobYear(Number(draft.dobYear) || 0);
+        setGender(draft.gender === "male" || draft.gender === "female" ? draft.gender : "");
+        setSelectedInterests(new Set(Array.isArray(draft.selectedInterests) ? draft.selectedInterests.filter((v: unknown) => typeof v === "string") : []));
+        const restoredTheme = typeof draft.selectedTheme === "string" ? draft.selectedTheme as ChatTheme : appTheme;
+        setSelectedTheme(restoredTheme);
+        setAppTheme(restoredTheme);
+        if (typeof draft.avatarUri === "string" && draft.avatarUri) {
+          FileSystem.getInfoAsync(draft.avatarUri).then((info) => {
+            if (active && info.exists) setAvatarUri(draft.avatarUri);
+          }).catch(() => {});
+        }
+      })
+      .catch((error) => console.warn("[Onboarding] Could not restore saved draft:", error))
+      .finally(() => { if (active) setHydratedUserId(userId); });
+    return () => { active = false; };
+  }, [userId, activeDraftKey]);
+
+  const draftSnapshot = {
+    version: 1, step, displayName, handle, selectedCountry, phoneNumber,
+    dobDay, dobMonth, dobYear, gender,
+    selectedInterests: Array.from(selectedInterests), avatarUri, selectedTheme,
+  };
+  draftRef.current = draftSnapshot;
+
+  // Save changes continuously, with a small debounce to avoid disk writes per keystroke.
+  useEffect(() => {
+    if (!activeDraftKey || hydratedUserId !== userId) return;
+    const timer = setTimeout(() => {
+      AsyncStorage.setItem(activeDraftKey, JSON.stringify(draftRef.current)).catch((error) => {
+        console.warn("[Onboarding] Could not save progress:", error);
+      });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [activeDraftKey, hydratedUserId, userId, step, displayName, handle, selectedCountry, phoneNumber, dobDay, dobMonth, dobYear, gender, selectedInterests, avatarUri, selectedTheme]);
+
+  // Flush the latest form snapshot when Android backgrounds or interrupts the app.
+  useEffect(() => {
+    if (!activeDraftKey || hydratedUserId !== userId) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active" && draftRef.current) {
+        AsyncStorage.setItem(activeDraftKey, JSON.stringify(draftRef.current)).catch(() => {});
+      }
+    });
+    return () => subscription.remove();
+  }, [activeDraftKey, hydratedUserId, userId]);
 
   // ── Navigation helpers ────────────────────────────────────────────────────────
   function goNext() {
@@ -169,25 +228,6 @@ export default function OnboardingScreen() {
   }
 
   // Handle native swipe gestures from the pagingEnabled ScrollView
-  function handlePagerSwipeEnd(contentOffsetX: number) {
-    const swipedPage = Math.round(contentOffsetX / screenWidth);
-    const swipedStep = swipedPage + 1;
-    if (swipedStep === step) return;
-    if (swipedStep > step) {
-      if (canProceed()) {
-        Haptics.selectionAsync();
-        setStep(swipedStep);
-      } else {
-        // Snap back — user can't advance yet
-        pagerRef.current?.scrollTo({ x: (step - 1) * screenWidth, animated: true });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      }
-    } else {
-      Haptics.selectionAsync();
-      setStep(swipedStep);
-    }
-  }
-
   // ── Validation (unchanged) ───────────────────────────────────────────────────
   function canProceed(): boolean {
     switch (step) {
@@ -211,7 +251,9 @@ export default function OnboardingScreen() {
   }
 
   // ── Effects (unchanged) ──────────────────────────────────────────────────────
-  useEffect(() => { detectCountry(); }, []);
+  useEffect(() => {
+    if (hydratedUserId === userId && !selectedCountry) detectCountry();
+  }, [hydratedUserId, userId, selectedCountry]);
 
   useEffect(() => {
     if (handleTimerRef.current) clearTimeout(handleTimerRef.current);
@@ -371,7 +413,27 @@ export default function OnboardingScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      const sourceUri = result.assets[0].uri;
+      if (Platform.OS === "web" || !FileSystem.documentDirectory) {
+        setAvatarUri(sourceUri);
+        return;
+      }
+      try {
+        const directory = `${FileSystem.documentDirectory}onboarding/`;
+        const directoryInfo = await FileSystem.getInfoAsync(directory);
+        if (!directoryInfo.exists) await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+        const extension = sourceUri.split("?")[0].split(".").pop()?.replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+        const safeUserId = (userId || "guest").replace(/[^a-z0-9_-]/gi, "");
+        const stableUri = `${directory}avatar_${safeUserId}.${extension}`;
+        await FileSystem.copyAsync({ from: sourceUri, to: stableUri });
+        const copied = await FileSystem.getInfoAsync(stableUri);
+        if (!copied.exists) throw new Error("The selected photo could not be saved on this device.");
+        setAvatarUri(stableUri);
+      } catch (error: any) {
+        showAlert("Photo could not be saved", error?.message || "Please choose the photo again.");
+      }
+    }
   }
 
   async function uploadAvatar(): Promise<string | null> {
@@ -381,6 +443,7 @@ export default function OnboardingScreen() {
 
   // ── Complete (unchanged) ─────────────────────────────────────────────────────
   async function handleComplete() {
+    if (loading) return;
     if (!userId) { showAlert("Error", "User session not found. Please log in again."); return; }
     const cleanHandle = handle.replace(/[^a-zA-Z0-9_]/g, "").toLowerCase();
     if (cleanHandle.length < 3) { showAlert("Invalid handle", "Handle must be at least 3 characters."); return; }
@@ -390,7 +453,7 @@ export default function OnboardingScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const availability = await checkUsernameAvailability(cleanHandle);
-    if (availability && availability.status !== "available" && availability.status !== "owned") {
+    if (!availability || (availability.status !== "available" && availability.status !== "owned")) {
       setLoading(false);
       if (availability?.status === "listed") {
         showAlert(
@@ -403,7 +466,7 @@ export default function OnboardingScreen() {
       } else {
         showAlert("Username unavailable", "We could not verify this username. Please try again.");
       }
-      setStep(1); return;
+      return;
     }
 
     let avatarUrl: string | null = null;
@@ -436,7 +499,7 @@ export default function OnboardingScreen() {
       country: selectedCountry?.name || null,
       phone_number: fullPhone,
       interests: Array.from(selectedInterests),
-      onboarding_completed: true,
+      onboarding_completed: false,
     };
     if (avatarUrl) profileData.avatar_url = avatarUrl;
 
@@ -453,9 +516,8 @@ export default function OnboardingScreen() {
             `@${cleanHandle} is reserved and can only be used after purchase.`,
             usernamePurchasePrompt(cleanHandle, listedHandle?.price, () => router.push("/app/afuusernames")),
           );
-          setStep(1);
         } else {
-          showAlert("Handle taken", "This handle is already in use."); setStep(1);
+          showAlert("Handle taken", "This handle is already in use.");
         }
       } else {
         if (profileError.message.toLowerCase().includes("listed for sale")) {
@@ -486,14 +548,26 @@ export default function OnboardingScreen() {
       } else {
         showAlert("Username unavailable", claimError.message);
       }
-      setStep(1);
       return;
     }
 
+    // Do not mark the account complete until profile persistence and username
+    // ownership have both succeeded. A failed finalization keeps the local draft.
+    const { data: completedProfile, error: completionError } = await supabase
+      .from("profiles")
+      .update({ onboarding_completed: true })
+      .eq("id", userId)
+      .select("id")
+      .maybeSingle();
+    if (completionError || !completedProfile) {
+      throw completionError || new Error("Your profile was saved, but setup could not be finalized. Please try again.");
+    }
+
+    if (activeDraftKey) await AsyncStorage.removeItem(activeDraftKey).catch(() => {});
     try { const { rewardXp } = await import("../../lib/rewardXp"); await rewardXp("profile_completed"); } catch (_) {}
     try { await supabase.from("chat_preferences").upsert({ user_id: userId, chat_theme: selectedTheme }, { onConflict: "user_id" }); } catch (_) {}
 
-    await refreshProfile();
+    await refreshProfile().catch(() => {});
     ensureAfuAiChat(userId, displayName.trim()).catch(() => {});
     setLoading(false);
 
@@ -950,8 +1024,8 @@ export default function OnboardingScreen() {
     <OnboardingBackdrop />
     <KeyboardAvoidingView
       style={st.root}
-      behavior="padding"
-      keyboardVerticalOffset={0}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={insets.top}
     >
       {/* ── Top bar ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
@@ -971,32 +1045,18 @@ export default function OnboardingScreen() {
         ))}
       </View>
 
-      {/* ── Sliding page strip — identical pattern to SwipeTabsWrapper ── */}
-      <View style={st.pagerOuter}>
-        <ScrollView
-          ref={pagerRef}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          scrollEventThrottle={16}
-          keyboardShouldPersistTaps="handled"
-          onMomentumScrollEnd={(e) => handlePagerSwipeEnd(e.nativeEvent.contentOffset.x)}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ width: screenWidth * TOTAL_STEPS }}
-        >
-          {stepRenderers.map((renderFn, i) => (
-            <ScrollView
-              key={i}
-              style={{ width: screenWidth }}
-              contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 140 }]}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {renderFn()}
-            </ScrollView>
-          ))}
-        </ScrollView>
-      </View>
+      {/* A single vertical scroll container avoids nested pager/keyboard gesture
+          conflicts on Android OEM keyboards and keeps the active form mounted. */}
+      <ScrollView
+        style={st.pagerOuter}
+        contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 140 }]}
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+      >
+        {stepRenderers[step - 1]()}
+      </ScrollView>
 
       {/* ── Bottom action bar — positioned absolute so it floats above keyboard ── */}
         <View style={[st.bottomBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
@@ -1060,7 +1120,7 @@ const st = StyleSheet.create({
     // width animated per DotIndicator
   },
 
-  pagerOuter: { flex: 1 },
+  pagerOuter: { flex: 1, minHeight: 0 },
 
   // Per-step scroll
   scrollContent: {
@@ -1069,6 +1129,7 @@ const st = StyleSheet.create({
     alignSelf: "center",
     paddingHorizontal: 24,
     paddingTop: 24,
+    flexGrow: 1,
   },
 
   // Step content layout
