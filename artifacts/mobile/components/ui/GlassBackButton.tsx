@@ -36,11 +36,9 @@ export function GlassBackButton({
   const { t } = useLanguage();
   const translatedLabel = label ? t(label) : undefined;
   const translatedAccessibilityLabel = t(accessibilityLabel ?? label ?? "Go back");
-  const requestedColor = color?.trim().toLowerCase();
-  const iconColor =
-    requestedColor === "#fff" || requestedColor === "#ffffff" || requestedColor === "white"
-      ? colors.navigationActive
-      : color ?? colors.navigationActive;
+  // Back navigation is system-neutral: never inherit the AfuChat accent color
+  // or a per-screen color override.
+  const iconColor = isDark ? "#FFFFFF" : "#000000";
   const sizeStyle = label
     ? { minWidth: size, height: size, borderRadius: size / 2 }
     : { width: size, height: size, borderRadius: size / 2 };
