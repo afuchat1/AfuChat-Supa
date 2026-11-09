@@ -336,4 +336,45 @@ async function runMigrations(db: DB) {
     await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN read_at TEXT");
     await db.runAsync("UPDATE schema_version SET version = 20");
   }
+
+  // v21: a post may belong to both For You and Following. Keep one lightweight
+  // record per (post, tab), so trimming one offline feed never evicts the other.
+  if (currentVersion < 21) {
+    await db.execAsync("BEGIN IMMEDIATE");
+    try {
+      await db.execAsync(`
+        CREATE TABLE feed_posts_v21 (
+          id TEXT NOT NULL, author_id TEXT NOT NULL, content TEXT, image_url TEXT,
+          images TEXT, video_url TEXT, post_type TEXT, article_title TEXT,
+          created_at TEXT NOT NULL, like_count INTEGER NOT NULL DEFAULT 0,
+          reply_count INTEGER NOT NULL DEFAULT 0, view_count INTEGER NOT NULL DEFAULT 0,
+          liked INTEGER NOT NULL DEFAULT 0, bookmarked INTEGER NOT NULL DEFAULT 0,
+          author_name TEXT, author_handle TEXT, author_avatar TEXT,
+          is_verified INTEGER NOT NULL DEFAULT 0, is_org_verified INTEGER NOT NULL DEFAULT 0,
+          tab TEXT NOT NULL DEFAULT 'for_you', score REAL NOT NULL DEFAULT 0,
+          stored_at INTEGER NOT NULL, viewed_at INTEGER, saved_to_tab TEXT,
+          PRIMARY KEY (id, tab)
+        );
+        INSERT OR IGNORE INTO feed_posts_v21
+          (id, author_id, content, image_url, images, video_url, post_type, article_title,
+           created_at, like_count, reply_count, view_count, liked, bookmarked,
+           author_name, author_handle, author_avatar, is_verified, is_org_verified,
+           tab, score, stored_at, viewed_at, saved_to_tab)
+        SELECT id, author_id, content, image_url, images, video_url, post_type, article_title,
+               created_at, like_count, reply_count, view_count, liked, bookmarked,
+               author_name, author_handle, author_avatar, is_verified, is_org_verified,
+               tab, score, stored_at, viewed_at, saved_to_tab
+        FROM feed_posts;
+        DROP TABLE feed_posts;
+        ALTER TABLE feed_posts_v21 RENAME TO feed_posts;
+        CREATE INDEX idx_feed_tab_created ON feed_posts(tab, created_at DESC);
+        CREATE INDEX idx_feed_created ON feed_posts(created_at DESC);
+      `);
+      await db.runAsync("UPDATE schema_version SET version = 21");
+      await db.execAsync("COMMIT");
+    } catch (error) {
+      try { await db.execAsync("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
 }
