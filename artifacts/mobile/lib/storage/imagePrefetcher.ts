@@ -12,6 +12,11 @@
  */
 
 import { Image as ExpoImage } from "expo-image";
+import {
+  getNetworkProfile,
+  subscribeToNetworkProfileChanges,
+  type NetworkProfile,
+} from "@/lib/networkQuality";
 
 type PrefetchItem = { url: string; type: "avatar" | "thumb" };
 
@@ -22,26 +27,57 @@ const _seen = new Set<string>();
 // Number of active downloads
 let _active = 0;
 const MAX_CONCURRENT = 4;
+const MAX_PENDING = 200;
+let _networkUnsubscribe: (() => void) | null = null;
+
+function canPrefetch(profile: NetworkProfile): boolean {
+  return profile.type === "wifi" && profile.connected !== false && profile.expensive !== true;
+}
+
+function ensureNetworkListener() {
+  if (_networkUnsubscribe) return;
+  _networkUnsubscribe = subscribeToNetworkProfileChanges((profile) => {
+    // Do not spend cellular data. Unknown startup state may wait briefly for
+    // NetInfo's first result; once Wi-Fi is confirmed, drain the small queue.
+    if (canPrefetch(profile)) {
+      _drain();
+    } else if (profile.type === "cellular" || profile.connected === false) {
+      for (const queued of _queue) _seen.delete(queued.url);
+      _queue.length = 0;
+    }
+  });
+}
 
 function enqueue(item: PrefetchItem) {
   if (!item.url || !item.url.startsWith("http")) return;
+  ensureNetworkListener();
+  const network = getNetworkProfile();
+  // Never enqueue on known cellular, disconnected, or metered networks.
+  // Unknown network state is held briefly until NetInfo confirms Wi-Fi.
+  if (network.type === "cellular" || network.connected === false || network.expensive === true) return;
   if (_seen.has(item.url)) return;
-  _seen.add(item.url);
-  // Avatars go to the front of the queue
-  if (item.type === "avatar") {
-    _queue.unshift(item);
-  } else {
-    _queue.push(item);
+  // Bound both the queue and its de-duplication index.
+  if (_seen.size >= 2_000) _seen.clear();
+  if (_queue.length >= MAX_PENDING) {
+    if (item.type === "thumb") return;
+    const lastThumb = _queue.map((queued) => queued.type).lastIndexOf("thumb");
+    const [dropped] = _queue.splice(lastThumb >= 0 ? lastThumb : _queue.length - 1, 1);
+    if (dropped) _seen.delete(dropped.url);
   }
+  _seen.add(item.url);
+  if (item.type === "avatar") _queue.unshift(item);
+  else _queue.push(item);
   _drain();
 }
 
 function _drain() {
+  if (!canPrefetch(getNetworkProfile())) return;
   while (_active < MAX_CONCURRENT && _queue.length > 0) {
     const item = _queue.shift()!;
     _active++;
-    // Keep image prefetches in memory only; re-download them when needed.
-    ExpoImage.prefetch(item.url, "memory")
+    // Store prefetched assets in expo-image disk cache; it remains separate
+    // from decoded bitmap memory, which the app can safely clear on background.
+    ExpoImage.prefetch(item.url, "disk")
       .catch(() => {})
       .finally(() => {
         _active--;

@@ -1,11 +1,12 @@
 // ─── Permanent Feed Post Store ──────────────────────────────────────────────────
-// Feed posts are stored permanently on device once downloaded/viewed.
-// Delta sync: only posts NEWER than the newest stored post_id are fetched.
-// Already-stored posts are never re-downloaded.
+// Keep a bounded, lightweight offline window of recent feed metadata.
+// Delta sync fetches newer posts; upserts refresh changed fields without storing media bytes.
+// The native image cache owns reusable image bytes and can evict them independently.
 //
 // RULES:
-//   • INSERT OR IGNORE — a post stored once is never overwritten/re-fetched
-//   • No TTL, no auto-trim — posts accumulate until user clears storage
+//   • Retain at most 200 recent post records per tab
+//   • Upsert metadata so edited posts and engagement counts stay current
+//   • Store feed records only; media bytes remain in expo-image managed cache
 //   • getNewestFeedPostDate(tab) → cursor for delta sync (only fetch newer)
 //   • updateLocalPost* helpers update reactive state (likes, bookmarks) without re-fetching
 
@@ -69,8 +70,7 @@ function mapPost(item: any, tab: FeedTab): LocalPost {
 // ─── Reads ──────────────────────────────────────────────────────────────────────
 
 /**
- * Load stored feed posts for a tab. Returns most recent first by default.
- * No TTL — returns everything stored, not just "fresh" data.
+ * Load the retained offline feed window for a tab, newest first.
  */
 export async function getLocalFeedPosts(
   tab: FeedTab,
@@ -146,33 +146,64 @@ export async function getLocalFeedPost(id: string): Promise<LocalPost | null> {
 // ─── Writes ─────────────────────────────────────────────────────────────────────
 
 /**
- * Save posts permanently. INSERT OR IGNORE ensures a post already on device
- * is never overwritten — it was already downloaded, no need to do it again.
+ * Upsert lightweight post data. Repeated syncs update changed text, URLs,
+ * profile details and counters without downloading media bytes into SQLite.
  */
 export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
   if (!posts.length) return;
   try {
     const db = await getDB();
+    // Bound writes as well as retained rows. Feed UI only needs a compact,
+    // newest-first offline window; media bytes remain in Expo Image's cache.
+    const boundedPosts = [...posts]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .slice(0, 200);
     const now = Date.now();
-    for (const item of posts) {
-      const p = mapPost(item, tab);
+    await db.execAsync("BEGIN IMMEDIATE");
+    try {
+      for (const item of boundedPosts) {
+        const p = mapPost(item, tab);
+        await db.runAsync(
+          `INSERT INTO feed_posts
+           (id, author_id, content, image_url, images, video_url, post_type, article_title,
+            created_at, like_count, reply_count, view_count, liked, bookmarked,
+            author_name, author_handle, author_avatar, is_verified, is_org_verified,
+            tab, score, stored_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id, tab) DO UPDATE SET
+            author_id=excluded.author_id, content=excluded.content,
+            image_url=excluded.image_url, images=excluded.images,
+            video_url=excluded.video_url, post_type=excluded.post_type,
+            article_title=excluded.article_title, like_count=excluded.like_count,
+            reply_count=excluded.reply_count, view_count=excluded.view_count,
+            liked=excluded.liked, bookmarked=excluded.bookmarked,
+            author_name=excluded.author_name, author_handle=excluded.author_handle,
+            author_avatar=excluded.author_avatar, is_verified=excluded.is_verified,
+            is_org_verified=excluded.is_org_verified,
+            score=excluded.score, stored_at=excluded.stored_at`,
+          [
+            p.id, p.author_id, p.content, p.image_url,
+            JSON.stringify(p.images), p.video_url, p.post_type, p.article_title,
+            p.created_at, p.like_count, p.reply_count, p.view_count,
+            p.liked ? 1 : 0, p.bookmarked ? 1 : 0,
+            p.author_name, p.author_handle, p.author_avatar,
+            p.is_verified ? 1 : 0, p.is_org_verified ? 1 : 0,
+            p.tab, p.score, now,
+          ],
+        );
+      }
       await db.runAsync(
-        `INSERT OR IGNORE INTO feed_posts
-         (id, author_id, content, image_url, images, video_url, post_type, article_title,
-          created_at, like_count, reply_count, view_count, liked, bookmarked,
-          author_name, author_handle, author_avatar, is_verified, is_org_verified,
-          tab, score, stored_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [
-          p.id, p.author_id, p.content, p.image_url,
-          JSON.stringify(p.images), p.video_url, p.post_type, p.article_title,
-          p.created_at, p.like_count, p.reply_count, p.view_count,
-          p.liked ? 1 : 0, p.bookmarked ? 1 : 0,
-          p.author_name, p.author_handle, p.author_avatar,
-          p.is_verified ? 1 : 0, p.is_org_verified ? 1 : 0,
-          p.tab, p.score, now,
-        ],
+        `DELETE FROM feed_posts
+         WHERE tab = ? AND id NOT IN (
+           SELECT id FROM feed_posts WHERE tab = ?
+           ORDER BY created_at DESC LIMIT 200
+         )`,
+        [tab, tab],
       );
+      await db.execAsync("COMMIT");
+    } catch (error) {
+      try { await db.execAsync("ROLLBACK"); } catch {}
+      throw error;
     }
   } catch {}
 }

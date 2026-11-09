@@ -25,7 +25,7 @@ export function CachedImage({ uri, cacheType = "thumb", ...props }: Props) {
     <ExpoImage
       {...props}
       source={{ uri }}
-      cachePolicy="memory"
+      cachePolicy="memory-disk"
       transition={0}
       allowDownscaling
       recyclingKey={uri}

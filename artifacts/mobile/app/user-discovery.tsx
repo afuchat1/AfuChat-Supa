@@ -204,7 +204,7 @@ function UserAvatar({
           source={{ uri }}
           style={{ width: size, height: size, borderRadius: size / 2 }}
           contentFit="cover"
-          cachePolicy="memory"
+          cachePolicy="memory-disk"
         />
       ) : (
         <View

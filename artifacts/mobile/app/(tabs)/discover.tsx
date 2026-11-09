@@ -53,7 +53,7 @@ import PostUploadBanner from "@/components/ui/PostUploadBanner";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getNetworkProfile } from "@/lib/networkQuality";
 import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
-import { getCachedFeedTab, cacheFeedTab, getCachedMoments, cacheMoments } from "@/lib/offlineStore";
+import { getCachedFeedTab, getCachedMoments } from "@/lib/offlineStore";
 import { timeAgo as formatRelative, formatPostDate } from "@/lib/timeAgo";
 import { sharePost, shareVideo } from "@/lib/share";
 import { matchInterestsWeighted, recordInteraction, getLearnedInterestBoosts, computeFeedScore, diversifyFeed, getSeenPostIds, markPostsSeen, weightedSample, type FeedSignals } from "@/lib/feedAlgorithm";
@@ -1112,6 +1112,21 @@ type FeedEntry =
   | { _kind: "user_recs"; id: string; seed: number }
   | { _kind: "premium"; id: string; variant: "ai" | "creator" | "wallet" };
 
+// Fetch every page of a new-post delta before advancing the local feed cursor.
+// A fixed one-page limit can permanently skip older posts in a large burst.
+async function fetchAllDeltaPages(buildQuery: (from: number, to: number) => any): Promise<any[]> {
+  const pageSize = 500;
+  const allRows: any[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    const batch = data ?? [];
+    allRows.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+  return allRows;
+}
+
 export default function DiscoverScreen() {
   "use no memo";
   const { horizontalScrollActive } = React.useContext(TabSwipeContext);
@@ -1681,7 +1696,7 @@ export default function DiscoverScreen() {
       const FOLLOWING_IDS_TTL = 5 * 60 * 1000;
       let followingIds: string[];
       const _fidCache = followingIdsCacheRef.current;
-      if (_fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
+      if (!isRefresh && _fidCache.ids.length > 0 && Date.now() - _fidCache.cachedAt < FOLLOWING_IDS_TTL) {
         followingIds = _fidCache.ids;
       } else {
         const { data: followData } = await supabase
@@ -1706,7 +1721,12 @@ export default function DiscoverScreen() {
         : null;
       // Delta sync: on refresh, only fetch posts NEWER than newest stored — never re-download existing posts
       const followNewerThan = isRefresh ? await getNewestFeedPostDate("following") : null;
-      const followBaseQ = supabase
+      // Small overlap catches posts sharing a timestamp with the newest cached row;
+      // local ID deduplication prevents duplicates in the visible feed.
+      const followDeltaSince = followNewerThan
+        ? new Date(Math.max(0, Date.parse(followNewerThan) - 1000)).toISOString()
+        : null;
+      const buildFollowBaseQuery = () => supabase
         .from("posts")
         .select(`
           id, author_id, content, image_url, created_at, view_count, like_count, visibility, language_code,
@@ -1717,18 +1737,30 @@ export default function DiscoverScreen() {
         `)
         .in("author_id", followingIds)
         .in("visibility", ["public", "followers"])
-        .order("created_at", { ascending: false });
-      const { data } = await (followOlderThan
-        ? followBaseQ.lt("created_at", followOlderThan).limit(pageSize)
-        : followNewerThan
-          ? followBaseQ.gt("created_at", followNewerThan).limit(pageSize)
-          : followBaseQ.limit(pageSize));
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
+      let data: any[] | null;
+      if (followOlderThan) {
+        const result = await buildFollowBaseQuery().lt("created_at", followOlderThan).limit(pageSize);
+        if (result.error) throw result.error;
+        data = result.data;
+      } else if (followNewerThan) {
+        // Read all delta pages before saving; otherwise a burst larger than one
+        // page would advance the newest-post cursor and hide the remaining posts.
+        data = await fetchAllDeltaPages((from, to) =>
+          buildFollowBaseQuery().gt("created_at", followDeltaSince!).range(from, to),
+        );
+      } else {
+        const result = await buildFollowBaseQuery().limit(pageSize);
+        if (result.error) throw result.error;
+        data = result.data;
+      }
 
       if (data) {
         if (data.length < pageSize) setHasMore(false); else setHasMore(true);
 
         const postIds = data.map((p: any) => p.id);
-        const _followLimit = pageSize * 3;
+        const _followLimit = Math.max(pageSize * 3, postIds.length * 3);
         const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
           postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
           postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
@@ -1771,8 +1803,8 @@ export default function DiscoverScreen() {
         if (isRefresh) {
           tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
-          cacheFeedTab(activeTab, mapped);
-          saveFeedPosts(mapped, activeTab as LocalFeedTab).catch(() => {});
+          // Persist the full fetched delta; SQLite retains only the newest 200.
+          // The virtualized feed keeps every fetched post available for scrolling.
           // Delta sync: prepend new posts to existing local posts (don't wipe them)
           if (background) {
             const prevIds = new Set(postsRef.current.map((p) => p.id));
@@ -1844,6 +1876,11 @@ export default function DiscoverScreen() {
 
     // Delta sync: on refresh, only fetch posts NEWER than newest stored
     const fyNewerThan = isRefresh ? await getNewestFeedPostDate("for_you") : null;
+    // Overlap by one second so equal-timestamp posts are not skipped. IDs are
+    // deduplicated before rendering, while SQLite metadata is safely upserted.
+    const fyDeltaSince = fyNewerThan
+      ? new Date(Math.max(0, Date.parse(fyNewerThan) - 1000)).toISOString()
+      : null;
 
     // On refresh, reset all stream offsets to new random positions so every
     // session surfaces a completely different combination of content.
@@ -1859,12 +1896,23 @@ export default function DiscoverScreen() {
       .order("created_at", { ascending: false });
     if (fyOlderThan) {
       fyQ = fyQ.lt("created_at", fyOlderThan);
-    } else if (fyNewerThan) {
-      fyQ = fyQ.gt("created_at", fyNewerThan);
+    } else if (fyDeltaSince) {
+      fyQ = fyQ.gt("created_at", fyDeltaSince);
     } else {
       fyQ = fyQ.gte("created_at", fourDaysAgo);
     }
     fyQ = fyQ.limit(RECENT_SIZE);
+    // Fetch every delta page; do not advance the local watermark after only
+    // the first page, or older posts from a burst would never be discovered.
+    const recentPromise = fyDeltaSince
+      ? fetchAllDeltaPages((from, to) =>
+          supabase.from("posts").select(fySelect).eq("visibility", "public")
+            .gt("created_at", fyDeltaSince)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to),
+        ).then((rows) => ({ data: rows }))
+      : fyQ;
 
     // ── Stream 2: Mid posts (4–30 days old, random window) ──
     const mdOffset = midOffsetRef.current;
@@ -1905,7 +1953,7 @@ export default function DiscoverScreen() {
             return res;
           });
 
-    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([fyQ, midPromise, throwbackPromise]);
+    const [{ data: recentData }, { data: midData }, { data: throwbackData }] = await Promise.all([recentPromise, midPromise, throwbackPromise]);
 
     // Merge all streams, deduplicate, then Fisher-Yates shuffle so the scoring
     // algorithm picks the best content from a randomly ordered pool — making
@@ -1947,7 +1995,7 @@ export default function DiscoverScreen() {
         .limit(6);
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
 
-      const _fyLimit = pageSize * 3;
+      const _fyLimit = Math.max(pageSize * 3, postIds.length * 3);
       const [
         { data: myLikes },
         { data: replyCounts },
@@ -2108,19 +2156,36 @@ export default function DiscoverScreen() {
         };
       });
 
-      // Weighted random sampling from top candidates — quality still wins but
-      // lower-ranked posts can surface, making every refresh genuinely different.
+      // Weighted sampling keeps discovery varied, but a refresh must visibly
+      // surface genuinely new content. Reserve up to 10 newest delta posts, then
+      // fill the remaining slots from the quality-ranked recommendation pool.
       const topPool = [...scored].sort((a, b) => b.score - a.score).slice(0, 60);
-      const sampled = weightedSample(topPool, Math.min(topPool.length, 30));
+      const guaranteedRecent = fyDeltaSince
+        ? (recentData || []).slice(0, 10)
+            .map((post: any) => scored.find((item) => item.id === post.id))
+            .filter((item): item is (typeof scored)[number] => !!item)
+        : [];
+      const guaranteedIds = new Set(guaranteedRecent.map((item) => item.id));
+      const recommendationPool = topPool.filter((item) => !guaranteedIds.has(item.id));
+      const sampled = [
+        ...guaranteedRecent,
+        ...weightedSample(recommendationPool, Math.min(recommendationPool.length, Math.max(0, 30 - guaranteedRecent.length))),
+      ];
 
-      // Diversify: no same-author back-to-back, no 3 same post-types in a row
+      // Diversify recommendations on normal loads. When a delta exists, keep
+      // every fetched new post in chronological order so no item is hidden by
+      // random sampling and the next load-more cursor remains contiguous.
       const diversified = diversifyFeed(sampled.map((p) => ({ ...p, postType: p.post_type })));
+      const deltaPosts = fyDeltaSince
+        ? [...scored].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+        : [];
+      const feedPresentation = fyDeltaSince ? deltaPosts : diversified;
 
       runAfterIdle(() => {
-        prefetchAvatars(diversified.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
-        prefetchThumbnails(diversified.slice(0, 6).map((p) => (p as any).image_url));
-        // Mark these posts as seen so they get demoted on the next refresh.
-        markPostsSeen(diversified.map((p) => p.id)).catch(() => {});
+        prefetchAvatars(feedPresentation.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
+        prefetchThumbnails(feedPresentation.slice(0, 6).map((p) => (p as any).image_url));
+        // Mark only the first screenful as seen; avoid a large SQLite write on refresh.
+        markPostsSeen(feedPresentation.slice(0, 30).map((p) => p.id)).catch(() => {});
       });
 
       // Org posts were fetched in parallel with the metadata queries above.
@@ -2181,26 +2246,34 @@ export default function DiscoverScreen() {
         }
       } catch (_) {}
 
-      // Interleave: insert 1 org post for every 5 regular posts
+      // Interleave organization posts into the selected feed presentation.
+      // For a delta refresh, include only organization posts newer than the
+      // same cursor so they cannot move pagination behind undisplayed new posts.
+      const displayOrgPosts = fyDeltaSince
+        ? orgPostItems.filter((post) => Date.parse(post.created_at) > Date.parse(fyDeltaSince))
+        : orgPostItems;
       const merged: PostItem[] = [];
       let orgIdx = 0;
-      for (let i = 0; i < diversified.length; i++) {
-        merged.push(diversified[i] as PostItem);
-        if ((i + 1) % 5 === 0 && orgIdx < orgPostItems.length) {
-          merged.push(orgPostItems[orgIdx++]);
+      for (let i = 0; i < feedPresentation.length; i++) {
+        merged.push(feedPresentation[i] as PostItem);
+        if ((i + 1) % 5 === 0 && orgIdx < displayOrgPosts.length) {
+          merged.push(displayOrgPosts[orgIdx++]);
         }
       }
-      // Append any remaining org posts at end
-      while (orgIdx < orgPostItems.length) {
-        merged.push(orgPostItems[orgIdx++]);
+      while (orgIdx < displayOrgPosts.length) {
+        merged.push(displayOrgPosts[orgIdx++]);
       }
 
       if (isRefresh) {
         tabPostsCache.current[activeTab] = merged;
         tabCacheTimestamp.current[activeTab] = Date.now();
-        cacheFeedTab(activeTab, merged);
-        cacheMoments(merged);
-        saveFeedPosts(merged, activeTab as LocalFeedTab).catch(() => {});
+        // Persist up to the newest 200 fetched items, not just the randomized
+        // 30-card presentation sample, so the next delta cursor cannot skip
+        // posts that were fetched but not selected for the first screen.
+        const offlineFeedWindow = [...scored, ...orgPostItems]
+          .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+          .slice(0, 200);
+        saveFeedPosts(offlineFeedWindow, activeTab as LocalFeedTab).catch(() => {});
         if (background) {
           const prevIds = new Set(postsRef.current.map((p) => p.id));
           const brandNew = merged.filter((p) => !prevIds.has(p.id));
@@ -2479,15 +2552,15 @@ export default function DiscoverScreen() {
       let newPostsData: any[] = [];
 
       if (activeTab === "for_you") {
-        const { data } = await supabase
-          .from("posts")
-          .select(fySelect)
-          .eq("visibility", "public")
-          .gt("created_at", newestAt)
-          .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-          .order("created_at", { ascending: false })
-          .limit(20);
-        newPostsData = data ?? [];
+        newPostsData = await fetchAllDeltaPages((from, to) =>
+          supabase.from("posts").select(fySelect)
+            .eq("visibility", "public")
+            .gt("created_at", newestAt)
+            .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to),
+        );
       } else if (activeTab === "following" && user?.id) {
         const { data: followData } = await supabase
           .from("follows")
@@ -2496,15 +2569,15 @@ export default function DiscoverScreen() {
           .limit(500);
         const followingIds = (followData ?? []).map((f: any) => f.following_id);
         if (followingIds.length > 0) {
-          const { data } = await supabase
-            .from("posts")
-            .select(fySelect)
-            .in("author_id", followingIds)
-            .in("visibility", ["public", "followers"])
-            .gt("created_at", newestAt)
-            .order("created_at", { ascending: false })
-            .limit(20);
-          newPostsData = data ?? [];
+          newPostsData = await fetchAllDeltaPages((from, to) =>
+            supabase.from("posts").select(fySelect)
+              .in("author_id", followingIds)
+              .in("visibility", ["public", "followers"])
+              .gt("created_at", newestAt)
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: false })
+              .range(from, to),
+          );
         }
       }
 
@@ -2619,6 +2692,8 @@ export default function DiscoverScreen() {
     // ① Snapshot + eagerly deduplicate against the live feed (postsRef = no stale closure)
     const existIds = new Set(postsRef.current.map((p) => p.id));
     const fresh = pendingPostsRef.current.filter((p) => !existIds.has(p.id));
+    // Persist the newest bounded offline window before clearing the pending buffer.
+    saveFeedPosts(fresh.slice(0, 200), feedTabRef.current as LocalFeedTab).catch(() => {});
 
     // ② Dismiss pill and arm the cooldown clock
     _resetPill(true);
@@ -2956,7 +3031,7 @@ export default function DiscoverScreen() {
                                   source={{ uri: track.coverUrl }}
                                   style={StyleSheet.absoluteFill}
                                   contentFit="cover"
-                                  cachePolicy="memory"
+                                  cachePolicy="memory-disk"
                                 />
                               ) : (
                                 <Ionicons name="musical-notes" size={20} color={track.accentColor || colors.accent} />
