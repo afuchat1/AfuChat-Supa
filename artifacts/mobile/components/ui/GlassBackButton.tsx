@@ -18,7 +18,6 @@ type Props = {
   icon?: React.ComponentProps<typeof Ionicons>["name"];
   iconSize?: number;
   size?: number;
-  color?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -29,7 +28,6 @@ export function GlassBackButton({
   icon = "arrow-back",
   iconSize = 18,
   size = 40,
-  color,
   style,
 }: Props) {
   const { colors, isDark } = useTheme();
