@@ -12,7 +12,11 @@
  */
 
 import { Image as ExpoImage } from "expo-image";
-import { getNetworkProfile } from "@/lib/networkQuality";
+import {
+  getNetworkProfile,
+  subscribeToNetworkProfileChanges,
+  type NetworkProfile,
+} from "@/lib/networkQuality";
 
 type PrefetchItem = { url: string; type: "avatar" | "thumb" };
 
@@ -23,27 +27,50 @@ const _seen = new Set<string>();
 // Number of active downloads
 let _active = 0;
 const MAX_CONCURRENT = 4;
+const MAX_PENDING = 200;
+let _networkUnsubscribe: (() => void) | null = null;
+
+function canPrefetch(profile: NetworkProfile): boolean {
+  return profile.type === "wifi" && profile.connected !== false && profile.expensive !== true;
+}
+
+function ensureNetworkListener() {
+  if (_networkUnsubscribe) return;
+  _networkUnsubscribe = subscribeToNetworkProfileChanges((profile) => {
+    // Do not spend cellular data. Unknown startup state may wait briefly for
+    // NetInfo's first result; once Wi-Fi is confirmed, drain the small queue.
+    if (canPrefetch(profile)) {
+      _drain();
+    } else if (profile.type === "cellular" || profile.connected === false) {
+      _queue.length = 0;
+    }
+  });
+}
 
 function enqueue(item: PrefetchItem) {
-  // Prefetch only on confirmed unmetered Wi-Fi. Visible images still load on
-  // demand on cellular and are cached by expo-image after they are viewed.
-  const network = getNetworkProfile();
-  if (network.type !== "wifi" || network.connected === false || network.expensive === true) return;
   if (!item.url || !item.url.startsWith("http")) return;
+  ensureNetworkListener();
+  const network = getNetworkProfile();
+  // Never enqueue on known cellular, disconnected, or metered networks.
+  // Unknown network state is held briefly until NetInfo confirms Wi-Fi.
+  if (network.type === "cellular" || network.connected === false || network.expensive === true) return;
   if (_seen.has(item.url)) return;
-  // Bound the in-memory de-duplication index for long-running sessions.
+  // Bound both the queue and its de-duplication index.
   if (_seen.size >= 2_000) _seen.clear();
-  _seen.add(item.url);
-  // Avatars go to the front of the queue
-  if (item.type === "avatar") {
-    _queue.unshift(item);
-  } else {
-    _queue.push(item);
+  if (_queue.length >= MAX_PENDING) {
+    if (item.type === "thumb") return;
+    const lastThumb = _queue.map((queued) => queued.type).lastIndexOf("thumb");
+    if (lastThumb >= 0) _queue.splice(lastThumb, 1);
+    else _queue.pop();
   }
+  _seen.add(item.url);
+  if (item.type === "avatar") _queue.unshift(item);
+  else _queue.push(item);
   _drain();
 }
 
 function _drain() {
+  if (!canPrefetch(getNetworkProfile())) return;
   while (_active < MAX_CONCURRENT && _queue.length > 0) {
     const item = _queue.shift()!;
     _active++;
