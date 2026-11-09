@@ -42,7 +42,7 @@ export function OptimizedImage({
   source,
   resizeMode = "cover",
   contentFit,
-  cachePolicy = "memory-disk",
+  cachePolicy = "memory",
   transition = 0,
   allowDownscaling = true,
   recyclingKey,
