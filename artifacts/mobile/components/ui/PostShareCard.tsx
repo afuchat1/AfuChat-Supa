@@ -79,7 +79,7 @@ export const ShareCard = React.forwardRef<ViewInstance, ShareCardProps>(function
               source={{ uri: avatarSrc }}
               style={{ width: 46, height: 46, borderRadius: 23 }}
               contentFit="cover"
-              cachePolicy="memory"
+              cachePolicy="memory-disk"
             />
           ) : (
             <View style={[s.avatarFallback, { backgroundColor: accent + "28" }]}>
