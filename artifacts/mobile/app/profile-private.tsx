@@ -92,7 +92,7 @@ export function ProfilePrivateView({
             source={{ uri: avatarUrl }}
             style={styles.avatar}
             contentFit="cover"
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
           />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
