@@ -1801,7 +1801,7 @@ export default function DiscoverScreen() {
         });
 
         if (isRefresh) {
-          tabPostsCache.current[activeTab] = mapped.slice(0, pageSize);
+          tabPostsCache.current[activeTab] = mapped;
           tabCacheTimestamp.current[activeTab] = Date.now();
           // Persist the full fetched delta; SQLite retains only the newest 200.
           // Keep React state to one page so large bursts do not cause a slow render.
@@ -1829,7 +1829,7 @@ export default function DiscoverScreen() {
             setPosts((prev) => {
               const existingIds = new Set(prev.map((p) => p.id));
               const brandNew = mapped.filter((p) => !existingIds.has(p.id));
-              return brandNew.length > 0 ? [...brandNew.slice(0, pageSize), ...prev] : prev;
+              return brandNew.length > 0 ? [...brandNew, ...prev] : prev;
             });
           } else if (!followNewerThan) {
             setPosts(mapped);
@@ -2173,14 +2173,20 @@ export default function DiscoverScreen() {
         ...weightedSample(recommendationPool, Math.min(recommendationPool.length, Math.max(0, 30 - guaranteedRecent.length))),
       ];
 
-      // Diversify: no same-author back-to-back, no 3 same post-types in a row
+      // Diversify recommendations on normal loads. When a delta exists, keep
+      // every fetched new post in chronological order so no item is hidden by
+      // random sampling and the next load-more cursor remains contiguous.
       const diversified = diversifyFeed(sampled.map((p) => ({ ...p, postType: p.post_type })));
+      const deltaPosts = fyDeltaSince
+        ? [...scored].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+        : [];
+      const feedPresentation = fyDeltaSince ? deltaPosts : diversified;
 
       runAfterIdle(() => {
-        prefetchAvatars(diversified.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
-        prefetchThumbnails(diversified.slice(0, 6).map((p) => (p as any).image_url));
-        // Mark these posts as seen so they get demoted on the next refresh.
-        markPostsSeen(diversified.map((p) => p.id)).catch(() => {});
+        prefetchAvatars(feedPresentation.slice(0, 8).map((p) => (p as any).profile?.avatar_url));
+        prefetchThumbnails(feedPresentation.slice(0, 6).map((p) => (p as any).image_url));
+        // Mark only the first screenful as seen; avoid a large SQLite write on refresh.
+        markPostsSeen(feedPresentation.slice(0, 30).map((p) => p.id)).catch(() => {});
       });
 
       // Org posts were fetched in parallel with the metadata queries above.
@@ -2241,18 +2247,22 @@ export default function DiscoverScreen() {
         }
       } catch (_) {}
 
-      // Interleave: insert 1 org post for every 5 regular posts
+      // Interleave organization posts into the selected feed presentation.
+      // For a delta refresh, include only organization posts newer than the
+      // same cursor so they cannot move pagination behind undisplayed new posts.
+      const displayOrgPosts = fyDeltaSince
+        ? orgPostItems.filter((post) => Date.parse(post.created_at) > Date.parse(fyDeltaSince))
+        : orgPostItems;
       const merged: PostItem[] = [];
       let orgIdx = 0;
-      for (let i = 0; i < diversified.length; i++) {
-        merged.push(diversified[i] as PostItem);
-        if ((i + 1) % 5 === 0 && orgIdx < orgPostItems.length) {
-          merged.push(orgPostItems[orgIdx++]);
+      for (let i = 0; i < feedPresentation.length; i++) {
+        merged.push(feedPresentation[i] as PostItem);
+        if ((i + 1) % 5 === 0 && orgIdx < displayOrgPosts.length) {
+          merged.push(displayOrgPosts[orgIdx++]);
         }
       }
-      // Append any remaining org posts at end
-      while (orgIdx < orgPostItems.length) {
-        merged.push(orgPostItems[orgIdx++]);
+      while (orgIdx < displayOrgPosts.length) {
+        merged.push(displayOrgPosts[orgIdx++]);
       }
 
       if (isRefresh) {
