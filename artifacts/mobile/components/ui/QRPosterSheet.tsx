@@ -139,7 +139,7 @@ export default function QRPosterSheet({
                     source={{ uri: avatarUrl }}
                     style={s.avatar}
                     contentFit="cover"
-                    cachePolicy="memory"
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <View style={[s.avatar, s.avatarFallback]}>
