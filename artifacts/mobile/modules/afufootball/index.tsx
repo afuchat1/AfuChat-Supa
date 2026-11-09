@@ -198,7 +198,7 @@ function ScreenFrame({
       >
         <View style={styles.topRow}>
           <Pressable onPress={() => safeRouter.back("/app/afufootball")} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="arrow-back" size={20} color={palette.backIconColor} />
+            <Ionicons name="arrow-back" size={20} color={backIconColor} />
           </Pressable>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.eyebrow, { color: "#8EA5C1" }]}>{eyebrow ?? "AFUCHAT FOOTBALL"}</Text>
