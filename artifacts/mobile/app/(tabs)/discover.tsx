@@ -2157,10 +2157,21 @@ export default function DiscoverScreen() {
         };
       });
 
-      // Weighted random sampling from top candidates — quality still wins but
-      // lower-ranked posts can surface, making every refresh genuinely different.
+      // Weighted sampling keeps discovery varied, but a refresh must visibly
+      // surface genuinely new content. Reserve up to 10 newest delta posts, then
+      // fill the remaining slots from the quality-ranked recommendation pool.
       const topPool = [...scored].sort((a, b) => b.score - a.score).slice(0, 60);
-      const sampled = weightedSample(topPool, Math.min(topPool.length, 30));
+      const guaranteedRecent = fyDeltaSince
+        ? (recentData || []).slice(0, 10)
+            .map((post: any) => scored.find((item) => item.id === post.id))
+            .filter((item): item is (typeof scored)[number] => !!item)
+        : [];
+      const guaranteedIds = new Set(guaranteedRecent.map((item) => item.id));
+      const recommendationPool = topPool.filter((item) => !guaranteedIds.has(item.id));
+      const sampled = [
+        ...guaranteedRecent,
+        ...weightedSample(recommendationPool, Math.max(0, 30 - guaranteedRecent.length)),
+      ];
 
       // Diversify: no same-author back-to-back, no 3 same post-types in a row
       const diversified = diversifyFeed(sampled.map((p) => ({ ...p, postType: p.post_type })));
