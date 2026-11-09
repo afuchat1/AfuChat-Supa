@@ -1238,7 +1238,7 @@ export function SearchScreen({
           style,
         ]}
       >
-        <Ionicons name="arrow-back" size={18} color={colors.text} />
+        <Ionicons name="arrow-back" size={18} color={themeIsDark ? "#FFFFFF" : "#000000"} />
       </TouchableOpacity>
     );
   }
