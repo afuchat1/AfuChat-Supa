@@ -55,7 +55,7 @@ import AlertModal from "@/components/ui/AlertModal";
 import { GlobalInboxListener } from "@/components/GlobalInboxListener";
 import { IncomingCallModal } from "@/components/IncomingCallModal";
 import PushNotificationManager from "@/components/PushNotificationManager";
-import UpdatePrompt from "@/components/UpdatePrompt";
+import PlayStoreUpdateManager from "@/components/PlayStoreUpdateManager";
 import { initActivityTracker } from "@/lib/activityTracker";
 import { MiniAppRuntimeProvider } from "@/lib/superapp/MiniAppRuntime";
 import { GlobalMusicPlayerProvider } from "@/components/GlobalMusicPlayer";
@@ -623,7 +623,7 @@ export default function RootLayout() {
                        <HardwareBackGuard />
                       <GlobalInboxListener />
                       <PushNotificationManager />
-                      <UpdatePrompt />
+                      <PlayStoreUpdateManager />
                       <LanguageProvider>
                         <LanguageDirectionShell>
                           <AdvancedFeaturesProvider>

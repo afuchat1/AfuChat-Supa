@@ -454,7 +454,7 @@ export default function SignUpScreen() {
             showsVerticalScrollIndicator={false}
           >
             <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28 }}>
-            <GlassBackButton onPress={goToLanding} style={sc.backBtn} color={colors.icon} />
+            <GlassBackButton onPress={goToLanding} style={sc.backBtn} />
 
             <View style={{ marginTop: 24, marginBottom: 32 }}>
               <Text style={[sc.heading, { color: colors.text }]}>{t("Create account")}</Text>

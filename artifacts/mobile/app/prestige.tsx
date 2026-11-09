@@ -244,7 +244,7 @@ export default function PrestigeScreen() {
         >
           {/* Nav */}
           <View style={s.heroNav}>
-            <GlassBackButton style={s.navBtn} onPress={() => router.back()} icon="chevron-back" color="#fff" />
+            <GlassBackButton style={s.navBtn} onPress={() => router.back()} icon="chevron-back" />
             <Text style={s.navTitle}>Prestige</Text>
             <TouchableOpacity style={s.navBtn} onPress={() => router.push("/app/afupay")} hitSlop={12}>
               <Ionicons name="wallet" size={20} color="#fff" />

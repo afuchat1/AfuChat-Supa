@@ -18,7 +18,6 @@ type Props = {
   icon?: React.ComponentProps<typeof Ionicons>["name"];
   iconSize?: number;
   size?: number;
-  color?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -29,18 +28,15 @@ export function GlassBackButton({
   icon = "arrow-back",
   iconSize = 18,
   size = 40,
-  color,
   style,
 }: Props) {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { t } = useLanguage();
   const translatedLabel = label ? t(label) : undefined;
   const translatedAccessibilityLabel = t(accessibilityLabel ?? label ?? "Go back");
-  const requestedColor = color?.trim().toLowerCase();
-  const iconColor =
-    requestedColor === "#fff" || requestedColor === "#ffffff" || requestedColor === "white"
-      ? colors.navigationActive
-      : color ?? colors.navigationActive;
+  // Back navigation is system-neutral: never inherit the AfuChat accent color
+  // or a per-screen color override.
+  const iconColor = isDark ? "#FFFFFF" : "#000000";
   const sizeStyle = label
     ? { minWidth: size, height: size, borderRadius: size / 2 }
     : { width: size, height: size, borderRadius: size / 2 };

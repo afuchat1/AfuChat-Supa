@@ -1117,7 +1117,6 @@ function EditPhase({
         <GlassBackButton
           onPress={step === 1 ? onBack : () => setStep(1)}
           style={es.backBtn}
-          color={colors.text}
         />
         <View style={{ flex: 1, alignItems: "center" }}>
           <Text style={[es.topTitle, { color: colors.text }]}>{step === 1 ? "Enhance" : "Details"}</Text>

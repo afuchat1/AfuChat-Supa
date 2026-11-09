@@ -183,7 +183,7 @@ function NativeCameraScreen() {
       <FaceFilterOverlay filter={filter} />
 
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
-        <GlassBackButton onPress={() => router.back()} style={st.topBtn} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} style={st.topBtn} />
         <View style={{ flex: 1 }} />
         <TouchableOpacity
           onPress={() => setFlash(flash === "off" ? "on" : "off")}

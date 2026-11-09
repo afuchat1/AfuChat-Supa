@@ -137,7 +137,7 @@ export default function RedEnvelopeScreen() {
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: "#FF3B30" }]}>
-        <GlassBackButton onPress={() => router.back()} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} />
         <Text style={styles.headerTitle}>🧧 Red Envelope</Text>
         <TouchableOpacity onPress={() => shareRedEnvelope({ envelopeId: id!, senderName: envelope.sender.display_name })}>
           <Ionicons name="share" size={22} color="#fff" />

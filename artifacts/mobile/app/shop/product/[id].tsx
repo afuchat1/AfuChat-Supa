@@ -160,7 +160,7 @@ export default function ProductDetailScreen() {
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* ── Back + Cart header ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 4 }]}>
-        <GlassBackButton onPress={() => router.back()} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} />
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity style={[st.topBarBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]} onPress={() => router.push("/app/afumarket?section=cart" as any)}>
             <Ionicons name="cart" size={20} color="#fff" />

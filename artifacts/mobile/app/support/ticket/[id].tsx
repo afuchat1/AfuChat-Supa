@@ -220,7 +220,7 @@ export default function TicketDetail() {
           colors={[BRAND, BRAND + "CC"]}
           style={[st.header, { paddingTop: insets.top + 8 }]}
         >
-          <GlassBackButton onPress={() => router.back()} style={st.iconBtn} color="#fff" />
+          <GlassBackButton onPress={() => router.back()} style={st.iconBtn} />
           <Text style={st.headerTitle}>Support Ticket</Text>
         </LinearGradient>
         <View style={{ padding: 14, gap: 12 }}>
@@ -240,7 +240,7 @@ export default function TicketDetail() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={[st.header, { paddingTop: insets.top + 8 }]}
       >
-        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} style={st.iconBtn} />
         <View style={{ flex: 1 }}>
           <Text style={st.headerTitle} numberOfLines={1}>{ticket?.subject || "Support Ticket"}</Text>
           <Text style={st.headerSub}>#{shortId}</Text>

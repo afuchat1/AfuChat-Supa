@@ -208,7 +208,7 @@ export default function StatusPage() {
 
       {/* Hero banner */}
       <View style={[styles.hero, { backgroundColor: overallCfg.bg, paddingTop: insets.top + 8 }]}>
-        <GlassBackButton onPress={() => router.back()} style={styles.backBtn} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} style={styles.backBtn} />
         <View style={styles.heroContent}>
           {loading ? (
             <ActivityIndicator color="#fff" size="large" />

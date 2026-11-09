@@ -124,7 +124,6 @@ export default function ViewProfileScreen() {
           <GlassBackButton
             style={[styles.backBtn, { top: insets.top + 8 }]}
             onPress={() => router.back()}
-            color="#fff"
           />
           <TouchableOpacity style={[styles.reportBtn, { top: insets.top + 8 }]} onPress={() => setShowReport(true)}>
             <View style={styles.backBtnInner}><Ionicons name="flag" size={18} color="#fff" /></View>

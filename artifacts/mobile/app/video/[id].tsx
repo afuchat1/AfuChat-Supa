@@ -1956,7 +1956,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         <ShortsFeedSkeleton dark={isDark} />
         {/* Render the real header on top so navigation chrome is visible during load */}
         <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
-          <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} color="#fff" />
+          <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} />
           <View style={mStyles.tabRow}>
             <TouchableOpacity
               onPress={() => switchTab("for_you")}
@@ -1988,7 +1988,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
       {/* Fixed header */}
       <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
-        <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} color="#fff" />
+        <GlassBackButton onPress={() => router.back()} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]} />
         <View style={mStyles.tabRow}>
           <TouchableOpacity
             onPress={() => switchTab("for_you")}

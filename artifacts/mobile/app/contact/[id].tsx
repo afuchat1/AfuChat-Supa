@@ -434,7 +434,6 @@ export default function ContactScreen() {
             <GlassBackButton
               style={s.navBtn}
               onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
-              color="#fff"
             />
             {!isSelf && (
               <TouchableOpacity style={s.navBtn}

@@ -712,7 +712,7 @@ export default function SignInScreen() {
           >
             <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28 }}>
             {/* Back */}
-            <GlassBackButton onPress={goToLanding} style={sc.backBtn} color={colors.icon} />
+            <GlassBackButton onPress={goToLanding} style={sc.backBtn} />
 
             <View style={{ marginTop: 24, marginBottom: 36 }}>
               <Text style={[sc.heading, { color: colors.text }]}>{t("Sign in")}</Text>

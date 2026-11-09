@@ -1,68 +1,70 @@
-import { useEffect, useState } from "react";
-import Constants from "expo-constants";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useRef } from "react";
+import { AppState, Platform } from "react-native";
 
-export interface UpdateInfo {
-  hasUpdate: boolean;
-  isMandatory: boolean;
-  latestVersion: string;
-  androidUrl: string;
-}
+const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
-const DEFAULT_ANDROID_URL = "https://play.google.com/store/apps/details?id=com.afuchat.mobile";
-
-/** Compare semver strings. Returns >0 if b is newer than a. */
-function semverCompare(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i++) {
-    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
-
-export function useUpdateChecker(): UpdateInfo | null {
-  const [info, setInfo] = useState<UpdateInfo | null>(null);
+/**
+ * Checks Google Play directly through Play Core.
+ *
+ * No Supabase settings, remote version endpoint, or custom update server is
+ * involved. Play Core decides whether an update is available and presents
+ * Google's native flexible/immediate update flow.
+ */
+export function useUpdateChecker(): void {
+  const checking = useRef(false);
+  const lastCheckedAt = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
+    if (Platform.OS !== "android" || __DEV__) return;
 
-    async function check() {
-      try {
-        const currentVersion =
-          Constants.expoConfig?.version ??
-          (Constants as any).manifest?.version ??
-          "0.0.0";
+    let mounted = true;
 
-        const { data } = await supabase
-          .from("app_settings")
-          .select("latest_app_version, min_app_version, android_store_url")
-          .limit(1)
-          .maybeSingle();
-
-        if (cancelled || !data) return;
-
-        const latest: string = data.latest_app_version ?? currentVersion;
-        const minVer: string = data.min_app_version ?? currentVersion;
-        const androidUrl: string = data.android_store_url ?? DEFAULT_ANDROID_URL;
-
-        const hasUpdate = semverCompare(currentVersion, latest) < 0;
-        const isMandatory = semverCompare(currentVersion, minVer) < 0;
-
-        if (hasUpdate || isMandatory) {
-          setInfo({ hasUpdate: true, isMandatory, latestVersion: latest, androidUrl });
-        }
-      } catch {
-        // Silent — update check is best-effort, never crash the app
+    const checkForUpdate = async (force = false) => {
+      const now = Date.now();
+      if (
+        checking.current ||
+        (!force && now - lastCheckedAt.current < CHECK_INTERVAL_MS)
+      ) {
+        return;
       }
-    }
 
-    // Delay slightly so it doesn't compete with initial app load
-    const timer = setTimeout(check, 3000);
-    return () => { cancelled = true; clearTimeout(timer); };
+      checking.current = true;
+      lastCheckedAt.current = now;
+
+      try {
+        const PlayUpdates = await import("expo-in-app-updates");
+        if (!mounted) return;
+
+        const result = await PlayUpdates.checkForUpdate();
+        if (!mounted || !result.updateAvailable) return;
+
+        // Play Console priority >= 4 uses the immediate flow. Other updates
+        // use the flexible flow and download while the user keeps using AfuChat.
+        // The native module completes a downloaded flexible update.
+        await PlayUpdates.startUpdate();
+      } catch {
+        // Update checks are best-effort and must never interrupt app startup.
+        // Allow another attempt after one minute if Play Store was unavailable.
+        lastCheckedAt.current = Date.now() - CHECK_INTERVAL_MS + 60_000;
+      } finally {
+        checking.current = false;
+      }
+    };
+
+    const startupTimer = setTimeout(() => {
+      void checkForUpdate(true);
+    }, 3500);
+
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void checkForUpdate();
+      }
+    });
+
+    return () => {
+      mounted = false;
+      clearTimeout(startupTimer);
+      appStateSubscription.remove();
+    };
   }, []);
-
-  return info;
 }
