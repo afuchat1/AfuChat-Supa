@@ -2495,7 +2495,7 @@ export default function DiscoverScreen() {
           .gt("created_at", newestAt)
           .neq("author_id", user?.id ?? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
           .order("created_at", { ascending: false })
-          .limit(20);
+          .limit(100);
         newPostsData = data ?? [];
       } else if (activeTab === "following" && user?.id) {
         const { data: followData } = await supabase
@@ -2512,7 +2512,7 @@ export default function DiscoverScreen() {
             .in("visibility", ["public", "followers"])
             .gt("created_at", newestAt)
             .order("created_at", { ascending: false })
-            .limit(20);
+            .limit(100);
           newPostsData = data ?? [];
         }
       }
