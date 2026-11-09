@@ -1,9 +1,10 @@
 // ─── Permanent Feed Post Store ──────────────────────────────────────────────────
-// Feed posts are stored permanently on device once downloaded/viewed.
-// Delta sync: only posts NEWER than the newest stored post_id are fetched.
-// Already-stored posts are never re-downloaded.
+// Keep a bounded, lightweight offline window of recent feed metadata.
+// Delta sync fetches newer posts; upserts refresh changed fields without storing media bytes.
+// The native image cache owns reusable image bytes and can evict them independently.
 //
 // RULES:
+//   • Retain at most 200 recent post records per tab
 //   • Upsert metadata so edited posts and engagement counts stay current
 //   • Store feed records only; media bytes remain in expo-image managed cache
 //   • getNewestFeedPostDate(tab) → cursor for delta sync (only fetch newer)
@@ -69,8 +70,7 @@ function mapPost(item: any, tab: FeedTab): LocalPost {
 // ─── Reads ──────────────────────────────────────────────────────────────────────
 
 /**
- * Load stored feed posts for a tab. Returns most recent first by default.
- * No TTL — returns everything stored, not just "fresh" data.
+ * Load the retained offline feed window for a tab, newest first.
  */
 export async function getLocalFeedPosts(
   tab: FeedTab,
