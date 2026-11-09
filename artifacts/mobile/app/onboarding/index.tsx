@@ -233,7 +233,6 @@ export default function OnboardingScreen() {
     setStep(step - 1);
   }
 
-  // Handle native swipe gestures from the pagingEnabled ScrollView
   // ── Validation (unchanged) ───────────────────────────────────────────────────
   function canProceed(): boolean {
     switch (step) {
@@ -488,7 +487,7 @@ export default function OnboardingScreen() {
 
     const fullPhone = getPhoneValidation().e164 ?? null;
     if (fullPhone) {
-        const { data: existingPhone, error: phoneLookupError } = await supabase.from("profiles").select("id").eq("phone_number", fullPhone).neq("id", userId).limit(1).maybeSingle();
+      const { data: existingPhone, error: phoneLookupError } = await supabase.from("profiles").select("id").eq("phone_number", fullPhone).neq("id", userId).limit(1).maybeSingle();
       if (phoneLookupError) throw phoneLookupError;
       if (existingPhone) {
         setLoading(false);
