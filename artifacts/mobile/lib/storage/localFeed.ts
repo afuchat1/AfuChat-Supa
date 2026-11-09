@@ -172,7 +172,7 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
           liked=excluded.liked, bookmarked=excluded.bookmarked,
           author_name=excluded.author_name, author_handle=excluded.author_handle,
           author_avatar=excluded.author_avatar, is_verified=excluded.is_verified,
-          is_org_verified=excluded.is_org_verified, tab=excluded.tab,
+          is_org_verified=excluded.is_org_verified,
           score=excluded.score, stored_at=excluded.stored_at`,
         [
           p.id, p.author_id, p.content, p.image_url,
