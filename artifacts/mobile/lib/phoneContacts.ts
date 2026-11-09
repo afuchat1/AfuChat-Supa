@@ -78,7 +78,7 @@ async function readDevicePhoneContacts(): Promise<{
   if (Platform.OS === "web") return { contacts: [], permission: "unavailable" };
 
   try {
-    const Contacts = require("expo-contacts") as typeof import("expo-contacts");
+    const Contacts = require("expo-contacts/legacy") as typeof import("expo-contacts/legacy");
     const currentPermission = await Contacts.getPermissionsAsync();
     const permission = currentPermission.status === "granted"
       ? currentPermission
