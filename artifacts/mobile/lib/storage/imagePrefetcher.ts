@@ -12,6 +12,7 @@
  */
 
 import { Image as ExpoImage } from "expo-image";
+import { getNetworkProfile } from "@/lib/networkQuality";
 
 type PrefetchItem = { url: string; type: "avatar" | "thumb" };
 
@@ -24,6 +25,10 @@ let _active = 0;
 const MAX_CONCURRENT = 4;
 
 function enqueue(item: PrefetchItem) {
+  // Prefetch only on confirmed unmetered Wi-Fi. Visible images still load on
+  // demand on cellular and are cached by expo-image after they are viewed.
+  const network = getNetworkProfile();
+  if (network.type !== "wifi" || network.connected === false || network.expensive === true) return;
   if (!item.url || !item.url.startsWith("http")) return;
   if (_seen.has(item.url)) return;
   _seen.add(item.url);
@@ -40,8 +45,9 @@ function _drain() {
   while (_active < MAX_CONCURRENT && _queue.length > 0) {
     const item = _queue.shift()!;
     _active++;
-    // Keep image prefetches in memory only; re-download them when needed.
-    ExpoImage.prefetch(item.url, "memory")
+    // Store prefetched assets in expo-image disk cache; it remains separate
+    // from decoded bitmap memory, which the app can safely clear on background.
+    ExpoImage.prefetch(item.url, "disk")
       .catch(() => {})
       .finally(() => {
         _active--;
