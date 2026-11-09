@@ -33,8 +33,7 @@ import { storage, KEYS } from "@/lib/storage";
 import { checkUsernameAvailability, usernamePurchasePrompt } from "@/lib/usernameAvailability";
 
 // ─── Cooldown helpers ─────────────────────────────────────────────────────────
-const HANDLE_COOLDOWN_DAYS = 30;
-const NAME_COOLDOWN_DAYS   = 7;
+const NAME_COOLDOWN_DAYS = 7;
 
 function getDaysRemaining(storedMs: string | undefined, cooldownDays: number): number {
   if (!storedMs) return 0;
@@ -366,9 +365,6 @@ export default function EditProfileScreen() {
   const handleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cooldown — read once synchronously from MMKV (synchronous store)
-  const [handleLockedDays] = useState(() =>
-    getDaysRemaining(storage.getString(KEYS.HANDLE_CHANGED_AT_PREFIX + (user?.id ?? "")), HANDLE_COOLDOWN_DAYS)
-  );
   const [nameLockedDays] = useState(() =>
     getDaysRemaining(storage.getString(KEYS.NAME_CHANGED_AT_PREFIX + (user?.id ?? "")), NAME_COOLDOWN_DAYS)
   );
@@ -483,13 +479,6 @@ export default function EditProfileScreen() {
       );
       return;
     }
-    if (handleChanged && handleLockedDays > 0) {
-      showAlert(
-        "Username Locked",
-        `You can change your username again in ${handleLockedDays} day${handleLockedDays !== 1 ? "s" : ""}.`
-      );
-      return;
-    }
 
     setSaving(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -542,14 +531,12 @@ export default function EditProfileScreen() {
       }
       return;
     }
-    if (handleChanged) updateData.handle = cleanHandle;
     const { error } = await supabase.from("profiles").update(updateData).eq("id", user!.id);
     if (error) {
       showAlert("Error", error.message);
     } else {
       if (nameChanged)   storage.setString(KEYS.NAME_CHANGED_AT_PREFIX   + user!.id, Date.now().toString());
-      if (handleChanged) storage.setString(KEYS.HANDLE_CHANGED_AT_PREFIX + user!.id, Date.now().toString());
-      patchProfile(updateData);
+      patchProfile({ ...updateData, ...(handleChanged ? { handle: cleanHandle } : {}) });
       if (router.canGoBack()) router.back(); else router.replace("/(tabs)/me" as any);
     }
     setSaving(false);
