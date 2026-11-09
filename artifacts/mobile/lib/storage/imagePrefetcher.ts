@@ -42,6 +42,7 @@ function ensureNetworkListener() {
     if (canPrefetch(profile)) {
       _drain();
     } else if (profile.type === "cellular" || profile.connected === false) {
+      for (const queued of _queue) _seen.delete(queued.url);
       _queue.length = 0;
     }
   });
@@ -60,8 +61,8 @@ function enqueue(item: PrefetchItem) {
   if (_queue.length >= MAX_PENDING) {
     if (item.type === "thumb") return;
     const lastThumb = _queue.map((queued) => queued.type).lastIndexOf("thumb");
-    if (lastThumb >= 0) _queue.splice(lastThumb, 1);
-    else _queue.pop();
+    const [dropped] = _queue.splice(lastThumb >= 0 ? lastThumb : _queue.length - 1, 1);
+    if (dropped) _seen.delete(dropped.url);
   }
   _seen.add(item.url);
   if (item.type === "avatar") _queue.unshift(item);
