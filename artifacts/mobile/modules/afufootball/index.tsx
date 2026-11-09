@@ -97,7 +97,7 @@ function useFollows() {
 }
 
 function usePalette() {
-  const { colors: appColors } = useTheme();
+  const { colors: appColors, isDark } = useTheme();
   const colors = {
     background: "#07182E",
     backgroundTertiary: "#E8F1FB",
@@ -110,6 +110,7 @@ function usePalette() {
   };
   return {
     colors,
+    backIconColor: isDark ? "#FFFFFF" : "#000000",
     pitch: "#EAF3FD",
     green: "#18C887",
     greenBright: "#2B9CF7",
@@ -197,7 +198,7 @@ function ScreenFrame({
       >
         <View style={styles.topRow}>
           <Pressable onPress={() => safeRouter.back("/app/afufootball")} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
-            <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={20} color={palette.backIconColor} />
           </Pressable>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={[styles.eyebrow, { color: "#8EA5C1" }]}>{eyebrow ?? "AFUCHAT FOOTBALL"}</Text>
