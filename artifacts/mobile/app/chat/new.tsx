@@ -74,7 +74,7 @@ type ChannelItem = { id: string; name: string; avatar_url: string | null; is_ver
 
 export default function NewChatScreen() {
   const { colors, accent } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const keyboardOffsetAnim = useRef(new Animated.Value(0)).current;
@@ -244,8 +244,8 @@ export default function NewChatScreen() {
        );
     };
     applyCached(await getLocalPhoneContacts());
-    void syncPhoneContacts(user.id, applyCached, applyCached);
-  }, [user, phonebookNames]);
+    void syncPhoneContacts(user.id, profile?.country, applyCached, applyCached);
+  }, [user, profile?.country, phonebookNames]);
 
   useEffect(() => {
     loadContacts();

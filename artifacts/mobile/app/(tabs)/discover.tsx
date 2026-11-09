@@ -2162,10 +2162,12 @@ export default function DiscoverScreen() {
       const topPool = [...scored].sort((a, b) => b.score - a.score).slice(0, 60);
       const guaranteedRecent = fyDeltaSince
         ? (recentData || []).slice(0, 10)
-            .map((post: any) => scored.find((item) => item.id === post.id))
-            .filter((item): item is (typeof scored)[number] => !!item)
+            .flatMap((post: any) => {
+              const item = scored.find((candidate: any) => candidate.id === post.id);
+              return item ? [item] : [];
+            })
         : [];
-      const guaranteedIds = new Set(guaranteedRecent.map((item) => item.id));
+      const guaranteedIds = new Set(guaranteedRecent.map((item: any) => item.id));
       const recommendationPool = topPool.filter((item) => !guaranteedIds.has(item.id));
       const sampled = [
         ...guaranteedRecent,

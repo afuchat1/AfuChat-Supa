@@ -29,16 +29,16 @@
     "build:web:cloudflare": "pnpm run build:web && mkdir -p dist/.well-known && cp well-known/assetlinks.json dist/.well-known/assetlinks.json && cp well-known/apple-app-site-association dist/.well-known/apple-app-site-association && printf '/.well-known/assetlinks.json\\n  Content-Type: application/json\\n  Cache-Control: public, max-age=300\\n\\n/.well-known/apple-app-site-association\\n  Content-Type: application/json\\n  Cache-Control: public, max-age=300\\n\\n/*.html\\n  Cache-Control: no-cache, no-store, must-revalidate\\n\\n/*/index.html\\n  Cache-Control: no-cache, no-store, must-revalidate\\n\\n/_expo/static/js/*\\n  Cache-Control: public, max-age=31536000, immutable\\n' > dist/_headers"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2",
+    "@babel/core": "^7.29.13",
     "@expo-google-fonts/inter": "^0.4.0",
     "@expo/cli": "58.1.19",
     "@expo/ngrok": "^4.1.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-google-signin/google-signin": "^16.1.4",
+    "@react-native-google-signin/google-signin": "^16.2.0",
     "@react-native/metro-config": "0.88.1",
     "@stardazed/streams-text-encoding": "^1.0.2",
-    "@tanstack/react-query": "^5.105.3",
+    "@tanstack/react-query": "^5.107.1",
     "@types/node": "^26.6.6",
     "@types/react": "~19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -75,7 +75,7 @@
     "@nkzw/create-context-hook": "^1.1.0",
     "@react-native-community/netinfo": "~12.0.1",
     "@shopify/flash-list": "2.3.2",
-    "@supabase/supabase-js": "^2.118.0",
+    "@supabase/supabase-js": "^2.119.0",
     "@types/qrcode": "^1.5.6",
     "expo": "~58.0.23",
     "expo-asset": "~58.0.20",
@@ -90,6 +90,7 @@
     "expo-document-picker": "~58.0.4",
     "expo-file-system": "~58.0.13",
     "expo-image-manipulator": "~58.0.16",
+    "expo-in-app-updates": "^0.13.0",
     "expo-keep-awake": "^58.0.3",
     "expo-local-authentication": "~58.0.2",
     "expo-media-library": "~58.0.13",
@@ -118,7 +119,6 @@
     "react-native-webrtc": "124.0.1",
     "react-native-webview": "14.0.1",
     "react-native-worklets": "0.13.0",
-    "rn-emoji-keyboard": "^1.7.0",
-    "expo-in-app-updates": "^0.13.0"
+    "rn-emoji-keyboard": "^1.7.0"
   }
 }
