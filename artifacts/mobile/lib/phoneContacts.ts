@@ -1,5 +1,6 @@
-import { Linking, Platform } from "react-native";
+import { Linking, NativeModules, Platform } from "react-native";
 import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
+import { COUNTRIES } from "@/constants/countries";
 import { supabase } from "@/lib/supabase";
 import { openExternalLink } from "@/lib/openExternalLink";
 import { isOnline } from "@/lib/offlineStore";
@@ -18,23 +19,62 @@ export const AFUCHAT_INVITE_MESSAGE =
   `Hey! I’m using AfuChat to stay connected through messaging, calls, and sharing. Join me there so we can connect on AfuChat: ${AFUCHAT_DOWNLOAD_URL}`;
 
 function countryRegion(value: unknown): CountryCode | undefined {
-  if (typeof value !== "string") return undefined;
-  const region = value.trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(region) ? (region as CountryCode) : undefined;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const normalized = value.trim();
+  const code = normalized.toUpperCase();
+  if (/^[A-Z]{2}$/.test(code)) return code as CountryCode;
+
+  // AfuChat stores the user's selected country as its display name. Resolve
+  // both that form and ISO codes locally so this works without connectivity.
+  const country = COUNTRIES.find(
+    (item) => item.name.toLocaleLowerCase() === normalized.toLocaleLowerCase(),
+  );
+  return country?.code as CountryCode | undefined;
 }
 
 /**
- * Matching uses E.164 whenever the device provides enough country information.
- * The original device number is kept separately for display, so formatting
- * never changes the contact's visible name or device ordering.
+ * Resolve the phone's default region without a network lookup. A saved AfuChat
+ * profile country is authoritative; the device locale is only a fallback for
+ * older/incomplete profiles. Contacts may still override this per number.
  */
-export function normalizePhoneNumber(raw: string, region?: unknown): string {
+export function resolveDefaultPhoneRegion(profileCountry?: string | null): CountryCode | undefined {
+  const savedRegion = countryRegion(profileCountry);
+  if (savedRegion) return savedRegion;
+
+  const localeCandidates = [
+    NativeModules.PlatformConstants?.LocaleIdentifier,
+    NativeModules.SettingsManager?.settings?.AppleLocale,
+    NativeModules.SettingsManager?.settings?.AppleLanguages?.[0],
+    (() => {
+      try { return Intl.DateTimeFormat().resolvedOptions().locale; }
+      catch { return undefined; }
+    })(),
+  ];
+
+  for (const candidate of localeCandidates) {
+    if (typeof candidate !== "string") continue;
+    const match = candidate.match(/(?:^|[-_])([A-Za-z]{2})(?:$|[-_])/);
+    const region = countryRegion(match?.[1]);
+    if (region) return region;
+  }
+  return undefined;
+}
+
+/**
+ * Return a validated E.164 number. Explicit international prefixes always win;
+ * otherwise use the contact's own region, then the user's saved country, then
+ * the device locale. Invalid/ambiguous local numbers remain visible but are
+ * not used for matching, calling, or invitations.
+ */
+export function normalizePhoneNumber(
+  raw: string,
+  region?: unknown,
+  defaultRegion?: CountryCode,
+): string {
   const value = raw.trim();
   if (!value) return "";
 
-  const parsed = parsePhoneNumberFromString(value, countryRegion(region));
-  // Never invent a country code for a local or malformed number. A guessed
-  // "+digits" value can point WhatsApp at a completely different person.
+  const parsed = parsePhoneNumberFromString(value, countryRegion(region) ?? defaultRegion);
   if (!parsed || !parsed.isPossible() || !parsed.isValid()) return "";
   return parsed.number;
 }
@@ -71,7 +111,7 @@ export async function callPhoneNumber(phone: string): Promise<boolean> {
   }
 }
 
-async function readDevicePhoneContacts(): Promise<{
+async function readDevicePhoneContacts(profileCountry?: string | null): Promise<{
   contacts: DevicePhoneContact[];
   permission: "granted" | "denied" | "unavailable";
 }> {
@@ -86,6 +126,7 @@ async function readDevicePhoneContacts(): Promise<{
     if (permission.status !== "granted") return { contacts: [], permission: "denied" };
 
     const contacts: DevicePhoneContact[] = [];
+    const defaultRegion = resolveDefaultPhoneRegion(profileCountry);
     const pageSize = 500;
     let pageOffset = 0;
     let position = 0;
@@ -115,7 +156,7 @@ async function readDevicePhoneContacts(): Promise<{
             key: `${contact.id ?? position}:${entry.phoneIndex < 0 ? "none" : entry.phoneIndex}`,
             name,
             phone: entry.raw,
-            normalized_phone: entry.raw ? normalizePhoneNumber(entry.raw, entry.region) : "",
+            normalized_phone: entry.raw ? normalizePhoneNumber(entry.raw, entry.region, defaultRegion) : "",
             position,
             phone_index: entry.phoneIndex,
           });
@@ -138,10 +179,11 @@ async function readDevicePhoneContacts(): Promise<{
  */
 export async function syncPhoneContacts(
   userId: string | undefined,
+  profileCountry?: string | null,
   onDeviceContacts?: (contacts: LocalPhoneContact[]) => void,
   onUpdatedContacts?: (contacts: LocalPhoneContact[]) => void,
 ): Promise<"granted" | "denied" | "unavailable"> {
-  const result = await readDevicePhoneContacts();
+  const result = await readDevicePhoneContacts(profileCountry);
   if (result.permission !== "granted") return result.permission;
 
   await saveDevicePhoneContacts(result.contacts);
