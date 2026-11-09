@@ -163,7 +163,7 @@ export async function saveFeedPosts(posts: any[], tab: FeedTab): Promise<void> {
           author_name, author_handle, author_avatar, is_verified, is_org_verified,
           tab, score, stored_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-         ON CONFLICT(id) DO UPDATE SET
+         ON CONFLICT(id, tab) DO UPDATE SET
           author_id=excluded.author_id, content=excluded.content,
           image_url=excluded.image_url, images=excluded.images,
           video_url=excluded.video_url, post_type=excluded.post_type,
