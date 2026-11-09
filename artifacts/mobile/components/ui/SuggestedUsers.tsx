@@ -196,7 +196,7 @@ function UserCard({
             source={{ uri: user.avatar_url }}
             style={styles.avatarImg}
             contentFit="cover"
-            cachePolicy="memory"
+            cachePolicy="memory-disk"
           />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
