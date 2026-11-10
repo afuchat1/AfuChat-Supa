@@ -10,6 +10,7 @@
 
 import { getDB } from "./db";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { isClientMessageId } from "./messageIds";
 export { createLocalMessageId, isClientMessageId } from "./messageIds";
 
@@ -48,6 +49,7 @@ export function mapToLocal(msg: any, conversationId: string): LocalMessage {
     (typeof sender?.handle === "string" ? sender.handle.trim() : "") ||
     (typeof msg.sender_handle === "string" ? msg.sender_handle.trim() : "") ||
     null;
+  const isPending = msg._pending ?? msg.is_pending ?? false;
   return {
     id: msg.id,
     conversation_id: conversationId,
@@ -58,15 +60,157 @@ export function mapToLocal(msg: any, conversationId: string): LocalMessage {
     content: msg.encrypted_content ?? msg.content ?? null,
     attachment_url: msg.attachment_url ?? null,
     attachment_type: msg.attachment_type ?? null,
-    reply_to_id: msg.reply_to_message_id ?? null,
+    reply_to_id: msg.reply_to_message_id ?? msg.reply_to_id ?? null,
     status: msg.status ?? "sent",
     sent_at: msg.sent_at ?? msg.created_at ?? new Date().toISOString(),
     edited_at: msg.edited_at ?? null,
     delivered_at: msg.delivered_at ?? null,
     read_at: msg.read_at ?? null,
-    is_pending: msg._pending ?? false,
-    synced: true,
+    is_pending: !!isPending,
+    synced: msg.synced ?? !isPending,
   };
+}
+
+// The native implementation uses SQLite. Expo's web adapter intentionally has
+// no SQLite, so persist web conversations through the existing AsyncStorage
+// cache instead of returning only queued/unsent messages on every open.
+const webMessageWriteQueues = new Map<string, Promise<void>>();
+const WEB_MESSAGES_PREFIX = "offline_messages_";
+
+function mergeLocalMessage(previous: LocalMessage | undefined, next: LocalMessage): LocalMessage {
+  if (!previous) return next;
+  const nextEditIsNewer = !!next.edited_at &&
+    (!previous.edited_at || next.edited_at > previous.edited_at);
+  const rank: Record<string, number> = { sending: 0, sent: 1, delivered: 2, read: 3 };
+  const status = (rank[next.status] ?? 1) > (rank[previous.status] ?? 1)
+    ? next.status
+    : previous.status;
+  return {
+    ...previous,
+    content: nextEditIsNewer ? next.content : previous.content ?? next.content,
+    attachment_url: nextEditIsNewer ? next.attachment_url : previous.attachment_url ?? next.attachment_url,
+    attachment_type: nextEditIsNewer ? next.attachment_type : previous.attachment_type ?? next.attachment_type,
+    reply_to_id: previous.reply_to_id ?? next.reply_to_id,
+    status,
+    sent_at: previous.sent_at || next.sent_at,
+    edited_at: nextEditIsNewer ? next.edited_at : previous.edited_at ?? next.edited_at,
+    delivered_at: latestTime(previous.delivered_at, next.delivered_at),
+    read_at: latestTime(previous.read_at, next.read_at),
+    sender_display_name: next.sender_display_name || previous.sender_display_name,
+    sender_avatar_url: next.sender_avatar_url || previous.sender_avatar_url,
+    sender_handle: next.sender_handle || previous.sender_handle,
+    is_pending: previous.is_pending && next.is_pending,
+    synced: previous.synced || next.synced,
+  };
+}
+
+function latestTime(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+const WARM_MESSAGE_LIMIT = 200;
+const WARM_CONVERSATION_LIMIT = 8;
+const warmMessages = new Map<string, LocalMessage[]>();
+const warmMessageReads = new Set<string>();
+
+function rememberWarmMessages(
+  conversationId: string,
+  messages: LocalMessage[],
+  markReadComplete = false,
+): void {
+  if (!conversationId) return;
+  const previous = warmMessages.get(conversationId) ?? [];
+  const byId = new Map(previous.map((message) => [message.id, message]));
+  for (const message of messages) {
+    byId.set(message.id, mergeLocalMessage(byId.get(message.id), message));
+  }
+  const next = [...byId.values()]
+    .sort((a, b) => a.sent_at.localeCompare(b.sent_at))
+    .slice(-WARM_MESSAGE_LIMIT);
+  warmMessages.delete(conversationId);
+  warmMessages.set(conversationId, next);
+  if (markReadComplete) warmMessageReads.add(conversationId);
+  while (warmMessages.size > WARM_CONVERSATION_LIMIT) {
+    const oldestId = warmMessages.keys().next().value;
+    if (!oldestId) break;
+    warmMessages.delete(oldestId);
+    warmMessageReads.delete(oldestId);
+  }
+}
+
+function forgetWarmMessage(conversationId: string, messageId: string): void {
+  const current = warmMessages.get(conversationId);
+  if (!current?.some((message) => message.id === messageId)) return;
+  warmMessages.delete(conversationId);
+  warmMessages.set(
+    conversationId,
+    current.filter((message) => message.id !== messageId),
+  );
+}
+
+/** Synchronous hot cache for instant reopening during the current app session. */
+export function getWarmLocalMessages(conversationId: string, limit = WARM_MESSAGE_LIMIT): LocalMessage[] | null {
+  if (!warmMessageReads.has(conversationId)) return null;
+  return (warmMessages.get(conversationId) ?? []).slice(-limit);
+}
+
+async function readWebMessages(conversationId: string): Promise<LocalMessage[]> {
+  const { getCachedMessages } = await import("../offlineStore");
+  const raw = await getCachedMessages(conversationId);
+  const byId = new Map<string, LocalMessage>();
+  for (const item of raw) {
+    if (!item?.id) continue;
+    const local = mapToLocal(item, conversationId);
+    byId.set(local.id, mergeLocalMessage(byId.get(local.id), local));
+  }
+  return [...byId.values()].sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+}
+
+async function updateWebMessages(
+  conversationId: string,
+  update: (messages: LocalMessage[]) => LocalMessage[],
+): Promise<void> {
+  const previous = webMessageWriteQueues.get(conversationId) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(async () => {
+    const { cacheMessages } = await import("../offlineStore");
+    const current = await readWebMessages(conversationId);
+    const updated = update(current);
+    rememberWarmMessages(conversationId, updated);
+    await cacheMessages(conversationId, updated);
+  });
+  webMessageWriteQueues.set(conversationId, next);
+  try {
+    await next;
+  } finally {
+    if (webMessageWriteQueues.get(conversationId) === next) {
+      webMessageWriteQueues.delete(conversationId);
+    }
+  }
+}
+
+async function waitForWebMessageWrites(conversationId: string): Promise<void> {
+  await webMessageWriteQueues.get(conversationId)?.catch(() => {});
+}
+
+async function getWebMessageChatIds(): Promise<string[]> {
+  const keys = await AsyncStorage.getAllKeys().catch(() => []);
+  return keys
+    .filter((key) => key.startsWith(WEB_MESSAGES_PREFIX))
+    .map((key) => key.slice(WEB_MESSAGES_PREFIX.length));
+}
+
+async function findWebMessageChatIds(messageId: string): Promise<string[]> {
+  const chatIds = await getWebMessageChatIds();
+  const matches: string[] = [];
+  for (const chatId of chatIds) {
+    await waitForWebMessageWrites(chatId);
+    if ((await readWebMessages(chatId)).some((message) => message.id === messageId)) {
+      matches.push(chatId);
+    }
+  }
+  return matches;
 }
 
 // ─── Reads ──────────────────────────────────────────────────────────────────────
@@ -80,33 +224,23 @@ export async function getLocalMessages(
 ): Promise<LocalMessage[]> {
   try {
     if (Platform.OS === "web") {
+      await waitForWebMessageWrites(conversationId);
       const { getPendingMessages } = await import("../offlineStore");
       const queued = await getPendingMessages();
-      return queued
+      const localById = new Map((await readWebMessages(conversationId)).map((msg) => [msg.id, msg]));
+      queued
         .filter((msg) => msg.chat_id === conversationId)
-        .map((msg) => ({
-          id: msg.id,
-          conversation_id: conversationId,
-          sender_id: msg.sender_id,
-          sender_display_name: msg.sender_display_name ?? null,
-          sender_avatar_url: msg.sender_avatar_url ?? null,
-          sender_handle: msg.sender_handle ?? null,
-          content: msg.encrypted_content,
-          attachment_url: null,
-          attachment_type: null,
-          reply_to_id: msg.reply_to_message_id ?? null,
-          status: "sending",
-          sent_at: msg.created_at,
-          edited_at: null,
-          delivered_at: null,
-          read_at: null,
-          is_pending: true,
-          synced: false,
-        }))
+        .forEach((msg) => {
+          const pending = mapToLocal({ ...msg, _pending: true, status: "sending" }, conversationId);
+          localById.set(pending.id, mergeLocalMessage(localById.get(pending.id), pending));
+        });
+      const result = [...localById.values()]
         .filter((msg) => !beforeSentAt || msg.sent_at < beforeSentAt)
         .filter((msg) => !afterSentAt || msg.sent_at > afterSentAt)
         .sort((a, b) => a.sent_at.localeCompare(b.sent_at))
         .slice(-limit);
+      rememberWarmMessages(conversationId, result, true);
+      return result;
     }
 
     const db = await getDB();
@@ -127,7 +261,9 @@ export async function getLocalMessages(
       [...params, limit],
     );
     rows.reverse();
-    return rows.map(rowToMsg);
+    const messages = rows.map(rowToMsg) as LocalMessage[];
+    rememberWarmMessages(conversationId, messages, true);
+    return messages;
   } catch {
     return [];
   }
@@ -139,6 +275,14 @@ export async function getLocalMessages(
  */
 export async function getNewestMessageDate(conversationId: string): Promise<string | null> {
   try {
+    if (Platform.OS === "web") {
+      await waitForWebMessageWrites(conversationId);
+      const messages = await readWebMessages(conversationId);
+      return messages
+        .filter((message) => !message.is_pending)
+        .reduce<string | null>((newest, message) =>
+          !newest || message.sent_at > newest ? message.sent_at : newest, null);
+    }
     const db = await getDB();
     const row = await db.getFirstAsync<{ sent_at: string }>(
       "SELECT sent_at FROM messages WHERE conversation_id = ? AND is_pending = 0 ORDER BY sent_at DESC LIMIT 1",
@@ -158,7 +302,8 @@ export async function getLocalMessageEditTimestamps(
   if (!conversationId || messageIds.length === 0) return new Map();
   try {
     if (Platform.OS === "web") {
-      const cached = await getLocalMessages(conversationId, 1000);
+      await waitForWebMessageWrites(conversationId);
+      const cached = await readWebMessages(conversationId);
       const requested = new Set(messageIds);
       const versions = new Map<string, string | null>();
       cached.forEach((message) => {
@@ -188,6 +333,12 @@ export async function getLocalMessageEditTimestamps(
 
 export async function getOldestMessageDate(conversationId: string): Promise<string | null> {
   try {
+    if (Platform.OS === "web") {
+      await waitForWebMessageWrites(conversationId);
+      const messages = (await readWebMessages(conversationId)).filter((message) => !message.is_pending);
+      return messages.reduce<string | null>((oldest, message) =>
+        !oldest || message.sent_at < oldest ? message.sent_at : oldest, null);
+    }
     const db = await getDB();
     const row = await db.getFirstAsync<{ sent_at: string }>(
       "SELECT sent_at FROM messages WHERE conversation_id = ? AND is_pending = 0 ORDER BY sent_at ASC LIMIT 1",
@@ -201,6 +352,10 @@ export async function getOldestMessageDate(conversationId: string): Promise<stri
 
 export async function getLocalMessageCount(conversationId: string): Promise<number> {
   try {
+    if (Platform.OS === "web") {
+      await waitForWebMessageWrites(conversationId);
+      return (await readWebMessages(conversationId)).length;
+    }
     const db = await getDB();
     const row = await db.getFirstAsync<{ c: number }>(
       "SELECT COUNT(*) as c FROM messages WHERE conversation_id = ?",
@@ -222,6 +377,18 @@ export async function getLocalMessageCount(conversationId: string): Promise<numb
 export async function saveMessages(conversationId: string, messages: any[]): Promise<void> {
   if (!messages.length) return;
   try {
+    if (Platform.OS === "web") {
+      await updateWebMessages(conversationId, (current) => {
+        const byId = new Map(current.map((message) => [message.id, message]));
+        for (const message of messages) {
+          if (!message?.id) continue;
+          const local = mapToLocal(message, conversationId);
+          byId.set(local.id, mergeLocalMessage(byId.get(local.id), local));
+        }
+        return [...byId.values()].sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+      });
+      return;
+    }
     const db = await getDB();
     const now = Date.now();
     for (const msg of messages) {
@@ -323,6 +490,7 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
         );
       }
     }
+    rememberWarmMessages(conversationId, messages.map((msg) => mapToLocal(msg, conversationId)));
   } catch {}
 }
 
@@ -340,6 +508,22 @@ export async function savePendingMessage(msg: {
   sender_avatar_url?: string | null;
   sender_handle?: string | null;
 }): Promise<void> {
+  const local = mapToLocal({
+    ...msg,
+    chat_id: msg.conversation_id,
+    encrypted_content: msg.content,
+    reply_to_message_id: msg.reply_to_id,
+    _pending: true,
+    status: "sending",
+  }, msg.conversation_id);
+  if (Platform.OS === "web") {
+    await updateWebMessages(msg.conversation_id, (current) => {
+      const byId = new Map(current.map((message) => [message.id, message]));
+      byId.set(local.id, mergeLocalMessage(byId.get(local.id), local));
+      return [...byId.values()].sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+    });
+    return;
+  }
   const db = await getDB();
   await db.runAsync(
     `INSERT OR REPLACE INTO messages
@@ -362,14 +546,51 @@ export async function savePendingMessage(msg: {
       msg.sender_handle ?? null,
     ],
   );
+  rememberWarmMessages(msg.conversation_id, [local]);
 }
 
 export async function markMessageSynced(localId: string, serverId: string): Promise<void> {
+  if (Platform.OS === "web") {
+    const chatIds = await findWebMessageChatIds(localId);
+    for (const chatId of chatIds) {
+      await updateWebMessages(chatId, (messages) => {
+        const pending = messages.find((message) => message.id === localId);
+        if (!pending) return messages;
+        const withoutPending = messages.filter((message) => message.id !== localId);
+        const confirmed = {
+          ...pending,
+          id: serverId,
+          is_pending: false,
+          synced: true,
+          status: "sent",
+        };
+        const existing = withoutPending.find((message) => message.id === serverId);
+        return [
+          ...withoutPending.filter((message) => message.id !== serverId),
+          mergeLocalMessage(existing, confirmed),
+        ].sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+      });
+    }
+    return;
+  }
   const db = await getDB();
   await db.runAsync(
     "UPDATE messages SET id = ?, is_pending = 0, synced = 1, status = 'sent' WHERE id = ?",
     [serverId, localId],
   );
+  for (const [conversationId, messages] of warmMessages) {
+    const pending = messages.find((message) => message.id === localId);
+    if (pending) {
+      rememberWarmMessages(conversationId, [{
+        ...pending,
+        id: serverId,
+        is_pending: false,
+        synced: true,
+        status: "sent",
+      }]);
+      break;
+    }
+  }
 }
 
 export async function saveMessageReceipts(
@@ -378,6 +599,23 @@ export async function saveMessageReceipts(
 ): Promise<void> {
   if (!receipts.delivered_at && !receipts.read_at) return;
   try {
+    if (Platform.OS === "web") {
+      const chatIds = await findWebMessageChatIds(messageId);
+      for (const chatId of chatIds) {
+        await updateWebMessages(chatId, (messages) => messages.map((message) => {
+          if (message.id !== messageId) return message;
+          const deliveredAt = latestTime(message.delivered_at, receipts.delivered_at ?? null);
+          const readAt = latestTime(message.read_at, receipts.read_at ?? null);
+          return {
+            ...message,
+            delivered_at: deliveredAt,
+            read_at: readAt,
+            status: readAt ? "read" : deliveredAt && message.status !== "read" ? "delivered" : message.status,
+          };
+        }));
+      }
+      return;
+    }
     const db = await getDB();
     const deliveredAt = receipts.delivered_at ?? null;
     const readAt = receipts.read_at ?? null;
@@ -426,12 +664,29 @@ export async function markMessageRead(
 
 export async function deleteLocalMessage(messageId: string): Promise<void> {
   try {
+    if (Platform.OS === "web") {
+      const chatIds = await findWebMessageChatIds(messageId);
+      for (const chatId of chatIds) {
+        await updateWebMessages(chatId, (messages) => messages.filter((message) => message.id !== messageId));
+        forgetWarmMessage(chatId, messageId);
+      }
+      return;
+    }
     const db = await getDB();
     await db.runAsync("DELETE FROM messages WHERE id = ?", [messageId]);
+    for (const [conversationId, messages] of warmMessages) {
+      if (messages.some((message) => message.id === messageId)) forgetWarmMessage(conversationId, messageId);
+    }
   } catch {}
 }
 
 export async function getPendingLocalMessages(): Promise<LocalMessage[]> {
+  if (Platform.OS === "web") {
+    const chatIds = await getWebMessageChatIds();
+    await Promise.all(chatIds.map(waitForWebMessageWrites));
+    const messages = (await Promise.all(chatIds.map((chatId) => readWebMessages(chatId)))).flat();
+    return messages.filter((message) => message.is_pending).sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+  }
   const db = await getDB();
   const rows = await db.getAllAsync<any>(
     "SELECT * FROM messages WHERE is_pending = 1 ORDER BY sent_at ASC",
@@ -442,8 +697,18 @@ export async function getPendingLocalMessages(): Promise<LocalMessage[]> {
 /** User-initiated: delete ALL messages in a conversation from device. */
 export async function deleteAllLocalMessages(conversationId: string): Promise<void> {
   try {
+    if (Platform.OS === "web") {
+      const { cacheMessages } = await import("../offlineStore");
+      await waitForWebMessageWrites(conversationId);
+      await cacheMessages(conversationId, []);
+      warmMessages.delete(conversationId);
+      warmMessageReads.delete(conversationId);
+      return;
+    }
     const db = await getDB();
     await db.runAsync("DELETE FROM messages WHERE conversation_id = ?", [conversationId]);
+    warmMessages.delete(conversationId);
+    warmMessageReads.delete(conversationId);
   } catch {}
 }
 

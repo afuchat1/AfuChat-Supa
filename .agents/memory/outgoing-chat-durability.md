@@ -1,10 +1,12 @@
 ---
-name: Outgoing chat message durability
-description: Keep outgoing chat history durable across send paths, reconnects, and navigation.
+name: Chat message durability
+description: Keep offline chat history instant and durable across sends, incoming delivery, reconnects, and navigation.
 ---
 
-Every server-confirmed outgoing chat message and its delivered/read timestamps must be stored in the local persistent message store, regardless of its send type. A delivery receipt is valid only after an authenticated recipient device acknowledges actual message or push receipt; FCM accepting a send and a read event are not substitutes. Let the database timestamp and validate recipient membership, and keep delivery separate from read status. Do not rely on a timestamp-only delta to recover server messages that were not cached locally. Do not remove pending bubbles until sync confirms the message is committed; a failed or skipped sync is not message deletion.
+Open conversations from durable local history first and fetch only new, missing, or changed messages; do not re-download bodies already stored locally. Persist incoming messages through the app-wide listener and OS-delivered background push path even when their chat is closed. Reuse the exact displayed image URI in the viewer, including a durable local file URI when already downloaded, instead of downloading again on tap.
 
-**Why:** Incoming messages were persisted while several outgoing pathways and receipt timestamps were not, and timestamp deltas could skip uncached rows. A push provider's send acceptance does not prove the recipient device received the message. The UI also hid all pending messages after a sync call that could return early or fail.
+Every server-confirmed outgoing chat message and its delivered/read timestamps must also be stored in the local persistent message store, regardless of send type. A delivery receipt is valid only after an authenticated recipient device acknowledges actual message or push receipt; FCM accepting a send and a read event are not substitutes. Let the database timestamp and validate recipient membership, and keep delivery separate from read status. Do not remove pending bubbles until sync confirms the message is committed; a failed or skipped sync is not message deletion.
 
-**How to apply:** Cache each confirmed send and server-confirmed delivery/read timestamps so Message Info works offline. Reconcile pending UI only from confirmed sync or persisted state. Keep server backfill bounded while retaining older local history.
+**Why:** The user requires chat to feel instant and remain usable offline, with old messages and already-loaded images reused. Timestamp-only deltas can skip uncached rows, and a push provider's send acceptance does not prove the recipient device received the message.
+
+**How to apply:** Use the platform's durable local store (SQLite natively, persistent AsyncStorage on Expo web) before network reconciliation. Keep server backfill bounded while retaining older local history. Persist each confirmed send and server-confirmed receipt timestamp, and reconcile pending UI only from confirmed sync or persisted state.

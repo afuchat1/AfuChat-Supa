@@ -90,7 +90,7 @@ import {
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { createLocalMessageId, getLocalMessages, getLocalMessageEditTimestamps, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageDelivered, markMessageRead, saveMessageReceipts, markMessageSynced } from "@/lib/storage/localMessages";
+import { createLocalMessageId, getLocalMessages, getWarmLocalMessages, getLocalMessageEditTimestamps, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageDelivered, markMessageRead, saveMessageReceipts, markMessageSynced } from "@/lib/storage/localMessages";
 import { queueMessage, removePendingMessage } from "@/lib/offlineStore";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
@@ -2571,7 +2571,34 @@ function ChatScreen() {
   }, [user?.id, id, isDraft, chatPrefs.screenshot_protection]);
 
   const insets = useSafeAreaInsets();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const warm = getWarmLocalMessages(id);
+    if (!warm) return [];
+    return [...warm].reverse().map((message) => {
+      const isBot = message.sender_id === AFUAI_BOT_ID;
+      const aiParsed = isBot ? parseAfuAiTags(message.content || "") : null;
+      return {
+        id: message.id,
+        chat_id: message.conversation_id,
+        sender_id: message.sender_id,
+        encrypted_content: aiParsed ? (aiParsed.text || message.content || "") : (message.content || ""),
+        sent_at: message.sent_at,
+        reply_to_message_id: message.reply_to_id,
+        attachment_url: message.attachment_url,
+        attachment_type: message.attachment_type,
+        edited_at: message.edited_at,
+        delivered_at: message.delivered_at,
+        read_at: message.read_at,
+        sender: localSenderSnapshot(message),
+        status: message.status as any,
+        reactions: [],
+        _pending: message.is_pending,
+        _isAi: isBot || undefined,
+        _aiActions: aiParsed?.actions.length ? aiParsed.actions : undefined,
+        _aiInvoices: aiParsed?.invoices.length ? aiParsed.invoices : undefined,
+      } satisfies Message;
+    });
+  });
   const [senderRingMap, setSenderRingMap] = useState<Map<string, 'crown'|'void'|'diamond'>>(new Map());
 
   useEffect(() => {
@@ -2625,11 +2652,12 @@ function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const imgViewer = useImageViewer();
-  const openChatImageViewer = useCallback(async (images: string[], index: number) => {
-    const resolvedImages = await Promise.all(images.map(async (uri) =>
-      (await getCachedChatAttachmentUri(uri)) ?? uri
-    ));
-    imgViewer.openViewer(resolvedImages, index);
+  const openChatImageViewer = useCallback((images: string[], index: number) => {
+    // MessageBubble passes the exact URI already displayed on screen (including
+    // a durable local file URI when the chat attachment was downloaded). Open
+    // immediately instead of waiting for another cache/database lookup; the
+    // image viewer can reuse the same source and its in-memory image cache.
+    imgViewer.openViewer(images, index);
   }, [imgViewer.openViewer]);
   const [realChatId, setRealChatId] = useState<string | null>(null);
   const creatingChatIdRef = useRef<Promise<string | null> | null>(null);
@@ -8949,7 +8977,7 @@ STRICT RULES:
 
       {/* ── Message list — fills remaining space, padded so content clears the floating input ── */}
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {loading ? (
+        {loading && messages.length === 0 ? (
           <ChatLoadingSkeleton />
         ) : messages.length === 0 ? (
           <View style={[st.emptyState, { paddingBottom: floatingInputHeight + 16 }]}>
