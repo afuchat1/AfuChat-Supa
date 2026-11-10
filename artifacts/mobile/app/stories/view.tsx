@@ -826,7 +826,7 @@ export default function ViewStoryScreen() {
                   appearance="embedded"
                   style={styles.expandedCommentInput}
                   placeholder="Write a reply…"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor="rgba(255,255,255,0.72)"
                   value={commentText}
                   onChangeText={setCommentText}
                   onFocus={() => setPaused(true)}
@@ -911,7 +911,7 @@ export default function ViewStoryScreen() {
                   appearance="embedded"
                   style={styles.commentInput}
                   placeholder="Reply…"
-                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  placeholderTextColor="rgba(255,255,255,0.72)"
                   value={commentText}
                   onChangeText={setCommentText}
                   onPressIn={() => {
@@ -1335,9 +1335,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(12,14,18,0.78)",
     borderWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.28)",
+    borderColor: "rgba(255,255,255,0.32)",
     justifyContent: "center",
     paddingHorizontal: 14,
     ...Platform.select({
