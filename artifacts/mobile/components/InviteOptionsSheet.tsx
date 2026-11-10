@@ -22,12 +22,11 @@ export default function InviteOptionsSheet({ visible, onClose, onSelect }: Props
     <SwipeableBottomSheet
       visible={visible}
       onClose={onClose}
-      maxHeight={360}
+      maxHeight={320}
       backgroundColor={colors.surface}
     >
-      <View style={{ padding: 20, gap: 12 }}>
-        <View style={{ alignItems: "center", gap: 5, marginBottom: 2 }}>
-          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: colors.separator }} />
+      <View style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 14, gap: 8 }}>
+        <View style={{ alignItems: "center", gap: 3 }}>
           <Text style={{ width: "100%", color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" }}>
             {"Invite via"}
           </Text>
@@ -41,8 +40,9 @@ export default function InviteOptionsSheet({ visible, onClose, onSelect }: Props
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 12,
-              padding: 14,
+              gap: 10,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
               borderRadius: 14,
               backgroundColor: colors.accent,
             }}
