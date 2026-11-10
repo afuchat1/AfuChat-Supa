@@ -19,6 +19,18 @@ export default function IndexScreen() {
   const [languageChecked, setLanguageChecked] = useState(false);
   const [languageSelected, setLanguageSelected] = useState(false);
   const { handle } = useLocalSearchParams<{ handle?: string }>();
+  const hasKnownIdentity = Boolean(getCachedUserId() || user?.id || session?.user?.id);
+
+  // Cached returning users go straight to the chat shell instead of waiting
+  // for language and initial-URL checks. The root deep-link gate still handles
+  // any incoming AfuChat action after navigation is ready.
+  useEffect(() => {
+    if (!hasKnownIdentity || handle || redirected.current) return;
+    redirected.current = true;
+    safeRouter.replace(
+      profile?.onboarding_completed === false ? "/onboarding" : "/(tabs)/chats",
+    );
+  }, [hasKnownIdentity, handle, profile?.onboarding_completed]);
 
   useEffect(() => {
     let mounted = true;

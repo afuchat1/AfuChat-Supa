@@ -5,7 +5,6 @@
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
 - [Expo Go QR verification](expo-go-qr-verification.md) — If the managed tunnel is unavailable, use the installed ngrok provider and verify the Android bundle before sharing its QR.
 - [Expo Media Library legacy API](expo-media-library-legacy-api.md) — Use `/legacy` for `getAssetsAsync`, `MediaType`, and `SortBy`; the package root targets the newer API.
-- [AfuCloud image routing](afucloud-image-routing.md) — Keep img.afuchat.com serving the original AfuCloud bucket so existing users retain access.
 - [AfuChat contrast and FABs](afuchat-brand-colors.md) — Keep card surfaces uniform by theme, preserve control colors, and use white icons on app-accent FABs.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
 - [Mention display policy](mention-rendering-policy.md) — Show mentions as avatar plus `@handle`, aligned on one centered line.
@@ -27,4 +26,4 @@
 - [React Native strict API migration](rn-strict-api-migration.md) — Keep SDK 58 on React Native's strict instance types; run the mobile typecheck after API changes.
 - [AfuChat production-branch workflow](afuchat-production-branch-workflow.md) — For urgent AfuChat fixes, work directly on the production branch instead of creating a feature branch.
 - [ACoin transfer safety](acoin-transfer-safety.md) — Keep credits authorized, transfers safe, and wallet history compatible with installed clients.
-- [AfuChat database scope](afuchat-database-scope.md) — Use the existing AfuChat schema; do not assume or create a separate shop schema.
+- [AfuChat app scope](afuchat-database-scope.md) — Treat this workspace as AfuChat only; follow the current remote baseline, not historical assumptions.

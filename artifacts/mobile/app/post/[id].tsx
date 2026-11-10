@@ -380,6 +380,13 @@ export default function PostDetailScreen() {
 
         if (!data || cancelled) { setLoading(false); return; }
 
+        // Video posts belong in the full-screen, swipeable video feed. Never
+        // render one inside this standard post-detail layout.
+        if (!org && data.post_type === "video") {
+          router.replace({ pathname: "/video/[id]", params: { id } } as any);
+          return;
+        }
+
         const imgs: string[] = ((data.post_images as any[]) ?? [])
           .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
           .map((r) => r.image_url);

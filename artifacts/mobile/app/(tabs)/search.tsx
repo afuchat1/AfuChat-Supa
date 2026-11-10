@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   Platform,
@@ -542,6 +541,7 @@ export function SearchScreen({
   const [lensImageUri, setLensImageUri] = useState<string | null>(null);
   const [lensLoading, setLensLoading] = useState(false);
   const [lensError, setLensError] = useState<string | null>(null);
+  const [imageSourceSheetOpen, setImageSourceSheetOpen] = useState(false);
   const isVisualSearchActive = Boolean(lensImageUri || lensLoading || lensResult);
   const lensRetryImageRef = useRef<{ uri: string; imageBase64: string; mimeType: string } | null>(null);
 
@@ -1663,19 +1663,16 @@ export function SearchScreen({
   }
 
 
-  async function openLens() {
+  function openLens() {
     if (lensLoading) return;
     Haptics.selectionAsync();
     setLensError(null);
-    if (Platform.OS === "web") {
-      await openLensWithSource("gallery");
-      return;
-    }
-    Alert.alert("Search with an image", "Choose where to get the image.", [
-      { text: "Take photo", onPress: () => { void openLensWithSource("camera"); } },
-      { text: "Choose from gallery", onPress: () => { void openLensWithSource("gallery"); } },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    setImageSourceSheetOpen(true);
+  }
+
+  function chooseLensSource(source: "camera" | "gallery") {
+    setImageSourceSheetOpen(false);
+    void openLensWithSource(source);
   }
 
   async function openLensWithSource(source: "camera" | "gallery") {
@@ -1882,7 +1879,11 @@ export function SearchScreen({
           activeOpacity={0.82}
           onPress={() => {
             trackSearchClick();
-            router.push((p.post_type === "article" ? `/article/${p.id}` : `/post/${p.id}`) as any);
+              if (p.post_type === "video") {
+                router.push({ pathname: "/video/[id]", params: { id: p.id } } as any);
+              } else {
+                router.push((p.post_type === "article" ? `/article/${p.id}` : `/post/${p.id}`) as any);
+              }
           }}
         >
           {showSideImage ? (
@@ -2351,7 +2352,11 @@ export function SearchScreen({
         accessibilityLabel: `Open AfuChat image post by ${post.author_name || post.author_handle}`,
         onPress: () => {
           trackSearchClick();
-          router.push((post.post_type === "article" ? `/article/${post.id}` : `/post/${post.id}`) as any);
+          if (post.post_type === "video") {
+            router.push({ pathname: "/video/[id]", params: { id: post.id } } as any);
+          } else {
+            router.push((post.post_type === "article" ? `/article/${post.id}` : `/post/${post.id}`) as any);
+          }
         },
       }));
 
@@ -3431,6 +3436,78 @@ export function SearchScreen({
           ? renderResults()
           : renderDiscovery()}
       {renderAfuSearchOverlay()}
+      <Modal
+        visible={imageSourceSheetOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setImageSourceSheetOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.52)" }}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setImageSourceSheetOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close image search options"
+          />
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: Math.max(insets.bottom, 12) + 16,
+              borderTopLeftRadius: 26,
+              borderTopRightRadius: 26,
+              backgroundColor: colors.surface,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 }}>
+              <View style={{ width: 46, height: 46, borderRadius: 16, backgroundColor: BRAND + "1C", alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="scan" size={23} color={BRAND} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold" }}>
+                  Search with an image
+                </Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 3 }}>
+                  Choose a photo to find similar posts.
+                </Text>
+              </View>
+            </View>
+            {Platform.OS !== "web" && (
+              <TouchableOpacity
+                onPress={() => chooseLensSource("camera")}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Take a photo"
+                style={{ minHeight: 54, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.backgroundSecondary, marginBottom: 8 }}
+              >
+                <Ionicons name="camera-outline" size={21} color={BRAND} />
+                <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Take a photo</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => chooseLensSource("gallery")}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Choose a photo from your gallery"
+              style={{ minHeight: 54, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.backgroundSecondary, marginBottom: 14 }}
+            >
+              <Ionicons name="images-outline" size={21} color={BRAND} />
+              <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Choose from gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setImageSourceSheetOpen(false)}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel image search"
+              style={{ minHeight: 46, alignItems: "center", justifyContent: "center", borderRadius: 16 }}
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

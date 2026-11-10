@@ -24,6 +24,7 @@ import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lazy-load Reanimated + GestureHandler with a try-catch IIFE.
@@ -646,14 +647,12 @@ function PostChrome({
     setSending(false);
   }
 
-  if (zoomed) return null;
-
   const isOwnPost = user?.id === meta.authorId;
 
   return (
     <>
       {/* ── Author row ── */}
-      <View style={[styles.authorRow, { paddingTop: insets.top + 50 }]}>
+      {!zoomed && <View style={[styles.authorRow, { paddingTop: insets.top + 50 }]}>
         <TouchableOpacity
           onPress={() => { onClose(); setTimeout(() => router.push({ pathname: "/contact/[id]", params: { id: meta.authorId } } as any), 120); }}
           activeOpacity={0.8}
@@ -680,12 +679,12 @@ function PostChrome({
             <Text style={styles.followingTagText}>Following</Text>
           </View>
         )}
-      </View>
+      </View>}
 
       {/* ── Bottom chrome: action bar + reply input (lifts above keyboard) ── */}
       <Animated.View style={[styles.bottomChrome, { paddingBottom: insets.bottom, bottom: kbOffset }]}>
         {/* Action bar */}
-        <View style={styles.actionBar}>
+        {!zoomed && <View style={styles.actionBar}>
           <TouchableOpacity style={styles.actionStat} onPress={onNavigateToPost} activeOpacity={0.7}>
             <Ionicons name="chatbubble-outline" size={20} color="rgba(255,255,255,0.75)" />
             <Text style={styles.actionCount}>{fmtCount(meta.replyCount)}</Text>
@@ -716,7 +715,7 @@ function PostChrome({
               color={bookmarked ? "#FFD60A" : "rgba(255,255,255,0.75)"}
             />
           </TouchableOpacity>
-        </View>
+        </View>}
 
         {/* Reply input pill */}
         <View style={styles.replyRow}>
@@ -1079,8 +1078,11 @@ function SimpleImageViewer({ images, initialIndex = 0, visible, onClose, meta }:
 
 // Exported component — picks animated or simple viewer at mount time.
 export function ImageViewer(props: ViewerProps) {
-  if (RA_AVAILABLE) return <AnimatedImageViewer {...props} />;
-  return <SimpleImageViewer {...props} />;
+  return (
+    <ThemeProvider forcedMode="dark">
+      {RA_AVAILABLE ? <AnimatedImageViewer {...props} /> : <SimpleImageViewer {...props} />}
+    </ThemeProvider>
+  );
 }
 
 // ─── useImageViewer hook ───────────────────────────────────────────────────────
@@ -1294,7 +1296,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#007AFF",
+    backgroundColor: "#1018D8",
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 6,

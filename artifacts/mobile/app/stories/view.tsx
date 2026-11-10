@@ -120,6 +120,7 @@ export default function ViewStoryScreen() {
   // Comment
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+  const [replyExpanded, setReplyExpanded] = useState(false);
 
   // Like state — per story id: { liked: boolean, count: number }
   const [likeState, setLikeState] = useState<Record<string, { liked: boolean; count: number }>>({});
@@ -140,6 +141,12 @@ export default function ViewStoryScreen() {
   );
 
   const isOwner = user?.id === userId;
+
+  useEffect(() => {
+    setReplyExpanded(false);
+    setCommentText("");
+    Keyboard.dismiss();
+  }, [index]);
 
   // ── Load stories ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -488,6 +495,7 @@ export default function ViewStoryScreen() {
   const sendComment = useCallback(async () => {
     const s = stories[index];
     if (!s || !user || !commentText.trim()) return;
+    let sent = false;
     setSendingComment(true);
     setPaused(true);
     try {
@@ -513,11 +521,14 @@ export default function ViewStoryScreen() {
         }
       }
       setCommentText("");
+      sent = true;
+      setReplyExpanded(false);
+      Keyboard.dismiss();
     } catch {
       // comment send failed — silently recover, keep text in input
     } finally {
       setSendingComment(false);
-      setPaused(false);
+      setPaused(!sent);
     }
   }, [index, stories, user, commentText]);
 
@@ -780,61 +791,121 @@ export default function ViewStoryScreen() {
 
       {/* ── Bottom action row — always visible ───────────────────────────── */}
       {!showViewers && !showShareSheet && (
-        <View style={[styles.bottomRow, {
-          bottom: keyboardHeight,
-          paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 12,
-        }]}>
+        <View style={[
+          styles.bottomRow,
+          replyExpanded && styles.expandedBottomRow,
+          {
+            bottom: keyboardHeight,
+            paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 12,
+          },
+        ]}>
 
-          {/* Owner: viewer pill + count (tappable to open sheet) */}
-          {isOwner ? (
-            <TouchableOpacity
-              style={styles.viewerPill}
-              onPress={openViewers}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="eye" size={15} color="rgba(255,255,255,0.85)" />
-              <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
-              {storyLike.count > 0 && (
-                <>
-                  <View style={styles.pillDivider} />
-                  <Ionicons name="heart" size={13} color="#FF2D55" />
-                  <Text style={styles.viewerPillCount}>{storyLike.count}</Text>
-                </>
-              )}
-              <Ionicons name="chevron-up" size={13} color="rgba(255,255,255,0.45)" />
-            </TouchableOpacity>
-          ) : (
-            /* Non-owner: viewer count display (read-only) */
-            <View style={[styles.viewerPill, { pointerEvents: "none" }]}>
-              <Ionicons name="eye" size={15} color="rgba(255,255,255,0.65)" />
-              <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
+          {replyExpanded && !isOwner ? (
+            <View style={styles.expandedReplyComposer}>
+              <View style={styles.expandedReplyHeader}>
+                <Text style={styles.expandedReplyTitle} numberOfLines={1}>
+                  Replying to {story.profile.display_name}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setReplyExpanded(false);
+                    setPaused(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close reply composer"
+                  hitSlop={8}
+                  style={styles.replyCollapseButton}
+                >
+                  <Ionicons name="chevron-down" size={19} color="rgba(255,255,255,0.82)" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.expandedReplyField}>
+                <Avatar uri={user?.user_metadata?.avatar_url ?? null} name="You" size={30} />
+                <TextInput
+                  appearance="embedded"
+                  style={styles.expandedCommentInput}
+                  placeholder="Write a reply…"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  onFocus={() => setPaused(true)}
+                  onBlur={() => {
+                    if (!commentText.trim()) {
+                      setReplyExpanded(false);
+                      setPaused(false);
+                    }
+                  }}
+                  autoFocus
+                  multiline
+                  maxLength={500}
+                  scrollEnabled
+                />
+                <TouchableOpacity
+                  onPress={sendComment}
+                  disabled={!commentText.trim() || sendingComment}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send story reply"
+                  style={[
+                    styles.expandedSendButton,
+                    { opacity: commentText.trim() && !sendingComment ? 1 : 0.45 },
+                  ]}
+                >
+                  {sendingComment
+                    ? <ActivityIndicator size={15} color="#fff" />
+                    : <Ionicons name="arrow-up" size={18} color="#fff" />}
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
-
-          {/* Spacer */}
-          <View style={{ flex: 1 }} />
-
-          {/* Like button — all users (owner can like their own story too) */}
-          <TouchableOpacity
-            style={[styles.actionBtn, storyLike.liked && styles.actionBtnActive]}
-            onPress={handleLike}
-            activeOpacity={0.75}
-          >
-            <Ionicons
-              name={storyLike.liked ? "heart" : "heart"}
-              size={22}
-              color={storyLike.liked ? "#FF2D55" : "#fff"}
-            />
-            {storyLike.count > 0 && (
-              <Text style={[styles.actionBtnLabel, storyLike.liked && { color: "#FF2D55" }]}>
-                {storyLike.count}
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Comment input — non-owners only */}
-          {!isOwner && (
+          ) : (
             <>
+              {/* Owner: viewer pill + count (tappable to open sheet) */}
+              {isOwner ? (
+                <TouchableOpacity
+                  style={styles.viewerPill}
+                  onPress={openViewers}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="eye" size={15} color="rgba(255,255,255,0.85)" />
+                  <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
+                  {storyLike.count > 0 && (
+                    <>
+                      <View style={styles.pillDivider} />
+                      <Ionicons name="heart" size={13} color="#FF2D55" />
+                      <Text style={styles.viewerPillCount}>{storyLike.count}</Text>
+                    </>
+                  )}
+                  <Ionicons name="chevron-up" size={13} color="rgba(255,255,255,0.45)" />
+                </TouchableOpacity>
+              ) : (
+                <View style={[styles.viewerPill, { pointerEvents: "none" }]}>
+                  <Ionicons name="eye" size={15} color="rgba(255,255,255,0.65)" />
+                  <Text style={styles.viewerPillCount}>{story.view_count || 0}</Text>
+                </View>
+              )}
+
+              <View style={{ flex: 1 }} />
+
+              <TouchableOpacity
+                style={[styles.actionBtn, storyLike.liked && styles.actionBtnActive]}
+                onPress={handleLike}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name={storyLike.liked ? "heart" : "heart"}
+                  size={22}
+                  color={storyLike.liked ? "#FF2D55" : "#fff"}
+                />
+                {storyLike.count > 0 && (
+                  <Text style={[styles.actionBtnLabel, storyLike.liked && { color: "#FF2D55" }]}>
+                    {storyLike.count}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Compact reply bar grows into a multiline composer on focus. */}
+              {!isOwner && (
+                <>
               <View style={styles.commentInputWrap}>
                 <TextInput
                   appearance="embedded"
@@ -843,7 +914,14 @@ export default function ViewStoryScreen() {
                   placeholderTextColor="rgba(255,255,255,0.38)"
                   value={commentText}
                   onChangeText={setCommentText}
-                  onFocus={() => setPaused(true)}
+                  onPressIn={() => {
+                    setReplyExpanded(true);
+                    setPaused(true);
+                  }}
+                  onFocus={() => {
+                    setReplyExpanded(true);
+                    setPaused(true);
+                  }}
                   onBlur={() => { if (!commentText.trim()) setPaused(false); }}
                   returnKeyType="send"
                   onSubmitEditing={sendComment}
@@ -862,6 +940,8 @@ export default function ViewStoryScreen() {
                 <TouchableOpacity style={styles.actionBtn} onPress={openShareSheet} activeOpacity={0.8}>
                   <Ionicons name="share-social" size={20} color="#fff" />
                 </TouchableOpacity>
+              )}
+                </>
               )}
             </>
           )}
@@ -1144,6 +1224,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
     gap: 8,
+  },
+  expandedBottomRow: {
+    alignItems: "stretch",
+    flexDirection: "column",
+    gap: 7,
+  },
+  expandedReplyComposer: {
+    width: "100%",
+    gap: 7,
+    paddingHorizontal: 2,
+  },
+  expandedReplyHeader: {
+    minHeight: 26,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 4,
+  },
+  expandedReplyTitle: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    flex: 1,
+  },
+  replyCollapseButton: {
+    width: 28,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  expandedReplyField: {
+    minHeight: 54,
+    maxHeight: 128,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    borderRadius: 24,
+    backgroundColor: "rgba(12,14,18,0.94)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  expandedCommentInput: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 106,
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 2,
+  },
+  expandedSendButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#1018D8",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Viewer pill — inline count visible without opening sheet

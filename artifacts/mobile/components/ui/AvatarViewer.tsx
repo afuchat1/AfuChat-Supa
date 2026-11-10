@@ -13,6 +13,7 @@ import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
+import { ThemeProvider } from "@/context/ThemeContext";
 
 type Props = {
   visible: boolean;
@@ -44,7 +45,7 @@ function hashColor(name?: string): string {
  * button) to dismiss. Image is sized to the smaller window dimension so it
  * stays square on every aspect ratio (mobile, tablet, desktop preview).
  */
-export function AvatarViewer({ visible, uri, name, onClose }: Props) {
+function AvatarViewerContent({ visible, uri, name, onClose }: Props) {
   const { colors, isDark } = useTheme();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -113,6 +114,14 @@ export function AvatarViewer({ visible, uri, name, onClose }: Props) {
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+export function AvatarViewer(props: Props) {
+  return (
+    <ThemeProvider forcedMode="dark">
+      <AvatarViewerContent {...props} />
+    </ThemeProvider>
   );
 }
 

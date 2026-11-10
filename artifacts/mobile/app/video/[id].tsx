@@ -56,6 +56,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { SmartSheet } from "@/components/ui/SmartSheet";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -1133,7 +1134,15 @@ const vStyles = StyleSheet.create({
 
 // ─── VideoFeed (embeddable) ───────────────────────────────────────────────────
 
-export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {}) {
+export function VideoFeed(props: { isEmbedded?: boolean } = {}) {
+  return (
+    <ThemeProvider forcedMode="dark">
+      <VideoFeedContent {...props} />
+    </ThemeProvider>
+  );
+}
+
+function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {}) {
   const { accent } = useAppAccent();
   const { colors, isDark } = useTheme();
   const params = useLocalSearchParams<{ id: string }>();
