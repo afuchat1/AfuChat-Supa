@@ -3453,24 +3453,24 @@ export function SearchScreen({
           />
           <View
             style={{
-              paddingHorizontal: 20,
-              paddingTop: 20,
-              paddingBottom: Math.max(insets.bottom, 12) + 16,
-              borderTopLeftRadius: 26,
-              borderTopRightRadius: 26,
+              paddingHorizontal: 18,
+              paddingTop: 14,
+              paddingBottom: Platform.OS === "web" ? 12 : Math.max(insets.bottom, 12) + 8,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
               backgroundColor: colors.surface,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 }}>
-              <View style={{ width: 46, height: 46, borderRadius: 16, backgroundColor: BRAND + "1C", alignItems: "center", justifyContent: "center" }}>
-                <Ionicons name="scan" size={23} color={BRAND} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: BRAND + "1C", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Ionicons name="scan" size={21} color={BRAND} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold" }}>
-                  Search with an image
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: colors.text, fontSize: 17, lineHeight: 22, fontFamily: "Inter_700Bold", textAlign: "left", flexShrink: 1 }}>
+                  {"Search with an image"}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 13, marginTop: 3 }}>
-                  Choose a photo to find similar posts.
+                <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 2, textAlign: "left", flexShrink: 1 }}>
+                  {"Choose a photo to find similar posts."}
                 </Text>
               </View>
             </View>
@@ -3480,7 +3480,7 @@ export function SearchScreen({
                 activeOpacity={0.75}
                 accessibilityRole="button"
                 accessibilityLabel="Take a photo"
-                style={{ minHeight: 54, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.backgroundSecondary, marginBottom: 8 }}
+                style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, borderRadius: 14, backgroundColor: colors.backgroundSecondary, marginBottom: 8 }}
               >
                 <Ionicons name="camera-outline" size={21} color={BRAND} />
                 <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Take a photo</Text>
@@ -3491,7 +3491,7 @@ export function SearchScreen({
               activeOpacity={0.75}
               accessibilityRole="button"
               accessibilityLabel="Choose a photo from your gallery"
-              style={{ minHeight: 54, flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 12, borderRadius: 16, backgroundColor: colors.backgroundSecondary, marginBottom: 14 }}
+              style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, borderRadius: 14, backgroundColor: colors.backgroundSecondary, marginBottom: 8 }}
             >
               <Ionicons name="images-outline" size={21} color={BRAND} />
               <Text style={{ color: colors.text, fontSize: 15, fontFamily: "Inter_600SemiBold" }}>Choose from gallery</Text>
@@ -3501,7 +3501,7 @@ export function SearchScreen({
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="Cancel image search"
-              style={{ minHeight: 46, alignItems: "center", justifyContent: "center", borderRadius: 16 }}
+              style={{ minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 14 }}
             >
               <Text style={{ color: colors.textSecondary, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
             </TouchableOpacity>
