@@ -9,7 +9,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  type FlatListInstance,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
@@ -101,7 +100,7 @@ export default function TicketDetail() {
   const BRAND = colors.accent;
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const listRef = useRef<FlatListInstance>(null);
+  const listRef = useRef<FlatList<Message>>(null);
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -109,6 +108,8 @@ export default function TicketDetail() {
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const [showAiTyping, setShowAiTyping] = useState(false);
+  const [retryingAi, setRetryingAi] = useState(false);
+  const [aiReplyFailed, setAiReplyFailed] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -130,6 +131,28 @@ export default function TicketDetail() {
     setLoading(false);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 200);
   }, [id]);
+
+  async function retryAiReply() {
+    if (!id || !user || retryingAi) return;
+    setRetryingAi(true);
+    setAiReplyFailed(false);
+    setShowAiTyping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("support-ai-reply", {
+        body: { ticket_id: id },
+      });
+      if (error || data?.error || data?.ok !== true) {
+        throw new Error(error?.message || data?.error || "Unexpected response");
+      }
+      await fetchData();
+    } catch (error: any) {
+      console.warn("[Support] AI reply retry failed:", error?.message || "Unexpected error");
+      setAiReplyFailed(true);
+      setShowAiTyping(false);
+    } finally {
+      setRetryingAi(false);
+    }
+  }
 
   useEffect(() => {
     fetchData();
@@ -212,6 +235,15 @@ export default function TicketDetail() {
 
   const statusCfg = STATUS_CONFIG[ticket?.status || "open"];
   const shortId = id?.split("-")[0].toUpperCase();
+  const hasAiReply = messages.some((message) => message.sender_type === "ai");
+  const ticketAgeMs = ticket ? Date.now() - new Date(ticket.created_at).getTime() : 0;
+  const canRetryAi =
+    !loading &&
+    !!ticket &&
+    ticket.status !== "closed" &&
+    !hasAiReply &&
+    !showAiTyping &&
+    ticketAgeMs >= 45_000;
 
   if (loading) {
     return (
@@ -298,7 +330,25 @@ export default function TicketDetail() {
               </Text>
             </View>
           }
-          ListFooterComponent={showAiTyping ? <AiTypingIndicator colors={colors} /> : undefined}
+          ListFooterComponent={showAiTyping ? <AiTypingIndicator colors={colors} /> : canRetryAi ? (
+            <View style={[st.aiRetryPrompt, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[st.aiRetryText, { color: colors.textMuted }]}>
+                {aiReplyFailed
+                  ? "The AI reply did not arrive. Your ticket is still open."
+                  : "No AI reply has appeared yet."}
+              </Text>
+              <TouchableOpacity
+                style={[st.aiRetryButton, { backgroundColor: BRAND, opacity: retryingAi ? 0.7 : 1 }]}
+                onPress={() => void retryAiReply()}
+                disabled={retryingAi}
+              >
+                {retryingAi
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Ionicons name="refresh" size={15} color="#fff" />}
+                <Text style={st.aiRetryButtonText}>Retry AI reply</Text>
+              </TouchableOpacity>
+            </View>
+          ) : undefined}
           ListEmptyComponent={
             <View style={st.emptyMsgs}>
               <Ionicons name="chatbubble" size={36} color={colors.textMuted} />
@@ -515,6 +565,27 @@ const st = StyleSheet.create({
     borderRadius: 12, borderWidth: 0.5,
     padding: 10, marginTop: 6, alignSelf: "flex-start",
   },
+  aiRetryPrompt: {
+    alignSelf: "flex-start",
+    maxWidth: "90%",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+    marginTop: 6,
+  },
+  aiRetryText: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
+  aiRetryButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  aiRetryButtonText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   aiTypingIcon: { width: 22, height: 22, borderRadius: 6, alignItems: "center", justifyContent: "center" },
   aiTypingLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
   dotsRow: { flexDirection: "row", alignItems: "center", gap: 3 },

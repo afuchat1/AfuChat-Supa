@@ -165,13 +165,13 @@ id = "YOposftFvF8pnZz8a0iFi"
 uri = "file://generated-artifacts/expo-go-qr.png"
 type = "image"
 title = "Expo Go QR code"
-description = "Scan this QR code in Expo Go to open the running app."
+description = "Scan with Expo Go on an Android device. The Android manifest and JavaScript bundle both returned HTTP 200."
 logical_id = "7268245b-4119-435c-8e4b-8bf24ffbe01a"
-content_hash = "sha256:07d206bb64e7d1b097a65e962268327f49179051c9de78eb60ada477c6a8edad"
-size = 5635
-mtime_ms = 1793696976980
-storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:6a0f6013-c263-434b-beb4-6ae290860064/7268245b-4119-435c-8e4b-8bf24ffbe01a/4cc6db90-e832-4ea3-af79-f3be4f2b3c2e"
-storage_version_token = "1793696991769264"
+content_hash = "sha256:2b0b08ae446b97e9c0737ce3461fecff2c2f36d73f9e69956478729bd024e895"
+size = 5197
+mtime_ms = 1794321538311
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:cd1f9748-a51d-48fb-bdc6-eac4e71c55e0/7268245b-4119-435c-8e4b-8bf24ffbe01a/4afb91b9-70d9-4581-bcd0-a28c74f1d78a"
+storage_version_token = "1794321550572781"
 content_type = "image/png"
 
 [[outputs]]

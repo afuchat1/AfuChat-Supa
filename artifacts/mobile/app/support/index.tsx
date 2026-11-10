@@ -122,6 +122,10 @@ export default function SupportCenter() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
+  const [pendingMessageTicketId, setPendingMessageTicketId] = useState<string | null>(null);
+  const [retryingAi, setRetryingAi] = useState(false);
+  const [aiReplyFailed, setAiReplyFailed] = useState(false);
+  const [aiReplyReady, setAiReplyReady] = useState(false);
 
   const [category, setCategory] = useState(params.errorCategory || "");
   const [priority, setPriority] = useState(params.errorPriority || "normal");
@@ -169,6 +173,30 @@ export default function SupportCenter() {
     if (tab === "tickets") fetchTickets();
   }, [tab, fetchTickets]);
 
+  async function requestAiReply(ticketId: string): Promise<boolean> {
+    setRetryingAi(true);
+    setAiReplyFailed(false);
+    setAiReplyReady(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("support-ai-reply", {
+        body: { ticket_id: ticketId },
+      });
+      if (error || data?.error || data?.ok !== true) {
+        console.warn("[Support] AI reply request failed:", error?.message || data?.error || "Unexpected response");
+        setAiReplyFailed(true);
+        return false;
+      }
+      setAiReplyReady(true);
+      return true;
+    } catch (error: any) {
+      console.warn("[Support] AI reply request failed:", error?.message || "Unexpected error");
+      setAiReplyFailed(true);
+      return false;
+    } finally {
+      setRetryingAi(false);
+    }
+  }
+
   async function submitTicket() {
     if (!user || !profile) return;
     if (!category) { showAlert("Required", "Please select a category"); return; }
@@ -182,36 +210,44 @@ export default function SupportCenter() {
         ? `${message.trim()}\n\n── Device Info ──────────────────\n${deviceInfo}`
         : message.trim();
 
-      const { data: ticket, error } = await supabase
-        .from("support_tickets")
-        .insert({
-          user_id: user.id,
-          email: email.trim(),
-          subject: subject.trim(),
-          category,
-          status: "open",
-          priority,
-        })
-        .select()
-        .single();
+      let ticketId = pendingMessageTicketId;
+      if (!ticketId) {
+        const { data: ticket, error } = await supabase
+          .from("support_tickets")
+          .insert({
+            user_id: user.id,
+            email: email.trim(),
+            subject: subject.trim(),
+            category,
+            status: "open",
+            priority,
+          })
+          .select("id")
+          .single();
 
-      if (error || !ticket) throw new Error(error?.message || "Failed to create ticket");
+        if (error || !ticket) throw new Error(error?.message || "Failed to create ticket");
+        ticketId = ticket.id;
+      }
+      if (!ticketId) throw new Error("Ticket could not be loaded. Please try again.");
 
-      await supabase.from("support_messages").insert({
-        ticket_id: ticket.id,
+      const { error: messageError } = await supabase.from("support_messages").insert({
+        ticket_id: ticketId,
         sender_id: user.id,
         sender_type: "user",
         message: fullMessage,
       });
+      if (messageError) {
+        setPendingMessageTicketId(ticketId);
+        throw new Error("Your ticket was created, but its message did not save. Your details are still here—tap Submit Ticket to retry.");
+      }
 
-      // Fire AI reply in the background — don't block the success UI on it.
-      supabase.functions
-        .invoke("support-ai-reply", { body: { ticket_id: ticket.id } })
-        .catch((e) => console.warn("[Support] AI reply invoke failed:", e?.message));
-
-      setSubmittedTicketId(ticket.id);
+      setPendingMessageTicketId(null);
+      setSubmittedTicketId(ticketId);
       setSubmitted(true);
+      setAiReplyFailed(false);
+      setAiReplyReady(false);
       setSubject(""); setMessage(""); setCategory(""); setPriority("normal");
+      void requestAiReply(ticketId);
     } catch (err: any) {
       showAlert("Error", err.message || "Failed to submit ticket");
     } finally {
@@ -422,7 +458,11 @@ export default function SupportCenter() {
                 </View>
                 <Text style={[st.successTitle, { color: colors.text }]}>Ticket submitted!</Text>
                 <Text style={[st.successSub, { color: colors.textMuted }]}>
-                  Your ticket has been received. Our AI assistant is drafting an initial reply right now — a human agent will follow up shortly.
+                  {aiReplyFailed
+                    ? "Your ticket is saved, but the AI assistant could not reply just now. You can retry below; a human agent will still follow up."
+                    : aiReplyReady
+                      ? "Your ticket is saved and the AI reply is ready in your ticket thread. A human agent will follow up shortly."
+                      : "Your ticket has been received. Our AI assistant is drafting an initial reply right now — a human agent will follow up shortly."}
                 </Text>
               </Animated.View>
 
@@ -441,13 +481,30 @@ export default function SupportCenter() {
                 </LinearGradient>
                 <View style={{ flex: 1 }}>
                   <Text style={[st.aiThinkingTitle, { color: "#7C3AED" }]}>
-                    AI is reviewing your ticket…
+                    {aiReplyFailed ? "AI reply unavailable" : aiReplyReady ? "AI reply is ready" : "AI is reviewing your ticket…"}
                   </Text>
                   <Text style={[st.aiThinkingSub, { color: colors.textMuted }]}>
-                    An instant reply will appear in your ticket thread in moments
+                    {aiReplyFailed
+                      ? "Your ticket is safe. Try again, or open it to contact support."
+                      : aiReplyReady
+                        ? "Open your ticket to read the reply."
+                        : "An instant reply will appear in your ticket thread in moments"}
                   </Text>
                 </View>
               </Animated.View>
+
+              {aiReplyFailed && submittedTicketId && (
+                <TouchableOpacity
+                  style={[st.primaryBtn, { backgroundColor: BRAND, alignSelf: "stretch", marginBottom: 12, opacity: retryingAi ? 0.7 : 1 }]}
+                  onPress={() => void requestAiReply(submittedTicketId)}
+                  disabled={retryingAi}
+                >
+                  {retryingAi
+                    ? <ActivityIndicator color="#fff" />
+                    : <Ionicons name="refresh" size={17} color="#fff" />}
+                  <Text style={st.primaryBtnText}>{retryingAi ? "Retrying AI reply…" : "Retry AI reply"}</Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[st.primaryBtn, { backgroundColor: BRAND, alignSelf: "stretch", marginTop: 8 }]}

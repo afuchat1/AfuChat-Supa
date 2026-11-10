@@ -67,7 +67,7 @@ type Viewer = {
 export default function ViewStoryScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { user } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
 
@@ -803,7 +803,7 @@ export default function ViewStoryScreen() {
           {replyExpanded && !isOwner ? (
             <View style={styles.expandedReplyComposer}>
               <View style={styles.expandedReplyHeader}>
-                <Text style={styles.expandedReplyTitle} numberOfLines={1}>
+                <Text style={[styles.expandedReplyTitle, { color: isDark ? "rgba(255,255,255,0.78)" : colors.textMuted }]} numberOfLines={1}>
                   Replying to {story.profile.display_name}
                 </Text>
                 <TouchableOpacity
@@ -817,16 +817,20 @@ export default function ViewStoryScreen() {
                   hitSlop={8}
                   style={styles.replyCollapseButton}
                 >
-                  <Ionicons name="chevron-down" size={19} color="rgba(255,255,255,0.82)" />
+                  <Ionicons name="chevron-down" size={19} color={isDark ? "rgba(255,255,255,0.82)" : colors.textMuted} />
                 </TouchableOpacity>
               </View>
-              <View style={styles.expandedReplyField}>
+              <View style={[
+                styles.expandedReplyField,
+                !isDark && { backgroundColor: colors.inputBg, borderColor: colors.border, borderWidth: 1 },
+              ]}>
                 <Avatar uri={user?.user_metadata?.avatar_url ?? null} name="You" size={30} />
                 <TextInput
                   appearance="embedded"
-                  style={styles.expandedCommentInput}
+                  style={[styles.expandedCommentInput, { color: colors.text }]}
                   placeholder="Write a reply…"
-                  placeholderTextColor="rgba(255,255,255,0.72)"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.72)" : colors.textMuted}
+                  selectionColor={colors.accent}
                   value={commentText}
                   onChangeText={setCommentText}
                   onFocus={() => setPaused(true)}
@@ -906,12 +910,16 @@ export default function ViewStoryScreen() {
               {/* Compact reply bar grows into a multiline composer on focus. */}
               {!isOwner && (
                 <>
-              <View style={styles.commentInputWrap}>
+              <View style={[
+                styles.commentInputWrap,
+                !isDark && { backgroundColor: colors.inputBg, borderColor: colors.border },
+              ]}>
                 <TextInput
                   appearance="embedded"
-                  style={styles.commentInput}
+                  style={[styles.commentInput, { color: colors.text }]}
                   placeholder="Reply…"
-                  placeholderTextColor="rgba(255,255,255,0.72)"
+                  placeholderTextColor={isDark ? "rgba(255,255,255,0.72)" : colors.textMuted}
+                  selectionColor={colors.accent}
                   value={commentText}
                   onChangeText={setCommentText}
                   onPressIn={() => {
@@ -1243,7 +1251,6 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   expandedReplyTitle: {
-    color: "rgba(255,255,255,0.78)",
     fontSize: 12,
     fontFamily: "Inter_500Medium",
     flex: 1,
@@ -1262,6 +1269,8 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 24,
     backgroundColor: "rgba(12,14,18,0.94)",
+    borderColor: "rgba(255,255,255,0.12)",
+    borderWidth: 0.5,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
@@ -1269,7 +1278,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     maxHeight: 106,
-    color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_400Regular",
     paddingHorizontal: 2,
@@ -1346,7 +1354,6 @@ const styles = StyleSheet.create({
     }),
   },
   commentInput: {
-    color: "#fff",
     fontSize: 14,
     fontFamily: "Inter_400Regular",
   },

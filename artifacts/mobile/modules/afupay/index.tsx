@@ -1087,7 +1087,7 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
   const [tab, setTab] = useState<"incoming" | "outgoing">("incoming");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
-  const [respondingAction, setRespondingAction] = useState<"pay" | "decline" | null>(null);
+  const [respondingAction, setRespondingAction] = useState<"pay" | "decline" | "cancel" | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1140,7 +1140,7 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
 
   useEffect(() => { load(); }, [load]);
 
-  async function respondToRequest(request: PayRequest, action: "pay" | "decline") {
+  async function respondToRequest(request: PayRequest, action: "pay" | "decline" | "cancel") {
     if (!user || respondingId) return;
     setRespondingId(request.id);
     setRespondingAction(action);
@@ -1177,6 +1177,8 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
           "Payment sent",
           `${fmtAmt(request.amount)} ${request.currency === "acoin" ? "ACoin" : "Nexa"} sent to @${request.requester?.handle || "user"}.`,
         );
+      } else if (action === "cancel") {
+        showAlert("Request cancelled", "Your pending payment request was cancelled.");
       } else {
         showAlert("Request declined", "The payment request was declined.");
       }
@@ -1187,7 +1189,11 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
       onRequestsChanged?.();
       if (action === "pay") onPaymentComplete?.();
       showAlert(
-        action === "pay" ? "Payment status unknown" : "Could not decline request",
+        action === "pay"
+          ? "Payment status unknown"
+          : action === "cancel"
+            ? "Could not cancel request"
+            : "Could not decline request",
         action === "pay"
           ? "Refresh your wallet activity before trying again."
           : "Check your connection and try again.",
@@ -1216,6 +1222,17 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
       [
         { text: "Cancel", style: "cancel" },
         { text: "Decline", style: "destructive", onPress: () => { void respondToRequest(request, "decline"); } },
+      ],
+    );
+  }
+
+  function confirmCancel(request: PayRequest) {
+    showAlert(
+      "Cancel request?",
+      `Cancel your pending request to @${request.target?.handle || "this user"}?`,
+      [
+        { text: "Keep request", style: "cancel" },
+        { text: "Cancel request", style: "destructive", onPress: () => { void respondToRequest(request, "cancel"); } },
       ],
     );
   }
@@ -1258,8 +1275,8 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
                 <Text style={[s.txLabel, { color: colors.text }]}>
                   {tab === "incoming" ? "From" : "To"} @{(tab === "incoming" ? r.requester : r.target)?.handle || "unknown"}
                 </Text>
-                <View style={[s.statusBadge, { backgroundColor: r.status === "pending" ? "#FF950018" : r.status === "completed" ? "#34C75918" : "#FF3B3018" }]}>
-                  <Text style={[s.statusText, { color: r.status === "pending" ? "#FF9500" : r.status === "completed" ? "#34C759" : "#FF3B30" }]}>{r.status}</Text>
+                <View style={[s.statusBadge, { backgroundColor: r.status === "pending" ? "#FF950018" : r.status === "accepted" ? "#34C75918" : "#FF3B3018" }]}>
+                  <Text style={[s.statusText, { color: r.status === "pending" ? "#FF9500" : r.status === "accepted" ? "#34C759" : "#FF3B30" }]}>{r.status}</Text>
                 </View>
               </View>
               <Text style={[s.txAmt, { color: Colors.brand, marginTop: 4 }]}>{fmtAmt(r.amount)} {r.currency === "acoin" ? "ACoin" : "Nexa"}</Text>
@@ -1290,6 +1307,22 @@ function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPayme
                     {respondingId === r.id && respondingAction === "pay"
                       ? <ActivityIndicator size="small" color="#fff" />
                       : <><Ionicons name="card-outline" size={16} color="#fff" /><Text style={[s.requestActionText, { color: "#fff" }]}>Review & Pay</Text></>}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {tab === "outgoing" && r.status === "pending" ? (
+                <View style={s.requestActions}>
+                  <TouchableOpacity
+                    style={[s.requestAction, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                    onPress={() => confirmCancel(r)}
+                    disabled={!!respondingId}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel payment request"
+                  >
+                    {respondingId === r.id && respondingAction === "cancel"
+                      ? <ActivityIndicator size="small" color={colors.textMuted} />
+                      : <><Ionicons name="close" size={17} color={colors.textMuted} /><Text style={[s.requestActionText, { color: colors.text }]}>Cancel request</Text></>}
                   </TouchableOpacity>
                 </View>
               ) : null}

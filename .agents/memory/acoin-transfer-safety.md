@@ -26,3 +26,9 @@ Incoming payment-request acceptance must show a review step before payment. Tran
 **Why:** The user chose “Review, then pay” for incoming wallet requests, and retrying an accepted request must never charge twice.
 
 **How to apply:** Use an authenticated server-side operation that locks the pending request, verifies its recipient, performs the selected-currency transfer, and completes the request in one transaction. Keep decline separate from wallet balance changes.
+
+The live `money_requests.status` constraint permits only `pending`, `accepted`, `denied`, `expired`, and `cancelled`. Use `accepted` after payment, `denied` for recipient declines, and `cancelled` when the requester cancels.
+
+**Why:** Writing `completed` or `declined` violates the live constraint, rolling back payment and request updates.
+
+**How to apply:** Check the Supabase status constraint before changing request transitions; keep payment, decline, expiry, and requester cancellation on the matching status values.
