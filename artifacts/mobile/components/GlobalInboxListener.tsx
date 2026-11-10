@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { emitIncomingMessage, IncomingMessage } from "@/lib/globalMessageEvents";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
+import { saveMessages } from "@/lib/storage/localMessages";
 
 export function GlobalInboxListener() {
   const { user, isAuthenticated } = useAuth();
@@ -31,7 +32,7 @@ export function GlobalInboxListener() {
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
 
-  const handlePayload = useCallback((payload: any) => {
+  const handlePayload = useCallback(async (payload: any) => {
     const msg = payload as IncomingMessage;
     if (!msg?.id || !msg?.chat_id || !msg?.sender_id) return;
     if (msg.sender_id === userIdRef.current) return;
@@ -44,6 +45,10 @@ export function GlobalInboxListener() {
       evictionTimers.current.delete(msg.id);
     }, 15_000);
     evictionTimers.current.set(msg.id, timer);
+
+    // Persist at the app root, not only from an open chat screen. This keeps
+    // received messages available offline before the user enters the thread.
+    await saveMessages(msg.chat_id, [msg]);
 
     const recipientId = userIdRef.current;
     if (recipientId) {

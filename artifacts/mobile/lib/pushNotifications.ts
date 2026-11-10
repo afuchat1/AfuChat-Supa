@@ -7,12 +7,14 @@ import { isExpoGo } from "@/lib/expoEnvironment";
 import { acknowledgeMessagesDelivered } from "@/lib/messageReceipts";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { isOnline } from "@/lib/offlineStore";
+import { saveMessages } from "@/lib/storage/localMessages";
 
 type NotificationsModule = typeof import("expo-notifications");
 type PushResponse = {
   actionIdentifier: string;
   userText?: string;
   notification?: { request?: { identifier?: string; content?: { data?: Record<string, unknown> } } };
+  request?: { identifier?: string; content?: { data?: Record<string, unknown> } };
   data?: Record<string, unknown>;
 };
 
@@ -71,7 +73,10 @@ function getNotifications(): NotificationsModule | null {
 }
 
 function getNotificationData(response: PushResponse): Record<string, unknown> {
-  const contentData = response.notification?.request?.content?.data ?? {};
+  const contentData =
+    response.notification?.request?.content?.data ??
+    response.request?.content?.data ??
+    {};
   const taskData = response.data ?? {};
   let serializedTaskData: Record<string, unknown> = {};
   const dataString = typeof taskData.dataString === "string" ? taskData.dataString : "";
@@ -100,6 +105,28 @@ function getTarget(response: PushResponse) {
     callerName: stringValue(data.callerName ?? data.caller_name),
     callerAvatar: stringValue(data.callerAvatar ?? data.caller_avatar),
   };
+}
+
+/**
+ * Persist the exact message associated with a push. Background notification
+ * delivery can happen while no chat screen is mounted (or while the app is
+ * suspended), so the message must not depend on the chat route's listener.
+ */
+export async function cacheIncomingMessageFromPush(response: PushResponse, userId: string): Promise<void> {
+  if (!userId) return;
+  const { chatId, messageId } = getTarget(response);
+  if (!chatId || !messageId) return;
+
+  try {
+    const { data: message, error } = await supabase
+      .from("messages")
+      .select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)")
+      .eq("id", messageId)
+      .eq("chat_id", chatId)
+      .maybeSingle();
+    if (error || !message || message.sender_id === userId) return;
+    await saveMessages(chatId, [message]);
+  } catch {}
 }
 
 async function markRead(response: PushResponse, userId: string) {
@@ -283,6 +310,7 @@ function defineBackgroundTask() {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData.session?.user?.id;
       if (!userId) return;
+      await cacheIncomingMessageFromPush(data as PushResponse, userId);
       if (typeof data.actionIdentifier === "string") {
         if (
           data.actionIdentifier === PUSH_ACTION_REPLY ||

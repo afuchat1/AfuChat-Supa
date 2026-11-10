@@ -6,6 +6,7 @@ import {
   addNotificationResponseListener,
   addNotificationReceivedListener,
   acknowledgeNotificationDelivery,
+  cacheIncomingMessageFromPush,
   clearLastNotificationResponse,
   configurePushNotifications,
   dismissChatNotifications,
@@ -81,6 +82,7 @@ export default function PushNotificationManager() {
       void handleResponse(response);
     });
     const deliverySubscription = addNotificationReceivedListener((notification) => {
+      void cacheIncomingMessageFromPush({ notification } as any, user.id);
       void acknowledgeNotificationDelivery({ notification } as any, user.id);
     });
     getLastNotificationResponse().then((response) => {

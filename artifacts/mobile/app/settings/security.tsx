@@ -113,7 +113,7 @@ import Colors from "@/constants/colors";
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function SecuritySettingsScreen() {
   const { colors, isDark } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
@@ -256,9 +256,28 @@ export default function SecuritySettingsScreen() {
             label="security.device_security"
             sublabel="security.device_security_description"
             onPress={() => router.push("/device-security" as any)}
-            last
             colors={colors}
           />
+          <Row
+            icon="ribbon"
+            iconColor={colors.accent}
+            label="Verification"
+            sublabel="Eligibility and account review"
+            onPress={() => router.push("/settings/verification" as any)}
+            last={!profile?.is_admin}
+            colors={colors}
+          />
+          {profile?.is_admin && (
+            <Row
+              icon="clipboard"
+              iconColor={colors.accent}
+              label="Verification requests"
+              sublabel="Review eligible personal applications"
+              onPress={() => router.push("/settings/verification-review" as any)}
+              last
+              colors={colors}
+            />
+          )}
         </Section>
 
         {/* ── YOUR DATA ────────────────────────────────────────────────── */}

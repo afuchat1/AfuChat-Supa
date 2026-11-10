@@ -49,6 +49,40 @@ export function getLocalAttachmentUri(url: string): string | null {
 }
 
 /**
+ * Resolve an already-downloaded chat attachment without starting a network
+ * request. Safe to use before opening the full-screen image viewer.
+ */
+export async function getCachedChatAttachmentUri(url: string): Promise<string | null> {
+  if (!url) return null;
+  if (url.startsWith("file://")) return url;
+  if (!url.startsWith("http")) return null;
+
+  const memoryPath = _mem.get(url);
+  if (memoryPath) {
+    try {
+      const info = await FileSystem.getInfoAsync(memoryPath);
+      if (info.exists && (info as any).size > 0) return memoryPath;
+      _mem.delete(url);
+    } catch {}
+  }
+
+  try {
+    const db = await getDB();
+    const row = await db.getFirstAsync<{ local_path: string; media_type: string | null }>(
+      "SELECT local_path, media_type FROM media_cache WHERE url_hash = ?",
+      [_urlHash(url)],
+    );
+    if (!row?.local_path || !row.media_type?.startsWith("chat_")) return null;
+    const info = await FileSystem.getInfoAsync(row.local_path);
+    if (!info.exists || !(info as any).size) return null;
+    _mem.set(url, row.local_path);
+    return row.local_path;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ensure a chat attachment is on device and return its local URI.
  * - Already downloaded → returns local path instantly (no network).
  * - Not yet downloaded → downloads it, caches permanently, returns local path.
@@ -103,6 +137,19 @@ export function autoDownloadChatAttachments(
   for (const msg of messages) {
     const { attachment_url: url, attachment_type: type } = msg;
     if (!url || !type) continue;
+    if (type === "image_group") {
+      try {
+        const groupedUrls: unknown = JSON.parse(url);
+        if (Array.isArray(groupedUrls)) {
+          groupedUrls.forEach((imageUrl) => {
+            if (typeof imageUrl === "string" && imageUrl.startsWith("http")) {
+              _downloadWithOpts(imageUrl, "image", saveToGallery).catch(() => {});
+            }
+          });
+        }
+      } catch {}
+      continue;
+    }
     if (type === "video") continue;  // too large — stream from URL
     if (type === "file") continue;   // user must decide to download
     if (_mem.has(url)) continue;

@@ -160,7 +160,7 @@ export default function VerifiedBadge({
               activeOpacity={0.85}
               onPress={() => {
                 setVisible(false);
-                router.push(isOrg ? "/business-verification" : "/premium");
+                router.push(isOrg ? "/business-verification" : "/settings/verification");
               }}
             >
               <Ionicons name={isOrg ? "storefront-outline" : "ribbon-outline"} size={15} color="#fff" />

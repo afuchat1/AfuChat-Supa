@@ -90,7 +90,7 @@ import {
   getCachedUserId,
   onConnectivityChange,
 } from "@/lib/offlineStore";
-import { createLocalMessageId, getLocalMessages, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageDelivered, markMessageRead, saveMessageReceipts, markMessageSynced } from "@/lib/storage/localMessages";
+import { createLocalMessageId, getLocalMessages, getLocalMessageEditTimestamps, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageDelivered, markMessageRead, saveMessageReceipts, markMessageSynced } from "@/lib/storage/localMessages";
 import { queueMessage, removePendingMessage } from "@/lib/offlineStore";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
@@ -107,7 +107,7 @@ import {
 import { LinkPreview } from "@/components/ui/LinkPreview";
 import { getPhonebookName } from "@/lib/storage/localContacts";
 import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
-import { getLocalAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
+import { getLocalAttachmentUri, getCachedChatAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
 import { uploadChatMedia } from "@/lib/mediaUpload";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import { translateUserContent, detectMessageLanguage } from "@/lib/translate";
@@ -1503,6 +1503,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   const [transcribing, setTranscribing] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const groupedImageUrls = parseGroupedImageUrls(msg);
 
   // ── Local attachment URI (from device cache) ──────────────────────────────
   // Initialise synchronously from the in-memory cache; then resolve in the
@@ -1511,20 +1512,47 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
     if (!msg.attachment_url || msg.attachment_type === "image_group") return "";
     return getLocalAttachmentUri(msg.attachment_url) ?? msg.attachment_url;
   });
+  const [groupAttachUris, setGroupAttachUris] = useState<Record<string, string>>({});
   const [fileDownloading, setFileDownloading] = useState(false);
 
   useEffect(() => {
     const url  = msg.attachment_url;
     const type = msg.attachment_type;
-    if (!chatPrefsLocal.auto_download) return;
-    // Skip video (stream from URL) and file (user must choose to download)
     if (!url || !type || type === "image_group" || type === "video" || type === "file") return;
-    // Already resolved to a local path — nothing to do
-    if (attachUri && !attachUri.startsWith("http")) return;
-    ensureChatAttachmentDownloaded(url, type)
-      .then((local) => { if (local && local !== attachUri) setAttachUri(local); })
-      .catch(() => {});
-  }, [msg.id, chatPrefsLocal.auto_download]); // eslint-disable-line react-hooks/exhaustive-deps
+    let active = true;
+    setAttachUri(getLocalAttachmentUri(url) ?? url);
+    void (async () => {
+      const cached = await getCachedChatAttachmentUri(url);
+      if (!active) return;
+      if (cached) {
+        setAttachUri(cached);
+        return;
+      }
+      if (!chatPrefsLocal.auto_download) return;
+      const downloaded = await ensureChatAttachmentDownloaded(url, type);
+      if (active && downloaded) setAttachUri(downloaded);
+    })();
+    return () => { active = false; };
+  }, [msg.id, msg.attachment_url, msg.attachment_type, chatPrefsLocal.auto_download]);
+
+  useEffect(() => {
+    if (groupedImageUrls.length === 0) {
+      setGroupAttachUris({});
+      return;
+    }
+    let active = true;
+    void Promise.all(groupedImageUrls.map(async (url) => {
+      const cached = await getCachedChatAttachmentUri(url);
+      if (cached || !chatPrefsLocal.auto_download) return [url, cached] as const;
+      return [url, await ensureChatAttachmentDownloaded(url, "image")] as const;
+    })).then((entries) => {
+      if (!active) return;
+      setGroupAttachUris(Object.fromEntries(
+        entries.filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+      ));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [msg.id, groupedImageUrls.join("\u001f"), chatPrefsLocal.auto_download]);
 
   async function handleFileTap() {
     if (!msg.attachment_url) return;
@@ -1708,7 +1736,6 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
     );
   }
 
-  const groupedImageUrls = parseGroupedImageUrls(msg);
   const hasImage = msg.attachment_url && (msg.attachment_type === "image" || msg.attachment_type === "gif" || groupedImageUrls.length > 0);
   const hasVideo = msg.attachment_url && msg.attachment_type === "video";
   const hasAudio = msg.attachment_url && msg.attachment_type === "audio";
@@ -1798,7 +1825,9 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
             <>
                 <TouchableOpacity
                 onPress={() => onImageTap?.(
-                  groupedImageUrls.length > 0 ? groupedImageUrls : [attachUri || msg.attachment_url!],
+                  groupedImageUrls.length > 0
+                    ? groupedImageUrls.map((url) => groupAttachUris[url] ?? url)
+                    : [attachUri || msg.attachment_url!],
                   0,
                 )}
                 onLongPress={messageLongPress}
@@ -1811,7 +1840,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                     {groupedImageUrls.map((url, index) => (
                       <ExpoImage
                         key={`${url}-${index}`}
-                        source={{ uri: url }}
+                        source={{ uri: groupAttachUris[url] ?? url }}
                         style={groupedImageUrls.length === 1 ? st.attachImage : st.imageGroupTile}
                         contentFit="cover"
                         cachePolicy="memory"
@@ -2596,6 +2625,12 @@ function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const imgViewer = useImageViewer();
+  const openChatImageViewer = useCallback(async (images: string[], index: number) => {
+    const resolvedImages = await Promise.all(images.map(async (uri) =>
+      (await getCachedChatAttachmentUri(uri)) ?? uri
+    ));
+    imgViewer.openViewer(resolvedImages, index);
+  }, [imgViewer.openViewer]);
   const [realChatId, setRealChatId] = useState<string | null>(null);
   const creatingChatIdRef = useRef<Promise<string | null> | null>(null);
 
@@ -3521,7 +3556,7 @@ function ChatScreen() {
         const newestFirst = [...cached].reverse();
         setMessages((previous) => {
           const previousById = new Map(previous.map((message) => [message.id, message]));
-          return newestFirst.map((m) => {
+          const hydrated = newestFirst.map((m) => {
             const previousMessage = previousById.get(m.id);
             return {
               id: m.id,
@@ -3539,8 +3574,19 @@ function ChatScreen() {
               reactions: [],
               _pending: m.is_pending,
               sender: mergeSenderSnapshot(previousMessage?.sender, localSenderSnapshot(m)),
+              ...(previousMessage?.reactions ? { reactions: previousMessage.reactions } : {}),
+              ...(previousMessage?.read_at ? { read_at: previousMessage.read_at } : {}),
+              ...(previousMessage?.delivered_at ? { delivered_at: previousMessage.delivered_at } : {}),
+              ...(previousMessage?._notification ? { _notification: previousMessage._notification } : {}),
             };
           });
+          const hydratedIds = new Set(hydrated.map((message) => message.id));
+          const preserved = previous.filter((message) =>
+            !hydratedIds.has(message.id) && (!clearedAt || message.sent_at > clearedAt)
+          );
+          return [...hydrated, ...preserved].sort(
+            (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+          );
         });
         hydrateLocalSenderSnapshots(chatId, cached, isCurrentLoad, setMessages);
         setLoading(false);
@@ -3588,23 +3634,87 @@ function ChatScreen() {
       }
     }
 
-    // Always backfill the latest server page, even when local history exists.
-    // Some send paths create a server message without first writing a local
-    // outbox row; a strict timestamp delta can skip those rows after navigation.
+    // Reconcile only new rows against the local cursor. The latest-ID index is
+    // intentionally small and catches missed/out-of-order rows without
+    // downloading the last page of message bodies on every reopen.
     const newestStored = await getNewestMessageDate(chatId);
     const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
     if (!isCurrentLoad()) return;
-    let msgQuery = supabase
-      .from("messages")
-      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
-      .eq("chat_id", chatId)
-      .order("sent_at", { ascending: false })
-      .limit(100);
-    if (clearedAtServer) {
-      msgQuery = msgQuery.gt("sent_at", clearedAtServer);
-    }
-      const { data } = await msgQuery;
+    const messageSelect = `id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`;
+    let serverMessages: any[] = [];
+
+    if (!newestStored) {
+      let firstPageQuery = supabase
+        .from("messages")
+        .select(messageSelect)
+        .eq("chat_id", chatId)
+        .order("sent_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(100);
+      if (clearedAtServer) firstPageQuery = firstPageQuery.gt("sent_at", clearedAtServer);
+      const { data: firstPage } = await firstPageQuery;
+      serverMessages = firstPage ?? [];
+    } else {
+      let recentIndexQuery = supabase
+        .from("messages")
+        .select("id, sent_at, edited_at")
+        .eq("chat_id", chatId)
+        .order("sent_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(100);
+      let deltaQuery = supabase
+        .from("messages")
+        .select(messageSelect)
+        .eq("chat_id", chatId)
+        .gt("sent_at", newestStored)
+        .order("sent_at", { ascending: true })
+        .order("id", { ascending: true })
+        .limit(1000);
+      if (clearedAtServer) {
+        recentIndexQuery = recentIndexQuery.gt("sent_at", clearedAtServer);
+        deltaQuery = deltaQuery.gt("sent_at", clearedAtServer);
+      }
+
+      const [{ data: recentIndex }, { data: deltaRows }] = await Promise.all([
+        recentIndexQuery,
+        deltaQuery,
+      ]);
       if (!isCurrentLoad()) return;
+
+      const recentIds = (recentIndex ?? []).map((row: any) => row.id as string);
+      const localEditedAt = await getLocalMessageEditTimestamps(chatId, recentIds);
+      const alreadyInDelta = new Set((deltaRows ?? []).map((row: any) => row.id as string));
+      const missedIds = (recentIndex ?? [])
+        .filter((row: any) =>
+          !alreadyInDelta.has(row.id) &&
+          (
+            !localEditedAt.has(row.id) ||
+            (row.edited_at && row.edited_at !== localEditedAt.get(row.id))
+          )
+        )
+        .map((row: any) => row.id as string);
+
+      let missedRows: any[] = [];
+      if (missedIds.length > 0) {
+        let missedQuery = supabase
+          .from("messages")
+          .select(messageSelect)
+          .eq("chat_id", chatId)
+          .in("id", missedIds);
+        if (clearedAtServer) missedQuery = missedQuery.gt("sent_at", clearedAtServer);
+        const { data: fetchedMissed } = await missedQuery;
+        missedRows = fetchedMissed ?? [];
+      }
+      if (!isCurrentLoad()) return;
+
+      const uniqueRows = new Map<string, any>();
+      [...(deltaRows ?? []), ...missedRows].forEach((row) => uniqueRows.set(row.id, row));
+      serverMessages = [...uniqueRows.values()].sort(
+        (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+      );
+    }
+    if (!isCurrentLoad()) return;
+    const data = serverMessages;
 
     if (data) {
       const msgIds = data.map((m: any) => m.id);
@@ -8523,7 +8633,7 @@ STRICT RULES:
             isHighlighted={item.id === highlightedMsgId}
             onTapEnvelope={handleTapEnvelope}
             onTapGift={handleTapGift}
-            onImageTap={imgViewer.openViewer}
+            onImageTap={openChatImageViewer}
             onConfirmExec={handleConfirmAiExec}
             onCancelExec={handleCancelAiExec}
             onSuggestionTap={(text) => sendMessage(text)}

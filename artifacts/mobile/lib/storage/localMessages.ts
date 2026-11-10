@@ -4,7 +4,7 @@
 // remains available for paging without repeatedly downloading the full thread.
 //
 // RULES:
-//   • INSERT OR IGNORE  — never overwrite message content; fill sender snapshots safely
+//   • INSERT OR IGNORE  — preserve content unless the server confirms an edit
 //   • No TTL, no auto-trim — messages live until the user deletes the conversation
 //   • Keep delivery/read receipt timestamps beside the message for offline info
 
@@ -150,6 +150,42 @@ export async function getNewestMessageDate(conversationId: string): Promise<stri
   }
 }
 
+/** Return edit versions for recent IDs so server reconciliation stays incremental. */
+export async function getLocalMessageEditTimestamps(
+  conversationId: string,
+  messageIds: string[],
+): Promise<Map<string, string | null>> {
+  if (!conversationId || messageIds.length === 0) return new Map();
+  try {
+    if (Platform.OS === "web") {
+      const cached = await getLocalMessages(conversationId, 1000);
+      const requested = new Set(messageIds);
+      const versions = new Map<string, string | null>();
+      cached.forEach((message) => {
+        if (requested.has(message.id)) versions.set(message.id, message.edited_at);
+      });
+      return versions;
+    }
+
+    const db = await getDB();
+    const found = new Map<string, string | null>();
+    // Keep bind parameter counts comfortably below SQLite's platform limits.
+    for (let offset = 0; offset < messageIds.length; offset += 80) {
+      const chunk = messageIds.slice(offset, offset + 80);
+      const placeholders = chunk.map(() => "?").join(", ");
+      const rows = await db.getAllAsync<{ id: string; edited_at: string | null }>(
+        `SELECT id, edited_at FROM messages
+         WHERE conversation_id = ? AND id IN (${placeholders})`,
+        [conversationId, ...chunk],
+      );
+      rows.forEach((row) => found.set(row.id, row.edited_at ?? null));
+    }
+    return found;
+  } catch {
+    return new Map();
+  }
+}
+
 export async function getOldestMessageDate(conversationId: string): Promise<string | null> {
   try {
     const db = await getDB();
@@ -180,8 +216,8 @@ export async function getLocalMessageCount(conversationId: string): Promise<numb
 
 /**
  * Persist messages permanently. Uses INSERT OR IGNORE — already-stored messages
- * are never overwritten. Status, receipt timestamps, edited_at, and non-empty
- * sender identity snapshots may be refreshed without erasing known values.
+ * are never overwritten. An explicit newer edited_at may update message content;
+ * status, receipts, and non-empty sender snapshots are merged safely.
  */
 export async function saveMessages(conversationId: string, messages: any[]): Promise<void> {
   if (!messages.length) return;
@@ -232,13 +268,22 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
       ) {
         await db.runAsync(
           `UPDATE messages SET
+             content = CASE
+               WHEN ? IS NULL THEN content
+               WHEN edited_at IS NOT NULL AND edited_at > ? THEN content
+               ELSE ?
+             END,
              status = CASE
                WHEN status = 'read' OR ? = 'read' THEN 'read'
                WHEN status = 'delivered' OR ? = 'delivered' THEN 'delivered'
                WHEN ? IS NOT NULL THEN ?
                ELSE status
              END,
-             edited_at = COALESCE(?, edited_at),
+             edited_at = CASE
+               WHEN ? IS NULL THEN edited_at
+               WHEN edited_at IS NULL OR edited_at < ? THEN ?
+               ELSE edited_at
+             END,
              delivered_at = CASE
                WHEN ? IS NULL THEN delivered_at
                WHEN delivered_at IS NULL OR delivered_at < ? THEN ?
@@ -254,11 +299,16 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
              sender_handle = COALESCE(NULLIF(?, ''), sender_handle)
            WHERE id = ?`,
           [
+             local.edited_at,
+             local.edited_at,
+             local.content,
             msg.status ?? null,
             msg.status ?? null,
             msg.status ?? null,
             msg.status ?? null,
-            msg.edited_at ?? null,
+             local.edited_at,
+             local.edited_at,
+             local.edited_at,
             local.delivered_at,
             local.delivered_at,
             local.delivered_at,
