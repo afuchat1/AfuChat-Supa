@@ -2,7 +2,7 @@
   "expo": {
     "name": "AfuChat",
     "slug": "afuchat-personal",
-    "version": "0.0.7",
+    "version": "0.0.8",
     "icon": "./assets/images/icon.png",
     "scheme": "afuchat",
     "orientation": "default",
@@ -76,7 +76,7 @@
           ]
         }
       ],
-      "versionCode": 7,
+      "versionCode": 8,
       "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
@@ -221,7 +221,7 @@
     "ios": {
       "bundleIdentifier": "com.afuchat.mobile",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "0.0.4",
+      "buildNumber": "0.0.8",
       "infoPlist": {
         "NSCameraUsageDescription": "AfuChat uses the camera to take photos and videos for stories and messages.",
         "NSMicrophoneUsageDescription": "AfuChat uses the microphone to record voice messages and video with audio.",
