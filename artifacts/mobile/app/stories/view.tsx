@@ -66,7 +66,7 @@ type Viewer = {
 
 export default function ViewStoryScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenH } = useWindowDimensions();
@@ -824,7 +824,7 @@ export default function ViewStoryScreen() {
                 styles.expandedReplyField,
                 !isDark && { backgroundColor: colors.inputBg, borderColor: colors.border, borderWidth: 1 },
               ]}>
-                <Avatar uri={user?.user_metadata?.avatar_url ?? null} name="You" size={30} />
+                <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "You"} size={30} userId={user?.id} />
                 <TextInput
                   appearance="embedded"
                   style={[styles.expandedCommentInput, { color: colors.text }]}
@@ -910,6 +910,14 @@ export default function ViewStoryScreen() {
               {/* Compact reply bar grows into a multiline composer on focus. */}
               {!isOwner && (
                 <>
+              {user ? (
+                <Avatar
+                  uri={profile?.avatar_url ?? null}
+                  name={profile?.display_name || "You"}
+                  size={30}
+                  userId={user.id}
+                />
+              ) : null}
               <View style={[
                 styles.commentInputWrap,
                 !isDark && { backgroundColor: colors.inputBg, borderColor: colors.border },

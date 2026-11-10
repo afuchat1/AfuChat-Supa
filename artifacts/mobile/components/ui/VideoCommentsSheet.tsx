@@ -1314,7 +1314,7 @@ export function VideoCommentsSheet({
       {user ? (
         <View style={[cStyles.inputRow, { paddingBottom: kbHeight > 0 ? 8 : 12 }]}>
           {/* Avatar — sits to the left of the pill, never inside it */}
-          <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
+          <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "You"} size={32} userId={user.id} />
 
           {/* ── Glass pill — text + all buttons on the right ── */}
           <AfuInputSurface

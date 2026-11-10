@@ -6503,6 +6503,8 @@ STRICT RULES:
         chat_id: targetChatId,
         sender_id: user.id,
         encrypted_content: content,
+        attachment_url: forwardMsg.attachment_url || null,
+        attachment_type: forwardMsg.attachment_type || null,
       }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
       if (error) throw error;
       await cacheConfirmedOutgoingMessage(inserted, {

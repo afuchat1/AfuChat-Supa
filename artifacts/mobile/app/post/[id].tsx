@@ -1032,7 +1032,7 @@ export default function PostDetailScreen() {
           {/* Main input row */}
           {user ? (
             <View style={st.inputRow}>
-              <Avatar uri={profile?.avatar_url} name={profile?.display_name || "You"} size={32} />
+              <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "You"} size={32} userId={user.id} />
 
               {/* Glass pill — text + secondary icons + send */}
               <FloatingGlassSurface

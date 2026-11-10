@@ -103,6 +103,169 @@ const MIME_TO_EXT: Record<string, string> = {
   "application/x-msdownload": "exe",
 };
 
+const UPLOAD_REUSE_CACHE_PREFIX = "@afuchat:uploaded_media:v1:";
+type UploadReuseIdentity = {
+  key: string;
+  scope: string;
+  sourceUri: string;
+  size: number | null;
+  modificationTime: number | null;
+};
+type UploadReuseEntry = UploadReuseIdentity & {
+  publicUrl: string;
+  storageKey: string;
+  uploadedAt: number;
+};
+type UploadResult = { publicUrl: string | null; error: string | null };
+
+const inFlightUploads = new Map<string, Promise<UploadResult>>();
+const EXACT_PATH_BUCKETS = new Set(["music", "music-covers", "stories"]);
+
+function getUploadReuseScope(bucket: string): string {
+  const canonicalBucket = resolveBucket(bucket);
+  // Music paths are authorization-checked by their logical bucket, and story
+  // media has its own expiration lifecycle. Other public media references can
+  // safely share one object URL across features.
+  return EXACT_PATH_BUCKETS.has(canonicalBucket) ? canonicalBucket : "shared-public-media";
+}
+
+function hashUploadIdentity(value: string): string {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ (code + index), 0x85ebca6b);
+  }
+  return `${value.length.toString(36)}-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
+}
+
+function isAlreadyStoredMediaUrl(value: string): boolean {
+  if (!/^https?:\/\//i.test(value)) return false;
+  try {
+    const candidate = new URL(value);
+    const configuredR2Base = process.env.EXPO_PUBLIC_R2_PUBLIC_BASE_URL;
+    const r2Bases = [configuredR2Base, "https://cdn.afuchat.com"].filter(Boolean) as string[];
+    for (const base of r2Bases) {
+      try {
+        const configured = new URL(base);
+        const pathPrefix = configured.pathname.replace(/\/+$/, "");
+        if (
+          candidate.origin === configured.origin &&
+          candidate.pathname.startsWith(`${pathPrefix}/`)
+        ) return true;
+      } catch {}
+    }
+    if (candidate.hostname.endsWith(".r2.dev")) return true;
+    const supabaseOrigin = new URL(supabaseUrl).origin;
+    return candidate.origin === supabaseOrigin &&
+      candidate.pathname.startsWith("/storage/v1/object/public/");
+  } catch {
+    return false;
+  }
+}
+
+async function getUploadReuseIdentity(
+  userId: string,
+  bucket: string,
+  fileUri: string,
+): Promise<UploadReuseIdentity | null> {
+  // Only persist short device file references. data:/blob: URIs may contain
+  // the whole file, and HTTP URLs are handled separately as stored references.
+  if (
+    fileUri.length > 4096 ||
+    !/^(file|content|ph):\/\//i.test(fileUri)
+  ) return null;
+
+  let size: number | null = null;
+  let modificationTime: number | null = null;
+  try {
+    const info = await FileSystem.getInfoAsync(fileUri);
+    if (info.exists) {
+      const details = info as any;
+      size = typeof details.size === "number" ? details.size : null;
+      modificationTime = typeof details.modificationTime === "number"
+        ? details.modificationTime
+        : null;
+    }
+  } catch {
+    // Some Android content:// providers do not expose metadata. The exact URI
+    // still gives a useful same-file key for that provider.
+  }
+
+  const sourceIdentity = `${fileUri}\u0000${size ?? ""}\u0000${modificationTime ?? ""}`;
+  const scope = getUploadReuseScope(bucket);
+  return {
+    key: `${UPLOAD_REUSE_CACHE_PREFIX}${userId}:${scope}:${hashUploadIdentity(sourceIdentity)}`,
+    scope,
+    sourceUri: fileUri,
+    size,
+    modificationTime,
+  };
+}
+
+async function readReusableUpload(identity: UploadReuseIdentity): Promise<UploadReuseEntry | null> {
+  try {
+    const raw = await AsyncStorage.getItem(identity.key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as UploadReuseEntry;
+    if (
+      entry.sourceUri !== identity.sourceUri ||
+      entry.size !== identity.size ||
+      entry.modificationTime !== identity.modificationTime ||
+      typeof entry.publicUrl !== "string" ||
+      !entry.publicUrl
+    ) {
+      await AsyncStorage.removeItem(identity.key).catch(() => {});
+      return null;
+    }
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+async function saveReusableUpload(
+  identity: UploadReuseIdentity,
+  bucket: string,
+  filePath: string,
+  publicUrl: string,
+): Promise<void> {
+  const entry: UploadReuseEntry = {
+    ...identity,
+    publicUrl,
+    storageKey: `${resolveBucket(bucket)}/${filePath.replace(/^\/+/, "")}`,
+    uploadedAt: Date.now(),
+  };
+  await AsyncStorage.setItem(identity.key, JSON.stringify(entry)).catch(() => {});
+}
+
+async function invalidateReusableUploads(storageKey: string): Promise<void> {
+  try {
+    const normalizedKey = storageKey.replace(/^\/+/, "");
+    const cacheKeys = (await AsyncStorage.getAllKeys())
+      .filter((key) => key.startsWith(UPLOAD_REUSE_CACHE_PREFIX));
+    if (!cacheKeys.length) return;
+    const entries = await AsyncStorage.multiGet(cacheKeys);
+    const staleKeys: string[] = [];
+    for (const [key, value] of entries) {
+      if (!value) continue;
+      try {
+        const entry = JSON.parse(value) as UploadReuseEntry;
+        if (
+          entry.storageKey === normalizedKey ||
+          entry.storageKey.endsWith(`/${normalizedKey}`)
+        ) staleKeys.push(key);
+      } catch {
+        staleKeys.push(key);
+      }
+    }
+    if (staleKeys.length) await AsyncStorage.multiRemove(staleKeys);
+  } catch {
+    // Deletion must still succeed even if the local reuse index is unavailable.
+  }
+}
+
 function getMime(ext: string): string {
   return MIME_MAP[ext.toLowerCase()] || "application/octet-stream";
 }
@@ -307,12 +470,12 @@ async function proxyUpload(
  *                 loaded into memory, safe for 100 MB+ videos.
  * Native data:/blob:: fileUriToBlob + proxy (already in-memory, small).
  */
-export async function uploadToStorage(
+async function uploadToStorageUncached(
   bucket: string,
   filePath: string,
   fileUri: string,
   contentType?: string,
-): Promise<{ publicUrl: string | null; error: string | null }> {
+): Promise<UploadResult> {
   let tempPath: string | null = null;
   const cleanupTemp = () => {
     if (!tempPath) return;
@@ -463,6 +626,61 @@ export async function uploadToStorage(
   } catch (e: any) {
     cleanupTemp();
     return { publicUrl: null, error: e?.message || "Upload failed" };
+  }
+}
+
+/**
+ * Reuse the same stored object when an already-uploaded URL or the exact same
+ * local file path is submitted again. This keeps forwards and repeated sends
+ * pointed at the original R2 object instead of creating another copy.
+ */
+export async function uploadToStorage(
+  bucket: string,
+  filePath: string,
+  fileUri: string,
+  contentType?: string,
+): Promise<UploadResult> {
+  const requiresExactPath = EXACT_PATH_BUCKETS.has(resolveBucket(bucket));
+  if (!requiresExactPath && isAlreadyStoredMediaUrl(fileUri)) {
+    return { publicUrl: fileUri, error: null };
+  }
+
+  if (requiresExactPath) {
+    return uploadToStorageUncached(bucket, filePath, fileUri, contentType);
+  }
+
+  let identity: UploadReuseIdentity | null = null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user?.id;
+    if (userId) identity = await getUploadReuseIdentity(userId, bucket, fileUri);
+  } catch {}
+
+  if (!identity) {
+    return uploadToStorageUncached(bucket, filePath, fileUri, contentType);
+  }
+
+  const inFlightKey = identity.key;
+  const pending = inFlightUploads.get(inFlightKey);
+  if (pending) return pending;
+
+  const uploadPromise = (async () => {
+    const cached = await readReusableUpload(identity);
+    if (cached) return { publicUrl: cached.publicUrl, error: null };
+
+    const result = await uploadToStorageUncached(bucket, filePath, fileUri, contentType);
+    if (result.publicUrl && !result.error) {
+      await saveReusableUpload(identity!, bucket, filePath, result.publicUrl);
+    }
+    return result;
+  })();
+  inFlightUploads.set(inFlightKey, uploadPromise);
+  try {
+    return await uploadPromise;
+  } finally {
+    if (inFlightUploads.get(inFlightKey) === uploadPromise) {
+      inFlightUploads.delete(inFlightKey);
+    }
   }
 }
 
@@ -645,6 +863,7 @@ export async function deleteUserFile(key: string): Promise<{ ok: boolean; error:
     try { json = text ? JSON.parse(text) : {}; } catch { /* ignore */ }
     if (!r.ok) return { ok: false, error: json?.error || `Failed (${r.status})` };
     AsyncStorage.removeItem(USAGE_CACHE_KEY).catch(() => {});
+    invalidateReusableUploads(key).catch(() => {});
     return { ok: true, error: null };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Delete failed" };
