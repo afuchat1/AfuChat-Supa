@@ -212,7 +212,7 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "amkaweesi1",
+    "owner": "afuapp",
     "web": {
       "bundler": "metro",
       "output": "static",
