@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
+import { GlassInputSurface } from "@/components/ui/GlassInputSurface";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -719,12 +720,12 @@ function PostChrome({
         {/* Reply input pill */}
         <View style={styles.replyRow}>
           <Avatar uri={myProfile?.avatar_url ?? null} name={myProfile?.display_name ?? "You"} size={30} />
-          <View style={styles.replyPill}>
+          <GlassInputSurface tone="overlay" style={styles.replyPill}>
             <TextInput
               ref={inputRef}
-              style={styles.replyInput}
+              style={[styles.replyInput, { color: "#1A1208" }]}
               placeholder="Post your reply…"
-              placeholderTextColor="rgba(255,255,255,0.38)"
+              placeholderTextColor="#5A5040"
               value={replyText}
               onChangeText={setReplyText}
               multiline={false}
@@ -739,7 +740,7 @@ function PostChrome({
                   : <Ionicons name="arrow-up" size={14} color="#fff" />}
               </TouchableOpacity>
             )}
-          </View>
+          </GlassInputSurface>
 
           {/* Expand: navigate to full comment page */}
           <TouchableOpacity onPress={onNavigateToPost} hitSlop={8} style={styles.expandBtn} activeOpacity={0.7}>
@@ -1254,10 +1255,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.15)",
     paddingHorizontal: 14,
     paddingVertical: 8,
     minHeight: 38,
