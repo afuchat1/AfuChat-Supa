@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 
@@ -218,33 +219,41 @@ export default function CreateArticleScreen() {
             </View>
           </View>
 
-          {/* Title input */}
-          <TextInput
-            style={[styles.titleInput, { color: colors.text }]}
-            placeholder="Article title…"
-            placeholderTextColor={colors.textMuted}
-            value={title}
-            onChangeText={setTitle}
-            multiline
-            maxLength={200}
-            returnKeyType="next"
-            onSubmitEditing={() => bodyRef.current?.focus()}
-            autoFocus
-          />
+          <FloatingGlassSurface
+            fill={false}
+            variant="input"
+            cornerRadius={20}
+            style={styles.editorShell}
+            contentStyle={styles.editorContent}
+          >
+            <TextInput
+              appearance="embedded"
+              style={[styles.titleInput, { color: colors.text }]}
+              placeholder="Article title…"
+              placeholderTextColor={colors.textMuted}
+              value={title}
+              onChangeText={setTitle}
+              multiline
+              maxLength={200}
+              returnKeyType="next"
+              onSubmitEditing={() => bodyRef.current?.focus()}
+              autoFocus
+            />
 
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          {/* Body input */}
-          <TextInput
-            ref={bodyRef}
-            style={[styles.bodyInput, { color: colors.text }]}
-            placeholder={"Tell your story…\n\nTip: tap 📷 in the toolbar below to insert images inline."}
-            placeholderTextColor={colors.textMuted}
-            value={body}
-            onChangeText={setBody}
-            multiline
-            textAlignVertical="top"
-          />
+            <TextInput
+              appearance="embedded"
+              ref={bodyRef}
+              style={[styles.bodyInput, { color: colors.text }]}
+              placeholder={"Tell your story…\n\nTip: tap 📷 in the toolbar below to insert images inline."}
+              placeholderTextColor={colors.textMuted}
+              value={body}
+              onChangeText={setBody}
+              multiline
+              textAlignVertical="top"
+            />
+          </FloatingGlassSurface>
 
           {/* Inline image previews */}
           {body.match(/\[img:(https?:\/\/[^\]]+)\]/g)?.map((match, i) => {
@@ -321,6 +330,8 @@ const styles = StyleSheet.create({
   publishBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20 },
   publishText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   content: { paddingHorizontal: 20, paddingTop: 16, gap: 0 },
+  editorShell: { width: "100%", marginBottom: 20 },
+  editorContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
   coverPicker: { width: "100%", height: 180, borderRadius: 14, borderWidth: 1.5, borderStyle: "dashed", marginBottom: 20, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   coverPreview: { width: "100%", height: "100%" },
   coverEditBadge: { position: "absolute", bottom: 10, right: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
@@ -331,8 +342,8 @@ const styles = StyleSheet.create({
   authorName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   audienceBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: "flex-start" },
   audienceBtnText: { fontSize: 11, fontFamily: "Inter_500Medium" },
-  titleInput: { fontSize: 26, fontFamily: "Inter_700Bold", lineHeight: 34, marginBottom: 16, minHeight: 60 },
-  divider: { height: 1, marginBottom: 20 },
+  titleInput: { fontSize: 25, fontFamily: "Inter_700Bold", lineHeight: 33, minHeight: 52 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 12 },
   bodyInput: { fontSize: 16, fontFamily: "Inter_400Regular", lineHeight: 26, minHeight: 300 },
   inlinePreviewWrap: { width: "100%", height: 200, borderRadius: 12, marginTop: 12, marginBottom: 4, overflow: "hidden", borderWidth: 0.5 },
   inlinePreview: { width: "100%", height: "100%" },

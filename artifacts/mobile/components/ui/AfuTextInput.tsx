@@ -14,6 +14,7 @@ import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 type AfuTextInputProps = TextInputProps & {
   appearance?: "floating" | "embedded";
   embeddedPaddingVertical?: number;
+  surfaceCornerRadius?: number;
 };
 
 const OUTER_STYLE_KEYS = new Set([
@@ -78,6 +79,7 @@ const AfuTextInput = forwardRef<TextInputInstance, AfuTextInputProps>(
     {
       appearance = "floating",
       embeddedPaddingVertical,
+      surfaceCornerRadius,
       style,
       multiline = false,
       placeholderTextColor,
@@ -146,6 +148,7 @@ const AfuTextInput = forwardRef<TextInputInstance, AfuTextInputProps>(
       <FloatingGlassSurface
         fill={fill}
         variant="input"
+          cornerRadius={surfaceCornerRadius}
         style={[styles.surface, outer, { minHeight }]}
         contentStyle={[
           styles.content,

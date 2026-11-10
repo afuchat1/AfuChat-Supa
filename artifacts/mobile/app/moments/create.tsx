@@ -329,6 +329,7 @@ export default function CreatePostScreen() {
 
             <TextInput
               ref={inputRef}
+              surfaceCornerRadius={18}
               style={[ss.input, { color: colors.text }]}
               placeholder="What's on your mind?"
               placeholderTextColor={colors.textMuted}
