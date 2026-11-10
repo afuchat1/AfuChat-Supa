@@ -3,8 +3,18 @@ import {
   Text as NativeText,
   type TextInstance,
   type TextProps,
+  type TextStyle,
 } from "react-native";
 import { useLanguage } from "@/context/LanguageContext";
+
+// React Native text does not shrink by default. In a horizontal flex row, long
+// labels can therefore crowd siblings and wrap inside an unexpectedly narrow
+// column. Give every app text node a shrinkable width; explicit screen styles
+// still take precedence.
+const TEXT_LAYOUT_BASELINE: TextStyle = {
+  flexShrink: 1,
+  minWidth: 0,
+};
 
 function localizeChildren(
   children: React.ReactNode,
@@ -44,6 +54,7 @@ const LocalizedText = forwardRef<TextInstance, LocalizedTextProps>(function Loca
     __afuchatStaticText: _staticText = false,
     __afuchatStaticParts = [],
     __afuchatTranslateAllText = false,
+    style,
     ...props
   },
   ref,
@@ -66,7 +77,7 @@ const LocalizedText = forwardRef<TextInstance, LocalizedTextProps>(function Loca
   );
 
   return (
-    <NativeText ref={ref} {...props}>
+    <NativeText ref={ref} {...props} style={[TEXT_LAYOUT_BASELINE, style]}>
       {localizedChildren}
     </NativeText>
   );
