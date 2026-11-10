@@ -276,6 +276,7 @@ export default function PostDetailScreen() {
   // ── Post state ──────────────────────────────────────────────────────────────
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [redirectingToVideo, setRedirectingToVideo] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
@@ -343,6 +344,7 @@ export default function PostDetailScreen() {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setRedirectingToVideo(false);
       try {
         let data: any;
         if (org === "1") {
@@ -384,6 +386,11 @@ export default function PostDetailScreen() {
         }
 
         if (!data || cancelled) { setLoading(false); return; }
+        if (data.post_type === "video") {
+          setRedirectingToVideo(true);
+          router.replace({ pathname: "/video/[id]", params: { id: String(data.id) } });
+          return;
+        }
 
         const imgs: string[] = ((data.post_images as any[]) ?? [])
           .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
@@ -895,6 +902,10 @@ export default function PostDetailScreen() {
   ) : undefined;
 
   // ── Render ────────────────────────────────────────────────────────────────────
+  if (redirectingToVideo) {
+    return <View style={[st.root, { backgroundColor: "#000" }]} />;
+  }
+
   return (
     <View style={[st.root, { backgroundColor: colors.background }]}>
       {/* Floating header — overlays the scroll content, true edge-to-edge */}

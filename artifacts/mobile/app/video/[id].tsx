@@ -217,6 +217,7 @@ function TapHandler({
 // ─── SocialShareSheet ─────────────────────────────────────────────────────────
 
 function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; onClose: () => void; url: string; title: string }) {
+  const { colors } = useTheme();
   if (!visible) return null;
   async function handlePlatform(p: typeof SOCIAL_PLATFORMS[number]) {
     if (p.id === "copy") { Clipboard.setStringAsync(url); onClose(); return; }
@@ -228,12 +229,12 @@ function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; 
     else await Share.share({ message: `${title} ${url}`, url, title });
   }
   return (
-    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.36}>
+    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.36} backgroundColor={colors.card}>
       <View style={ssStyles.header}>
-        <Ionicons name="search" size={20} color="#bbb" />
-        <Text style={ssStyles.title}>Send to</Text>
+        <Ionicons name="search" size={20} color={colors.textMuted} />
+        <Text style={[ssStyles.title, { color: colors.text }]}>Send to</Text>
         <TouchableOpacity onPress={onClose} hitSlop={10}>
-          <Ionicons name="close" size={22} color="#555" />
+          <Ionicons name="close" size={22} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -246,7 +247,7 @@ function SocialShareSheet({ visible, onClose, url, title }: { visible: boolean; 
             <View style={[ssStyles.iconCircle, { backgroundColor: p.color }]}>
               <Ionicons name={p.icon as any} size={22} color="#fff" />
             </View>
-            <Text style={ssStyles.cellLabel}>{p.label}</Text>
+            <Text style={[ssStyles.cellLabel, { color: colors.textMuted }]}>{p.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -270,53 +271,54 @@ function VideoContextMenu({ visible, item, onClose, onShare, onRepost, onDownloa
   onCopyLink: () => void; onNotInterested: () => void; onReport: () => void;
   autoScroll: boolean; onToggleAutoScroll: () => void;
 }) {
+  const { colors } = useTheme();
   if (!visible || !item) return null;
 
   function tap(fn: () => void) { onClose(); setTimeout(fn, 180); }
 
   return (
-    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.55} backgroundColor="#fff">
-      <View style={cmStyles.sep} />
+    <SmartSheet visible={visible} onClose={onClose} peekFraction={0.55} backgroundColor={colors.card}>
+      <View style={[cmStyles.sep, { backgroundColor: colors.border }]} />
 
       {/* Group 1 — sharing actions */}
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onRepost)} activeOpacity={0.65}>
-        <Ionicons name="repeat" size={24} color="#111" style={cmStyles.rowIcon} />
-        <Text style={cmStyles.rowLabel}>Repost</Text>
+        <Ionicons name="repeat" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Repost</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onShare)} activeOpacity={0.65}>
-        <Ionicons name="arrow-redo" size={24} color="#111" style={cmStyles.rowIcon} />
-        <Text style={cmStyles.rowLabel}>Share to</Text>
+        <Ionicons name="arrow-redo" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Share to</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onCopyLink)} activeOpacity={0.65}>
-        <Ionicons name="link" size={24} color="#111" style={cmStyles.rowIcon} />
-        <Text style={cmStyles.rowLabel}>Copy link</Text>
+        <Ionicons name="link" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Copy link</Text>
       </TouchableOpacity>
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onDownload)} activeOpacity={0.65}>
-        <Ionicons name="download" size={24} color="#111" style={cmStyles.rowIcon} />
-        <Text style={cmStyles.rowLabel}>Save</Text>
+        <Ionicons name="download" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Save</Text>
       </TouchableOpacity>
 
-      <View style={cmStyles.sep} />
+      <View style={[cmStyles.sep, { backgroundColor: colors.border }]} />
 
       {/* Group 2 — playback controls */}
       <View style={cmStyles.row}>
-        <Ionicons name="infinite" size={24} color="#111" style={cmStyles.rowIcon} />
-        <Text style={cmStyles.rowLabel}>Auto scroll</Text>
+        <Ionicons name="infinite" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Auto scroll</Text>
         <Switch
           value={autoScroll}
           onValueChange={() => { onToggleAutoScroll(); }}
-          trackColor={{ false: "#ddd", true: "#111" }}
+          trackColor={{ false: colors.border, true: colors.accent }}
           thumbColor="#fff"
           style={cmStyles.toggle}
         />
       </View>
 
-      <View style={cmStyles.sep} />
+      <View style={[cmStyles.sep, { backgroundColor: colors.border }]} />
 
       {/* Group 3 — negative actions */}
       <TouchableOpacity style={cmStyles.row} onPress={() => tap(onNotInterested)} activeOpacity={0.65}>
-        <Ionicons name="eye-off" size={24} color="#111" style={cmStyles.rowIcon} />
-        <Text style={cmStyles.rowLabel}>Not interested</Text>
+        <Ionicons name="eye-off" size={24} color={colors.text} style={cmStyles.rowIcon} />
+        <Text style={[cmStyles.rowLabel, { color: colors.text }]}>Not interested</Text>
       </TouchableOpacity>
       <TouchableOpacity style={[cmStyles.row, cmStyles.rowLast]} onPress={() => tap(onReport)} activeOpacity={0.65}>
         <Ionicons name="flag" size={24} color="#FF3B30" style={cmStyles.rowIcon} />
@@ -1911,7 +1913,7 @@ export function VideoFeed({ isEmbedded = false }: { isEmbedded?: boolean } = {})
     return (
       <View style={[mStyles.root, { paddingBottom: tabOffset }]}>
         <StatusBar barStyle="light-content" />
-        <ShortsFeedSkeleton dark={isDark} />
+        <ShortsFeedSkeleton dark />
         {/* Render the real header on top so navigation chrome is visible during load */}
         <View style={[mStyles.headerRow, { paddingTop: insets.top + 6 }]}>
           <TouchableOpacity onPress={() => router.back()} hitSlop={12} style={[mStyles.headerSide, isEmbedded && { opacity: 0, pointerEvents: "none" } as any]}>

@@ -15,6 +15,7 @@ import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -541,6 +542,7 @@ export default function FileManagerScreen() {
         animationType="fade"
         onRequestClose={() => setPreviewFile(null)}
       >
+        <StatusBar style="light" />
         <View style={styles.previewRoot}>
           <View style={styles.previewHeader}>
             <Pressable

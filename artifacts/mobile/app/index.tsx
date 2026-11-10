@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/context/AuthContext";
 import { getCachedUserId } from "@/lib/offlineStore";
@@ -12,10 +12,18 @@ import { LANGUAGE_PREFERENCE_KEY } from "@/context/LanguageContext";
 export default function IndexScreen() {
   const { session, profile, loading, user } = useAuth();
   const redirected = useRef(false);
+  const [cachedLanguageSelected] = useState<boolean | null>(() => {
+    try {
+      const stored = storage.getString(KEYS.LANGUAGE);
+      return stored == null ? null : stored !== "none";
+    } catch {
+      return null;
+    }
+  });
   const [initialUrlChecked, setInitialUrlChecked] = useState(false);
   const [initialDeepLinkPending, setInitialDeepLinkPending] = useState(false);
-  const [languageChecked, setLanguageChecked] = useState(false);
-  const [languageSelected, setLanguageSelected] = useState(false);
+  const [languageChecked, setLanguageChecked] = useState(cachedLanguageSelected !== null);
+  const [languageSelected, setLanguageSelected] = useState(cachedLanguageSelected ?? false);
   const { handle } = useLocalSearchParams<{ handle?: string }>();
 
   useEffect(() => {
@@ -62,6 +70,7 @@ export default function IndexScreen() {
   // Language is the first-run gate. It runs before auth and onboarding
   // routing so a new user can understand the welcome experience.
   useEffect(() => {
+    if (cachedLanguageSelected !== null) return;
     let mounted = true;
     let settled = false;
     const timeout = setTimeout(() => {
@@ -91,7 +100,7 @@ export default function IndexScreen() {
       mounted = false;
       clearTimeout(timeout);
     };
-  }, []);
+  }, [cachedLanguageSelected]);
 
   function doRedirect(hasSession: boolean, profileReady: boolean, profileOnboarded: boolean) {
     if (redirected.current) return;
@@ -198,27 +207,7 @@ export default function IndexScreen() {
     return () => clearTimeout(timeout);
   }, [handle, loading, user?.id, initialUrlChecked, initialDeepLinkPending, languageChecked, languageSelected]);
 
-  // This route is only a navigation handoff. Returning users are routed from
-  // the synchronous local identity cache, so never show an account-restoring
-  // or loading message while background auth work continues.
-  return (
-    <View style={styles.boot}>
-      <ActivityIndicator size="large" color="#FFFFFF" />
-      <Text style={styles.bootText}>Starting AfuChat…</Text>
-    </View>
-  );
+  // This route is only a navigation handoff. Do not show an intermediate
+  // loading screen while routing to the chat tab or first-run experience.
+  return null;
 }
-
-const styles = StyleSheet.create({
-  boot: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-    backgroundColor: "#000000",
-  },
-  bootText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-  },
-});
