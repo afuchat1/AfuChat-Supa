@@ -20,3 +20,9 @@ The legacy `deduct_acoin` RPC has no request ID. Repeated same-amount calls can 
 **Why:** A legacy send can leave the sender charged twice while the recipient is credited once; blindly treating every pending intent as a transfer would break unrelated purchases.
 
 **How to apply:** Keep duplicate protection scoped to a short same-sender/same-amount retry window, preserve the old RPC signatures, and never refund an expired intent without matching it to a verified transaction.
+
+Incoming payment-request acceptance must show a review step before payment. Transfer and request completion must be atomic; declining must change only the request status.
+
+**Why:** The user chose “Review, then pay” for incoming wallet requests, and retrying an accepted request must never charge twice.
+
+**How to apply:** Use an authenticated server-side operation that locks the pending request, verifies its recipient, performs the selected-currency transfer, and completes the request in one transaction. Keep decline separate from wallet balance changes.

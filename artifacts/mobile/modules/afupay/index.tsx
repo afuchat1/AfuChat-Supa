@@ -140,6 +140,16 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function withTimeout<T>(request: PromiseLike<T>, timeoutMs = 15_000): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("request_timeout")), timeoutMs);
+  });
+  return Promise.race([Promise.resolve(request), timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 function SubHeader({ title, onBack, colors }: { title: string; onBack: () => void; colors: any }) {
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
@@ -377,7 +387,7 @@ export default function AfuPayApp({
   if (view === "send") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
   if (view === "receive") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} /></View>;
   if (view === "exchange") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
-  if (view === "requests") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><RequestsView colors={colors} insets={insets} user={user} onBack={() => navigateToView("home")} /></View>;
+  if (view === "requests") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><RequestsView colors={colors} insets={insets} user={user} onBack={() => navigateToView("home")} onRequestsChanged={() => { void loadPendingCount(); }} onPaymentComplete={() => { void loadTransactions(); refreshProfile?.(); }} /></View>;
   if (view === "services") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><AfuServicesApp embedded onBack={() => navigateToView("home")} /></View>;
 
   const recentTx = transactions.slice(0, 6);
@@ -1071,49 +1081,144 @@ function ExchangeView({ colors, insets, user, profile, currSettings, onBack, onS
   );
 }
 
-function RequestsView({ colors, insets, user, onBack }: any) {
+function RequestsView({ colors, insets, user, onBack, onRequestsChanged, onPaymentComplete }: any) {
   const [requests, setRequests] = useState<PayRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"incoming" | "outgoing">("incoming");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [respondingAction, setRespondingAction] = useState<"pay" | "decline" | null>(null);
 
   const load = useCallback(async () => {
-    if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("money_requests")
-      .select("id,requester_id,target_id,currency,amount,note,status,created_at")
-      .or(`target_id.eq.${user.id},requester_id.eq.${user.id}`)
-      .order("created_at", { ascending: false })
-      .limit(30);
-
-    if (error || !data) {
+    setLoadError(null);
+    try {
+      if (!user) {
+        setRequests([]);
+        setLoadError("Sign in to view payment requests.");
+        return;
+      }
+      const { data, error } = await withTimeout(
+        supabase
+          .from("money_requests")
+          .select("id,requester_id,target_id,currency,amount,note,status,created_at")
+          .or(`target_id.eq.${user.id},requester_id.eq.${user.id}`)
+          .order("created_at", { ascending: false })
+          .limit(30),
+      );
+      if (error) throw error;
+      const rows = data || [];
+      const profileIds = Array.from(new Set(
+        rows.flatMap((request: any) => [request.requester_id, request.target_id]),
+      ));
+      let profiles: any[] = [];
+      if (profileIds.length > 0) {
+        const profileResult = await withTimeout(
+          supabase.from("profiles").select("id,handle,display_name").in("id", profileIds),
+        );
+        if (profileResult.error) throw profileResult.error;
+        profiles = profileResult.data || [];
+      }
+      const profileMap = new Map(
+        profiles.map((p: any) => [
+          p.id,
+          { handle: p.handle, display_name: p.display_name },
+        ]),
+      );
+      setRequests(rows.map((request: any) => ({
+        ...request,
+        requester: profileMap.get(request.requester_id) || null,
+        target: profileMap.get(request.target_id) || null,
+      })) as PayRequest[]);
+    } catch {
       setRequests([]);
+      setLoadError("Could not load requests. Check your connection and try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const profileIds = Array.from(new Set(
-      data.flatMap((request: any) => [request.requester_id, request.target_id]),
-    ));
-    const { data: profiles } = profileIds.length > 0
-      ? await supabase.from("profiles").select("id,handle,display_name").in("id", profileIds)
-      : { data: [] };
-    const profileMap = new Map(
-      (profiles || []).map((p: any) => [
-        p.id,
-        { handle: p.handle, display_name: p.display_name },
-      ]),
-    );
-
-    setRequests(data.map((request: any) => ({
-      ...request,
-      requester: profileMap.get(request.requester_id) || null,
-      target: profileMap.get(request.target_id) || null,
-    })) as PayRequest[]);
-    setLoading(false);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function respondToRequest(request: PayRequest, action: "pay" | "decline") {
+    if (!user || respondingId) return;
+    setRespondingId(request.id);
+    setRespondingAction(action);
+    try {
+      const { data, error } = await withTimeout(
+        supabase
+          .rpc("respond_to_money_request", {
+            p_request_id: request.id,
+            p_action: action,
+          })
+          .retry(false),
+        25_000,
+      );
+      if (error) throw error;
+
+      const result = (Array.isArray(data) ? data[0] : data) as {
+        success?: boolean;
+        message?: string;
+      } | null;
+      if (result?.success !== true) {
+        showAlert(
+          action === "pay" ? "Payment not completed" : "Request not updated",
+          result?.message || "Please refresh the requests and try again.",
+        );
+        await load();
+        return;
+      }
+
+      await load();
+      onRequestsChanged?.();
+      if (action === "pay") {
+        onPaymentComplete?.();
+        showAlert(
+          "Payment sent",
+          `${fmtAmt(request.amount)} ${request.currency === "acoin" ? "ACoin" : "Nexa"} sent to @${request.requester?.handle || "user"}.`,
+        );
+      } else {
+        showAlert("Request declined", "The payment request was declined.");
+      }
+    } catch {
+      // A lost response can happen after a transaction commits. Refresh the
+      // request state and wallet history before allowing another attempt.
+      await load();
+      onRequestsChanged?.();
+      if (action === "pay") onPaymentComplete?.();
+      showAlert(
+        action === "pay" ? "Payment status unknown" : "Could not decline request",
+        action === "pay"
+          ? "Refresh your wallet activity before trying again."
+          : "Check your connection and try again.",
+      );
+    } finally {
+      setRespondingId(null);
+      setRespondingAction(null);
+    }
+  }
+
+  function reviewPayment(request: PayRequest) {
+    showAlert(
+      "Review payment",
+      `Send ${fmtAmt(request.amount)} ${request.currency === "acoin" ? "ACoin" : "Nexa"} to @${request.requester?.handle || "this user"}? This will debit your wallet.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Pay request", onPress: () => { void respondToRequest(request, "pay"); } },
+      ],
+    );
+  }
+
+  function confirmDecline(request: PayRequest) {
+    showAlert(
+      "Decline request?",
+      `Decline the request from @${request.requester?.handle || "this user"}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Decline", style: "destructive", onPress: () => { void respondToRequest(request, "decline"); } },
+      ],
+    );
+  }
 
   const shown = requests.filter(r => tab === "incoming" ? r.target_id === user?.id : r.requester_id === user?.id);
 
@@ -1129,6 +1234,19 @@ function RequestsView({ colors, insets, user, onBack }: any) {
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}>
         {loading ? <ActivityIndicator color={Colors.brand} style={{ marginTop: 40 }} /> :
+          loadError ? (
+            <View style={s.emptyWrap}>
+              <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+              <Text style={[s.emptyText, { color: colors.textMuted, textAlign: "center" }]}>{loadError}</Text>
+              <TouchableOpacity
+                style={[s.emptyBtn, { backgroundColor: Colors.brand }]}
+                onPress={() => void load()}
+                activeOpacity={0.85}
+              >
+                <Text style={s.emptyBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) :
           shown.length === 0 ? (
             <View style={s.emptyWrap}>
               <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
@@ -1147,6 +1265,34 @@ function RequestsView({ colors, insets, user, onBack }: any) {
               <Text style={[s.txAmt, { color: Colors.brand, marginTop: 4 }]}>{fmtAmt(r.amount)} {r.currency === "acoin" ? "ACoin" : "Nexa"}</Text>
               {r.note && <Text style={[s.txSub, { color: colors.textMuted, marginTop: 4 }]}>{r.note}</Text>}
               <Text style={[s.txSub, { color: colors.textMuted, marginTop: 4 }]}>{timeAgo(r.created_at)}</Text>
+              {tab === "incoming" && r.status === "pending" ? (
+                <View style={s.requestActions}>
+                  <TouchableOpacity
+                    style={[s.requestAction, { backgroundColor: colors.inputBg, borderColor: colors.border }]}
+                    onPress={() => confirmDecline(r)}
+                    disabled={!!respondingId}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Decline payment request"
+                  >
+                    {respondingId === r.id && respondingAction === "decline"
+                      ? <ActivityIndicator size="small" color={colors.textMuted} />
+                      : <><Ionicons name="close" size={17} color={colors.textMuted} /><Text style={[s.requestActionText, { color: colors.text }]}>Decline</Text></>}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.requestAction, { backgroundColor: Colors.brand, borderColor: Colors.brand }]}
+                    onPress={() => reviewPayment(r)}
+                    disabled={!!respondingId}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Review and pay request"
+                  >
+                    {respondingId === r.id && respondingAction === "pay"
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <><Ionicons name="card-outline" size={16} color="#fff" /><Text style={[s.requestActionText, { color: "#fff" }]}>Review & Pay</Text></>}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
           ))}
       </ScrollView>
@@ -1269,6 +1415,9 @@ const s = StyleSheet.create({
   shareBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   receiveHint: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },
   requestCard: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
+  requestActions: { flexDirection: "row", gap: 8, marginTop: 12 },
+  requestAction: { flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 8, borderWidth: 1, borderRadius: 12 },
+  requestActionText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
 });

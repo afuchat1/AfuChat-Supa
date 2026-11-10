@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -40,42 +40,95 @@ export default function MoneyRequestScreen() {
   const { afu_id, handle } = useLocalSearchParams<{ afu_id?: string; handle?: string }>();
 
   const [target, setTarget] = useState<Target | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [afuIdInput, setAfuIdInput] = useState(afu_id ?? "");
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [currency, setCurrency] = useState<"acoin" | "nexa">("acoin");
   const [sending, setSending] = useState(false);
+  const lookupAttempt = useRef(0);
 
   const currColor = currency === "acoin" ? "#34C759" : "#FF9500";
 
-  useEffect(() => {
-    if (afu_id) resolveByAfuId(afu_id);
-    else if (handle) resolveByHandle(handle);
-    else if (afu_id !== undefined || handle !== undefined) {
-      showAlert("Error", "No target specified.");
-      if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any);
+  const lookupTarget = useCallback(async (value: string, lookupBy: "afu_id" | "handle" = "afu_id") => {
+    const attempt = ++lookupAttempt.current;
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    const normalizedValue = lookupBy === "afu_id"
+      ? digits.padStart(8, "0")
+      : value.trim().replace(/^@/, "").toLowerCase();
+
+    if (!normalizedValue || (lookupBy === "afu_id" && digits.length === 0)) {
+      setLookupError("Enter the 8-digit AfuChat ID.");
+      setTarget(null);
+      setLoading(false);
+      return;
     }
-  }, [afu_id, handle]);
 
-  async function resolveByAfuId(id: string) {
+    setTarget(null);
+    setLookupError(null);
     setLoading(true);
-    const { data } = await supabase.rpc("lookup_profile_by_afu_id", { p_afu_id: id });
-    const p = data?.[0];
-    if (!p) { showAlert("Not Found", "No user found with this AfuChat ID."); if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any); return; }
-    setTarget(p as Target);
-    setLoading(false);
-  }
 
-  async function resolveByHandle(h: string) {
-    setLoading(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select("id,handle,display_name,avatar_url")
-      .eq("handle", h.toLowerCase())
-      .maybeSingle();
-    if (!data) { showAlert("Not Found", "No user found."); if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any); return; }
-    setTarget(data as Target);
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const lookup = lookupBy === "afu_id"
+        ? supabase.rpc("lookup_profile_by_afu_id", { p_afu_id: normalizedValue }).then(({ data, error }) => {
+            if (error) throw error;
+            return (data?.[0] as Target | undefined) ?? null;
+          })
+        : supabase
+            .from("profiles")
+            .select("id,handle,display_name,avatar_url")
+            .eq("handle", normalizedValue)
+            .maybeSingle()
+            .then(({ data, error }) => {
+              if (error) throw error;
+              return (data as Target | null) ?? null;
+            });
+      const timedOut = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("lookup_timeout")), 15_000);
+      });
+      const resolved = await Promise.race([lookup, timedOut]);
+      if (attempt !== lookupAttempt.current) return;
+      if (!resolved) {
+        setLookupError("No user found. Check the AfuChat ID and try again.");
+        return;
+      }
+      setTarget(resolved);
+    } catch (error) {
+      if (attempt !== lookupAttempt.current) return;
+      setLookupError(
+        error instanceof Error && error.message === "lookup_timeout"
+          ? "Lookup timed out. Check your connection and try again."
+          : "Could not look up this user. Check your connection and try again.",
+      );
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (attempt === lookupAttempt.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (afu_id) {
+      setAfuIdInput(afu_id);
+      void lookupTarget(afu_id, "afu_id");
+    } else if (handle) {
+      void lookupTarget(handle, "handle");
+    } else {
+      lookupAttempt.current += 1;
+      setTarget(null);
+      setLookupError(null);
+      setLoading(false);
+    }
+    return () => { lookupAttempt.current += 1; };
+  }, [afu_id, handle, lookupTarget]);
+
+  function clearTarget() {
+    lookupAttempt.current += 1;
+    setTarget(null);
+    setLookupError(null);
     setLoading(false);
+    setAfuIdInput("");
   }
 
   async function sendRequest() {
@@ -118,10 +171,47 @@ export default function MoneyRequestScreen() {
           <Text style={[s.hint, { color: colors.textMuted }]}>Looking up user…</Text>
         </View>
       ) : !target ? (
-        <View style={s.centered}>
-          <Ionicons name="person" size={48} color={colors.textMuted} />
-          <Text style={[s.hint, { color: colors.textMuted }]}>No user found</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={[s.lookupContent, { paddingBottom: insets.bottom + 24 }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[s.lookupIcon, { backgroundColor: "#FF9500" + "18" }]}>
+            <Ionicons name="person-outline" size={26} color="#FF9500" />
+          </View>
+          <Text style={[s.lookupTitle, { color: colors.text }]}>Request money</Text>
+          <Text style={[s.lookupDescription, { color: colors.textMuted }]}>
+            Enter the recipient’s 8-digit AfuChat ID to find them.
+          </Text>
+          <View style={[s.lookupInputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+            <TextInput
+              appearance="embedded"
+              style={[s.lookupInput, { color: colors.text }]}
+              value={afuIdInput}
+              onChangeText={(value) => {
+                setAfuIdInput(value.replace(/\D/g, "").slice(0, 8));
+                setLookupError(null);
+              }}
+              placeholder="AfuChat ID"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={8}
+              returnKeyType="search"
+              onSubmitEditing={() => void lookupTarget(afuIdInput, "afu_id")}
+            />
+          </View>
+          {lookupError ? (
+            <Text style={[s.lookupError, { color: "#FF453A" }]}>{lookupError}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={[s.lookupButton, { backgroundColor: colors.accent, opacity: afuIdInput.length ? 1 : 0.55 }]}
+            onPress={() => void lookupTarget(afuIdInput, "afu_id")}
+            disabled={!afuIdInput.length}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="search" size={17} color="#fff" />
+            <Text style={s.lookupButtonText}>Find user</Text>
+          </TouchableOpacity>
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}
@@ -142,6 +232,9 @@ export default function MoneyRequestScreen() {
               <Text style={[s.name, { color: colors.text }]}>{target.display_name}</Text>
               <Text style={[s.handle, { color: colors.textMuted }]}>@{target.handle}</Text>
             </View>
+            <TouchableOpacity onPress={clearTarget} hitSlop={8} accessibilityRole="button" accessibilityLabel="Change recipient">
+              <Text style={[s.changeTarget, { color: colors.accent }]}>Change</Text>
+            </TouchableOpacity>
             <View style={[s.iconBadge, { backgroundColor: "#FF9500" + "18" }]}>
               <Ionicons name="hand-left" size={16} color="#FF9500" />
             </View>
@@ -238,6 +331,16 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   content: { padding: 16, gap: 12 },
+  lookupContent: { flexGrow: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24, gap: 12 },
+  lookupIcon: { width: 58, height: 58, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  lookupTitle: { fontSize: 20, fontFamily: "Inter_700Bold", marginTop: 2 },
+  lookupDescription: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20, marginBottom: 4 },
+  lookupInputRow: { width: "100%", minHeight: 50, justifyContent: "center", borderRadius: 14, borderWidth: 1, paddingHorizontal: 16 },
+  lookupInput: { width: "100%", minHeight: 48, fontSize: 18, fontFamily: "Inter_600SemiBold", letterSpacing: 1.5, textAlign: "center" },
+  lookupError: { width: "100%", fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "center" },
+  lookupButton: { width: "100%", minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14 },
+  lookupButtonText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  changeTarget: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   banner: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 14, borderWidth: 1, padding: 14 },
   card: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 16, borderWidth: 0.5, padding: 16 },
   name: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
