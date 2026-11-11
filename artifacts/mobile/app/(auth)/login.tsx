@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -60,7 +61,7 @@ function SoftOrb({ cx, cy, size, color }: { cx: number; cy: number; size: number
 }
 
 // ─── Glass input ──────────────────────────────────────────────────────────────
-function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoCapitalize, autoComplete, rightElement, onSubmitEditing, returnKeyType, inputRef, accent }: any) {
+function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, inputMode, autoCapitalize, autoComplete, maxLength, testID, rightElement, onSubmitEditing, returnKeyType, inputRef, accent }: any) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   return (
@@ -78,7 +79,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
         value={value} onChangeText={onChangeText}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? "none"}
-        autoComplete={autoComplete} autoCorrect={false}
+        inputMode={inputMode} autoComplete={autoComplete} maxLength={maxLength} testID={testID} autoCorrect={false}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         onSubmitEditing={onSubmitEditing} returnKeyType={returnKeyType ?? "next"}
       />
@@ -107,17 +108,31 @@ function GlassModal({ visible, onClose, children }: { visible: boolean; onClose:
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View style={[gm.overlay, { opacity }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View style={[gm.card, { transform: [{ scale }], backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.cardSurface }]} />
-          <View style={[gm.topBorder, { backgroundColor: colors.border }]} />
-          {children}
-        </Animated.View>
+        <KeyboardAvoidingView style={gm.keyboardLayer} behavior="padding" keyboardVerticalOffset={0}>
+          <ScrollView
+            style={gm.modalScroll}
+            contentContainerStyle={gm.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Animated.View style={[gm.card, { transform: [{ scale }], backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.cardSurface }]} />
+              <View style={[gm.topBorder, { backgroundColor: colors.border }]} />
+              {children}
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Animated.View>
     </Modal>
   );
 }
 const gm = StyleSheet.create({
-  overlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,0.75)" },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)" },
+  keyboardLayer: { flex: 1 },
+  modalScroll: { flex: 1 },
+  modalScrollContent: { flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 20 },
   card: { width: "100%", maxWidth: 420, borderRadius: 28, overflow: "hidden", borderWidth: 1 },
   topBorder: { height: 1, marginHorizontal: 0 },
 });
@@ -225,10 +240,25 @@ function EmailVerifyModal({ visible, email, onClose, onVerified, isDark, accent 
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const sentRef = useRef(false);
+  const codeInputRef = useRef<TextInputInstance>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (visible && !sentRef.current && email) { sentRef.current = true; sendCode(); }
-    if (!visible) { sentRef.current = false; setCode(""); }
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    if (visible && email) {
+      if (!sentRef.current) { sentRef.current = true; void sendCode(); }
+      focusTimerRef.current = setTimeout(
+        () => codeInputRef.current?.focus(),
+        Platform.OS === "android" ? 400 : 250,
+      );
+    } else if (!visible) {
+      sentRef.current = false;
+      setCode("");
+      codeInputRef.current?.blur();
+    }
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
   }, [visible, email]);
 
   async function sendCode() {
@@ -238,12 +268,15 @@ function EmailVerifyModal({ visible, email, onClose, onVerified, isDark, accent 
   }
 
   async function verify() {
-    if (!code.trim()) return showAlert("Enter code", "Please enter the 6-digit code from your email.");
+    if (code.length !== 6) return showAlert("Enter code", "Please enter the 6-digit code from your email.");
     setLoading(true);
     const { error } = await supabase.auth.verifyOtp({ email, token: code.trim(), type: "signup" });
     setLoading(false);
     if (error) showAlert("Invalid code", "The code is incorrect or expired. Try resending.");
-    else onVerified();
+    else {
+      Keyboard.dismiss();
+      onVerified();
+    }
   }
 
   return (
@@ -257,8 +290,22 @@ function EmailVerifyModal({ visible, email, onClose, onVerified, isDark, accent 
           {sending ? "Sending verification code…" : `We sent a 6-digit code to ${email}`}
         </Text>
         <View style={{ gap: 12 }}>
-          <AuthInput icon="keypad" placeholder="6-digit code" value={code} onChangeText={setCode} keyboardType="number-pad" returnKeyType="go" onSubmitEditing={verify} accent={accent} />
-          <TouchableOpacity style={[sc.primaryBtn, (loading || sending) && { opacity: 0.6 }]} onPress={verify} disabled={loading || sending} activeOpacity={0.85}>
+          <AuthInput
+            inputRef={codeInputRef}
+            testID="login-email-code-input"
+            icon="keypad"
+            placeholder="6-digit code"
+            value={code}
+            onChangeText={(value: string) => setCode(value.replace(/\D/g, "").slice(0, 6))}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            returnKeyType="done"
+            onSubmitEditing={verify}
+            accent={accent}
+          />
+          <TouchableOpacity style={[sc.primaryBtn, (loading || sending || code.length !== 6) && { opacity: 0.6 }]} onPress={verify} disabled={loading || sending || code.length !== 6} activeOpacity={0.85}>
             <LinearGradient colors={[accent, Colors.brandDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={sc.primaryGrad}>
               {(loading || sending) ? <ActivityIndicator color="#fff" size="small" /> : (
                 <Text style={sc.primaryText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>
@@ -498,6 +545,7 @@ export default function SignInScreen() {
         if (!data.user.email_confirmed_at) {
           await supabase.auth.signOut();
           setLoading(false);
+          Keyboard.dismiss();
           setVerifyEmail(resolvedEmail); setVerifyVisible(true); return;
         }
         const { data: prof } = await supabase.from("profiles").select("scheduled_deletion_at, account_deleted").eq("id", data.user.id).single();
@@ -777,8 +825,8 @@ export default function SignInScreen() {
       <ForgotPasswordModal visible={forgotVisible} onClose={() => setForgotVisible(false)} isDark={isDark} accent={accent} />
       <EmailVerifyModal
         visible={verifyVisible} email={verifyEmail}
-        onClose={() => setVerifyVisible(false)}
-        onVerified={() => { setVerifyVisible(false); router.replace("/(tabs)/chats"); }}
+        onClose={() => { Keyboard.dismiss(); setVerifyVisible(false); }}
+        onVerified={() => { Keyboard.dismiss(); setVerifyVisible(false); router.replace("/(tabs)/chats"); }}
         isDark={isDark} accent={accent}
       />
     </View>

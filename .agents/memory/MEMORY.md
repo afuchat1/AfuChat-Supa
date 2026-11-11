@@ -28,4 +28,5 @@
 - [AfuChat production-branch workflow](afuchat-production-branch-workflow.md) — For urgent AfuChat fixes, work directly on the production branch instead of creating a feature branch.
 - [ACoin transfer safety](acoin-transfer-safety.md) — Keep wallet transfers atomic and use the live money-request status values.
 - [AfuChat app scope](afuchat-database-scope.md) — Treat this workspace as AfuChat only; follow the current remote baseline, not historical assumptions.
+- [Username ownership security](username-ownership-security.md) — Free primary handles are not purchases; only trusted marketplace flows may create durable aliases.
 - [Selective verification policy](manual-verification-policy.md) — Keep personal verification selective, based on sustained authentic participation, with concise, actionable qualification guidance.
