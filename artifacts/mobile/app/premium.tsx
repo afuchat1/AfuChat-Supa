@@ -23,13 +23,20 @@ import { getSubscriptionPrice } from "@/lib/creatorEntitlements";
 import {
   ActiveBanner,
   CostSummary,
+  CtaBackdrop,
   FeatureCard,
   FloatingNav,
+  PerkStrip,
+  PlanHero,
   PremiumSkeleton,
-  PriceHero,
+  TierBackdrop,
   TierTabs,
+  TrustLine,
   WalletCard,
+  lighten,
+  makePalette,
   readableTint,
+  shade,
   type IconName,
   type TierTab,
 } from "@/components/premium/PlanComponents";
@@ -107,7 +114,7 @@ type TierCfg = {
 
 const TIER_CONFIG: Record<string, TierCfg> = {
   free: {
-    color: "#8D96A8",
+    color: "#10B981",
     emoji: "○",
     badge: "FREE",
     sections: [
@@ -117,7 +124,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     ],
   },
   silver: {
-    color: "#8E9BB5",
+    color: "#2F6BFF",
     emoji: "✓",
     badge: "STANDARD",
     sections: [
@@ -163,7 +170,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     ],
   },
   gold: {
-    color: "#C8923A",
+    color: "#FF8A1F",
     emoji: "★",
     badge: "PRO",
     sections: [
@@ -217,7 +224,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     ],
   },
   platinum: {
-    color: "#1018D8",
+    color: "#9B4DFF",
     emoji: "💎",
     badge: "PLATINUM",
     sections: [
@@ -255,12 +262,12 @@ const TIER_CONFIG: Record<string, TierCfg> = {
   },
 };
 
-/** Presentation-only metadata (icons replace emoji for a crisper native look). */
-const TIER_UI: Record<string, { icon: IconName; tagline: string }> = {
-  free: { icon: "ellipse-outline", tagline: "Get started" },
-  silver: { icon: "shield-checkmark", tagline: "Everyday essentials" },
-  gold: { icon: "star", tagline: "For power users and creators" },
-  platinum: { icon: "diamond", tagline: "The complete AfuChat" },
+/** Presentation-only metadata (hero gradient runs deep at the top to bright at the bottom). */
+const TIER_UI: Record<string, { icon: IconName; tagline: string; stops: string[] }> = {
+  free: { icon: "leaf", tagline: "Get started", stops: ["#04281F", "#0B7A62", "#5EEAD4"] },
+  silver: { icon: "shield-checkmark", tagline: "Everyday essentials", stops: ["#061641", "#1D5BE0", "#7DB8FF"] },
+  gold: { icon: "star", tagline: "For power users and creators", stops: ["#331302", "#B8500A", "#FFB347"] },
+  platinum: { icon: "diamond", tagline: "The complete AfuChat", stops: ["#220851", "#6D28D9", "#F472B6"] },
 };
 
 const PAID_TIERS = ["silver", "gold", "platinum"] as const;
@@ -515,15 +522,20 @@ export default function PremiumScreen() {
 
   // ── Presentation ───────────────────────────────────────────────────────────
 
-  const sep = colors.border;
-  const cardBg = colors.inputBg;
+  const pal = makePalette(colors);
   const tint = readableTint(tierColor, colors.background);
   const ui = TIER_UI[activeTier] ?? TIER_UI.free;
   const navTop = topInset + 8;
+  const heroTop = topInset + 64;
+  // Full-page backdrop: deep at the top; light lavender (light theme) or deep (dark theme) below.
+  const pageStops = pal.isDark
+    ? [ui.stops[0], shade(ui.stops[1], 0.45), shade(ui.stops[0], 0.15)]
+    : [ui.stops[0], ui.stops[1], lighten(ui.stops[2], 0.82)];
 
   if (loading) {
     return (
       <View style={[s.flex, { backgroundColor: colors.background }]}>
+        <TierBackdrop stops={pageStops} />
         <FloatingNav top={navTop} title="Premium" onBack={() => router.back()} colors={colors} />
         <ScrollView
           style={s.flex}
@@ -531,7 +543,7 @@ export default function PremiumScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.pageContent, isWide && s.pageContentWide]}>
-            <PremiumSkeleton colors={colors} />
+            <PremiumSkeleton pal={pal} />
           </View>
         </ScrollView>
       </View>
@@ -553,30 +565,39 @@ export default function PremiumScreen() {
       label: tc.badge,
       icon: (TIER_UI[tier] ?? TIER_UI.free).icon,
       color: readableTint(tc.color, colors.background),
+      accent: tc.color,
       priceLabel: tier === "free" ? "Free" : tabPrice === null ? "—" : `${tabPrice} AC`,
       isCurrent: tier === "free" ? !isPremium : isPremium && subscription?.plan_tier === tier,
     };
   });
 
+  const perDay = selectedPlan && activeTier !== "free" && selectedPlan.duration_days > 0
+    ? (() => {
+        const v = acoinPrice / selectedPlan.duration_days;
+        return `${v >= 10 ? Math.round(v) : v.toFixed(1)} AC a day`;
+      })()
+    : null;
+  const featureCount = (cfg?.sections ?? []).reduce((n, sec) => n + sec.items.length, 0);
   const ctaBusy = subscribing || cancelling;
 
   return (
     <View style={[s.flex, { backgroundColor: colors.background }]}>
+      <TierBackdrop stops={pageStops} />
       <FloatingNav top={navTop} title="Premium" onBack={() => router.back()} colors={colors} />
 
       <ScrollView
         style={s.flex}
-        contentContainerStyle={[s.scrollContent, { paddingTop: topInset + 72 }]}
+        contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[s.pageContent, isWide && s.pageContentWide]}>
-          {plansError ? (
-            <View style={[s.errorCard, { backgroundColor: cardBg, borderColor: sep }]}>
+        {plansError ? (
+          <View style={[s.pageContent, isWide && s.pageContentWide, { paddingTop: topInset + 72 }]}>
+            <View style={[s.errorCard, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
               <View style={[s.errorIcon, { backgroundColor: colors.errorSubtle }]}>
                 <Ionicons name="cloud-offline-outline" size={24} color={colors.error} />
               </View>
-              <Text style={[s.errorTitle, { color: colors.text }]}>Plans unavailable</Text>
-              <Text style={[s.errorSub, { color: colors.textSecondary }]}>
+              <Text style={[s.errorTitle, { color: pal.text }]}>Plans unavailable</Text>
+              <Text style={[s.errorSub, { color: pal.textSecondary }]}>
                 Check your connection and try again.
               </Text>
               <TouchableOpacity
@@ -591,11 +612,38 @@ export default function PremiumScreen() {
                 <Text style={[s.retryButtonText, { color: colors.bubbleText }]}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <>
+          </View>
+        ) : (
+          <>
+            <Animated.View style={[s.heroWrap, { opacity: fadeAnim }]}>
+              <PlanHero
+                top={heroTop}
+                stops={ui.stops}
+                icon={ui.icon}
+                badge={cfg?.badge ?? ""}
+                tagline={ui.tagline}
+                acoin={acoinPrice}
+                usd={usdPrice}
+                local={localPrice}
+                duration={
+                  selectedPlan
+                    ? durationLabel(selectedPlan.duration_days)
+                    : activeTier === "free"
+                      ? "no charge"
+                      : "unavailable"
+                }
+                perDay={perDay}
+                verified={["silver", "gold", "platinum"].includes(activeTier)}
+                isCurrent={isCurrentPlan}
+              />
+            </Animated.View>
+
+            <View style={[s.pageContent, isWide && s.pageContentWide, s.afterHero]}>
+              <TierTabs tabs={tabs} activeId={activeTier} onSelect={switchTier} pal={pal} />
+
               {isPremium && subscription && (
                 <ActiveBanner
-                  colors={colors}
+                  pal={pal}
                   tint={readableTint(
                     TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent,
                     colors.background
@@ -607,43 +655,23 @@ export default function PremiumScreen() {
                 />
               )}
 
-              <TierTabs tabs={tabs} activeId={activeTier} onSelect={switchTier} colors={colors} />
-
               <Animated.View
                 style={[s.body, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
               >
-                <PriceHero
-                  colors={colors}
-                  tint={tint}
-                  icon={ui.icon}
-                  badge={cfg?.badge ?? ""}
-                  tagline={ui.tagline}
-                  acoin={acoinPrice}
-                  usd={usdPrice}
-                  local={localPrice}
-                  duration={
-                    selectedPlan
-                      ? durationLabel(selectedPlan.duration_days)
-                      : activeTier === "free"
-                        ? "no charge"
-                        : "unavailable"
-                  }
-                  verified={["silver", "gold", "platinum"].includes(activeTier)}
-                  isCurrent={isCurrentPlan}
-                />
+                <PerkStrip pal={pal} sections={cfg?.sections ?? []} count={featureCount} />
 
-                <FeatureCard colors={colors} tint={tint} sections={cfg?.sections ?? []} />
+                <FeatureCard pal={pal} sections={cfg?.sections ?? []} tierKey={activeTier} />
 
                 <WalletCard
-                  colors={colors}
+                  pal={pal}
                   balance={balance}
                   usd={fmtUSD(balance)}
                   onPress={() => router.push("/app/afupay?section=topup" as any)}
                 />
               </Animated.View>
-            </>
-          )}
-        </View>
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Sticky CTA */}
@@ -651,13 +679,13 @@ export default function PremiumScreen() {
         <View
           style={[
             s.cta,
-            { paddingBottom: bottomInset + 14, backgroundColor: colors.background, borderTopColor: sep },
+            { paddingBottom: bottomInset + 14, backgroundColor: pal.bar, borderTopColor: pal.cardBorder },
           ]}
         >
           <View style={[s.ctaInner, isWide && s.pageContentWide]}>
             {activeTier !== "free" && selectedPlan && !isCurrentPlan && (
               <CostSummary
-                colors={colors}
+                pal={pal}
                 balance={balance}
                 cost={acoinPrice}
                 after={afterBalance}
@@ -666,16 +694,16 @@ export default function PremiumScreen() {
             )}
 
             {isCurrentPlan ? (
-              <View style={[s.currentBar, { backgroundColor: tint + "14", borderColor: tint + "38" }]}>
+              <View style={[s.currentBar, { backgroundColor: tint + "1F", borderColor: tint + "55" }]}>
                 <Ionicons name={ui.icon} size={20} color={tint} />
-                <Text style={[s.currentBarTxt, { color: colors.text }]}>
+                <Text style={[s.currentBarTxt, { color: pal.text }]}>
                   {`Current plan · ${cfg?.badge}`}
                 </Text>
                 <Ionicons name="checkmark-circle" size={20} color={colors.success} />
               </View>
             ) : activeTier === "free" && isPremium ? (
               <TouchableOpacity
-                style={[s.ctaBtn, { backgroundColor: colors.accent }, ctaBusy && { opacity: 0.55 }]}
+                style={[s.ctaBtn, ctaBusy && { opacity: 0.55 }]}
                 onPress={handleCancel}
                 disabled={ctaBusy}
                 activeOpacity={0.85}
@@ -683,11 +711,12 @@ export default function PremiumScreen() {
                 accessibilityLabel="Switch to Free plan"
                 testID="premium-switch-free-cta"
               >
+                <CtaBackdrop color={colors.accent} />
                 <Text style={[s.ctaBtnTxt, { color: colors.bubbleText }]}>Switch to Free plan</Text>
               </TouchableOpacity>
             ) : selectedPlan ? (
               <TouchableOpacity
-                style={[s.ctaBtn, { backgroundColor: colors.accent }, ctaBusy && { opacity: 0.55 }]}
+                style={[s.ctaBtn, ctaBusy && { opacity: 0.55 }]}
                 onPress={handleSubscribe}
                 disabled={ctaBusy}
                 activeOpacity={0.85}
@@ -696,6 +725,7 @@ export default function PremiumScreen() {
                 accessibilityState={{ disabled: ctaBusy, busy: subscribing }}
                 testID="premium-primary-cta"
               >
+                <CtaBackdrop color={colors.accent} />
                 {subscribing ? (
                   <ActivityIndicator color={colors.bubbleText} size="small" />
                 ) : (
@@ -706,17 +736,22 @@ export default function PremiumScreen() {
                         ? `Switch to ${cfg?.badge} · ${acoinPrice} AC`
                         : `Get ${cfg?.badge} · ${usdPrice}`}
                     </Text>
+                    <Ionicons name="arrow-forward" size={16} color={colors.bubbleText} />
                   </>
                 )}
               </TouchableOpacity>
             ) : (
-              <View style={[s.currentBar, { backgroundColor: cardBg, borderColor: sep }]}>
-                <Text style={[s.currentBarTxt, { color: colors.textMuted }]}>Unavailable for purchase</Text>
+              <View style={[s.currentBar, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
+                <Text style={[s.currentBarTxt, { color: pal.textMuted }]}>Unavailable for purchase</Text>
               </View>
             )}
 
+            {!isCurrentPlan && activeTier !== "free" && selectedPlan && (
+              <TrustLine pal={pal} text="Paid securely from your ACoin wallet" />
+            )}
+
             {isSwitching && activeTier !== "free" && selectedPlan && (
-              <Text style={[s.legal, { color: colors.textMuted }]}>
+              <Text style={[s.legal, { color: pal.textMuted }]}>
                 {"Current plan ends immediately · no refund"}
               </Text>
             )}
@@ -732,8 +767,10 @@ const s = StyleSheet.create({
 
   scrollContent: {
     alignItems: "center",
-    paddingBottom: 24,
+    paddingBottom: 28,
   },
+  heroWrap: { width: "100%" },
+  afterHero: { marginTop: -44, zIndex: 5 },
   pageContent: {
     width: "100%",
     maxWidth: 760,
@@ -792,9 +829,10 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    minHeight: 54,
+    minHeight: 56,
     paddingVertical: 15,
-    borderRadius: 16,
+    borderRadius: 18,
+    overflow: "hidden",
   },
   ctaBtnTxt: {
     fontSize: 16,
