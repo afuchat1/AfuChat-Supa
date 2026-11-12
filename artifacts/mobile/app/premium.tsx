@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,13 +14,32 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { getSubscriptionPrice } from "@/lib/creatorEntitlements";
+import {
+  ActiveBanner,
+  CostSummary,
+  CtaBackdrop,
+  FeatureCard,
+  FloatingNav,
+  PerkStrip,
+  PlanHero,
+  PremiumSkeleton,
+  TierBackdrop,
+  TierTabs,
+  TrustLine,
+  WalletCard,
+  lighten,
+  makePalette,
+  readableTint,
+  shade,
+  type IconName,
+  type TierTab,
+} from "@/components/premium/PlanComponents";
 
 // ── Currency helpers ─────────────────────────────────────────────────────────
 
@@ -95,7 +114,7 @@ type TierCfg = {
 
 const TIER_CONFIG: Record<string, TierCfg> = {
   free: {
-    color: "#8D96A8",
+    color: "#10B981",
     emoji: "○",
     badge: "FREE",
     sections: [
@@ -105,7 +124,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     ],
   },
   silver: {
-    color: "#8E9BB5",
+    color: "#2F6BFF",
     emoji: "✓",
     badge: "STANDARD",
     sections: [
@@ -151,7 +170,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     ],
   },
   gold: {
-    color: "#C8923A",
+    color: "#FF8A1F",
     emoji: "★",
     badge: "PRO",
     sections: [
@@ -205,7 +224,7 @@ const TIER_CONFIG: Record<string, TierCfg> = {
     ],
   },
   platinum: {
-    color: "#1018D8",
+    color: "#9B4DFF",
     emoji: "💎",
     badge: "PLATINUM",
     sections: [
@@ -243,6 +262,14 @@ const TIER_CONFIG: Record<string, TierCfg> = {
   },
 };
 
+/** Presentation-only metadata (hero gradient runs deep at the top to bright at the bottom). */
+const TIER_UI: Record<string, { icon: IconName; tagline: string; stops: string[] }> = {
+  free: { icon: "leaf", tagline: "Get started", stops: ["#04281F", "#0B7A62", "#5EEAD4"] },
+  silver: { icon: "shield-checkmark", tagline: "Everyday essentials", stops: ["#061641", "#1D5BE0", "#7DB8FF"] },
+  gold: { icon: "star", tagline: "For power users and creators", stops: ["#331302", "#B8500A", "#FFB347"] },
+  platinum: { icon: "diamond", tagline: "The complete AfuChat", stops: ["#220851", "#6D28D9", "#F472B6"] },
+};
+
 const PAID_TIERS = ["silver", "gold", "platinum"] as const;
 
 function durationLabel(days: number) {
@@ -268,6 +295,7 @@ export default function PremiumScreen() {
   const [subscribing, setSubscribing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
   const subscribeLockRef = useRef(false);
 
   const loadPlans = useCallback(async () => {
@@ -297,9 +325,19 @@ export default function PremiumScreen() {
   useEffect(() => { loadPlans(); }, [loadPlans]);
 
   function switchTier(tier: string) {
-    Animated.sequence([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 70, useNativeDriver: true }),
-      Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+    if (tier === activeTier) return;
+    slideAnim.setValue(12);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(fadeAnim, { toValue: 0, duration: 70, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
     ]).start();
     setActiveTier(tier);
     Haptics.selectionAsync?.();
@@ -482,71 +520,86 @@ export default function PremiumScreen() {
     );
   }
 
-  const sep = colors.border;
-  const cardBg = colors.inputBg;
+  // ── Presentation ───────────────────────────────────────────────────────────
+
+  const pal = makePalette(colors);
+  const tint = readableTint(tierColor, colors.background);
+  const ui = TIER_UI[activeTier] ?? TIER_UI.free;
+  const navTop = topInset + 8;
+  const heroTop = topInset + 64;
+  // Full-page backdrop: deep at the top; light lavender (light theme) or deep (dark theme) below.
+  const pageStops = pal.isDark
+    ? [ui.stops[0], shade(ui.stops[1], 0.45), shade(ui.stops[0], 0.15)]
+    : [ui.stops[0], ui.stops[1], lighten(ui.stops[2], 0.82)];
 
   if (loading) {
     return (
       <View style={[s.flex, { backgroundColor: colors.background }]}>
-        <View
-          style={[
-            s.nav,
-            { top: topInset + 8, backgroundColor: cardBg, borderColor: sep, shadowColor: colors.text },
-          ]}
-        >
-          <GlassBackButton onPress={() => router.back()} style={s.backBtn} />
-          <Text style={[s.navTitle, { color: colors.text }]}>Premium</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        <TierBackdrop stops={pageStops} />
+        <FloatingNav top={navTop} title="Premium" onBack={() => router.back()} colors={colors} />
         <ScrollView
           style={s.flex}
           contentContainerStyle={[s.scrollContent, { paddingTop: topInset + 72 }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[s.pageContent, isWide && s.pageContentWide]}>
-            <View style={[s.loadingCard, { backgroundColor: cardBg, borderColor: sep }]}>
-              <View style={s.loadingHeader}>
-                <ActivityIndicator color={colors.accent} size="small" />
-                <Text style={[s.loadingText, { color: colors.text }]}>Loading plan options</Text>
-              </View>
-              <View style={[s.loadingLine, { backgroundColor: colors.surface }]} />
-              <View style={[s.loadingLineShort, { backgroundColor: colors.surface }]} />
-            </View>
+            <PremiumSkeleton pal={pal} />
           </View>
         </ScrollView>
       </View>
     );
   }
 
-  const afterBalance = (profile?.acoin ?? 0) - acoinPrice;
-  const canAfford = (profile?.acoin ?? 0) >= acoinPrice;
+  const balance = profile?.acoin ?? 0;
+  const afterBalance = balance - acoinPrice;
+  const canAfford = balance >= acoinPrice;
+
+  const tabs: TierTab[] = tierOptions.map((tier) => {
+    const tc = TIER_CONFIG[tier];
+    const plan = plans.find((p) => p.tier === tier);
+    const tabPrice = tier === "free"
+      ? 0
+      : getSubscriptionPrice(tier, plan?.acoin_price) ?? plan?.acoin_price ?? null;
+    return {
+      id: tier,
+      label: tc.badge,
+      icon: (TIER_UI[tier] ?? TIER_UI.free).icon,
+      color: readableTint(tc.color, colors.background),
+      accent: tc.color,
+      priceLabel: tier === "free" ? "Free" : tabPrice === null ? "—" : `${tabPrice} AC`,
+      isCurrent: tier === "free" ? !isPremium : isPremium && subscription?.plan_tier === tier,
+    };
+  });
+
+  const perDay = selectedPlan && activeTier !== "free" && selectedPlan.duration_days > 0
+    ? (() => {
+        const v = acoinPrice / selectedPlan.duration_days;
+        return `${v >= 10 ? Math.round(v) : v.toFixed(1)} AC a day`;
+      })()
+    : null;
+  const featureCount = (cfg?.sections ?? []).reduce((n, sec) => n + sec.items.length, 0);
+  const ctaBusy = subscribing || cancelling;
 
   return (
     <View style={[s.flex, { backgroundColor: colors.background }]}>
-      {/* Nav */}
-      <View
-        style={[
-          s.nav,
-          { top: topInset + 8, backgroundColor: cardBg, borderColor: sep, shadowColor: colors.text },
-        ]}
-      >
-        <GlassBackButton onPress={() => router.back()} style={s.backBtn} />
-        <Text style={[s.navTitle, { color: colors.text }]}>Premium</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <TierBackdrop stops={pageStops} />
+      <FloatingNav top={navTop} title="Premium" onBack={() => router.back()} colors={colors} />
 
       <ScrollView
         style={s.flex}
-        contentContainerStyle={[s.scrollContent, { paddingTop: topInset + 72 }]}
+        contentContainerStyle={s.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[s.pageContent, isWide && s.pageContentWide]}>
-          {plansError ? (
-            <View style={[s.errorCard, { backgroundColor: cardBg, borderColor: sep }]}>
+        {plansError ? (
+          <View style={[s.pageContent, isWide && s.pageContentWide, { paddingTop: topInset + 72 }]}>
+            <View style={[s.errorCard, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
               <View style={[s.errorIcon, { backgroundColor: colors.errorSubtle }]}>
-                <Ionicons name="cloud-offline-outline" size={22} color={colors.error} />
+                <Ionicons name="cloud-offline-outline" size={24} color={colors.error} />
               </View>
-              <Text style={[s.errorTitle, { color: colors.text }]}>Plans unavailable</Text>
+              <Text style={[s.errorTitle, { color: pal.text }]}>Plans unavailable</Text>
+              <Text style={[s.errorSub, { color: pal.textSecondary }]}>
+                Check your connection and try again.
+              </Text>
               <TouchableOpacity
                 style={[s.retryButton, { backgroundColor: colors.accent }]}
                 onPress={loadPlans}
@@ -556,226 +609,154 @@ export default function PremiumScreen() {
                 testID="premium-retry-plans"
               >
                 <Ionicons name="refresh" size={16} color={colors.bubbleText} />
-                <Text style={s.retryButtonText}>Retry</Text>
+                <Text style={[s.retryButtonText, { color: colors.bubbleText }]}>Retry</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <>
-        {isPremium && subscription && (
-          <View style={[s.activeBar, { backgroundColor: tierColor + "12", borderColor: tierColor + "33" }]}>
-            <Ionicons name="shield-checkmark" size={14} color={tierColor} />
-            <Text style={[s.activeBarTxt, { color: colors.text }]}>
-              {TIER_CONFIG[subscription.plan_tier]?.badge ?? subscription.plan_name} · {daysLeft}d
-            </Text>
-            <TouchableOpacity
-              onPress={handleCancel}
-              disabled={cancelling}
-              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel subscription"
-            >
-              <Text style={[s.cancelTxt, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
           </View>
-        )}
+        ) : (
+          <>
+            <Animated.View style={[s.heroWrap, { opacity: fadeAnim }]}>
+              <PlanHero
+                top={heroTop}
+                stops={ui.stops}
+                icon={ui.icon}
+                badge={cfg?.badge ?? ""}
+                tagline={ui.tagline}
+                acoin={acoinPrice}
+                usd={usdPrice}
+                local={localPrice}
+                duration={
+                  selectedPlan
+                    ? durationLabel(selectedPlan.duration_days)
+                    : activeTier === "free"
+                      ? "no charge"
+                      : "unavailable"
+                }
+                perDay={perDay}
+                verified={["silver", "gold", "platinum"].includes(activeTier)}
+                isCurrent={isCurrentPlan}
+              />
+            </Animated.View>
 
-        {/* Tier tabs */}
-        <View style={[s.tabs, { backgroundColor: cardBg, borderColor: sep }]}>
-          {tierOptions.map((tier) => {
-            const tc = TIER_CONFIG[tier];
-            const active = activeTier === tier;
-            const isCurrent = tier === "free"
-              ? !isPremium
-              : isPremium && subscription?.plan_tier === tier;
-            return (
-              <Pressable
-                key={tier}
-                style={[
-                  s.tab,
-                  active && { backgroundColor: tc.color + "18", borderColor: tc.color + "44" },
-                ]}
-                onPress={() => switchTier(tier)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={`${tc.badge} plan${isCurrent ? ", current plan" : ""}`}
-                testID={`premium-tier-${tier}`}
-              >
-                <Text style={s.tabEmoji}>{tc.emoji}</Text>
-                <Text style={[s.tabLabel, { color: active ? colors.text : colors.textSecondary }]}>
-                  {tc.badge}
-                </Text>
-                {isCurrent && <View style={[s.currentDot, { backgroundColor: tc.color }]} />}
-              </Pressable>
-            );
-          })}
-        </View>
+            <View style={[s.pageContent, isWide && s.pageContentWide, s.afterHero]}>
+              <TierTabs tabs={tabs} activeId={activeTier} onSelect={switchTier} pal={pal} />
 
-        <Animated.View style={[s.body, { opacity: fadeAnim }]}>
-
-          {/* Price card */}
-          <View style={[s.card, { backgroundColor: cardBg, borderColor: sep }]}>
-            <View style={s.priceTopRow}>
-              <View style={s.priceLeft}>
-                {/* Big ACoin number */}
-                <View style={s.priceMainRow}>
-                  <Text style={[s.priceNum, { color: colors.text }]}>{acoinPrice}</Text>
-                  <Text style={[s.priceUnit, { color: colors.textMuted }]}>AC</Text>
-                  <View style={[s.durPill, { backgroundColor: tierColor + "18" }]}>
-                    <Text style={[s.durTxt, { color: colors.textSecondary }]}>
-                      / {selectedPlan ? durationLabel(selectedPlan.duration_days) : activeTier === "free" ? "no charge" : "unavailable"}
-                    </Text>
-                  </View>
-                </View>
-                {/* USD + local currency */}
-                <View style={s.equivRow}>
-                <Text style={[s.usdTxt, { color: colors.textSecondary }]}>{usdPrice} USD</Text>
-                  {localPrice ? (
-                    <Text style={[s.localTxt, { color: colors.textSecondary }]}> · ≈ {localPrice}</Text>
-                  ) : null}
-                </View>
-              </View>
-              {["silver", "gold", "platinum"].includes(activeTier) && (
-                <View style={[s.verBadge, { backgroundColor: tierColor + "15", borderColor: tierColor + "40" }]}>
-                  <Ionicons name="shield-checkmark" size={13} color={tierColor} />
-                  <Text style={[s.verTxt, { color: colors.textSecondary }]}>Verified</Text>
-                </View>
+              {isPremium && subscription && (
+                <ActiveBanner
+                  pal={pal}
+                  tint={readableTint(
+                    TIER_CONFIG[subscription.plan_tier]?.color ?? colors.accent,
+                    colors.background
+                  )}
+                  label={TIER_CONFIG[subscription.plan_tier]?.badge ?? subscription.plan_name}
+                  daysLeft={daysLeft}
+                  cancelling={cancelling}
+                  onCancel={handleCancel}
+                />
               )}
-            </View>
-          </View>
 
-          {/* Features */}
-          <View style={[s.card, s.featCard, { backgroundColor: cardBg, borderColor: sep }]}>
-            {cfg?.sections.map((sec, si) => (
-              <View
-                key={si}
-                style={[
-                  s.featSec,
-                  si > 0 && { borderTopColor: colors.border },
-                ]}
+              <Animated.View
+                style={[s.body, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
               >
-                <View style={s.featSecHead}>
-                  <View style={[s.featIco, { backgroundColor: tierColor + "18" }]}>
-                    <Ionicons name={sec.icon as any} size={12} color={tierColor} />
-                  </View>
-                  <Text style={[s.featSecTitle, { color: colors.text }]}>{sec.title}</Text>
-                </View>
-                <View style={s.featItems}>
-                  {sec.items.map((item, ii) => (
-                    <View key={ii} style={s.featItem}>
-                      <Ionicons name="checkmark-circle" size={15} color={colors.success} />
-                      <Text style={[s.featItemTxt, { color: colors.textSecondary }]}>{item}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
+                <PerkStrip pal={pal} sections={cfg?.sections ?? []} count={featureCount} />
 
-          {/* Wallet link */}
-          <TouchableOpacity
-            style={[s.walletRow, { backgroundColor: cardBg, borderColor: sep }]}
-            onPress={() => router.push("/app/afupay?section=topup" as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="wallet" size={15} color={colors.accent} />
-            <Text style={[s.walletTxt, { color: colors.textSecondary }]}>
-              {"Balance: "}
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold" }}>
-                {profile?.acoin ?? 0} AC
-              </Text>
-              {"  "}
-              <Text style={{ color: colors.textMuted, fontFamily: "Inter_400Regular" }}>
-                {fmtUSD(profile?.acoin ?? 0)}
-              </Text>
-            </Text>
-            <Ionicons name="chevron-forward" size={13} color={colors.iconMuted} />
-          </TouchableOpacity>
+                <FeatureCard pal={pal} sections={cfg?.sections ?? []} tierKey={activeTier} />
 
-        </Animated.View>
-            </>
-          )}
-        </View>
+                <WalletCard
+                  pal={pal}
+                  balance={balance}
+                  usd={fmtUSD(balance)}
+                  onPress={() => router.push("/app/afupay?section=topup" as any)}
+                />
+              </Animated.View>
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Sticky CTA */}
       {!plansError && (
-      <View style={[s.cta, { paddingBottom: bottomInset + 14, backgroundColor: colors.background, borderTopColor: sep }]}>
-        <View style={[s.ctaInner, isWide && s.pageContentWide]}>
-        {activeTier !== "free" && selectedPlan && !isCurrentPlan && (
-          <View style={[s.costRow, { borderColor: sep }]}>
-            <View style={s.costCol}>
-              <Text style={[s.costLbl, { color: colors.textMuted }]}>Balance</Text>
-              <Text style={[s.costVal, { color: colors.text }]}>{profile?.acoin ?? 0}</Text>
-            </View>
-              <Text style={[s.costOp, { color: colors.textMuted }]}>to</Text>
-            <View style={s.costCol}>
-              <Text style={[s.costLbl, { color: colors.textMuted }]}>Cost</Text>
-              <Text style={[s.costVal, { color: colors.warning }]}>{acoinPrice}</Text>
-            </View>
-              <Text style={[s.costOp, { color: colors.textMuted }]}>=</Text>
-            <View style={s.costCol}>
-              <Text style={[s.costLbl, { color: colors.textMuted }]}>After</Text>
-              <Text style={[s.costVal, { color: canAfford ? colors.success : colors.error, fontFamily: "Inter_700Bold" }]}>
-                {afterBalance}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {isCurrentPlan ? (
-          <View style={[s.currentBar, { backgroundColor: tierColor + "14", borderColor: tierColor + "33" }]}>
-            <Text style={s.currentBarEmoji}>{cfg?.emoji}</Text>
-            <Text style={[s.currentBarTxt, { color: colors.text }]}>
-              {`Current plan · ${cfg?.badge}`}
-            </Text>
-          </View>
-        ) : activeTier === "free" && isPremium ? (
-          <TouchableOpacity
-            style={[s.ctaBtn, { backgroundColor: colors.accent }, (subscribing || cancelling) && { opacity: 0.55 }]}
-            onPress={handleCancel}
-            disabled={subscribing || cancelling}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            testID="premium-switch-free-cta"
-          >
-            <Text style={[s.ctaBtnTxt, { color: colors.bubbleText }]}>Switch to Free plan</Text>
-          </TouchableOpacity>
-        ) : selectedPlan ? (
-          <TouchableOpacity
-            style={[s.ctaBtn, { backgroundColor: colors.accent }, (subscribing || cancelling) && { opacity: 0.55 }]}
-            onPress={handleSubscribe}
-            disabled={subscribing || cancelling}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={isSwitching ? `Switch to ${cfg?.badge}` : `Get ${cfg?.badge} for ${usdPrice}`}
-            testID="premium-primary-cta"
-          >
-            {subscribing ? (
-              <ActivityIndicator color={colors.bubbleText} size="small" />
-            ) : (
-              <>
-                <Ionicons name="diamond" size={16} color={colors.bubbleText} />
-                <Text style={[s.ctaBtnTxt, { color: colors.bubbleText }]}>
-                  {isSwitching
-                    ? `Switch to ${cfg?.badge} · ${acoinPrice} AC`
-                    : `Get ${cfg?.badge} · ${usdPrice}`}
-                </Text>
-              </>
+        <View
+          style={[
+            s.cta,
+            { paddingBottom: bottomInset + 14, backgroundColor: pal.bar, borderTopColor: pal.cardBorder },
+          ]}
+        >
+          <View style={[s.ctaInner, isWide && s.pageContentWide]}>
+            {activeTier !== "free" && selectedPlan && !isCurrentPlan && (
+              <CostSummary
+                pal={pal}
+                balance={balance}
+                cost={acoinPrice}
+                after={afterBalance}
+                canAfford={canAfford}
+              />
             )}
-          </TouchableOpacity>
-        ) : (
-          <View style={[s.currentBar, { backgroundColor: cardBg, borderColor: sep }]}>
-            <Text style={[s.currentBarTxt, { color: colors.textMuted }]}>Unavailable for purchase</Text>
-          </View>
-        )}
 
-        {isSwitching && activeTier !== "free" && selectedPlan && (
-          <Text style={[s.legal, { color: colors.textMuted }]}>
-            {"Current plan ends immediately · no refund"}
-          </Text>
-        )}
-      </View>
-      </View>
+            {isCurrentPlan ? (
+              <View style={[s.currentBar, { backgroundColor: tint + "1F", borderColor: tint + "55" }]}>
+                <Ionicons name={ui.icon} size={20} color={tint} />
+                <Text style={[s.currentBarTxt, { color: pal.text }]}>
+                  {`Current plan · ${cfg?.badge}`}
+                </Text>
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              </View>
+            ) : activeTier === "free" && isPremium ? (
+              <TouchableOpacity
+                style={[s.ctaBtn, ctaBusy && { opacity: 0.55 }]}
+                onPress={handleCancel}
+                disabled={ctaBusy}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Switch to Free plan"
+                testID="premium-switch-free-cta"
+              >
+                <CtaBackdrop color={colors.accent} />
+                <Text style={[s.ctaBtnTxt, { color: colors.bubbleText }]}>Switch to Free plan</Text>
+              </TouchableOpacity>
+            ) : selectedPlan ? (
+              <TouchableOpacity
+                style={[s.ctaBtn, ctaBusy && { opacity: 0.55 }]}
+                onPress={handleSubscribe}
+                disabled={ctaBusy}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={isSwitching ? `Switch to ${cfg?.badge}` : `Get ${cfg?.badge} for ${usdPrice}`}
+                accessibilityState={{ disabled: ctaBusy, busy: subscribing }}
+                testID="premium-primary-cta"
+              >
+                <CtaBackdrop color={colors.accent} />
+                {subscribing ? (
+                  <ActivityIndicator color={colors.bubbleText} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="diamond" size={16} color={colors.bubbleText} />
+                    <Text style={[s.ctaBtnTxt, { color: colors.bubbleText }]}>
+                      {isSwitching
+                        ? `Switch to ${cfg?.badge} · ${acoinPrice} AC`
+                        : `Get ${cfg?.badge} · ${usdPrice}`}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={16} color={colors.bubbleText} />
+                  </>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <View style={[s.currentBar, { backgroundColor: pal.card, borderColor: pal.cardBorder }]}>
+                <Text style={[s.currentBarTxt, { color: pal.textMuted }]}>Unavailable for purchase</Text>
+              </View>
+            )}
+
+            {!isCurrentPlan && activeTier !== "free" && selectedPlan && (
+              <TrustLine pal={pal} text="Paid securely from your ACoin wallet" />
+            )}
+
+            {isSwitching && activeTier !== "free" && selectedPlan && (
+              <Text style={[s.legal, { color: pal.textMuted }]}>
+                {"Current plan ends immediately · no refund"}
+              </Text>
+            )}
+          </View>
+        </View>
       )}
     </View>
   );
@@ -786,191 +767,72 @@ const s = StyleSheet.create({
 
   scrollContent: {
     alignItems: "center",
-    paddingBottom: 20,
+    paddingBottom: 28,
   },
+  heroWrap: { width: "100%" },
+  afterHero: { marginTop: -44, zIndex: 5 },
   pageContent: {
     width: "100%",
     maxWidth: 760,
     paddingHorizontal: 16,
-    gap: 12,
+    gap: 14,
   },
   pageContentWide: {
     maxWidth: 820,
   },
-  nav: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderRadius: 18,
-    zIndex: 20,
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  navTitle: { fontSize: 17, fontFamily: "Inter_600SemiBold", letterSpacing: -0.3 },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  loadingText: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  loadingCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 18,
-    gap: 14,
-  },
-  loadingHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  loadingLine: { height: 12, width: "100%", borderRadius: 6, opacity: 0.65 },
-  loadingLineShort: { height: 12, width: "62%", borderRadius: 6, opacity: 0.65 },
+  body: { gap: 14 },
+
   errorCard: {
     marginTop: 20,
     borderRadius: 22,
     borderWidth: 1,
     padding: 24,
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
-  errorIcon: { width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  errorIcon: { width: 56, height: 56, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   errorTitle: { fontSize: 20, fontFamily: "Inter_700Bold", textAlign: "center" },
-  retryButton: { minHeight: 46, paddingHorizontal: 18, borderRadius: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4 },
-  retryButtonText: { fontSize: 14, fontFamily: "Inter_700Bold" },
-
-  activeBar: {
+  errorSub: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  retryButton: {
+    minHeight: 48,
+    paddingHorizontal: 22,
+    borderRadius: 14,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignSelf: "stretch",
-  },
-  activeBarTxt: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "left" },
-  cancelTxt: { fontSize: 12, fontFamily: "Inter_400Regular" },
-
-  tabs: {
-    flexDirection: "row",
-    padding: 4,
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 16,
-  },
-  tab: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 72,
-    paddingHorizontal: 2,
-    paddingVertical: 9,
-    gap: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "transparent",
+    gap: 8,
+    marginTop: 6,
   },
-  tabEmoji: { fontSize: 20 },
-  tabLabel: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5, textAlign: "center" },
-  currentDot: { width: 5, height: 5, borderRadius: 3 },
-
-  body: { paddingTop: 0, gap: 12 },
-
-  card: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 20,
-  },
-  priceTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
-  priceLeft: { flex: 1, minWidth: 0, gap: 5 },
-  priceMainRow: { flexDirection: "row", alignItems: "baseline", gap: 5, flexWrap: "wrap" },
-  priceNum: { fontSize: 40, fontFamily: "Inter_700Bold", letterSpacing: -1.5 },
-  priceUnit: { fontSize: 20, fontFamily: "Inter_400Regular", marginBottom: 2 },
-  durPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 4,
-    alignSelf: "center",
-  },
-  durTxt: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  equivRow: { flexDirection: "row", alignItems: "center" },
-  usdTxt: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  localTxt: { fontSize: 14, fontFamily: "Inter_400Regular" },
-  verBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 9,
-    borderWidth: 1,
-    marginLeft: 12,
-  },
-  verTxt: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-
-  featCard: { padding: 0, overflow: "hidden" },
-  featSec: { padding: 18 },
-  featSecHead: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 12 },
-  featIco: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center" },
-  featSecTitle: { flex: 1, minWidth: 0, fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.2, textAlign: "left" },
-  featItems: { gap: 9, paddingLeft: 2 },
-  featItem: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
-  featItemTxt: { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, lineHeight: 20, textAlign: "left" },
-
-  walletRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  walletTxt: { flex: 1, minWidth: 0, fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "left" },
+  retryButtonText: { fontSize: 14, fontFamily: "Inter_700Bold" },
 
   cta: {
     alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 12,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   ctaInner: {
     width: "100%",
     gap: 10,
   },
-  costRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 0.5,
-    borderRadius: 10,
-  },
-  costCol: { alignItems: "center", gap: 2, minWidth: 60 },
-  costLbl: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  costVal: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  costOp: { fontSize: 20, fontFamily: "Inter_300Light" },
   currentBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     padding: 15,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
   },
-  currentBarEmoji: { fontSize: 22 },
   currentBarTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1, minWidth: 0, textAlign: "left" },
   ctaBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 16,
-    borderRadius: 13,
+    minHeight: 56,
+    paddingVertical: 15,
+    borderRadius: 18,
+    overflow: "hidden",
   },
   ctaBtnTxt: {
     fontSize: 16,
