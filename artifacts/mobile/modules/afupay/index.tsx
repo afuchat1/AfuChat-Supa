@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -32,6 +32,8 @@ import QRCode from "@/components/ui/QRCode";
 import Colors from "@/constants/colors";
 import AfuServicesApp from "@/modules/afuservices";
 import { safeRouter } from "@/lib/navUtils";
+import { PaymentProviderPicker, type PaymentProvider } from "@/components/PaymentProviderPicker";
+import { confirmWhopPayment, startWhopCheckout } from "@/lib/whopPayments";
 
 type AppView = "home" | "history" | "topup" | "send" | "receive" | "exchange" | "requests" | "services";
 type TxFilter = "all" | "acoin" | "nexa" | "gifts";
@@ -593,22 +595,29 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
   );
 }
 
-function PaymentWebViewModal({ url, colors, insets, onClose, onComplete }: {
-  url: string; colors: any; insets: any; onClose: () => void; onComplete: () => void;
+function PaymentWebViewModal({ url, provider, colors, insets, onClose, onComplete }: {
+  url: string; provider: PaymentProvider; colors: any; insets: any; onClose: () => void; onComplete: (returnUrl: string) => void;
 }) {
   const [webLoading, setWebLoading] = useState(true);
+  const completionHandled = useRef(false);
+
+  function complete(returnUrl: string) {
+    if (completionHandled.current) return;
+    completionHandled.current = true;
+    onComplete(returnUrl);
+  }
 
   function handleNavChange(nav: any) {
     const u: string = nav.url || "";
     if (u.includes("payment-complete") || u.includes("payment_complete") || u.includes("paymentcomplete")) {
-      onComplete();
+      complete(u);
     }
   }
 
   function shouldStart(req: any) {
     const u: string = req.url || "";
     if (u.includes("payment-complete") || u.includes("payment_complete") || u.includes("paymentcomplete")) {
-      onComplete();
+      complete(u);
       return false;
     }
     return true;
@@ -626,7 +635,9 @@ function PaymentWebViewModal({ url, colors, insets, onClose, onComplete }: {
             <Ionicons name="lock-closed" size={13} color="#34C759" />
             <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 15, color: colors.text }}>Secure Checkout</Text>
             <View style={{ backgroundColor: "#34C75920", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: "#34C759" }}>Pesapal</Text>
+              <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: "#34C759" }}>
+                {provider === "whop" ? "Whop" : "Pesapal"}
+              </Text>
             </View>
           </View>
           <TouchableOpacity onPress={onClose} hitSlop={12} style={{ padding: 6 }}>
@@ -666,32 +677,46 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
   const [customAmt, setCustomAmt] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+  const [provider, setProvider] = useState<PaymentProvider>("whop");
 
   async function checkout() {
     const acoinAmt = selectedPack !== null ? PACKAGES[selectedPack].amount : (parseInt(customAmt || "0") || 0);
-    if (acoinAmt < 50) { showAlert("Too Low", "Minimum purchase is 50 ACoin."); return; }
+    const minimum = provider === "whop" ? 100 : 50;
+    if (acoinAmt < minimum) {
+      showAlert("Too Low", `Minimum purchase with ${provider === "whop" ? "Whop" : "Pesapal"} is ${minimum} ACoins.`);
+      return;
+    }
     setLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${getEdgeFnBase()}/pesapal-initiate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ acoin_amount: acoinAmt, currency: "USD" }),
-      });
-      const data = await res.json();
-      if (data.redirect_url) {
-        setCheckoutUrl(data.redirect_url);
+      if (provider === "whop") {
+        const result = await startWhopCheckout({ purpose: "topup", acoin_amount: acoinAmt });
+        setCheckoutSessionId(result.session_id);
+        setCheckoutUrl(result.purchase_url);
       } else {
-        showAlert("Error", data.error || "Could not initiate payment.");
+        const token = await getToken();
+        const res = await fetch(`${getEdgeFnBase()}/pesapal-initiate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ acoin_amount: acoinAmt, currency: "USD" }),
+        });
+        const data = await res.json();
+        if (data.redirect_url) {
+          setCheckoutSessionId(null);
+          setCheckoutUrl(data.redirect_url);
+        } else {
+          showAlert("Error", data.error || "Could not initiate payment.");
+        }
       }
-    } catch {
-      showAlert("Error", "Network error. Please try again.");
+    } catch (error) {
+      showAlert("Error", error instanceof Error ? error.message : "Network error. Please try again.");
     }
     setLoading(false);
   }
 
   const acoinAmt = selectedPack !== null ? PACKAGES[selectedPack].amount : (parseInt(customAmt || "0") || 0);
   const price = (acoinAmt * 0.01).toFixed(2);
+  const minimumAmount = provider === "whop" ? 100 : 50;
 
   const country = profile?.country ?? null;
 
@@ -756,7 +781,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
 
         {/* ── Custom amount ── */}
         <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 20, marginBottom: 8 }]}>OR ENTER CUSTOM AMOUNT</Text>
-        <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: selectedPack === null && acoinAmt >= 50 ? Colors.brand : colors.border, borderWidth: selectedPack === null && acoinAmt >= 50 ? 1.5 : 1 }]}>
+        <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: selectedPack === null && acoinAmt >= minimumAmount ? Colors.brand : colors.border, borderWidth: selectedPack === null && acoinAmt >= minimumAmount ? 1.5 : 1 }]}>
           <Ionicons name="diamond" size={16} color={Colors.brand} style={{ marginRight: 8 }} />
           <TextInput
             style={[s.input, { color: colors.text, flex: 1 }]}
@@ -770,7 +795,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
         </View>
 
         {/* ── Preview for custom amount ── */}
-        {selectedPack === null && acoinAmt >= 50 && (
+        {selectedPack === null && acoinAmt >= minimumAmount && (
           <View style={[s.previewBox, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "30", marginTop: 10 }]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{fmtAmt(acoinAmt)} ACoin</Text>
@@ -781,15 +806,26 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
                 )}
               </View>
             </View>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>Mobile money · Card · Bank · Powered by Pesapal</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>
+              Secure hosted checkout via {provider === "whop" ? "Whop" : "Pesapal"}
+            </Text>
           </View>
         )}
 
+        <View style={{ marginTop: 20 }}>
+          <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
+          {provider === "whop" && (
+            <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 6 }}>
+              Whop checkout minimum is $1.00 (100 ACoins).
+            </Text>
+          )}
+        </View>
+
         {/* ── CTA ── */}
         <TouchableOpacity
-          style={[s.primaryBtn, { backgroundColor: Colors.brand, opacity: (loading || acoinAmt < 50) ? 0.5 : 1, marginTop: 20 }]}
+          style={[s.primaryBtn, { backgroundColor: Colors.brand, opacity: (loading || acoinAmt < minimumAmount) ? 0.5 : 1, marginTop: 20 }]}
           onPress={checkout}
-          disabled={loading || acoinAmt < 50}
+          disabled={loading || acoinAmt < minimumAmount}
           activeOpacity={0.85}
         >
           {loading
@@ -803,18 +839,40 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
           }
         </TouchableOpacity>
         <Text style={{ textAlign: "center", color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 8 }}>
-          1 AC = $0.01 · Secure checkout via Pesapal
+          1 AC = $0.01 · Secure checkout via {provider === "whop" ? "Whop" : "Pesapal"}
         </Text>
 
       </ScrollView>
       {!!checkoutUrl && (
         <PaymentWebViewModal
           url={checkoutUrl}
+          provider={provider}
           colors={colors}
           insets={insets}
           onClose={() => setCheckoutUrl(null)}
-          onComplete={() => {
+          onComplete={async (returnUrl) => {
+            let returnedSessionId: string | null = null;
+            try { returnedSessionId = new URL(returnUrl).searchParams.get("session_id"); } catch {}
             setCheckoutUrl(null);
+            if (provider === "whop") {
+              const sessionId = returnedSessionId || checkoutSessionId;
+              if (!sessionId) {
+                showAlert("Payment Pending", "We could not find your payment reference. Your payment will be confirmed automatically if it succeeds.");
+                return;
+              }
+              try {
+                const result = await confirmWhopPayment(sessionId);
+                onSuccess?.();
+                if (result.confirmed) {
+                  showAlert("Payment Confirmed", "Your ACoin wallet has been updated.");
+                } else {
+                  showAlert("Payment Pending", "Whop is still confirming your payment. Your wallet will update when it is verified.");
+                }
+              } catch (error) {
+                showAlert("Payment Pending", error instanceof Error ? error.message : "Whop is still confirming your payment.");
+              }
+              return;
+            }
             onSuccess?.();
             showAlert("Payment Submitted", "Your payment is being processed. Your ACoin balance will update shortly.");
           }}

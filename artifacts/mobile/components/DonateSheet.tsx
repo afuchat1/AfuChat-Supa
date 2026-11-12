@@ -25,6 +25,8 @@ import { supabase } from "@/lib/supabase";
 import Colors from "@/constants/colors";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { useLanguage } from "@/context/LanguageContext";
+import { PaymentProviderPicker, type PaymentProvider } from "@/components/PaymentProviderPicker";
+import { confirmWhopPayment, startWhopCheckout } from "@/lib/whopPayments";
 
 const ACCENT = Colors.brand;
 
@@ -65,8 +67,11 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [webLoading, setWebLoading] = useState(false);
+  const [provider, setProvider] = useState<PaymentProvider>("whop");
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const completionHandled = useRef(false);
 
   const usdAmount =
     customAmt !== ""
@@ -91,30 +96,38 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
     }
     setLoading(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${SUPABASE_EDGE_URL}/pesapal-initiate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          purpose: "donation",
-          usd_amount: usdAmount,
-          // Fallback: some deployments read acoin_amount; map 1 USD → 100 units
-          acoin_amount: Math.round(usdAmount * 100),
-          currency: "USD",
-        }),
-      });
-      const data = await res.json();
-      if (data.redirect_url) {
-        setCheckoutUrl(data.redirect_url);
+      if (provider === "whop") {
+        const result = await startWhopCheckout({ purpose: "donation", usd_amount: usdAmount });
+        setCheckoutSessionId(result.session_id);
+        completionHandled.current = false;
+        setCheckoutUrl(result.purchase_url);
       } else {
-        setError(data.error || t("donate.error_checkout"));
-        shake();
+        const token = await getToken();
+        const res = await fetch(`${SUPABASE_EDGE_URL}/pesapal-initiate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            purpose: "donation",
+            usd_amount: usdAmount,
+            acoin_amount: Math.round(usdAmount * 100),
+            currency: "USD",
+          }),
+        });
+        const data = await res.json();
+        if (data.redirect_url) {
+          setCheckoutSessionId(null);
+          completionHandled.current = false;
+          setCheckoutUrl(data.redirect_url);
+        } else {
+          setError(data.error || t("donate.error_checkout"));
+          shake();
+        }
       }
-    } catch {
-      setError(t("donate.error_network"));
+    } catch (checkoutError) {
+      setError(checkoutError instanceof Error ? checkoutError.message : t("donate.error_network"));
       shake();
     }
     setLoading(false);
@@ -127,8 +140,26 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
       u.includes("payment_complete") ||
       u.includes("paymentcomplete")
     ) {
+      if (completionHandled.current) return;
+      completionHandled.current = true;
       setCheckoutUrl(null);
-      setDone(true);
+      if (provider === "whop") {
+        let returnedSessionId: string | null = null;
+        try { returnedSessionId = new URL(u).searchParams.get("session_id"); } catch {}
+        const sessionId = returnedSessionId || checkoutSessionId;
+        if (!sessionId) {
+          setError("We could not find your payment reference. Please check again shortly.");
+          return;
+        }
+        void confirmWhopPayment(sessionId).then((result) => {
+          if (result.confirmed) setDone(true);
+          else setError("Whop is still confirming your payment. Please check again shortly.");
+        }).catch((error) => {
+          setError(error instanceof Error ? error.message : "Whop is still confirming your payment.");
+        });
+      } else {
+        setDone(true);
+      }
     }
   }
 
@@ -142,10 +173,12 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
     setError(null);
     setCheckoutUrl(null);
     setDone(false);
+    setCheckoutSessionId(null);
+    setProvider("whop");
     onClose();
   }
 
-  // ── Pesapal WebView modal ─────────────────────────────────────────────────
+  // ── Hosted payment WebView modal ───────────────────────────────────────────
   if (checkoutUrl) {
     return (
       <Modal
@@ -165,7 +198,7 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
               <Ionicons name="lock-closed" size={13} color="#34C759" />
               <Text style={[s.webviewTitle, { color: colors.text }]}>{t("donate.checkout_title")}</Text>
               <View style={s.pesapalBadge}>
-                <Text style={s.pesapalBadgeText}>Pesapal</Text>
+                <Text style={s.pesapalBadgeText}>{provider === "whop" ? "Whop" : "Pesapal"}</Text>
               </View>
             </View>
             <TouchableOpacity onPress={handleWebviewClose} hitSlop={12} style={{ padding: 6 }}>
@@ -309,13 +342,19 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
           </View>
         </View>
 
+        <View style={{ marginTop: 12, marginBottom: 8 }}>
+          <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
+        </View>
+
         {/* Info blurb */}
         <View style={[s.infoBox, { backgroundColor: colors.backgroundSecondary }]}>
           <View style={s.infoIcon}>
             <Ionicons name="shield-checkmark" size={14} color="#34C759" />
           </View>
           <Text style={[s.infoText, { color: colors.textMuted }]}>
-            {t("donate.secure_checkout")}
+            {provider === "whop"
+              ? "Secure hosted checkout via Whop. Your donation is recorded only after payment confirmation."
+              : t("donate.secure_checkout")}
           </Text>
         </View>
 

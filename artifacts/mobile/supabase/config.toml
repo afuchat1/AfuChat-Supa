@@ -26,3 +26,9 @@ verify_jwt = true
 
 [functions.export-user-data]
 verify_jwt = true
+
+[functions.whop-checkout]
+verify_jwt = false
+
+[functions.whop-webhook]
+verify_jwt = false

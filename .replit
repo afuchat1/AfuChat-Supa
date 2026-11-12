@@ -21,6 +21,8 @@ R2_PUBLIC_BASE_URL = "https://cdn.afuchat.com"
 R2_DEV_PUBLIC_URL = "https://pub-2e81c468eb99436690ca6da9f89191ce.r2.dev"
 R2_S3_ENDPOINT = "https://42e79186125e8ff83e51f15816e074de.r2.cloudflarestorage.com"
 PESAPAL_ENV = "production"
+WHOP_COMPANY_ID = "biz_bhb8lGNWQLaf9S"
+WHOP_ENVIRONMENT = "production"
 
 [workflows]
 runButton = "Project"
