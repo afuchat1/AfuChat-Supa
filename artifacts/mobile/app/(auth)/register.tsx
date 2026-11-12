@@ -4,6 +4,7 @@ import {
   Animated,
   Keyboard,
   KeyboardAvoidingView,
+  findNodeHandle,
   Modal,
   Platform,
   Pressable,
@@ -49,7 +50,7 @@ function SoftOrb({ cx, cy, size, color }: { cx: number; cy: number; size: number
 }
 
 // ─── Glass input ──────────────────────────────────────────────────────────────
-function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, inputMode, autoCapitalize, autoComplete, maxLength, testID, rightElement, onSubmitEditing, returnKeyType, inputRef, accent }: any) {
+function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, inputMode, autoCapitalize, autoComplete, maxLength, testID, rightElement, onSubmitEditing, returnKeyType, inputRef, accent, onFocus, onBlur }: any) {
   const { colors } = useTheme();
   const [focused, setFocused] = useState(false);
   return (
@@ -68,7 +69,8 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? "none"}
         inputMode={inputMode} autoComplete={autoComplete} maxLength={maxLength} testID={testID} autoCorrect={false}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        onFocus={() => { setFocused(true); onFocus?.(); }}
+        onBlur={() => { setFocused(false); onBlur?.(); }}
         onSubmitEditing={onSubmitEditing} returnKeyType={returnKeyType ?? "next"}
       />
       {rightElement}
@@ -264,7 +266,44 @@ export default function SignUpScreen() {
   const [verifyVisible, setVerifyVisible] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState("");
   const [signupUserId, setSignupUserId] = useState<string | null>(null);
+  const emailRef = useRef<TextInputInstance>(null);
   const pwdRef = useRef<TextInputInstance>(null);
+  const formScrollRef = useRef<any>(null);
+  const activeInputRef = useRef<TextInputInstance | null>(null);
+  const focusScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scrollFocusedRegisterInputIntoView() {
+    if (Platform.OS === "web") return;
+    const nativeHandle = activeInputRef.current ? findNodeHandle(activeInputRef.current) : null;
+    if (nativeHandle == null) return;
+    formScrollRef.current?.scrollResponderScrollNativeHandleToKeyboard?.(nativeHandle, 24, true);
+  }
+
+  function focusRegisterInput(inputRef: React.RefObject<TextInputInstance | null>) {
+    activeInputRef.current = inputRef.current;
+    requestAnimationFrame(scrollFocusedRegisterInputIntoView);
+    if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
+    focusScrollTimerRef.current = setTimeout(
+      scrollFocusedRegisterInputIntoView,
+      Platform.OS === "android" ? 280 : 180,
+    );
+  }
+
+  function blurRegisterInput(inputRef: React.RefObject<TextInputInstance | null>) {
+    if (activeInputRef.current === inputRef.current) activeInputRef.current = null;
+  }
+
+  useEffect(() => {
+    const subscription = Keyboard.addListener("keyboardDidShow", () => {
+      if (!activeInputRef.current) return;
+      if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
+      focusScrollTimerRef.current = setTimeout(scrollFocusedRegisterInputIntoView, 90);
+    });
+    return () => {
+      subscription.remove();
+      if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
+    };
+  }, []);
 
   // Slide animation
   const landingX = useRef(new Animated.Value(0)).current;
@@ -316,6 +355,7 @@ export default function SignUpScreen() {
       setSignupUserId(data.user.id);
       if (!data.session) {
         Keyboard.dismiss();
+        activeInputRef.current = null;
         setVerifyEmail(e);
         setVerifyVisible(true);
       }
@@ -498,11 +538,18 @@ export default function SignUpScreen() {
 
       {/* ── EMAIL FORM PANEL ── */}
       <Animated.View style={[sc.panel, { transform: [{ translateX: formX }], pointerEvents: step === "email" ? "auto" : "none" } as any]}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+          keyboardVerticalOffset={0}
+        >
           <ScrollView
+            ref={formScrollRef}
             contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
-            keyboardShouldPersistTaps="always"
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
             showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
           >
             <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28 }}>
             <GlassBackButton onPress={goToLanding} style={sc.backBtn} />
@@ -515,11 +562,14 @@ export default function SignUpScreen() {
             <View style={{ gap: 14 }}>
               <AuthInput
                 icon="mail" placeholder="Email address"
+                inputRef={emailRef}
                 value={email} onChangeText={setEmail}
                 keyboardType="email-address" autoComplete="email"
                 testID="signup-email-input"
                 returnKeyType="next"
                 onSubmitEditing={() => pwdRef.current?.focus()}
+                onFocus={() => focusRegisterInput(emailRef)}
+                onBlur={() => blurRegisterInput(emailRef)}
                 accent={accent}
               />
               <AuthInput
@@ -529,6 +579,8 @@ export default function SignUpScreen() {
                 secureTextEntry={!showPwd} autoComplete="new-password"
                 testID="signup-password-input"
                 returnKeyType="go" onSubmitEditing={handleSignup}
+                onFocus={() => focusRegisterInput(pwdRef)}
+                onBlur={() => blurRegisterInput(pwdRef)}
                 accent={accent}
                 rightElement={
                   <TouchableOpacity onPress={() => setShowPwd(p => !p)} style={{ padding: 4 }}>

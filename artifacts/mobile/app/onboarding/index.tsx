@@ -7,6 +7,7 @@ import {
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
+  findNodeHandle,
   Modal,
   Platform,
   Pressable,
@@ -119,7 +120,12 @@ export default function OnboardingScreen() {
   const draftCompletedRef = useRef(false);
   const handleInputRef = useRef<any>(null);
   const scrollRef = useRef<any>(null);
+  const displayNameInputRef = useRef<any>(null);
+  const phoneInputRef = useRef<any>(null);
+  const activeInputRef = useRef<any>(null);
+  const focusScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState<ChatTheme>(appTheme);
 
   const [displayName, setDisplayName] = useState("");
@@ -148,6 +154,47 @@ export default function OnboardingScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const userId = params.userId || user?.id;
   const activeDraftKey = userId ? `afuchat:onboarding:draft:${userId}` : null;
+
+  function scrollFocusedInputIntoView() {
+    if (Platform.OS === "web") return;
+    const nativeHandle = activeInputRef.current ? findNodeHandle(activeInputRef.current) : null;
+    if (nativeHandle == null) return;
+    (scrollRef.current as any)?.scrollResponderScrollNativeHandleToKeyboard?.(nativeHandle, 28, true);
+  }
+
+  function focusInput(field: string, inputRef: React.RefObject<any>) {
+    setFocusedField(field);
+    activeInputRef.current = inputRef.current;
+    requestAnimationFrame(scrollFocusedInputIntoView);
+    if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
+    focusScrollTimerRef.current = setTimeout(
+      scrollFocusedInputIntoView,
+      Platform.OS === "android" ? 280 : 180,
+    );
+  }
+
+  function blurInput(field: string, inputRef: React.RefObject<any>) {
+    if (activeInputRef.current !== inputRef.current) return;
+    activeInputRef.current = null;
+    setFocusedField((current) => current === field ? null : current);
+  }
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
+      setKeyboardVisible(true);
+      if (!activeInputRef.current) return;
+      if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
+      focusScrollTimerRef.current = setTimeout(scrollFocusedInputIntoView, 90);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+    });
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+      if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
+    };
+  }, []);
 
   // Restore this account's saved progress before enabling autosave or country detection.
   useEffect(() => {
@@ -222,6 +269,7 @@ export default function OnboardingScreen() {
   function goNext() {
     if (step >= TOTAL_STEPS) return;
     Keyboard.dismiss();
+    activeInputRef.current = null;
     Haptics.selectionAsync();
     setStep(step + 1);
   }
@@ -229,6 +277,7 @@ export default function OnboardingScreen() {
   function goBack() {
     if (step <= 1) return;
     Keyboard.dismiss();
+    activeInputRef.current = null;
     Haptics.selectionAsync();
     setStep(step - 1);
   }
@@ -581,19 +630,25 @@ export default function OnboardingScreen() {
     return (
       <View style={st.stepContent}>
         <View style={st.stepHeader}>
-          <Text style={st.stepEmoji}>👋</Text>
-          <Text style={[st.stepTitle, { color: colors.text }]}>Make your place on AfuChat</Text>
+          <View style={[st.stepIconBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="person-add-outline" size={20} color={colors.accent} />
+          </View>
+          <Text style={[st.stepTitle, { color: colors.text }]}>Create your profile</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Your profile is your starting point for meaningful connections, communities and ACoin rewards.
+            Choose the name people see and a username they can use to find you.
           </Text>
         </View>
 
         <View style={st.fieldsGroup}>
           <View style={st.fieldWrap}>
             <Text style={[st.fieldLabel, { color: colors.textSecondary }]}>Display Name</Text>
-            <View style={[st.field, { backgroundColor: colors.inputBg }]}>
+            <View style={[st.field, {
+              backgroundColor: colors.inputBg,
+              borderColor: focusedField === "displayName" ? colors.accent : colors.border,
+            }]}>
               <Ionicons name="person" size={18} color={focusedField === "displayName" ? colors.accent : colors.textMuted} style={st.fieldIcon} />
               <TextInput
+                ref={displayNameInputRef}
                 appearance="embedded"
                 style={[st.input, { color: colors.text }]}
                 placeholder="e.g. John Doe"
@@ -603,15 +658,18 @@ export default function OnboardingScreen() {
                 autoCapitalize="words"
                 returnKeyType="next"
                 onSubmitEditing={() => handleInputRef.current?.focus()}
-                onFocus={() => setFocusedField("displayName")}
-                onBlur={() => setFocusedField(null)}
+                onFocus={() => focusInput("displayName", displayNameInputRef)}
+                onBlur={() => blurInput("displayName", displayNameInputRef)}
               />
             </View>
           </View>
 
           <View style={st.fieldWrap}>
             <Text style={[st.fieldLabel, { color: colors.textSecondary }]}>Username</Text>
-            <View style={[st.field, { backgroundColor: colors.inputBg }]}>
+            <View style={[st.field, {
+              backgroundColor: colors.inputBg,
+              borderColor: focusedField === "handle" ? colors.accent : colors.border,
+            }]}>
               <Ionicons
                 name="at"
                 size={18}
@@ -628,8 +686,8 @@ export default function OnboardingScreen() {
                 onChangeText={(t) => setHandle(t.replace(/[^a-zA-Z0-9_@]/g, "").toLowerCase())}
                 autoCapitalize="none"
                 autoCorrect={false}
-                onFocus={() => setFocusedField("handle")}
-                onBlur={() => setFocusedField(null)}
+                onFocus={() => focusInput("handle", handleInputRef)}
+                onBlur={() => blurInput("handle", handleInputRef)}
               />
               {handleStatus === "checking" && <ActivityIndicator size="small" color={colors.accent} style={{ marginRight: 8 }} />}
               {handleStatus === "available" && <Ionicons name="checkmark-circle" size={20} color="#34C759" style={{ marginRight: 8 }} />}
@@ -676,10 +734,12 @@ export default function OnboardingScreen() {
     return (
       <View style={st.stepContent}>
         <View style={st.stepHeader}>
-          <Text style={st.stepEmoji}>📱</Text>
-          <Text style={[st.stepTitle, { color: colors.text }]}>Stay connected</Text>
+          <View style={[st.stepIconBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="phone-portrait-outline" size={20} color={colors.accent} />
+          </View>
+          <Text style={[st.stepTitle, { color: colors.text }]}>Add account recovery</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Use your number for account recovery and to find people you already know. It is never shared publicly.
+            Add a number to recover your account and find people you know. It is never shown publicly.
           </Text>
         </View>
 
@@ -710,8 +770,13 @@ export default function OnboardingScreen() {
                   <Text style={st.countryFlag}>{selectedCountry.flag}</Text>
                   <Text style={[st.dialCodeText, { color: colors.text }]}>{selectedCountry.dial}</Text>
                 </View>
-                <View style={[st.phoneField, { backgroundColor: colors.inputBg, flex: 1 }]}>
+                <View style={[st.phoneField, {
+                  backgroundColor: colors.inputBg,
+                  borderColor: focusedField === "phone" ? colors.accent : colors.border,
+                  flex: 1,
+                }]}>
                   <TextInput
+                    ref={phoneInputRef}
                     appearance="embedded"
                     style={[st.input, { color: colors.text }]}
                     placeholder="e.g. 772 123 456"
@@ -719,8 +784,8 @@ export default function OnboardingScreen() {
                     value={phoneNumber}
                     onChangeText={(t) => setPhoneNumber(formatPhoneForDisplay(t))}
                     keyboardType="phone-pad"
-                    onFocus={() => setFocusedField("phone")}
-                    onBlur={() => setFocusedField(null)}
+                    onFocus={() => focusInput("phone", phoneInputRef)}
+                    onBlur={() => blurInput("phone", phoneInputRef)}
                   />
                   {phoneAvailStatus === "checking" && <ActivityIndicator size="small" color={colors.accent} style={{ marginRight: 8 }} />}
                   {phoneAvailStatus === "available" && <Ionicons name="checkmark-circle" size={20} color="#34C759" style={{ marginRight: 8 }} />}
@@ -755,8 +820,10 @@ export default function OnboardingScreen() {
     return (
       <View style={st.stepContent}>
         <View style={st.stepHeader}>
-          <Text style={st.stepEmoji}>🎂</Text>
-          <Text style={[st.stepTitle, { color: colors.text }]}>Date of birth & gender</Text>
+          <View style={[st.stepIconBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="calendar-outline" size={20} color={colors.accent} />
+          </View>
+          <Text style={[st.stepTitle, { color: colors.text }]}>Set your profile details</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
             Your birthday is private and used only for age verification and recommendations.
           </Text>
@@ -807,10 +874,12 @@ export default function OnboardingScreen() {
     return (
       <View style={st.stepContent}>
         <View style={st.stepHeader}>
-          <Text style={st.stepEmoji}>💡</Text>
-          <Text style={[st.stepTitle, { color: colors.text }]}>Choose what moves you</Text>
+          <View style={[st.stepIconBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="sparkles-outline" size={20} color={colors.accent} />
+          </View>
+          <Text style={[st.stepTitle, { color: colors.text }]}>Personalize your feed</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Pick at least 3 interests so AfuChat can help you find the right people, communities and conversations.
+            Pick at least three interests to shape the people, communities and conversations you discover.
           </Text>
         </View>
 
@@ -867,8 +936,10 @@ export default function OnboardingScreen() {
     return (
       <View style={st.stepContent}>
         <View style={st.stepHeader}>
-          <Text style={st.stepEmoji}>📸</Text>
-          <Text style={[st.stepTitle, { color: colors.text }]}>Ready to connect?</Text>
+          <View style={[st.stepIconBadge, { backgroundColor: colors.accent + "18" }]}>
+            <Ionicons name="camera-outline" size={20} color={colors.accent} />
+          </View>
+          <Text style={[st.stepTitle, { color: colors.text }]}>Finish your profile</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
             Add a photo so people can recognise you, then start building your place in the AfuChat community.
           </Text>
@@ -1014,8 +1085,8 @@ export default function OnboardingScreen() {
     <OnboardingBackdrop />
     <KeyboardAvoidingView
       style={st.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={insets.top}
+      behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+      keyboardVerticalOffset={0}
     >
       {/* ── Top bar ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
@@ -1041,7 +1112,7 @@ export default function OnboardingScreen() {
         ref={scrollRef}
         style={st.pagerOuter}
         contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 140 }]}
-        keyboardShouldPersistTaps="always"
+        keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
@@ -1050,7 +1121,7 @@ export default function OnboardingScreen() {
       </ScrollView>
 
       {/* ── Bottom action bar — positioned absolute so it floats above keyboard ── */}
-        <View style={[st.bottomBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 }]}>
+        <View style={[st.bottomBar, { paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 16) }]}>
         <Pressable
           style={[
             st.nextBtn,
@@ -1124,15 +1195,15 @@ const st = StyleSheet.create({
   },
 
   // Step content layout
-  stepContent: { gap: 28 },
-  stepHeader:  { alignItems: "center", gap: 8 },
-  stepEmoji:   { fontSize: 48, marginBottom: 4 },
-  stepTitle:   { fontSize: 26, fontFamily: "Inter_700Bold",     textAlign: "center" },
-  stepDesc:    { fontSize: 15, fontFamily: "Inter_400Regular",  textAlign: "center", lineHeight: 22, paddingHorizontal: 8 },
+  stepContent: { gap: 22 },
+  stepHeader:  { alignItems: "flex-start", gap: 7 },
+  stepIconBadge: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", marginBottom: 2 },
+  stepTitle:   { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "left", letterSpacing: -0.4 },
+  stepDesc:    { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "left", lineHeight: 21, paddingHorizontal: 0 },
 
   // Form fields
-  fieldsGroup: { gap: 20 },
-  fieldWrap:   { gap: 6 },
+  fieldsGroup: { gap: 16 },
+  fieldWrap:   { gap: 7 },
   fieldLabel:  { fontSize: 13, fontFamily: "Inter_600SemiBold", paddingLeft: 2 },
   field: {
     flexDirection: "row",
@@ -1140,6 +1211,7 @@ const st = StyleSheet.create({
     borderRadius:  999,
     paddingHorizontal: 14,
     height: 52,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   fieldIcon:   { marginRight: 10 },
   input:       { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", height: 52, outlineStyle: "none" } as any,
@@ -1156,7 +1228,7 @@ const st = StyleSheet.create({
   phoneRow:     { flexDirection: "row", gap: 8 },
   dialCodeBox:  { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 12, height: 52, minWidth: 90 },
   dialCodeText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  phoneField:   { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 14, height: 52 },
+  phoneField:   { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 14, height: 52, borderWidth: StyleSheet.hairlineWidth },
 
   // DOB / gender
   dobRow:          { flexDirection: "row", alignItems: "center", gap: 8 },
