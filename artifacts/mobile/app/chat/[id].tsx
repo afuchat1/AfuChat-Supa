@@ -374,6 +374,52 @@ function isOptimisticMatch(local: Message, server: Message): boolean {
     Math.abs(localTime - serverTime) <= 15000;
 }
 
+function confirmedOutgoingMessage(row: any, optimistic: Message): Message {
+  return {
+    ...optimistic,
+    id: row.id,
+    chat_id: row.chat_id || optimistic.chat_id,
+    sender_id: row.sender_id || optimistic.sender_id,
+    encrypted_content: row.encrypted_content ?? optimistic.encrypted_content,
+    sent_at: row.sent_at || optimistic.sent_at,
+    reply_to_message_id: row.reply_to_message_id ?? optimistic.reply_to_message_id,
+    attachment_url: row.attachment_url || optimistic.attachment_url,
+    attachment_type: row.attachment_type || optimistic.attachment_type,
+    edited_at: row.edited_at ?? optimistic.edited_at,
+    _pending: false,
+    status: "sent",
+  };
+}
+
+function reconcileOptimisticOutgoingMessage(
+  previous: Message[],
+  optimisticId: string,
+  serverMessage: Message,
+): Message[] {
+  const existing = previous.find((message) => message.id === serverMessage.id);
+  const optimistic = previous.find((message) => message.id === optimisticId) ??
+    previous.find((message) => isOptimisticMatch(message, serverMessage));
+  const confirmed: Message = {
+    ...optimistic,
+    ...existing,
+    ...serverMessage,
+    sender: mergeSenderSnapshot(
+      mergeSenderSnapshot(optimistic?.sender, existing?.sender),
+      serverMessage.sender,
+    ),
+    reactions: existing?.reactions ?? optimistic?.reactions ?? serverMessage.reactions ?? [],
+    _pending: false,
+  };
+  const remaining = previous.filter((message) =>
+    message.id !== optimisticId &&
+    message.id !== serverMessage.id &&
+    !isOptimisticMatch(message, serverMessage)
+  );
+  return [...remaining, confirmed].sort(
+    (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+  );
+}
+
 async function cacheConfirmedOutgoingMessage(message: any, sender?: any): Promise<void> {
   if (!message?.id || !message?.chat_id || !message?.sender_id) return;
   await saveMessages(message.chat_id, [{
@@ -7913,13 +7959,10 @@ STRICT RULES:
           return;
         }
         if (insertedVoice) {
-          await cacheConfirmedOutgoingMessage(insertedVoice, {
-            display_name: profile?.display_name || "You",
-            avatar_url: profile?.avatar_url ?? null,
-            handle: profile?.handle || "",
-          });
+          const confirmedMessage = confirmedOutgoingMessage(insertedVoice, optimisticMsg);
+          setMessages((prev) => reconcileOptimisticOutgoingMessage(prev, tempId, confirmedMessage));
+          await cacheConfirmedOutgoingMessage(insertedVoice, confirmedMessage.sender);
         }
-        setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, _pending: false } : m));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         loadMessages();
         setSending(false);
@@ -8018,13 +8061,10 @@ STRICT RULES:
         return;
       }
       if (insertedVoice) {
-        await cacheConfirmedOutgoingMessage(insertedVoice, {
-          display_name: profile?.display_name || "You",
-          avatar_url: profile?.avatar_url ?? null,
-          handle: profile?.handle || "",
-        });
+        const confirmedMessage = confirmedOutgoingMessage(insertedVoice, optimisticMsg);
+        setMessages((prev) => reconcileOptimisticOutgoingMessage(prev, tempId, confirmedMessage));
+        await cacheConfirmedOutgoingMessage(insertedVoice, confirmedMessage.sender);
       }
-      setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, _pending: false } : m));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       loadMessages();
       setSending(false);
