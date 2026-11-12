@@ -275,18 +275,30 @@ export default function SignUpScreen() {
   function scrollFocusedRegisterInputIntoView() {
     if (Platform.OS === "web") return;
     const nativeHandle = activeInputRef.current ? findNodeHandle(activeInputRef.current) : null;
-    if (nativeHandle == null) return;
-    formScrollRef.current?.scrollResponderScrollNativeHandleToKeyboard?.(nativeHandle, 24, true);
+    const scrollView = formScrollRef.current;
+    if (nativeHandle == null || !scrollView?.scrollResponderScrollNativeHandleToKeyboard) return;
+
+    const scrollToFocusedInput = (scrollViewTop = 0) => {
+      scrollView.scrollResponderScrollNativeHandleToKeyboard(
+        nativeHandle,
+        Math.max(0, scrollViewTop) + 24,
+        true,
+      );
+    };
+
+    if (typeof scrollView.measureInWindow === "function") {
+      scrollView.measureInWindow((_x: number, y: number) => scrollToFocusedInput(y));
+    } else {
+      scrollToFocusedInput();
+    }
   }
 
   function focusRegisterInput(inputRef: React.RefObject<TextInputInstance | null>) {
     activeInputRef.current = inputRef.current;
-    requestAnimationFrame(scrollFocusedRegisterInputIntoView);
     if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
-    focusScrollTimerRef.current = setTimeout(
-      scrollFocusedRegisterInputIntoView,
-      Platform.OS === "android" ? 280 : 180,
-    );
+    focusScrollTimerRef.current = Keyboard.isVisible()
+      ? setTimeout(scrollFocusedRegisterInputIntoView, 100)
+      : null;
   }
 
   function blurRegisterInput(inputRef: React.RefObject<TextInputInstance | null>) {
@@ -547,16 +559,16 @@ export default function SignUpScreen() {
       <Animated.View style={[sc.panel, { transform: [{ translateX: formX }], pointerEvents: step === "email" ? "auto" : "none" } as any]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={0}
         >
           <ScrollView
             ref={formScrollRef}
+            style={{ flex: 1 }}
             contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
             showsVerticalScrollIndicator={false}
-            automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
           >
             <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28 }}>
             <GlassBackButton onPress={goToLanding} style={sc.backBtn} />

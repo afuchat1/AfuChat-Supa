@@ -243,3 +243,17 @@ mtime_ms = 1793785517730
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7e9bf0b1-3e9e-42c4-8287-716b8c1c06ab/a3133f24-199e-4a29-abe7-683867294413/cefb0e96-cfba-4d54-b445-211c1384ed31"
 storage_version_token = "1793785541175820"
 content_type = "image/png"
+
+[[outputs]]
+id = "GKRPkpbL47movqDPrD0LQ"
+uri = "file://artifacts/mobile/.expo/afuchat-expo-go-qr.png"
+type = "image"
+title = "AfuChat Expo Go QR"
+description = "Scan with Expo Go to open the current mobile development build."
+logical_id = "2355a4b1-a6ee-4a0a-b1db-6b5328fd5f4f"
+content_hash = "sha256:107397c6004fa3987950cf9b39e5b39c33a6597918065af6ef43b5d8d7e0f907"
+size = 4747
+mtime_ms = 1794468775342
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:40f7aca6-ea0c-4cf0-a429-197b088872fb/2355a4b1-a6ee-4a0a-b1db-6b5328fd5f4f/89c7a8a6-0397-4ef9-bf92-ccd530294507"
+storage_version_token = "1794468788631002"
+content_type = "image/png"

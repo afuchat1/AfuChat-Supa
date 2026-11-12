@@ -48,6 +48,12 @@ import OnboardingBackdrop from "@/components/onboarding/OnboardingBackdrop";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TOTAL_STEPS  = 5;
+const NEXT_BUTTON_HEIGHT = 52;
+const BOTTOM_BAR_TOP_PADDING = 12;
+const KEYBOARD_BOTTOM_PADDING = 12;
+const KEYBOARD_INPUT_GAP = 16;
+const KEYBOARD_ACTION_CLEARANCE =
+  NEXT_BUTTON_HEIGHT + BOTTOM_BAR_TOP_PADDING + KEYBOARD_BOTTOM_PADDING + KEYBOARD_INPUT_GAP;
 
 const INTERESTS = [
   { id: "technology", label: "Technology",   icon: "laptop"         },
@@ -158,19 +164,31 @@ export default function OnboardingScreen() {
   function scrollFocusedInputIntoView() {
     if (Platform.OS === "web") return;
     const nativeHandle = activeInputRef.current ? findNodeHandle(activeInputRef.current) : null;
-    if (nativeHandle == null) return;
-    (scrollRef.current as any)?.scrollResponderScrollNativeHandleToKeyboard?.(nativeHandle, 28, true);
+    const scrollView = scrollRef.current as any;
+    if (nativeHandle == null || !scrollView?.scrollResponderScrollNativeHandleToKeyboard) return;
+
+    const scrollToFocusedInput = (scrollViewTop = 0) => {
+      scrollView.scrollResponderScrollNativeHandleToKeyboard(
+        nativeHandle,
+        Math.max(0, scrollViewTop) + KEYBOARD_ACTION_CLEARANCE,
+        true,
+      );
+    };
+
+    if (typeof scrollView.measureInWindow === "function") {
+      scrollView.measureInWindow((_x: number, y: number) => scrollToFocusedInput(y));
+    } else {
+      scrollToFocusedInput();
+    }
   }
 
   function focusInput(field: string, inputRef: React.RefObject<any>) {
     setFocusedField(field);
     activeInputRef.current = inputRef.current;
-    requestAnimationFrame(scrollFocusedInputIntoView);
     if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
-    focusScrollTimerRef.current = setTimeout(
-      scrollFocusedInputIntoView,
-      Platform.OS === "android" ? 280 : 180,
-    );
+    focusScrollTimerRef.current = Keyboard.isVisible()
+      ? setTimeout(scrollFocusedInputIntoView, 100)
+      : null;
   }
 
   function blurInput(field: string, inputRef: React.RefObject<any>) {
@@ -1085,7 +1103,7 @@ export default function OnboardingScreen() {
     <OnboardingBackdrop />
     <KeyboardAvoidingView
       style={st.root}
-      behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={0}
     >
       {/* ── Top bar ── */}
@@ -1115,13 +1133,12 @@ export default function OnboardingScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         showsVerticalScrollIndicator={false}
-        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
       >
         {stepRenderers[step - 1]()}
       </ScrollView>
 
       {/* ── Bottom action bar — positioned absolute so it floats above keyboard ── */}
-        <View style={[st.bottomBar, { paddingBottom: keyboardVisible ? 12 : Math.max(insets.bottom, 16) }]}>
+        <View style={[st.bottomBar, { paddingBottom: keyboardVisible ? KEYBOARD_BOTTOM_PADDING : Math.max(insets.bottom, 16) }]}>
         <Pressable
           style={[
             st.nextBtn,
@@ -1278,10 +1295,10 @@ const st = StyleSheet.create({
     left:    0,
     right:   0,
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: BOTTOM_BAR_TOP_PADDING,
     alignItems: "center",
   },
-  nextBtn:     { width: "100%", maxWidth: 560, height: 52, borderRadius: 999, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  nextBtn:     { width: "100%", maxWidth: 560, height: NEXT_BUTTON_HEIGHT, borderRadius: 999, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   nextBtnText: { color: "#fff", fontSize: 17, fontFamily: "Inter_600SemiBold" },
 
   // Modals
