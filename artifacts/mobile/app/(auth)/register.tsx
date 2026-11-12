@@ -471,7 +471,13 @@ export default function SignUpScreen() {
 
       {/* ── LANDING PANEL ── */}
       <Animated.View style={[sc.panel, { transform: [{ translateX: landingX }], pointerEvents: step === "landing" ? "auto" : "none" } as any]}>
-        <AuthContent style={{ flex: 1, paddingHorizontal: 28, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 32 }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+        <AuthContent style={{ flexGrow: 1, paddingHorizontal: 28, paddingTop: insets.top + 40, paddingBottom: insets.bottom + 32 }}>
 
           {/* Logo + tagline */}
           <View style={{ alignItems: "center", marginBottom: 48 }}>
@@ -530,10 +536,11 @@ export default function SignUpScreen() {
               <Text style={{ color: accent }} onPress={() => router.push("/privacy")}>{t("Privacy Policy")}</Text>
             </Text>
             <Text style={{ fontSize: 10.5, fontFamily: "Inter_400Regular", color: colors.textMuted }}>
-              © {new Date().getFullYear()} AfuChat Technologies Limited
+              {`© ${new Date().getFullYear()} AfuChat Technologies Limited`}
             </Text>
           </View>
       </AuthContent>
+        </ScrollView>
       </Animated.View>
 
       {/* ── EMAIL FORM PANEL ── */}

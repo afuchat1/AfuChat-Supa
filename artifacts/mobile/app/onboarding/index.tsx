@@ -635,7 +635,7 @@ export default function OnboardingScreen() {
           </View>
           <Text style={[st.stepTitle, { color: colors.text }]}>Create your profile</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Choose the name people see and a username they can use to find you.
+            {"Choose the name people see and a username they can use to find you."}
           </Text>
         </View>
 
@@ -715,7 +715,7 @@ export default function OnboardingScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold" }, { color: colors.text }]}>@{listedHandle.username} is reserved</Text>
                   <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 3 }, { color: colors.textMuted }]}>
-                    Listed for {listedHandle.price} ACoin. Buy it first to use it.
+                    {`Listed for ${listedHandle.price} ACoin. Buy it first to use it.`}
                   </Text>
                 </View>
                 <TouchableOpacity style={[st.takenLoginBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/app/afuusernames")}>
@@ -739,7 +739,7 @@ export default function OnboardingScreen() {
           </View>
           <Text style={[st.stepTitle, { color: colors.text }]}>Add account recovery</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Add a number to recover your account and find people you know. It is never shown publicly.
+            {"Add a number to recover your account and find people you know. It is never shown publicly."}
           </Text>
         </View>
 
@@ -825,7 +825,7 @@ export default function OnboardingScreen() {
           </View>
           <Text style={[st.stepTitle, { color: colors.text }]}>Set your profile details</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Your birthday is private and used only for age verification and recommendations.
+            {"Your birthday is private and used only for age verification and recommendations."}
           </Text>
         </View>
 
@@ -879,7 +879,7 @@ export default function OnboardingScreen() {
           </View>
           <Text style={[st.stepTitle, { color: colors.text }]}>Personalize your feed</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Pick at least three interests to shape the people, communities and conversations you discover.
+            {"Pick at least three interests to shape the people, communities and conversations you discover."}
           </Text>
         </View>
 
@@ -941,7 +941,7 @@ export default function OnboardingScreen() {
           </View>
           <Text style={[st.stepTitle, { color: colors.text }]}>Finish your profile</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            Add a photo so people can recognise you, then start building your place in the AfuChat community.
+            {"Add a photo so people can recognise you, then start building your place in the AfuChat community."}
           </Text>
         </View>
 
