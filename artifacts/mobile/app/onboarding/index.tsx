@@ -701,8 +701,8 @@ export default function OnboardingScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                   <Avatar uri={takenHandleProfile.avatar_url} name={takenHandleProfile.display_name} size={36} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold" }, { color: colors.text }]}>{takenHandleProfile.display_name}</Text>
-                    <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular" }, { color: colors.textMuted }]}>@{takenHandleProfile.handle}</Text>
+                    <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", minWidth: 0, flexShrink: 1 }, { color: colors.text }]}>{takenHandleProfile.display_name}</Text>
+                    <Text numberOfLines={1} style={[{ fontSize: 12, fontFamily: "Inter_400Regular", minWidth: 0, flexShrink: 1 }, { color: colors.textMuted }]}>@{takenHandleProfile.handle}</Text>
                   </View>
                 </View>
                 <TouchableOpacity style={[st.takenLoginBtn, { backgroundColor: colors.accent }]} onPress={() => router.replace("/(auth)/login")}>
@@ -800,8 +800,8 @@ export default function OnboardingScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                     <Avatar uri={takenPhoneProfile.avatar_url} name={takenPhoneProfile.display_name} size={36} />
                     <View style={{ flex: 1 }}>
-                      <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold" }, { color: colors.text }]}>{takenPhoneProfile.display_name}</Text>
-                      <Text style={[{ fontSize: 12, fontFamily: "Inter_400Regular" }, { color: colors.textMuted }]}>@{takenPhoneProfile.handle}</Text>
+                      <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", minWidth: 0, flexShrink: 1 }, { color: colors.text }]}>{takenPhoneProfile.display_name}</Text>
+                      <Text numberOfLines={1} style={[{ fontSize: 12, fontFamily: "Inter_400Regular", minWidth: 0, flexShrink: 1 }, { color: colors.textMuted }]}>@{takenPhoneProfile.handle}</Text>
                     </View>
                   </View>
                   <TouchableOpacity style={[st.takenLoginBtn, { backgroundColor: colors.accent }]} onPress={() => router.replace("/(auth)/login")}>
@@ -1096,7 +1096,7 @@ export default function OnboardingScreen() {
           <View style={{ width: 44, height: 44 }} />
         )}
         <Text style={[st.stepIndicator, { color: colors.textMuted }]}>Step {step} of {TOTAL_STEPS}</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 44, height: 44 }} />
       </View>
 
       {/* ── Page dot indicator ── */}
@@ -1166,7 +1166,7 @@ const st = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom:  12,
   },
-  stepIndicator: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  stepIndicator: { fontSize: 14, fontFamily: "Inter_500Medium", flexShrink: 1, minWidth: 0, textAlign: "center" },
 
   // Page dots
   dotsRow: {
@@ -1192,19 +1192,20 @@ const st = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     flexGrow: 1,
+    minWidth: 0,
   },
 
   // Step content layout
-  stepContent: { gap: 22 },
-  stepHeader:  { alignItems: "flex-start", gap: 7 },
-  stepIconBadge: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", marginBottom: 2 },
-  stepTitle:   { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "left", letterSpacing: -0.4 },
-  stepDesc:    { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "left", lineHeight: 21, paddingHorizontal: 0 },
+  stepContent: { width: "100%", minWidth: 0, gap: 22 },
+  stepHeader:  { width: "100%", minWidth: 0, alignItems: "stretch", gap: 7 },
+  stepIconBadge: { width: 38, height: 38, alignSelf: "flex-start", borderRadius: 13, alignItems: "center", justifyContent: "center", marginBottom: 2 },
+  stepTitle:   { width: "100%", minWidth: 0, flexShrink: 1, fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "left", letterSpacing: -0.4 },
+  stepDesc:    { width: "100%", minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "left", lineHeight: 21, paddingHorizontal: 0 },
 
   // Form fields
   fieldsGroup: { gap: 16 },
   fieldWrap:   { gap: 7 },
-  fieldLabel:  { fontSize: 13, fontFamily: "Inter_600SemiBold", paddingLeft: 2 },
+  fieldLabel:  { minWidth: 0, flexShrink: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", paddingLeft: 2 },
   field: {
     flexDirection: "row",
     alignItems:    "center",
@@ -1214,42 +1215,42 @@ const st = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   fieldIcon:   { marginRight: 10 },
-  input:       { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", height: 52, outlineStyle: "none" } as any,
-  fieldHint:   { fontSize: 12, fontFamily: "Inter_400Regular", paddingLeft: 2 },
-  errorHint:   { fontSize: 12, fontFamily: "Inter_500Medium",  paddingLeft: 2, color: "#FF3B30" },
-  successHint: { fontSize: 12, fontFamily: "Inter_500Medium",  paddingLeft: 2, color: "#34C759" },
+  input:       { flex: 1, minWidth: 0, fontSize: 16, fontFamily: "Inter_400Regular", height: 52, outlineStyle: "none" } as any,
+  fieldHint:   { minWidth: 0, flexShrink: 1, fontSize: 12, fontFamily: "Inter_400Regular", paddingLeft: 2 },
+  errorHint:   { minWidth: 0, flexShrink: 1, fontSize: 12, fontFamily: "Inter_500Medium",  paddingLeft: 2, color: "#FF3B30" },
+  successHint: { minWidth: 0, flexShrink: 1, fontSize: 12, fontFamily: "Inter_500Medium",  paddingLeft: 2, color: "#34C759" },
   takenCard:   { borderRadius: 12, borderWidth: 1, padding: 12, marginTop: 4, flexDirection: "row", alignItems: "center", gap: 8 },
   takenLoginBtn: { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
 
   // Phone
   countryFlag:  { fontSize: 22, marginRight: 10 },
-  countryName:  { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
-  placeholderText: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
-  phoneRow:     { flexDirection: "row", gap: 8 },
-  dialCodeBox:  { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 12, height: 52, minWidth: 90 },
+  countryName:  { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, flexShrink: 1 },
+  placeholderText: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, flexShrink: 1 },
+  phoneRow:     { width: "100%", minWidth: 0, flexDirection: "row", gap: 8 },
+  dialCodeBox:  { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 12, height: 52, minWidth: 90, flexShrink: 0 },
   dialCodeText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  phoneField:   { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 14, height: 52, borderWidth: StyleSheet.hairlineWidth },
+  phoneField:   { minWidth: 0, flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 14, height: 52, borderWidth: StyleSheet.hairlineWidth },
 
   // DOB / gender
-  dobRow:          { flexDirection: "row", alignItems: "center", gap: 8 },
-  dobSelector:     { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 999, paddingHorizontal: 14 },
-  dobSelectorText: { fontSize: 15, fontFamily: "Inter_500Medium" },
-  genderRow:       { flexDirection: "row", gap: 12 },
-  genderBtn:       { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52, paddingHorizontal: 16, borderRadius: 999 },
-  genderText:      { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  dobRow:          { width: "100%", minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
+  dobSelector:     { minWidth: 0, flexShrink: 1, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 999, paddingHorizontal: 14 },
+  dobSelectorText: { minWidth: 0, flexShrink: 1, fontSize: 15, fontFamily: "Inter_500Medium" },
+  genderRow:       { width: "100%", minWidth: 0, flexDirection: "row", gap: 12 },
+  genderBtn:       { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52, paddingHorizontal: 16, borderRadius: 999 },
+  genderText:      { minWidth: 0, flexShrink: 1, fontSize: 16, fontFamily: "Inter_600SemiBold" },
 
   // Interests
   interestsGrid:  { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  interestChip:   { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
-  interestText:   { fontSize: 14, fontFamily: "Inter_500Medium" },
-  interestCount:  { fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 4 },
+  interestChip:   { maxWidth: "100%", minWidth: 0, flexShrink: 1, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
+  interestText:   { minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
+  interestCount:  { minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 4 },
 
   // Accent theme card
   accentCard:       { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
   accentCardTop:    { flexDirection: "row", alignItems: "center", gap: 12 },
   accentIconWrap:   { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  accentCardLabel:  { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  accentCardDesc:   { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  accentCardLabel:  { minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  accentCardDesc:   { minWidth: 0, flexShrink: 1, fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   accentChipLabel:  { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
   accentSwatches:   { flexDirection: "row", gap: 10 },
   accentSwatch:     { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
@@ -1266,9 +1267,9 @@ const st = StyleSheet.create({
   // Profile summary
   summaryCard:   { borderRadius: 14, padding: 16, gap: 12, marginTop: 16 },
   summaryTitle:  { fontSize: 16, fontFamily: "Inter_600SemiBold", marginBottom: 4 },
-  summaryRow:    { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  summaryLabel:  { fontSize: 13, fontFamily: "Inter_400Regular", width: 80 },
-  summaryValue:  { fontSize: 14, fontFamily: "Inter_500Medium",  flex: 1, textAlign: "right" },
+  summaryRow:    { width: "100%", minWidth: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
+  summaryLabel:  { fontSize: 13, fontFamily: "Inter_400Regular", width: 80, flexShrink: 0 },
+  summaryValue:  { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1, minWidth: 0, flexShrink: 1, textAlign: "right" },
 
   // Bottom action bar
   bottomBar: {
@@ -1291,8 +1292,8 @@ const st = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 16, fontFamily: "Inter_400Regular", height: 44 },
   countryItem: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   countryItemFlag: { fontSize: 24 },
-  countryItemName: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1 },
-  countryItemDial: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  countryItemName: { fontSize: 16, fontFamily: "Inter_400Regular", flex: 1, minWidth: 0, flexShrink: 1 },
+  countryItemDial: { fontSize: 14, fontFamily: "Inter_400Regular", flexShrink: 0 },
   pickerItem:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
   pickerItemText: { fontSize: 16, fontFamily: "Inter_400Regular" },
 });

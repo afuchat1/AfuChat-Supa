@@ -80,7 +80,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, secureTextEntry, ke
 const inp = StyleSheet.create({
   wrap: { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 18, height: 56, borderWidth: StyleSheet.hairlineWidth },
   icon: { marginRight: 10 },
-  text: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular", height: 56, outlineStyle: "none" } as any,
+  text: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular", height: 56, outlineStyle: "none" } as any,
 });
 
 // ─── Checkbox ─────────────────────────────────────────────────────────────────
@@ -679,6 +679,9 @@ const sc = StyleSheet.create({
   },
 
   heading: {
+    width: "100%",
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 32,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.8,
@@ -686,6 +689,9 @@ const sc = StyleSheet.create({
     marginBottom: 8,
   },
   subheading: {
+    width: "100%",
+    minWidth: 0,
+    flexShrink: 1,
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     lineHeight: 22,
@@ -730,5 +736,5 @@ const sc = StyleSheet.create({
 
   primaryBtn: { borderRadius: 999, overflow: "hidden", marginTop: 4 },
   primaryGrad: { height: 58, alignItems: "center", justifyContent: "center" },
-  primaryText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold", letterSpacing: -0.1 },
+  primaryText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold", letterSpacing: -0.1, flexShrink: 1, textAlign: "center", paddingHorizontal: 12 },
 });
