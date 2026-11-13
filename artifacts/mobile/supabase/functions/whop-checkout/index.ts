@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { WhopClient, WhopEnvironment } from "npm:@whop/sdk@2.7.0";
+import { unwrapWebhook } from "npm:@whop/sdk@2.7.0/helpers";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -7,6 +8,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "
 const WHOP_API_KEY = Deno.env.get("WHOP_API_KEY") ?? "";
 const WHOP_COMPANY_ID = Deno.env.get("WHOP_COMPANY_ID") ?? "";
 const WHOP_ENVIRONMENT = Deno.env.get("WHOP_ENVIRONMENT") === "sandbox" ? "sandbox" : "production";
+const WHOP_WEBHOOK_SECRET = Deno.env.get("WHOP_WEBHOOK_SECRET") ?? "";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -183,7 +185,60 @@ async function confirmCheckout(userId: string | null, sessionId: unknown) {
   };
 }
 
+async function handleWhopWebhook(request: Request) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !WHOP_WEBHOOK_SECRET) {
+    return json({ error: "Webhook is not configured." }, 503);
+  }
+
+  const rawBody = await request.text();
+  let event: any;
+  try {
+    event = unwrapWebhook(rawBody, {
+      headers: Object.fromEntries(request.headers),
+      key: WHOP_WEBHOOK_SECRET,
+    });
+  } catch {
+    return json({ error: "Invalid webhook signature." }, 401);
+  }
+
+  if (event.type !== "payment.succeeded") return json({ received: true, ignored: true });
+
+  const payment = event.data || {};
+  const checkoutConfigurationId = payment.checkout_configuration_id;
+  if (!payment.id || !checkoutConfigurationId) return json({ received: true, ignored: true });
+
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: session, error: sessionError } = await admin
+    .from("whop_payment_sessions")
+    .select("id")
+    .eq("whop_checkout_configuration_id", checkoutConfigurationId)
+    .maybeSingle();
+  if (sessionError) {
+    console.error("[whop-checkout] webhook session lookup failed:", sessionError.message);
+    return json({ error: "Unable to find checkout session." }, 500);
+  }
+  if (!session) return json({ received: true, ignored: true });
+
+  const amount = Number(payment.subtotal?.amount ?? payment.total?.amount);
+  const currency = String(payment.subtotal?.currency || payment.currency || "").toLowerCase();
+  const { data: result, error } = await admin.rpc("fulfill_whop_payment", {
+    p_session_id: session.id,
+    p_whop_payment_id: payment.id,
+    p_amount_usd: amount,
+    p_currency: currency,
+  });
+  if (error || !result?.ok) {
+    console.error("[whop-checkout] webhook fulfillment failed:", error?.message || result?.error);
+    return json({ error: "Payment fulfillment failed." }, 500);
+  }
+  return json({ received: true });
+}
+
 Deno.serve(async (request) => {
+  if (request.headers.has("webhook-id") || request.headers.has("webhook-signature")) {
+    if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
+    return handleWhopWebhook(request);
+  }
   if (request.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
   if (request.method !== "POST") return json({ error: "Method not allowed." }, 405);
   try {
