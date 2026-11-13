@@ -746,7 +746,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
       >
         {step === 1 ? (
           <>
-            <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 16 }]}>
+            <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 12, paddingVertical: 9, paddingHorizontal: 11 }]}>
               <Ionicons name="diamond" size={14} color={Colors.gold} />
               <Text style={[s.balancePill2Text, { color: colors.text }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
             </View>
@@ -784,10 +784,12 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
                         : <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={18} color={isSelected ? Colors.brand : colors.border} />
                       }
                     </View>
-                    <Text style={[s.packTileAmount, { color: isSelected ? Colors.brand : colors.text }]}>{fmtAmt(pkg.amount)} AC</Text>
                     <View style={s.packTilePriceRow}>
-                      <Text style={[s.packTilePrice, { color: colors.text }]}>${pkg.priceUsd % 1 === 0 ? pkg.priceUsd.toFixed(0) : pkg.priceUsd.toFixed(2)}</Text>
-                      {!!lc && <Text style={[s.packTileLocal, { color: colors.textMuted }]}>{lc}</Text>}
+                      <Text style={[s.packTileAmount, { color: isSelected ? Colors.brand : colors.text }]}>{fmtAmt(pkg.amount)} AC</Text>
+                      <View style={s.packTilePriceCopy}>
+                        <Text style={[s.packTilePrice, { color: colors.text }]}>${pkg.priceUsd % 1 === 0 ? pkg.priceUsd.toFixed(0) : pkg.priceUsd.toFixed(2)}</Text>
+                        {!!lc && <Text style={[s.packTileLocal, { color: colors.textMuted }]}>{lc}</Text>}
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -831,7 +833,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
             <Text style={[s.topupStepTitle, { color: colors.text, marginBottom: 12 }]}>Choose how to pay</Text>
             <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
             {provider === "whop" && (
-              <View style={[s.providerHint, { backgroundColor: colors.backgroundSecondary }]}>
+              <View style={s.providerHint}>
                 <Ionicons name="shield-checkmark" size={15} color="#34C759" />
                 <Text style={[s.topupStepSub, { color: colors.textMuted }]}>Whop checkout starts at $1.00.</Text>
               </View>
@@ -1545,4 +1547,32 @@ const s = StyleSheet.create({
   requestActionText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
+  topupStepHeader: { paddingHorizontal: 16, paddingTop: 3, paddingBottom: 9, borderBottomWidth: StyleSheet.hairlineWidth },
+  topupStepLabelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 7 },
+  topupStepLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  topupProgressTrack: { height: 3, borderRadius: 2, overflow: "hidden" },
+  topupProgressFill: { height: "100%", borderRadius: 2, backgroundColor: Colors.brand },
+  topupStepTitle: { fontSize: 18, lineHeight: 22, fontFamily: "Inter_700Bold", letterSpacing: -0.35 },
+  topupStepSub: { fontSize: 12, lineHeight: 16, fontFamily: "Inter_400Regular" },
+  amountSectionHeading: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 },
+  packGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 8 },
+  packTile: { width: "48.5%", minHeight: 68, justifyContent: "space-between", paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderRadius: 12 },
+  packTileTop: { minHeight: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4 },
+  packTileLabel: { fontSize: 10, lineHeight: 13, fontFamily: "Inter_500Medium" },
+  packTilePriceRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, marginTop: 4 },
+  packTileAmount: { flexShrink: 1, fontSize: 13, lineHeight: 17, fontFamily: "Inter_700Bold" },
+  packTilePriceCopy: { alignItems: "flex-end", flexShrink: 0 },
+  packTilePrice: { fontSize: 13, lineHeight: 16, fontFamily: "Inter_700Bold" },
+  packTileLocal: { fontSize: 9, lineHeight: 12, fontFamily: "Inter_400Regular", textAlign: "right" },
+  topupOrderCard: { minHeight: 78, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderRadius: 16, marginBottom: 18 },
+  topupOrderCopy: { flex: 1, minWidth: 0 },
+  topupOrderAmount: { fontSize: 20, lineHeight: 25, fontFamily: "Inter_700Bold", marginTop: 2 },
+  topupOrderPrice: { fontSize: 21, lineHeight: 26, fontFamily: "Inter_700Bold", marginLeft: 12 },
+  providerHint: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 10, paddingHorizontal: 2 },
+  checkoutFooter: { paddingHorizontal: 16, paddingTop: 11, borderTopWidth: StyleSheet.hairlineWidth },
+  footerSummary: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 9 },
+  footerSummaryLabel: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  footerSummaryAmount: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  checkoutButton: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingHorizontal: 16 },
+  checkoutButtonText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 });

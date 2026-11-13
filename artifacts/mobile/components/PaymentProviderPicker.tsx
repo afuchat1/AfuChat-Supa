@@ -10,9 +10,9 @@ export function PaymentProviderLogo({ provider }: { provider: PaymentProvider })
     return (
       <Image
         source={require("../assets/images/payment/whop-icon.png")}
-        resizeMode="cover"
+        resizeMode="contain"
         accessibilityLabel="Whop logo"
-        style={{ width: 30, height: 30, borderRadius: 7 }}
+        style={{ width: 32, height: 32 }}
       />
     );
   }
@@ -22,7 +22,7 @@ export function PaymentProviderLogo({ provider }: { provider: PaymentProvider })
       source={require("../assets/images/payment/pesapal-logo.png")}
       resizeMode="contain"
       accessibilityLabel="Pesapal logo"
-      style={{ width: 58, height: 28 }}
+      style={{ width: 76, height: 24 }}
     />
   );
 }
@@ -37,65 +37,50 @@ export function PaymentProviderPicker({
   colors: { text: string; textMuted: string; border: string; surface?: string; inputBg?: string };
 }) {
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+    <View>
+      <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.6 }}>
         PAYMENT METHOD
       </Text>
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      <View style={{ marginTop: 4 }}>
         {([
-          ["whop", "Whop", "Default"],
-          ["pesapal", "Pesapal", "Optional"],
-        ] as const).map(([provider, label, note]) => {
+          ["whop", "Whop"],
+          ["pesapal", "Pesapal"],
+        ] as const).map(([provider, label], index, providers) => {
           const selected = value === provider;
           return (
             <TouchableOpacity
               key={provider}
               testID={`payment-provider-${provider}`}
               accessibilityRole="radio"
-              accessibilityLabel={`${label}, ${note}`}
+              accessibilityLabel={`${label} payment provider`}
+              accessibilityHint={selected ? "Selected" : "Tap to choose this payment provider"}
               accessibilityState={{ selected }}
               onPress={() => onChange(provider)}
               activeOpacity={0.8}
               style={{
-                flex: 1,
-                minHeight: 58,
-                paddingHorizontal: 12,
-                paddingVertical: 9,
-                borderRadius: 12,
-                borderWidth: selected ? 1.5 : 1,
-                 borderColor: selected ? Colors.brand : colors.border,
-                 backgroundColor: selected ? Colors.brand + "10" : colors.surface || colors.inputBg || "transparent",
+                minHeight: 64,
+                paddingHorizontal: 2,
+                paddingVertical: 8,
                 flexDirection: "row",
                 alignItems: "center",
-                 gap: 8,
+                gap: 12,
+                borderBottomWidth: index < providers.length - 1 ? 0.5 : 0,
+                borderBottomColor: colors.border,
               }}
             >
-               <View
-                 style={{
-                   width: provider === "whop" ? 34 : 62,
-                   height: 34,
-                   borderRadius: 8,
-                   backgroundColor: "#FFFFFF",
-                   alignItems: "center",
-                   justifyContent: "center",
-                   flexShrink: 0,
-                 }}
-               >
-                 <PaymentProviderLogo provider={provider} />
-               </View>
-              <Ionicons
-                name={selected ? "radio-button-on" : "radio-button-off"}
-                size={18}
-                 color={selected ? Colors.brand : colors.textMuted}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>
+              <View style={{ width: 84, height: 38, alignItems: "flex-start", justifyContent: "center", flexShrink: 0 }}>
+                <PaymentProviderLogo provider={provider} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: selected ? Colors.brand : colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
                   {label}
                 </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2 }}>
-                  {note}
-                </Text>
               </View>
+              <Ionicons
+                name={selected ? "radio-button-on" : "radio-button-off"}
+                size={20}
+                color={selected ? Colors.brand : colors.textMuted}
+              />
             </TouchableOpacity>
           );
         })}
