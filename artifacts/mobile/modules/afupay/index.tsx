@@ -679,6 +679,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [provider, setProvider] = useState<PaymentProvider>("whop");
+  const [step, setStep] = useState<1 | 2>(1);
 
   async function checkout() {
     const acoinAmt = selectedPack !== null ? PACKAGES[selectedPack].amount : (parseInt(customAmt || "0") || 0);
@@ -722,127 +723,160 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <SubHeader title="Buy ACoin" onBack={onBack} colors={colors} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
-
-        {/* ── Balance pill ── */}
-        <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 20 }]}>
-          <Ionicons name="diamond" size={14} color={Colors.gold} />
-          <Text style={[s.balancePill2Text, { color: colors.text }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
+      <SubHeader
+        title={step === 1 ? "Top up wallet" : "Payment method"}
+        onBack={() => step === 2 ? setStep(1) : onBack()}
+        colors={colors}
+      />
+      <View style={[s.topupStepHeader, { borderBottomColor: colors.border }]}>
+        <View style={s.topupStepLabelRow}>
+          <Text style={[s.topupStepLabel, { color: step === 1 ? Colors.brand : colors.textMuted }]}>01  Amount</Text>
+          <Text style={[s.topupStepLabel, { color: step === 2 ? Colors.brand : colors.textMuted }]}>02  Payment</Text>
         </View>
-
-        {/* ── Package list ── */}
-        <Text style={[s.sectionTitle, { color: colors.textSecondary, marginBottom: 10 }]}>CHOOSE A PACKAGE</Text>
-        <View style={{ gap: 8 }}>
-          {PACKAGES.map((pkg, i) => {
-            const isSelected = selectedPack === i;
-            const lc = localLine(pkg.priceUsd, country);
-            return (
-              <TouchableOpacity
-                key={i}
-                activeOpacity={0.82}
-                onPress={() => { setSelectedPack(i); setCustomAmt(""); Haptics.selectionAsync(); }}
-                style={[s.packRow, {
-                  backgroundColor: isSelected ? Colors.brand + "12" : colors.surface,
-                  borderColor: isSelected ? Colors.brand : colors.border,
-                }]}
-              >
-                {/* Icon + label */}
-                <View style={[s.packIconWrap, { backgroundColor: isSelected ? Colors.brand + "20" : colors.inputBg }]}>
-                  <Ionicons name={pkg.icon} size={20} color={Colors.brand} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={[s.packRowLabel, { color: colors.text }]}>{pkg.label}</Text>
-                    {pkg.popular && (
-                      <View style={[s.popularChip, { backgroundColor: Colors.brand }]}>
-                        <Text style={s.popularChipText}>POPULAR</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[s.packRowAmt, { color: Colors.brand }]}>{fmtAmt(pkg.amount)} ACoin</Text>
-                </View>
-                {/* Price column */}
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={[s.packRowUsd, { color: isSelected ? Colors.brand : colors.text }]}>${pkg.priceUsd % 1 === 0 ? pkg.priceUsd.toFixed(0) : pkg.priceUsd.toFixed(2)}</Text>
-                  {!!lc && <Text style={[s.packRowLocal, { color: colors.textMuted }]}>{lc}</Text>}
-                </View>
-                {/* Check */}
-                <View style={{ width: 24, alignItems: "center", marginLeft: 10 }}>
-                  {isSelected
-                    ? <Ionicons name="checkmark-circle" size={22} color={Colors.brand} />
-                    : <View style={[s.packCircle, { borderColor: colors.border }]} />
-                  }
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={[s.topupProgressTrack, { backgroundColor: colors.border }]}>
+          <View style={[s.topupProgressFill, { width: step === 1 ? "50%" : "100%" }]} />
         </View>
+      </View>
 
-        {/* ── Custom amount ── */}
-        <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 20, marginBottom: 8 }]}>OR ENTER CUSTOM AMOUNT</Text>
-        <View style={[s.inputRow, { backgroundColor: colors.inputBg, borderColor: selectedPack === null && acoinAmt >= minimumAmount ? Colors.brand : colors.border, borderWidth: selectedPack === null && acoinAmt >= minimumAmount ? 1.5 : 1 }]}>
-          <Ionicons name="diamond" size={16} color={Colors.brand} style={{ marginRight: 8 }} />
-          <TextInput
-            style={[s.input, { color: colors.text, flex: 1 }]}
-            placeholder="e.g. 300"
-            placeholderTextColor={colors.textMuted}
-            value={customAmt}
-            onChangeText={t => { setCustomAmt(t); setSelectedPack(null); }}
-            keyboardType="number-pad"
-          />
-          <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 13 }}>ACoin</Text>
-        </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 16 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {step === 1 ? (
+          <>
+            <View style={[s.balancePill2, { backgroundColor: colors.accent + "12", borderColor: colors.border, marginBottom: 16 }]}>
+              <Ionicons name="diamond" size={14} color={Colors.gold} />
+              <Text style={[s.balancePill2Text, { color: colors.text }]}>Balance: {fmtAmt(profile?.acoin || 0)} ACoin</Text>
+            </View>
 
-        {/* ── Preview for custom amount ── */}
-        {selectedPack === null && acoinAmt >= minimumAmount && (
-          <View style={[s.previewBox, { backgroundColor: Colors.brand + "10", borderColor: Colors.brand + "30", marginTop: 10 }]}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>{fmtAmt(acoinAmt)} ACoin</Text>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{ color: colors.text, fontFamily: "Inter_700Bold", fontSize: 16 }}>${price}</Text>
+            <View style={s.amountSectionHeading}>
+              <Text style={[s.topupStepTitle, { color: colors.text }]}>Choose an amount</Text>
+              <Text style={[s.topupStepSub, { color: colors.textMuted }]}>1 AC = $0.01</Text>
+            </View>
+
+            <View style={s.packGrid}>
+              {PACKAGES.map((pkg, i) => {
+                const isSelected = selectedPack === i;
+                const lc = localLine(pkg.priceUsd, country);
+                return (
+                  <TouchableOpacity
+                    key={pkg.amount}
+                    testID={`acoin-package-${pkg.amount}`}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${fmtAmt(pkg.amount)} ACoins for $${pkg.priceUsd}`}
+                    accessibilityState={{ selected: isSelected }}
+                    activeOpacity={0.82}
+                    onPress={() => { setSelectedPack(i); setCustomAmt(""); Haptics.selectionAsync(); }}
+                    style={[
+                      s.packTile,
+                      {
+                        backgroundColor: isSelected ? Colors.brand + "12" : colors.surface,
+                        borderColor: isSelected ? Colors.brand : colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={s.packTileTop}>
+                      <Text style={[s.packTileLabel, { color: colors.textSecondary }]}>{pkg.label}</Text>
+                      {pkg.popular
+                        ? <View style={[s.popularChip, { backgroundColor: Colors.brand }]}><Text style={s.popularChipText}>POPULAR</Text></View>
+                        : <Ionicons name={isSelected ? "checkmark-circle" : "ellipse-outline"} size={18} color={isSelected ? Colors.brand : colors.border} />
+                      }
+                    </View>
+                    <Text style={[s.packTileAmount, { color: isSelected ? Colors.brand : colors.text }]}>{fmtAmt(pkg.amount)} AC</Text>
+                    <View style={s.packTilePriceRow}>
+                      <Text style={[s.packTilePrice, { color: colors.text }]}>${pkg.priceUsd % 1 === 0 ? pkg.priceUsd.toFixed(0) : pkg.priceUsd.toFixed(2)}</Text>
+                      {!!lc && <Text style={[s.packTileLocal, { color: colors.textMuted }]}>{lc}</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 14, marginBottom: 7 }]}>CUSTOM AMOUNT</Text>
+            <View style={[
+              s.inputRow,
+              {
+                backgroundColor: colors.inputBg,
+                borderColor: selectedPack === null && acoinAmt >= minimumAmount ? Colors.brand : colors.border,
+                borderWidth: selectedPack === null && acoinAmt >= minimumAmount ? 1.5 : 1,
+              },
+            ]}>
+              <Ionicons name="diamond" size={16} color={Colors.brand} style={{ marginRight: 8 }} />
+              <TextInput
+                style={[s.input, { color: colors.text, flex: 1 }]}
+                placeholder="Enter ACoins"
+                placeholderTextColor={colors.textMuted}
+                value={customAmt}
+                onChangeText={t => { setCustomAmt(t); setSelectedPack(null); }}
+                keyboardType="number-pad"
+              />
+              <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 13 }}>AC</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={s.topupOrderCopy}>
+                <Text style={[s.topupStepSub, { color: colors.textMuted }]}>YOU’RE ADDING</Text>
+                <Text style={[s.topupOrderAmount, { color: colors.text }]}>{fmtAmt(acoinAmt)} ACoins</Text>
                 {!!localLine(parseFloat(price), country) && (
-                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: "Inter_400Regular" }}>{localLine(parseFloat(price), country)}</Text>
+                  <Text style={[s.topupStepSub, { color: colors.textMuted }]}>{localLine(parseFloat(price), country)}</Text>
                 )}
               </View>
+              <Text style={[s.topupOrderPrice, { color: Colors.brand }]}>${price}</Text>
             </View>
-            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 6, fontFamily: "Inter_400Regular" }}>
-              Secure hosted checkout via {provider === "whop" ? "Whop" : "Pesapal"}
-            </Text>
-          </View>
+
+            <Text style={[s.topupStepTitle, { color: colors.text, marginBottom: 12 }]}>Choose how to pay</Text>
+            <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
+            {provider === "whop" && (
+              <View style={[s.providerHint, { backgroundColor: colors.backgroundSecondary }]}>
+                <Ionicons name="shield-checkmark" size={15} color="#34C759" />
+                <Text style={[s.topupStepSub, { color: colors.textMuted }]}>Whop checkout starts at $1.00.</Text>
+              </View>
+            )}
+          </>
         )}
+      </ScrollView>
 
-        <View style={{ marginTop: 20 }}>
-          <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
-          {provider === "whop" && (
-            <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 6 }}>
-              Whop checkout minimum is $1.00 (100 ACoins).
-            </Text>
-          )}
+      <View style={[
+        s.checkoutFooter,
+        {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+          paddingBottom: Platform.OS === "web" ? Math.max(insets.bottom, 34) : Math.max(insets.bottom, 12),
+        },
+      ]}>
+        <View style={s.footerSummary}>
+          <Text style={[s.footerSummaryLabel, { color: colors.textMuted }]}>
+            {step === 1 ? "Selected amount" : `${provider === "whop" ? "Whop" : "Pesapal"} · total`}
+          </Text>
+          <Text style={[s.footerSummaryAmount, { color: colors.text }]}>{acoinAmt >= 50 ? `$${price}` : "Choose an amount"}</Text>
         </View>
-
-        {/* ── CTA ── */}
         <TouchableOpacity
-          style={[s.primaryBtn, { backgroundColor: Colors.brand, opacity: (loading || acoinAmt < minimumAmount) ? 0.5 : 1, marginTop: 20 }]}
-          onPress={checkout}
+          testID={step === 1 ? "topup-continue" : "topup-pay"}
+          style={[
+            s.checkoutButton,
+            { backgroundColor: Colors.brand, opacity: (loading || acoinAmt < minimumAmount) ? 0.5 : 1 },
+          ]}
+          onPress={() => step === 1 ? setStep(2) : checkout()}
           disabled={loading || acoinAmt < minimumAmount}
           activeOpacity={0.85}
         >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <>
-                <Ionicons name="lock-closed" size={16} color="#fff" />
-                <Text style={s.primaryBtnText}>
-                  {`Pay ${acoinAmt >= 50 ? `$${price} · ${fmtAmt(acoinAmt)} AC` : "Select a package"}`}
-                </Text>
-              </>
-          }
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={s.checkoutButtonText}>
+                {step === 1 ? "Continue to payment" : `Pay $${price}`}
+              </Text>
+              <Ionicons name={step === 1 ? "arrow-forward" : "lock-closed"} size={16} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
-        <Text style={{ textAlign: "center", color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 8 }}>
-          1 AC = $0.01 · Secure checkout via {provider === "whop" ? "Whop" : "Pesapal"}
-        </Text>
+      </View>
 
-      </ScrollView>
       {!!checkoutUrl && (
         <PaymentWebViewModal
           url={checkoutUrl}
