@@ -11,6 +11,7 @@ import {
   isOnline,
 } from "./offlineStore";
 import { drainQueue, startSyncQueue, stopSyncQueue } from "./storage/syncQueue";
+import { resolveMessageTimestamp } from "./messageTimestamps";
 import {
   getPendingLocalMessages,
   isClientMessageId,
@@ -45,6 +46,7 @@ export async function syncPendingMessages(): Promise<void> {
 
     for (const msg of pending.slice(0, MAX_ITEMS_PER_SYNC)) {
       try {
+        const sentAt = resolveMessageTimestamp(msg);
         if (isClientMessageId(msg.id)) {
           const insertPayload: Record<string, unknown> = {
             id: msg.id,
@@ -52,6 +54,7 @@ export async function syncPendingMessages(): Promise<void> {
             sender_id: msg.sender_id,
             encrypted_content: msg.encrypted_content,
           };
+          if (sentAt) insertPayload.sent_at = sentAt;
           if (msg.reply_to_message_id) {
             insertPayload.reply_to_message_id = msg.reply_to_message_id;
           }
@@ -95,11 +98,13 @@ export async function syncPendingMessages(): Promise<void> {
           continue;
         }
 
-        const { error } = await supabase.from("messages").insert({
+        const insertPayload: Record<string, unknown> = {
           chat_id: msg.chat_id,
           sender_id: msg.sender_id,
           encrypted_content: msg.encrypted_content,
-        });
+        };
+        if (sentAt) insertPayload.sent_at = sentAt;
+        const { error } = await supabase.from("messages").insert(insertPayload);
         if (!error) {
           await removePendingMessage(msg.id);
         }
@@ -136,6 +141,8 @@ export async function syncPendingMessages(): Promise<void> {
           sender_id: msg.sender_id,
           encrypted_content: msg.content,
         };
+        const sentAt = resolveMessageTimestamp(msg);
+        if (sentAt) insertPayload.sent_at = sentAt;
         if (isClientMessageId(msg.id)) insertPayload.id = msg.id;
         if (msg.reply_to_id) insertPayload.reply_to_message_id = msg.reply_to_id;
 

@@ -92,6 +92,13 @@ import {
 } from "@/lib/offlineStore";
 import { createLocalMessageId, getLocalMessages, getWarmLocalMessages, getLocalMessageEditTimestamps, saveMessages, savePendingMessage, getNewestMessageDate, deleteAllLocalMessages, markMessageDelivered, markMessageRead, saveMessageReceipts, markMessageSynced } from "@/lib/storage/localMessages";
 import { queueMessage, removePendingMessage } from "@/lib/offlineStore";
+import {
+  compareMessageTimestamps,
+  latestMessageTimestamp,
+  messageTimestampMillis,
+  normalizeMessageTimestamp,
+  resolveMessageTimestamp,
+} from "@/lib/messageTimestamps";
 import { enqueue } from "@/lib/storage/syncQueue";
 import { storage } from "@/lib/storage/mmkv";
 import {
@@ -343,9 +350,7 @@ function latestReceiptTime(
   current: string | null | undefined,
   incoming: string | null | undefined,
 ): string | null {
-  if (!incoming) return current ?? null;
-  if (!current || incoming > current) return incoming;
-  return current;
+  return latestMessageTimestamp(current, incoming);
 }
 
 function mergeReceiptRow(
@@ -368,9 +373,9 @@ function isOptimisticMatch(local: Message, server: Message): boolean {
   if (!isTemporary || local.sender_id !== server.sender_id) return false;
   if (local.encrypted_content !== server.encrypted_content) return false;
   if ((local.attachment_type || null) !== (server.attachment_type || null)) return false;
-  const localTime = new Date(local.sent_at).getTime();
-  const serverTime = new Date(server.sent_at).getTime();
-  return Number.isFinite(localTime) && Number.isFinite(serverTime) &&
+  const localTime = messageTimestampMillis(local.sent_at);
+  const serverTime = messageTimestampMillis(server.sent_at);
+  return localTime !== null && serverTime !== null &&
     Math.abs(localTime - serverTime) <= 15000;
 }
 
@@ -381,11 +386,13 @@ function confirmedOutgoingMessage(row: any, optimistic: Message): Message {
     chat_id: row.chat_id || optimistic.chat_id,
     sender_id: row.sender_id || optimistic.sender_id,
     encrypted_content: row.encrypted_content ?? optimistic.encrypted_content,
-    sent_at: row.sent_at || optimistic.sent_at,
+    sent_at: resolveMessageTimestamp(row, optimistic.sent_at),
     reply_to_message_id: row.reply_to_message_id ?? optimistic.reply_to_message_id,
     attachment_url: row.attachment_url || optimistic.attachment_url,
     attachment_type: row.attachment_type || optimistic.attachment_type,
     edited_at: row.edited_at ?? optimistic.edited_at,
+    delivered_at: latestMessageTimestamp(optimistic.delivered_at, row.delivered_at),
+    read_at: latestMessageTimestamp(optimistic.read_at, row.read_at),
     _pending: false,
     status: "sent",
   };
@@ -416,7 +423,7 @@ function reconcileOptimisticOutgoingMessage(
     !isOptimisticMatch(message, serverMessage)
   );
   return [...remaining, confirmed].sort(
-    (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+    (a, b) => compareMessageTimestamps(a.sent_at, b.sent_at, "desc")
   );
 }
 
@@ -424,7 +431,7 @@ async function cacheConfirmedOutgoingMessage(message: any, sender?: any): Promis
   if (!message?.id || !message?.chat_id || !message?.sender_id) return;
   await saveMessages(message.chat_id, [{
     ...message,
-    sent_at: message.sent_at || new Date().toISOString(),
+    sent_at: resolveMessageTimestamp(message, new Date().toISOString()),
     status: message.status || "sent",
     sender: message.sender ?? sender,
   }]);
@@ -699,13 +706,17 @@ function formatLastSeen(ts: string | null | undefined, showOnlineStatus?: boolea
   return { text: "last seen long time ago", isOnline: false };
 }
 
-function formatMsgTime(iso: string): string {
-  const d = new Date(iso);
+function formatMsgTime(iso: string | null | undefined): string {
+  const timestamp = messageTimestampMillis(iso);
+  if (timestamp === null) return "—";
+  const d = new Date(timestamp);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatMsgInfoTime(iso: string): string {
-  const d = new Date(iso);
+function formatMsgInfoTime(iso: string | null | undefined): string {
+  const timestamp = messageTimestampMillis(iso);
+  if (timestamp === null) return "Time unavailable";
+  const d = new Date(timestamp);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   const yesterday = new Date(now);
@@ -717,8 +728,10 @@ function formatMsgInfoTime(iso: string): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} at ${time}`;
 }
 
-function formatDateHeader(iso: string): string {
-  const d = new Date(iso);
+function formatDateHeader(iso: string | null | undefined): string {
+  const timestamp = messageTimestampMillis(iso);
+  if (timestamp === null) return "Date unavailable";
+  const d = new Date(timestamp);
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -3659,7 +3672,7 @@ function ChatScreen() {
             !hydratedIds.has(message.id) && (!clearedAt || message.sent_at > clearedAt)
           );
           return [...hydrated, ...preserved].sort(
-            (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+            (a, b) => compareMessageTimestamps(a.sent_at, b.sent_at, "desc")
           );
         });
         hydrateLocalSenderSnapshots(chatId, cached, isCurrentLoad, setMessages);
@@ -3784,7 +3797,7 @@ function ChatScreen() {
       const uniqueRows = new Map<string, any>();
       [...(deltaRows ?? []), ...missedRows].forEach((row) => uniqueRows.set(row.id, row));
       serverMessages = [...uniqueRows.values()].sort(
-        (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+        (a, b) => compareMessageTimestamps(a.sent_at, b.sent_at)
       );
     }
     if (!isCurrentLoad()) return;
@@ -3817,7 +3830,7 @@ function ChatScreen() {
           chat_id: m.chat_id,
           sender_id: m.sender_id,
           encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
-          sent_at: m.sent_at,
+          sent_at: resolveMessageTimestamp(m),
           reply_to_message_id: m.reply_to_message_id,
           attachment_url: m.attachment_url,
           attachment_type: m.attachment_type,
@@ -3857,7 +3870,7 @@ function ChatScreen() {
             : m;
         });
         return [...merged, ...notInServer].sort(
-          (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+          (a, b) => compareMessageTimestamps(a.sent_at, b.sent_at, "desc")
         );
       });
 
@@ -4155,7 +4168,7 @@ function ChatScreen() {
           return {
             id: m.id, chat_id: m.chat_id, sender_id: m.sender_id,
             encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
-            sent_at: m.sent_at, reply_to_message_id: m.reply_to_message_id,
+            sent_at: resolveMessageTimestamp(m), reply_to_message_id: m.reply_to_message_id,
             attachment_url: m.attachment_url, attachment_type: m.attachment_type, edited_at: m.edited_at,
             sender, reactions: reactionMap[m.id] || [],
             status: m.sender_id === user.id
@@ -6489,7 +6502,7 @@ STRICT RULES:
       const lines = sorted
         .map(
           (m) =>
-            `[${m.sent_at ? new Date(m.sent_at).toLocaleString() : ""}] ${m.sender?.display_name || "Unknown"}: ${m.encrypted_content || `[${m.attachment_type || "attachment"}]`}`
+            `[${messageTimestampMillis(m.sent_at) === null ? "" : new Date(messageTimestampMillis(m.sent_at)!).toLocaleString()}] ${m.sender?.display_name || "Unknown"}: ${m.encrypted_content || `[${m.attachment_type || "attachment"}]`}`
         )
         .join("\n");
       await Share.share({ message: lines, title: `Chat with ${headerTitle}` });
@@ -6851,7 +6864,7 @@ STRICT RULES:
             chat_id: activeChatId,
             sender_id: user.id,
             encrypted_content: text,
-            created_at: now,
+            sent_at: now,
             reply_to_message_id: replyTo?.id || null,
             sender_display_name: profile?.display_name || "You",
             sender_avatar_url: profile?.avatar_url || null,
@@ -6992,7 +7005,15 @@ STRICT RULES:
         handle: profile?.handle || "",
       });
       setMessages((prev) =>
-        prev.map((m) => m.id === msgId ? { ...m, id: inserted.id, status: "sent" as const, _pending: false } : m)
+        prev.map((m) => m.id === msgId
+          ? {
+              ...m,
+              id: inserted.id,
+              sent_at: normalizeMessageTimestamp(inserted.sent_at) ?? m.sent_at,
+              status: "sent" as const,
+              _pending: false,
+            }
+          : m)
       );
       if (!directText) setInput("");
       clearLocalDrafts();
@@ -7079,7 +7100,7 @@ STRICT RULES:
           chat_id: activeChatId,
           sender_id: user.id,
           encrypted_content: text,
-          sent_at: new Date().toISOString(),
+          sent_at: normalizeMessageTimestamp(inserted.sent_at) ?? now,
           reply_to_message_id: replyTo?.id ?? null,
           sender_display_name: profile?.display_name || "Someone",
           sender_avatar_url: profile?.avatar_url ?? null,
@@ -8387,9 +8408,12 @@ STRICT RULES:
     // the next-older message (index + 1) is on a different calendar day.
     const current = listData[index];
     const older = listData[index + 1]; // one step older in the inverted list
-    if (!current?.sent_at) return false;
+    const currentTime = messageTimestampMillis(current?.sent_at);
+    if (currentTime === null) return false;
     if (!older?.sent_at) return true; // oldest message in the list — always show
-    return new Date(current.sent_at).toDateString() !== new Date(older.sent_at).toDateString();
+    const olderTime = messageTimestampMillis(older.sent_at);
+    if (olderTime === null) return true;
+    return new Date(currentTime).toDateString() !== new Date(olderTime).toDateString();
   }
 
   const handleScroll = useCallback((e: any) => {
@@ -8468,7 +8492,7 @@ STRICT RULES:
         setMessages((previous) => {
           if (previous.some((message) => message.id === targetMessage.id)) return previous;
           return [...previous, targetMessage].sort(
-            (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime(),
+          (a, b) => compareMessageTimestamps(a.sent_at, b.sent_at, "desc"),
           );
         });
       }, () => {});

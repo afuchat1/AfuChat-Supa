@@ -28,7 +28,9 @@ export type PendingMessage = {
   chat_id: string;
   sender_id: string;
   encrypted_content: string;
-  created_at: string;
+  sent_at?: string;
+  /** Older locally queued records used created_at before the DB sent_at field. */
+  created_at?: string;
   reply_to_message_id?: string | null;
   sender_display_name?: string | null;
   sender_avatar_url?: string | null;
