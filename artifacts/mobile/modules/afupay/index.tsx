@@ -34,6 +34,12 @@ import AfuServicesApp from "@/modules/afuservices";
 import { safeRouter } from "@/lib/navUtils";
 import { PaymentProviderPicker, type PaymentProvider } from "@/components/PaymentProviderPicker";
 import { confirmWhopPayment, startWhopCheckout } from "@/lib/whopPayments";
+import {
+  getAcoinStorePackages,
+  purchaseAcoinStorePackage,
+  shouldConfirmAcoinTestPurchase,
+  type AcoinStorePackage,
+} from "@/lib/revenuecat";
 
 type AppView = "home" | "history" | "topup" | "send" | "receive" | "exchange" | "requests" | "services";
 type TxFilter = "all" | "acoin" | "nexa" | "gifts";
@@ -385,7 +391,7 @@ export default function AfuPayApp({
     : transactions.filter(t => t.currency === txFilter);
 
   if (view === "history") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><HistoryView colors={colors} insets={insets} txs={filteredTx} loading={txLoading} filter={txFilter} setFilter={setTxFilter} refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadTransactions(); }} onBack={() => navigateToView("home")} /></View>;
-  if (view === "topup") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><TopUpView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} /></View>;
+  if (view === "topup") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><TopUpView colors={colors} insets={insets} profile={profile} userId={user?.id ?? null} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); }} /></View>;
   if (view === "send") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><SendView initialRecipientId={initialRecipientId} paymentReference={paymentReference} colors={colors} insets={insets} user={user} profile={profile} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
   if (view === "receive") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ReceiveView colors={colors} insets={insets} profile={profile} onBack={() => navigateToView("home")} /></View>;
   if (view === "exchange") return <View style={[s.walletRoot, { flex: 1, backgroundColor: colors.background }]}><ExchangeView colors={colors} insets={insets} user={user} profile={profile} currSettings={currSettings} onBack={() => navigateToView("home")} onSuccess={() => { loadTransactions(); refreshProfile?.(); navigateToView("home"); }} /></View>;
@@ -672,16 +678,76 @@ function PaymentWebViewModal({ url, provider, colors, insets, onClose, onComplet
   );
 }
 
-function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
+function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) {
+  const isNativeStorePurchase = Platform.OS !== "web";
   const [selectedPack, setSelectedPack] = useState<number | null>(2);
   const [customAmt, setCustomAmt] = useState("");
   const [loading, setLoading] = useState(false);
+  const [nativeLoading, setNativeLoading] = useState(isNativeStorePurchase);
+  const [nativePackages, setNativePackages] = useState<AcoinStorePackage[]>([]);
+  const [nativeError, setNativeError] = useState("");
+  const [confirmTestPurchase, setConfirmTestPurchase] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [provider, setProvider] = useState<PaymentProvider>("whop");
   const [step, setStep] = useState<1 | 2>(1);
 
+  useEffect(() => {
+    if (!isNativeStorePurchase) return;
+    let active = true;
+    if (!userId) {
+      setNativeError("Sign in to see in-app Acoin purchase options.");
+      setNativeLoading(false);
+      return () => { active = false; };
+    }
+
+    setNativeLoading(true);
+    setNativeError("");
+    void getAcoinStorePackages(userId)
+      .then((packages) => {
+        if (!active) return;
+        setNativePackages(packages);
+        setSelectedPack(packages.length ? Math.min(2, packages.length - 1) : null);
+        if (!packages.length) setNativeError("Acoin purchases are not available for this store yet.");
+      })
+      .catch((error) => {
+        if (!active) return;
+        setNativeError(error instanceof Error ? error.message : "Could not load in-app purchases.");
+      })
+      .finally(() => {
+        if (active) setNativeLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [isNativeStorePurchase, userId]);
+
+  const selectedNativePackage = isNativeStorePurchase && selectedPack !== null
+    ? nativePackages[selectedPack] ?? null
+    : null;
+  const visiblePackages = useMemo(() => {
+    if (isNativeStorePurchase) {
+      return nativePackages.map((item) => {
+        const design = PACKAGES.find((pack) => pack.amount === item.amount);
+        return {
+          amount: item.amount,
+          label: design?.label ?? "Acoin",
+          icon: design?.icon ?? "diamond-outline",
+          popular: design?.popular,
+          priceLabel: item.package.product.priceString,
+          priceUsd: null as number | null,
+          storePackage: item.package,
+        };
+      });
+    }
+    return PACKAGES.map((pack) => ({
+      ...pack,
+      priceLabel: `$${pack.priceUsd % 1 === 0 ? pack.priceUsd.toFixed(0) : pack.priceUsd.toFixed(2)}`,
+      storePackage: null,
+    }));
+  }, [isNativeStorePurchase, nativePackages]);
+
   async function checkout() {
+    if (isNativeStorePurchase) return;
     const acoinAmt = selectedPack !== null ? PACKAGES[selectedPack].amount : (parseInt(customAmt || "0") || 0);
     const minimum = provider === "whop" ? 100 : 50;
     if (acoinAmt < minimum) {
@@ -711,27 +777,64 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
       }
     } catch (error) {
       showAlert("Error", error instanceof Error ? error.message : "Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
-  const acoinAmt = selectedPack !== null ? PACKAGES[selectedPack].amount : (parseInt(customAmt || "0") || 0);
-  const price = (acoinAmt * 0.01).toFixed(2);
-  const minimumAmount = provider === "whop" ? 100 : 50;
+  async function purchaseNativeAcoin() {
+    if (!userId || !selectedNativePackage) return;
+    setConfirmTestPurchase(false);
+    setLoading(true);
+    try {
+      await purchaseAcoinStorePackage(userId, selectedNativePackage.package);
+      onSuccess?.();
+      if (shouldConfirmAcoinTestPurchase()) {
+        showAlert(
+          "Test purchase completed",
+          "RevenueCat approved this Test Store purchase. Test purchases do not add ACoins to the live wallet.",
+        );
+      } else {
+        showAlert(
+          "Purchase submitted",
+          "Your store is confirming the transaction. ACoins will appear in your wallet after verification.",
+        );
+      }
+    } catch (error) {
+      if (error && typeof error === "object" && "userCancelled" in error && error.userCancelled) return;
+      showAlert("Purchase not completed", error instanceof Error ? error.message : "Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const acoinAmt = isNativeStorePurchase
+    ? selectedNativePackage?.amount ?? 0
+    : selectedPack !== null
+      ? PACKAGES[selectedPack].amount
+      : (parseInt(customAmt || "0") || 0);
+  const price = isNativeStorePurchase
+    ? selectedNativePackage?.package.product.priceString ?? ""
+    : (acoinAmt * 0.01).toFixed(2);
+  const priceDisplay = isNativeStorePurchase ? price : `$${price}`;
+  const minimumAmount = isNativeStorePurchase ? 0 : provider === "whop" ? 100 : 50;
+  const canContinue = isNativeStorePurchase
+    ? !nativeLoading && Boolean(selectedNativePackage)
+    : acoinAmt >= minimumAmount;
 
   const country = profile?.country ?? null;
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
       <SubHeader
-        title={step === 1 ? "Top up wallet" : "Payment method"}
+        title={step === 1 ? "Top up wallet" : isNativeStorePurchase ? "In-app purchase" : "Payment method"}
         onBack={() => step === 2 ? setStep(1) : onBack()}
         colors={colors}
       />
       <View style={[s.topupStepHeader, { borderBottomColor: colors.border }]}>
         <View style={s.topupStepLabelRow}>
           <Text style={[s.topupStepLabel, { color: step === 1 ? Colors.brand : colors.textMuted }]}>01  Amount</Text>
-          <Text style={[s.topupStepLabel, { color: step === 2 ? Colors.brand : colors.textMuted }]}>02  Payment</Text>
+          <Text style={[s.topupStepLabel, { color: step === 2 ? Colors.brand : colors.textMuted }]}>{isNativeStorePurchase ? "02  Purchase" : "02  Payment"}</Text>
         </View>
         <View style={[s.topupProgressTrack, { backgroundColor: colors.border }]}>
           <View style={[s.topupProgressFill, { width: step === 1 ? "50%" : "100%" }]} />
@@ -753,19 +856,33 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
 
             <View style={s.amountSectionHeading}>
               <Text style={[s.topupStepTitle, { color: colors.text }]}>Choose an amount</Text>
-              <Text style={[s.topupStepSub, { color: colors.textMuted }]}>1 AC = $0.01</Text>
+              <Text style={[s.topupStepSub, { color: colors.textMuted }]}>{isNativeStorePurchase ? "Secure in-app purchase" : "1 AC = $0.01"}</Text>
             </View>
 
+            {isNativeStorePurchase && nativeLoading && (
+              <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                <ActivityIndicator color={Colors.brand} />
+                <Text style={[s.topupStepSub, { color: colors.textMuted, marginTop: 10 }]}>Loading store prices…</Text>
+              </View>
+            )}
+
+            {isNativeStorePurchase && !nativeLoading && !!nativeError && (
+              <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 14 }]}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
+                <Text style={[s.topupStepSub, { color: colors.textMuted, flex: 1 }]}>{nativeError}</Text>
+              </View>
+            )}
+
             <View style={s.packGrid}>
-              {PACKAGES.map((pkg, i) => {
+              {visiblePackages.map((pkg, i) => {
                 const isSelected = selectedPack === i;
-                const lc = localLine(pkg.priceUsd, country);
+                const lc = typeof pkg.priceUsd === "number" ? localLine(pkg.priceUsd, country) : null;
                 return (
                   <TouchableOpacity
                     key={pkg.amount}
                     testID={`acoin-package-${pkg.amount}`}
                     accessibilityRole="radio"
-                    accessibilityLabel={`${fmtAmt(pkg.amount)} ACoins for $${pkg.priceUsd}`}
+                    accessibilityLabel={`${fmtAmt(pkg.amount)} ACoins for ${pkg.priceLabel}`}
                     accessibilityState={{ selected: isSelected }}
                     activeOpacity={0.82}
                     onPress={() => { setSelectedPack(i); setCustomAmt(""); Haptics.selectionAsync(); }}
@@ -787,7 +904,7 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
                     <View style={s.packTilePriceRow}>
                       <Text style={[s.packTileAmount, { color: isSelected ? Colors.brand : colors.text }]}>{fmtAmt(pkg.amount)} AC</Text>
                       <View style={s.packTilePriceCopy}>
-                        <Text style={[s.packTilePrice, { color: colors.text }]}>${pkg.priceUsd % 1 === 0 ? pkg.priceUsd.toFixed(0) : pkg.priceUsd.toFixed(2)}</Text>
+                        <Text style={[s.packTilePrice, { color: colors.text }]}>{pkg.priceLabel}</Text>
                         {!!lc && <Text style={[s.packTileLocal, { color: colors.textMuted }]}>{lc}</Text>}
                       </View>
                     </View>
@@ -796,26 +913,30 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
               })}
             </View>
 
-            <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 14, marginBottom: 7 }]}>CUSTOM AMOUNT</Text>
-            <View style={[
-              s.inputRow,
-              {
-                backgroundColor: colors.inputBg,
-                borderColor: selectedPack === null && acoinAmt >= minimumAmount ? Colors.brand : colors.border,
-                borderWidth: selectedPack === null && acoinAmt >= minimumAmount ? 1.5 : 1,
-              },
-            ]}>
-              <Ionicons name="diamond" size={16} color={Colors.brand} style={{ marginRight: 8 }} />
-              <TextInput
-                style={[s.input, { color: colors.text, flex: 1 }]}
-                placeholder="Enter ACoins"
-                placeholderTextColor={colors.textMuted}
-                value={customAmt}
-                onChangeText={t => { setCustomAmt(t); setSelectedPack(null); }}
-                keyboardType="number-pad"
-              />
-              <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 13 }}>AC</Text>
-            </View>
+            {!isNativeStorePurchase && (
+              <>
+                <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 14, marginBottom: 7 }]}>CUSTOM AMOUNT</Text>
+                <View style={[
+                  s.inputRow,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: selectedPack === null && acoinAmt >= minimumAmount ? Colors.brand : colors.border,
+                    borderWidth: selectedPack === null && acoinAmt >= minimumAmount ? 1.5 : 1,
+                  },
+                ]}>
+                  <Ionicons name="diamond" size={16} color={Colors.brand} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[s.input, { color: colors.text, flex: 1 }]}
+                    placeholder="Enter ACoins"
+                    placeholderTextColor={colors.textMuted}
+                    value={customAmt}
+                    onChangeText={t => { setCustomAmt(t); setSelectedPack(null); }}
+                    keyboardType="number-pad"
+                  />
+                  <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 13 }}>AC</Text>
+                </View>
+              </>
+            )}
           </>
         ) : (
           <>
@@ -823,20 +944,31 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
               <View style={s.topupOrderCopy}>
                 <Text style={[s.topupStepSub, { color: colors.textMuted }]}>YOU’RE ADDING</Text>
                 <Text style={[s.topupOrderAmount, { color: colors.text }]}>{fmtAmt(acoinAmt)} ACoins</Text>
-                {!!localLine(parseFloat(price), country) && (
+                {!isNativeStorePurchase && !!localLine(parseFloat(price), country) && (
                   <Text style={[s.topupStepSub, { color: colors.textMuted }]}>{localLine(parseFloat(price), country)}</Text>
                 )}
               </View>
-              <Text style={[s.topupOrderPrice, { color: Colors.brand }]}>${price}</Text>
+              <Text style={[s.topupOrderPrice, { color: Colors.brand }]}>{priceDisplay}</Text>
             </View>
 
-            <Text style={[s.topupStepTitle, { color: colors.text, marginBottom: 12 }]}>Choose how to pay</Text>
-            <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
-            {provider === "whop" && (
-              <View style={s.providerHint}>
-                <Ionicons name="shield-checkmark" size={15} color="#34C759" />
-                <Text style={[s.topupStepSub, { color: colors.textMuted }]}>Whop checkout starts at $1.00.</Text>
+            {isNativeStorePurchase ? (
+              <View style={[s.providerHint, { backgroundColor: colors.surface }]}>
+                <Ionicons name="lock-closed-outline" size={15} color={colors.textMuted} />
+                <Text style={[s.topupStepSub, { color: colors.textMuted, flex: 1 }]}>
+                  The purchase is completed securely by {Platform.OS === "ios" ? "the App Store" : "Google Play"} without opening a browser.
+                </Text>
               </View>
+            ) : (
+              <>
+                <Text style={[s.topupStepTitle, { color: colors.text, marginBottom: 12 }]}>Choose how to pay</Text>
+                <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
+                {provider === "whop" && (
+                  <View style={s.providerHint}>
+                    <Ionicons name="shield-checkmark" size={15} color="#34C759" />
+                    <Text style={[s.topupStepSub, { color: colors.textMuted }]}>Whop checkout stays inside AfuChat.</Text>
+                  </View>
+                )}
+              </>
             )}
           </>
         )}
@@ -852,18 +984,31 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
       ]}>
         <View style={s.footerSummary}>
           <Text style={[s.footerSummaryLabel, { color: colors.textMuted }]}>
-            {step === 1 ? "Selected amount" : `${provider === "whop" ? "Whop" : "Pesapal"} · total`}
+            {step === 1
+              ? "Selected amount"
+              : isNativeStorePurchase
+                ? "Store total"
+                : `${provider === "whop" ? "Whop" : "Pesapal"} · total`}
           </Text>
-          <Text style={[s.footerSummaryAmount, { color: colors.text }]}>{acoinAmt >= 50 ? `$${price}` : "Choose an amount"}</Text>
+          <Text style={[s.footerSummaryAmount, { color: colors.text }]}>{acoinAmt >= 50 ? priceDisplay : "Choose an amount"}</Text>
         </View>
         <TouchableOpacity
           testID={step === 1 ? "topup-continue" : "topup-pay"}
           style={[
             s.checkoutButton,
-            { backgroundColor: Colors.brand, opacity: (loading || acoinAmt < minimumAmount) ? 0.5 : 1 },
+            { backgroundColor: Colors.brand, opacity: (loading || !canContinue) ? 0.5 : 1 },
           ]}
-          onPress={() => step === 1 ? setStep(2) : checkout()}
-          disabled={loading || acoinAmt < minimumAmount}
+          onPress={() => {
+            if (step === 1) {
+              setStep(2);
+            } else if (isNativeStorePurchase) {
+              if (shouldConfirmAcoinTestPurchase()) setConfirmTestPurchase(true);
+              else void purchaseNativeAcoin();
+            } else {
+              void checkout();
+            }
+          }}
+          disabled={loading || !canContinue}
           activeOpacity={0.85}
         >
           {loading ? (
@@ -871,7 +1016,11 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
           ) : (
             <>
               <Text style={s.checkoutButtonText}>
-                {step === 1 ? "Continue to payment" : `Pay $${price}`}
+                {step === 1
+                  ? "Continue"
+                  : isNativeStorePurchase
+                    ? "Continue to purchase"
+                    : `Pay $${price}`}
               </Text>
               <Ionicons name={step === 1 ? "arrow-forward" : "lock-closed"} size={16} color="#fff" />
             </>
@@ -914,6 +1063,41 @@ function TopUpView({ colors, insets, profile, onBack, onSuccess }: any) {
           }}
         />
       )}
+
+      <Modal
+        visible={confirmTestPurchase}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmTestPurchase(false)}
+      >
+        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.48)" }}>
+          <View style={{ width: "100%", maxWidth: 420, alignSelf: "center", borderRadius: 18, padding: 22, backgroundColor: colors.background }}>
+            <Text style={{ color: colors.text, fontSize: 18, fontFamily: "Inter_700Bold" }}>Confirm test purchase</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 20, marginTop: 9 }}>
+              Buy {fmtAmt(acoinAmt)} ACoins for {priceDisplay} in RevenueCat Test Store? This test does not charge you or add ACoins to your live wallet.
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 22 }}>
+              <TouchableOpacity
+                onPress={() => setConfirmTestPurchase(false)}
+                style={{ flex: 1, minHeight: 46, justifyContent: "center", alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
+                accessibilityRole="button"
+              >
+                <Text style={{ color: colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => void purchaseNativeAcoin()}
+                disabled={loading}
+                style={{ flex: 1, minHeight: 46, justifyContent: "center", alignItems: "center", borderRadius: 12, backgroundColor: Colors.brand, opacity: loading ? 0.6 : 1 }}
+                accessibilityRole="button"
+              >
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" }}>Confirm</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

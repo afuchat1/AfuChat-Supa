@@ -287,7 +287,16 @@ export default function BrowserScreen() {
         </View>
       )}
 
-      <View style={[styles.bottomBar, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View
+        style={[
+          styles.bottomBar,
+          {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 8),
+          },
+        ]}
+      >
         <TouchableOpacity
           onPress={() => browserControls.current?.back()}
           disabled={!canGoBack}
@@ -373,15 +382,18 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   homeHint: { fontSize: 14, textAlign: "center" },
   bottomBar: {
-    minHeight: 58,
+    minHeight: 62,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 18,
     paddingTop: 6,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   bottomButton: {
-    flex: 1,
-    minHeight: 48,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },

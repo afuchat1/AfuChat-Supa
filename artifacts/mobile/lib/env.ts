@@ -37,6 +37,15 @@ export const GOOGLE_WEB_CLIENT_ID: string =
 export const ENGAGERA_API_KEY: string =
   (process.env.EXPO_PUBLIC_ENGAGERA_API_KEY ?? "").trim();
 
+export const REVENUECAT_TEST_API_KEY: string =
+  (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? "").trim();
+
+export const REVENUECAT_ANDROID_API_KEY: string =
+  (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? "").trim();
+
+export const REVENUECAT_IOS_API_KEY: string =
+  (process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? "").trim();
+
 /**
  * Giphy public API key — used client-side for GIF search and trending.
  * Intentionally public: Giphy keys are designed to be embedded in client apps
