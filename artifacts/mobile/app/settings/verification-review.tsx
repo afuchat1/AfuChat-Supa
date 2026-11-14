@@ -18,6 +18,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
+import { openExternalLink } from "@/lib/openExternalLink";
 
 type RequestRow = {
   request_id: string;
@@ -116,7 +117,7 @@ export default function VerificationReviewScreen() {
               <TouchableOpacity
                 style={[styles.evidenceLink, { borderColor: colors.border }]}
                 onPress={() => {
-                  if (item.evidence_url.startsWith("https://")) void Linking.openURL(item.evidence_url);
+                  if (item.evidence_url.startsWith("https://")) void openExternalLink(item.evidence_url);
                 }}
                 activeOpacity={0.75}
               >

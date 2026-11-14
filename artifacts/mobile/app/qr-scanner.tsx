@@ -302,7 +302,7 @@ function ResultSheet({
         {result.type === "url" && (
           <TouchableOpacity style={[sheet.actionBtn, { backgroundColor: "#5856D6" }]} onPress={handleOpenUrl}>
             <Ionicons name="globe" size={18} color="#fff" />
-            <Text style={sheet.actionBtnText}>Open in Browser</Text>
+            <Text style={sheet.actionBtnText}>Open in AfuChat Browser</Text>
           </TouchableOpacity>
         )}
 
