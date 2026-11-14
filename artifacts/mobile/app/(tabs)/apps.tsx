@@ -151,6 +151,14 @@ const CATEGORIES: Category[] = [
          route: "/app/afusaved",
         featuredSub: "Keep saved posts and starred messages close.",
       },
+      {
+        id: "afubrowser",
+        label: "Browser",
+        icon: "globe-outline",
+        gradient: ["#52606D", "#64748B"],
+        route: "/browser",
+        featuredSub: "Browse web pages without leaving AfuChat.",
+      },
     ],
   },
   {

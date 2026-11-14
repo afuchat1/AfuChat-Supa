@@ -148,6 +148,15 @@ export default function BrowserScreen() {
     else router.replace("/");
   }, [canGoBack, router]);
 
+  const handleHome = useCallback(() => {
+    Keyboard.dismiss();
+    setSourceUrl("");
+    setAddressText("");
+    setLoadError("");
+    setIsLoading(false);
+    setProgress(0);
+  }, []);
+
   const handleShare = useCallback(async () => {
     const url = addressText.trim();
     if (!url) return;
@@ -272,12 +281,8 @@ export default function BrowserScreen() {
         </View>
       ) : (
         <View style={styles.emptyState}>
-          <View style={[styles.homeIcon, { backgroundColor: colors.surface }]}>
-            <Ionicons name="globe-outline" size={32} color={colors.accent} />
-          </View>
-          <Text style={[styles.homeTitle, { color: colors.text }]}>Browse in AfuChat</Text>
           <Text style={[styles.homeHint, { color: colors.textMuted }]}>
-            Search the web or enter a website above.
+            Search or enter a web address
           </Text>
         </View>
       )}
@@ -291,7 +296,6 @@ export default function BrowserScreen() {
           style={styles.bottomButton}
         >
           <Ionicons name="chevron-back" size={20} color={canGoBack ? colors.text : colors.textMuted} />
-          <Text style={[styles.bottomLabel, { color: canGoBack ? colors.text : colors.textMuted }]}>Back</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => browserControls.current?.forward()}
@@ -301,17 +305,16 @@ export default function BrowserScreen() {
           style={styles.bottomButton}
         >
           <Ionicons name="chevron-forward" size={20} color={canGoForward ? colors.text : colors.textMuted} />
-          <Text style={[styles.bottomLabel, { color: canGoForward ? colors.text : colors.textMuted }]}>Forward</Text>
         </TouchableOpacity>
-        <View style={styles.bottomStatus}>
-          {isLoading ? (
-            <ActivityIndicator size="small" color={colors.accent} />
-          ) : (
-            <Text numberOfLines={1} style={[styles.bottomDomain, { color: colors.textMuted }]}>
-              {sourceUrl ? new URL(sourceUrl).hostname : "AfuChat browser"}
-            </Text>
-          )}
-        </View>
+        <TouchableOpacity
+          onPress={handleHome}
+          disabled={!sourceUrl}
+          accessibilityRole="button"
+          accessibilityLabel="Browser home"
+          style={styles.bottomButton}
+        >
+          <Ionicons name="home-outline" size={19} color={sourceUrl ? colors.text : colors.textMuted} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -368,25 +371,18 @@ const styles = StyleSheet.create({
   retryButton: { marginTop: 18, paddingHorizontal: 20, paddingVertical: 11, borderRadius: 12 },
   retryText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   emptyState: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
-  homeIcon: {
-    width: 68,
-    height: 68,
-    borderRadius: 23,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  homeTitle: { marginTop: 18, fontSize: 20, fontWeight: "700" },
-  homeHint: { marginTop: 8, fontSize: 14, textAlign: "center" },
+  homeHint: { fontSize: 14, textAlign: "center" },
   bottomBar: {
     minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
     paddingTop: 6,
-    paddingHorizontal: 14,
-    gap: 12,
+    paddingHorizontal: 24,
   },
-  bottomButton: { width: 76, flexDirection: "row", alignItems: "center", gap: 3 },
-  bottomLabel: { fontSize: 12, fontWeight: "600" },
-  bottomStatus: { flex: 1, alignItems: "flex-end" },
-  bottomDomain: { maxWidth: "100%", fontSize: 12 },
+  bottomButton: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
