@@ -32,5 +32,7 @@ verify_jwt = false
 
 # Called asynchronously by the notification_events database trigger. The
 # function can only dispatch an already-persisted notification event.
-[functions.deliver-notification-push]
+[functions.send-push-notification]
+# The function validates normal message/call requests itself. This lets the
+# database invoke the persisted-event delivery path without a user JWT.
 verify_jwt = false

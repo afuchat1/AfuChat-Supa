@@ -57,9 +57,214 @@ async function accessToken(serviceAccount: any) {
   return data.access_token as string;
 }
 
+type SocialNotificationEvent = {
+  id: string;
+  recipient_id: string;
+  actor_id: string | null;
+  kind: string;
+  title: string;
+  body: string;
+  cta_route: string | null;
+  entity_id: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+type SocialPushDevice = {
+  id: string;
+  token: string;
+  notification_preferences: Record<string, unknown> | null;
+};
+
+async function setSocialPushStatus(
+  admin: ReturnType<typeof createClient>,
+  eventId: string,
+  status: "sent" | "skipped" | "failed",
+  error?: string,
+) {
+  const { error: updateError } = await admin.from("notification_events").update({
+    push_status: status,
+    push_sent_at: status === "sent" ? new Date().toISOString() : null,
+    push_last_error: error ?? null,
+  }).eq("id", eventId);
+  if (updateError) {
+    console.error("[send-push] could not update social push status", updateError.message);
+  }
+}
+
+async function dispatchSocialNotification(eventId: string) {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const firebaseJson =
+    Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ??
+    Deno.env.get("FIREBASE_SERVICE_ACCOUNT_KEY") ??
+    "";
+  if (!url || !serviceRoleKey) {
+    return json({ error: "Push delivery is not configured" }, 503);
+  }
+
+  const admin = createClient(url, serviceRoleKey);
+  const { data, error } = await admin.rpc("claim_notification_push_event", {
+    p_event_id: eventId,
+  });
+  if (error) {
+    console.error("[send-push] could not claim social notification", error.message);
+    return json({ error: "Could not claim notification event" }, 500);
+  }
+
+  const event = (Array.isArray(data) ? data[0] : data) as SocialNotificationEvent | null;
+  if (!event) return json({ ok: true, sent: 0, status: "already-processed" });
+
+  if (!firebaseJson) {
+    await setSocialPushStatus(admin, event.id, "failed", "Firebase service account is not configured in Supabase");
+    return json({ ok: false, sent: 0, status: "failed", reason: "FCM is not configured" }, 503);
+  }
+
+  let serviceAccount: Record<string, any>;
+  try {
+    serviceAccount = JSON.parse(firebaseJson);
+    if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+      throw new Error("Firebase service account is incomplete");
+    }
+  } catch {
+    await setSocialPushStatus(admin, event.id, "failed", "Firebase service account is invalid");
+    return json({ ok: false, sent: 0, status: "failed", reason: "FCM credentials are invalid" }, 503);
+  }
+
+  const { data: devices, error: deviceError } = await admin
+    .from("push_devices")
+    .select("id, token, notification_preferences")
+    .eq("user_id", event.recipient_id)
+    .eq("enabled", true);
+  if (deviceError) {
+    await setSocialPushStatus(admin, event.id, "failed", "Could not load registered devices");
+    return json({ ok: false, sent: 0, status: "failed" }, 500);
+  }
+
+  const eligibleDevices = ((devices ?? []) as SocialPushDevice[]).filter((device) => {
+    const preferences = device.notification_preferences ?? {};
+    return preferences.social !== false && preferences.social_notifications !== false;
+  });
+  if (!eligibleDevices.length) {
+    await setSocialPushStatus(admin, event.id, "skipped");
+    return json({ ok: true, sent: 0, attempted: 0, status: "skipped" });
+  }
+
+  let bearer: string;
+  try {
+    bearer = await accessToken(serviceAccount);
+  } catch {
+    await setSocialPushStatus(admin, event.id, "failed", "Could not authenticate with Firebase");
+    return json({ ok: false, sent: 0, attempted: eligibleDevices.length, status: "failed" }, 502);
+  }
+
+  const metadata = event.metadata ?? {};
+  const actorId = [
+    event.actor_id,
+    metadata.actor_id,
+    metadata.follower_id,
+    metadata.liker_id,
+    metadata.replier_id,
+  ].find((value): value is string => typeof value === "string" && value.length > 0) ?? "";
+  const followBackEligible =
+    event.kind === "follow" && metadata.follow_back_eligible === true;
+  const categoryId = followBackEligible ? "social_follow" : "social";
+  const pushData = Object.fromEntries(Object.entries({
+    categoryId,
+    notificationId: event.id,
+    eventKind: event.kind,
+    actorId,
+    followerId: event.kind === "follow" ? actorId : "",
+    followId: typeof metadata.follow_id === "string" ? metadata.follow_id : "",
+    chatId: typeof metadata.chat_id === "string" ? metadata.chat_id : "",
+    messageId: typeof metadata.message_id === "string" ? metadata.message_id : "",
+    route: event.cta_route ?? "",
+    entityId: event.entity_id ?? "",
+  }).map(([key, value]) => [key, String(value ?? "")]));
+
+  let sent = 0;
+  for (const device of eligibleDevices) {
+    try {
+      const response = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(serviceAccount.project_id)}/messages:send`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${bearer}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: {
+              token: device.token,
+              notification: {
+                title: event.title || "AfuChat",
+                body: event.body || "Someone interacted with you.",
+              },
+              data: pushData,
+              android: {
+                priority: "HIGH",
+                notification: {
+                  channel_id: "social_notifications_v1",
+                  sound: "default",
+                },
+              },
+              apns: {
+                headers: {
+                  "apns-push-type": "alert",
+                  "apns-priority": "10",
+                },
+                payload: {
+                  aps: { sound: "default", category: categoryId },
+                },
+              },
+            },
+          }),
+        },
+      );
+      if (response.ok) {
+        sent += 1;
+        continue;
+      }
+
+      const responseBody = await response.json().catch(() => ({}));
+      const fcmCode = responseBody?.error?.details?.[0]?.errorCode;
+      if (fcmCode === "UNREGISTERED" || response.status === 404 || response.status === 410) {
+        await admin.from("push_devices").update({ enabled: false }).eq("id", device.id);
+      }
+      console.error("[send-push] social FCM delivery failed", {
+        eventId: event.id,
+        status: response.status,
+        code: fcmCode ?? responseBody?.error?.status ?? "UNKNOWN",
+      });
+    } catch (error) {
+      console.error("[send-push] social FCM request failed", {
+        eventId: event.id,
+        message: error instanceof Error ? error.message.slice(0, 300) : "Unknown FCM error",
+      });
+    }
+  }
+
+  const status = sent > 0 ? "sent" : "failed";
+  await setSocialPushStatus(
+    admin,
+    event.id,
+    status,
+    sent > 0 ? undefined : "No device accepted the push",
+  );
+  return json({ ok: sent > 0, sent, attempted: eligibleDevices.length, status });
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers });
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+  const body = await request.json().catch(() => null);
+  if (typeof body?.eventId === "string") {
+    const eventId = body.eventId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(eventId)) {
+      return json({ error: "A valid notification event ID is required" }, 400);
+    }
+    return await dispatchSocialNotification(eventId);
+  }
+
   const authorization = request.headers.get("Authorization");
   if (!authorization?.startsWith("Bearer ")) return json({ error: "Authorization required" }, 401);
 
@@ -78,7 +283,6 @@ Deno.serve(async (request) => {
   const { data: userData, error: userError } = await auth.auth.getUser();
   if (userError || !userData.user) return json({ error: "Invalid session" }, 401);
   const authenticatedUserId = userData.user.id;
-  const body = await request.json().catch(() => null);
   if (body?.senderId !== authenticatedUserId) {
     return json({ error: "Sender does not match the authenticated user" }, 403);
   }

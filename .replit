@@ -132,6 +132,6 @@ timeoutMs = 120000
 
 [deployment]
 deploymentTarget = "autoscale"
-build = ["pnpm", "--dir", "artifacts/mobile", "exec", "expo", "export", "-p", "web"]
+build = ["corepack", "pnpm", "--dir", "artifacts/mobile", "run", "build:web"]
 publicDir = "artifacts/mobile/dist"
 run = ["node", "artifacts/mobile/scripts/serve-static-web.mjs"]

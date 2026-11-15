@@ -75,7 +75,7 @@ BEGIN
   END IF;
 
   PERFORM net.http_post(
-    url := 'https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1/deliver-notification-push',
+    url := 'https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1/send-push-notification',
     headers := '{"Content-Type":"application/json"}'::jsonb,
     body := jsonb_build_object('eventId', NEW.id)
   );
@@ -115,7 +115,7 @@ BEGIN
     '* * * * *',
     $cron$
       SELECT net.http_post(
-        url := 'https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1/deliver-notification-push',
+        url := 'https://rhnsjqqtdzlkvqazfcbg.supabase.co/functions/v1/send-push-notification',
         headers := '{"Content-Type":"application/json"}'::jsonb,
         body := jsonb_build_object('eventId', event.id)
       )
