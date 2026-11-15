@@ -60,7 +60,7 @@ function OrderCard({ order, onPress }: { order: ShopOrder; onPress: () => void }
           {shopLogo
             ? <Image source={{ uri: shopLogo }} style={st.shopLogo} />
             : (
-              <LinearGradient colors={[BRAND, "#0B10A8"]} style={[st.shopLogo, { alignItems: "center", justifyContent: "center" }]}>
+              <LinearGradient colors={[BRAND, "#1D73B7"]} style={[st.shopLogo, { alignItems: "center", justifyContent: "center" }]}>
                 <Ionicons name="storefront" size={12} color="#fff" />
               </LinearGradient>
             )}

@@ -54,14 +54,14 @@ export type ChatPrefs = {
 };
 
 export const CHAT_THEME_COLORS: Record<string, { bubble: string; bubbleText: string; accent: string }> = {
-  Teal:     { bubble: "#1018D8", bubbleText: "#fff", accent: "#1018D8" },
+  Teal:     { bubble: "#258FE5", bubbleText: "#fff", accent: "#258FE5" },
   Purple:   { bubble: "#7B2FBE", bubbleText: "#fff", accent: "#7B2FBE" },
   Indigo:   { bubble: "#3835A3", bubbleText: "#fff", accent: "#3835A3" },
   Emerald:  { bubble: "#198A3E", bubbleText: "#fff", accent: "#198A3E" },
 };
 
 export const ACCENT_SWATCHES: { key: ChatTheme; label: string }[] = [
-  { key: "Teal",    label: "AfuChat" },
+  { key: "Teal",    label: "AfuChat Blue" },
   { key: "Indigo",  label: "Indigo"  },
   { key: "Emerald", label: "Emerald" },
   { key: "Purple",  label: "Purple"  },
@@ -115,7 +115,7 @@ const ChatPreferencesContext = createContext<ChatPrefsContextType>({
 });
 
 export function ChatPreferencesProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isPremium } = useAuth();
   const [prefs, setPrefs] = useState<ChatPrefs>(defaults);
   const [loading, setLoading] = useState(true);
 
@@ -197,6 +197,7 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
   useEffect(() => { load(); }, [load]);
 
   const updatePref = useCallback(async <K extends keyof ChatPrefs>(key: K, value: ChatPrefs[K]) => {
+    if (key === "chat_theme" && !isPremium) return;
     setPrefs((p) => ({ ...p, [key]: value }));
 
     if (key === "chat_theme") AsyncStorage.setItem(APP_ACCENT_KEY, value as string).catch(() => {});
@@ -247,9 +248,11 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
         await AsyncStorage.setItem(storageKey, JSON.stringify({ ...existing, [key]: value }));
       } catch {}
     }
-  }, [user]);
+  }, [user, isPremium]);
 
-  const themeColors = CHAT_THEME_COLORS[prefs.chat_theme] || CHAT_THEME_COLORS["Teal"];
+  const themeColors = isPremium
+    ? CHAT_THEME_COLORS[prefs.chat_theme] || CHAT_THEME_COLORS["Teal"]
+    : CHAT_THEME_COLORS["Teal"];
   const bubbleRadius = BUBBLE_RADIUS[prefs.bubble_style] || BUBBLE_RADIUS["Rounded"];
 
   return (

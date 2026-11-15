@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -40,7 +41,7 @@ registerUiTexts(CHAT_DYNAMIC_UI_TEXTS);
 export default function ChatSettingsScreen() {
   const { colors, accent, isDark } = useTheme();
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, isPremium } = useAuth();
   const insets = useSafeAreaInsets();
   const { prefs, loading, updatePref } = useChatPreferences();
   const { setAppTheme } = useAppAccent();
@@ -48,10 +49,16 @@ export default function ChatSettingsScreen() {
   const [clearing, setClearing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
 
-  const themeColor = CHAT_THEME_COLORS[prefs.chat_theme]?.accent ?? accent;
+  const activeChatTheme: ChatTheme = isPremium ? prefs.chat_theme : "Teal";
+  const activeChatThemeName = ACCENT_SWATCHES.find(({ key }) => key === activeChatTheme)?.label ?? activeChatTheme;
+  const themeColor = CHAT_THEME_COLORS[activeChatTheme]?.accent ?? accent;
   const bubbleRadius = BUBBLE_RADIUS[prefs.bubble_style] ?? 18;
 
   async function handleColorPick(key: ChatTheme) {
+    if (!isPremium) {
+      router.push("/premium");
+      return;
+    }
     await updatePref("chat_theme", key);
     setAppTheme(key);
   }
@@ -147,37 +154,64 @@ export default function ChatSettingsScreen() {
       >
         {/* ── THEME COLOR ──────────────────────────────────── */}
         <SectionTitle label="ACCENT COLOUR" />
-        <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
-          <View style={s.cardHeaderRow}>
-            <View style={s.iconWrap}>
-              <Ionicons name="color-palette-outline" size={22} color={colors.text} />
+        {isPremium ? (
+          <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
+            <View style={s.cardHeaderRow}>
+              <View style={s.iconWrap}>
+                <Ionicons name="color-palette-outline" size={22} color={colors.text} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, { color: colors.text }]}>App Accent</Text>
+                <Text style={[s.cardSub, { color: colors.textMuted }]}>Applies to bubbles, tabs and buttons</Text>
+              </View>
+              <View style={[s.accentPill, { backgroundColor: themeColor + "20", borderColor: themeColor + "55" }]}>
+                <Text style={[s.accentPillText, { color: themeColor }]}>{activeChatThemeName}</Text>
+              </View>
             </View>
+            <View style={s.swatchGrid}>
+              {ACCENT_SWATCHES.map(({ key, label }) => {
+                const hex = CHAT_THEME_COLORS[key]?.accent ?? accent;
+                const active = activeChatTheme === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    testID={`accent-swatch-${key.toLowerCase()}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set app color to ${label}`}
+                    accessibilityState={{ selected: active }}
+                    onPress={() => handleColorPick(key)}
+                    style={[s.swatch, { backgroundColor: hex }, active && s.swatchActive]}
+                    activeOpacity={0.8}
+                  >
+                    {active && <Ionicons name="checkmark" size={17} color="#fff" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            testID="accent-premium-gate"
+            accessibilityRole="button"
+            accessibilityLabel="Unlock custom app colors with Premium"
+            onPress={() => router.push("/premium")}
+            activeOpacity={0.75}
+            style={[
+              s.card,
+              { backgroundColor: colors.cardSurface, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 12 },
+            ]}
+          >
+            <Ionicons name="lock-closed" size={20} color={accent} />
             <View style={{ flex: 1 }}>
-              <Text style={[s.cardTitle, { color: colors.text }]}>App Accent</Text>
-              <Text style={[s.cardSub, { color: colors.textMuted }]}>Applies to bubbles, tabs and buttons</Text>
+              <Text style={[s.cardTitle, { color: colors.text }]}>Custom app colors</Text>
+              <Text style={[s.cardSub, { color: colors.textMuted }]}>Choose from the color list with Premium</Text>
             </View>
-            <View style={[s.accentPill, { backgroundColor: themeColor + "20", borderColor: themeColor + "55" }]}>
-              <Text style={[s.accentPillText, { color: themeColor }]}>{prefs.chat_theme}</Text>
+            <View style={[s.accentPill, { backgroundColor: accent + "20", borderColor: accent + "55" }]}>
+              <Text style={[s.accentPillText, { color: accent }]}>Default</Text>
             </View>
-          </View>
-
-          <View style={s.swatchGrid}>
-            {ACCENT_SWATCHES.map(({ key }) => {
-              const hex = CHAT_THEME_COLORS[key]?.accent ?? "#ccc";
-              const active = prefs.chat_theme === key;
-              return (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => handleColorPick(key)}
-                  style={[s.swatch, { backgroundColor: hex }, active && s.swatchActive]}
-                  activeOpacity={0.8}
-                >
-                  {active && <Ionicons name="checkmark" size={17} color="#fff" />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
 
         {/* ── LIVE PREVIEW ─────────────────────────────────── */}
         <View style={[s.previewCard, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
@@ -189,7 +223,7 @@ export default function ChatSettingsScreen() {
           </View>
           <View style={s.previewBubbleRow}>
             <View style={{ flex: 1 }} />
-            <View style={[s.previewBubble, s.previewBubbleRight, { backgroundColor: themeColor, borderRadius: bubbleRadius }]}>
+              <View style={[s.previewBubble, s.previewBubbleRight, { backgroundColor: themeColor, borderRadius: bubbleRadius }]}>
               <Text style={[s.previewBubbleText, { color: "#fff", fontSize: prefs.font_size * 0.78 }]}>I'm great, thanks! 😊</Text>
               <View style={s.previewTsRow}>
                 <Text style={[s.previewTs, { color: "rgba(255,255,255,0.75)" }]}>12:35</Text>

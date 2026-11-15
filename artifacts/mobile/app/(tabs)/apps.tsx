@@ -219,7 +219,7 @@ const ALL_PAGES = CATEGORIES.flatMap((c) => c.pages);
 const FEATURED_IDS = ["afupay", "afumarket", "afumatch", "afufreelance"];
 
 function resolveGradient(gradient: [string, string], accent: string): [string, string] {
-  return gradient.map((c) => (c === "#1018D8" ? accent : c)) as [string, string];
+  return gradient.map((c) => (c === "#258FE5" ? accent : c)) as [string, string];
 }
 
 function openPlatformPage(page: PlatformPage) {

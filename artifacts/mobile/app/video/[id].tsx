@@ -113,7 +113,7 @@ import { listMusicTracks, getMusicPlaybackUri } from "@/lib/afuMusic";
 
 const USE_NATIVE = true;
 const VIDEO_PAGE_SIZE = 50;
-const VID_THREAD_COLORS = ["#1018D8", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
+const VID_THREAD_COLORS = ["#258FE5", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
 const QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
 const SOCIAL_PLATFORMS = [
   { id: "whatsapp",  label: "WhatsApp",  icon: "logo-whatsapp",      color: "#25D366", scheme: (u: string) => `https://wa.me/?text=${encodeURIComponent(u)}` },
@@ -907,7 +907,7 @@ const VideoItem = React.memo(function VideoItem({
                 <RichText
                   style={vStyles.caption}
                   numberOfLines={expanded ? undefined : 1}
-                  linkColor="#1018D8"
+                  linkColor="#258FE5"
                 >
                   {item.content}
                 </RichText>

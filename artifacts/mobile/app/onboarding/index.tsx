@@ -30,7 +30,6 @@ import { supabase } from "@/lib/supabase";
 import { uploadAvatar as uploadAvatarMedia } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
-import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import type { Country } from "@/constants/countries";
 const getCountries = () => (require("@/constants/countries").COUNTRIES as Country[]);
@@ -41,8 +40,6 @@ import {
 } from "libphonenumber-js";
 import { Avatar } from "@/components/ui/Avatar";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
-import { useAppAccent } from "@/context/AppAccentContext";
-import { CHAT_THEME_COLORS, type ChatTheme } from "@/context/ChatPreferencesContext";
 import { checkUsernameAvailability, usernamePurchasePrompt } from "@/lib/usernameAvailability";
 import OnboardingBackdrop from "@/components/onboarding/OnboardingBackdrop";
 
@@ -86,13 +83,6 @@ function getDaysInMonth(month: number, year: number) {
   return new Date(year, month, 0).getDate();
 }
 
-const ACCENT_THEMES: { name: ChatTheme; hex: string }[] = [
-  { name: "Teal",    hex: "#1018D8" },
-  { name: "Indigo",  hex: "#3835A3" },
-  { name: "Emerald", hex: "#198A3E" },
-  { name: "Purple",  hex: "#7B2FBE" },
-];
-
 // ─── Dot indicator ─────────────────────────────────────────────────────────────
 function DotIndicator({ index, step, accent }: { index: number; step: number; accent: string }) {
   const isActive = index === step - 1;
@@ -115,7 +105,6 @@ function DotIndicator({ index, step, accent }: { index: number; step: number; ac
 export default function OnboardingScreen() {
   const { colors } = useTheme();
   const { user, refreshProfile } = useAuth();
-  const { appTheme, setAppTheme } = useAppAccent();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ userId?: string }>();
 
@@ -132,8 +121,6 @@ export default function OnboardingScreen() {
   const focusScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState<ChatTheme>(appTheme);
-
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
   const [handleStatus, setHandleStatus] = useState<"idle"|"checking"|"available"|"owned"|"listed"|"taken"|"invalid_format"|"error">("idle");
@@ -237,9 +224,6 @@ export default function OnboardingScreen() {
         setDobYear(Number(draft.dobYear) || 0);
         setGender(draft.gender === "male" || draft.gender === "female" ? draft.gender : "");
         setSelectedInterests(new Set(Array.isArray(draft.selectedInterests) ? draft.selectedInterests.filter((v: unknown) => typeof v === "string") : []));
-        const restoredTheme = typeof draft.selectedTheme === "string" ? draft.selectedTheme as ChatTheme : appTheme;
-        setSelectedTheme(restoredTheme);
-        setAppTheme(restoredTheme);
         if (typeof draft.avatarUri === "string" && draft.avatarUri) {
           const info = await FileSystem.getInfoAsync(draft.avatarUri).catch(() => ({ exists: false }));
           if (active && info.exists) setAvatarUri(draft.avatarUri);
@@ -253,7 +237,7 @@ export default function OnboardingScreen() {
   const draftSnapshot = {
     version: 1, step, displayName, handle, selectedCountry, phoneNumber,
     dobDay, dobMonth, dobYear, gender,
-    selectedInterests: Array.from(selectedInterests), avatarUri, selectedTheme,
+    selectedInterests: Array.from(selectedInterests), avatarUri,
   };
   draftRef.current = draftSnapshot;
 
@@ -266,7 +250,7 @@ export default function OnboardingScreen() {
       });
     }, 250);
     return () => clearTimeout(timer);
-  }, [activeDraftKey, hydratedUserId, userId, step, displayName, handle, selectedCountry, phoneNumber, dobDay, dobMonth, dobYear, gender, selectedInterests, avatarUri, selectedTheme]);
+  }, [activeDraftKey, hydratedUserId, userId, step, displayName, handle, selectedCountry, phoneNumber, dobDay, dobMonth, dobYear, gender, selectedInterests, avatarUri]);
 
   // Flush the latest form snapshot when Android backgrounds or interrupts the app.
   useEffect(() => {
@@ -461,13 +445,7 @@ export default function OnboardingScreen() {
 
   function validatePhone(): boolean { return getPhoneValidation().valid; }
 
-  // ── Accent / interest helpers (unchanged) ────────────────────────────────────
-  function handleAccentTheme(theme: ChatTheme) {
-    setSelectedTheme(theme);
-    setAppTheme(theme);
-    Haptics.selectionAsync();
-  }
-
+  // ── Interest helpers ─────────────────────────────────────────────────────────
   function toggleInterest(id: string) {
     setSelectedInterests((prev) => {
       const next = new Set(prev);
@@ -620,8 +598,6 @@ export default function OnboardingScreen() {
     draftCompletedRef.current = true;
     if (activeDraftKey) await AsyncStorage.removeItem(activeDraftKey).catch(() => {});
     try { const { rewardXp } = await import("../../lib/rewardXp"); await rewardXp("profile_completed"); } catch (_) {}
-    try { await supabase.from("chat_preferences").upsert({ user_id: userId, chat_theme: selectedTheme }, { onConflict: "user_id" }); } catch (_) {}
-
     await refreshProfile().catch(() => {});
     ensureAfuAiChat(userId, displayName.trim()).catch(() => {});
     setLoading(false);
@@ -902,29 +878,6 @@ export default function OnboardingScreen() {
         </View>
 
         <View style={st.fieldsGroup}>
-          {/* Accent theme card */}
-          <View style={[st.accentCard, { backgroundColor: colors.inputBg }]}>
-            <View style={st.accentCardTop}>
-              <View style={[st.accentIconWrap, { backgroundColor: colors.accent + "22" }]}>
-                <Ionicons name="color-palette" size={18} color={colors.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[st.accentCardLabel, { color: colors.text }]}>App Accent Color</Text>
-                <Text style={[st.accentCardDesc, { color: colors.textMuted }]}>Pick a theme that feels like you</Text>
-              </View>
-              <View style={[st.accentIconWrap, { backgroundColor: colors.accent }]}>
-                <Text style={st.accentChipLabel}>{selectedTheme.charAt(0)}</Text>
-              </View>
-            </View>
-            <View style={st.accentSwatches}>
-              {ACCENT_THEMES.map(({ name, hex }) => (
-                <TouchableOpacity key={name} onPress={() => handleAccentTheme(name)} style={[st.accentSwatch, { backgroundColor: hex }, selectedTheme === name && st.accentSwatchActive]}>
-                  {selectedTheme === name && <Ionicons name="checkmark" size={16} color="#fff" />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
           <View>
             <Text style={[st.interestCount, { color: colors.textSecondary, textAlign: "left", marginBottom: 10 }]}>
               {selectedInterests.size}/3 minimum selected
@@ -1262,16 +1215,6 @@ const st = StyleSheet.create({
   interestText:   { minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
   interestCount:  { minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 4 },
 
-  // Accent theme card
-  accentCard:       { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14, gap: 14 },
-  accentCardTop:    { flexDirection: "row", alignItems: "center", gap: 12 },
-  accentIconWrap:   { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  accentCardLabel:  { minWidth: 0, flexShrink: 1, fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  accentCardDesc:   { minWidth: 0, flexShrink: 1, fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
-  accentChipLabel:  { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
-  accentSwatches:   { flexDirection: "row", gap: 10 },
-  accentSwatch:     { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
-  accentSwatchActive: { borderWidth: 2.5, borderColor: "#fff" },
 
   // Avatar
   avatarSection:     { alignItems: "center", gap: 16, marginTop: 8 },

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CHAT_THEME_COLORS, type ChatTheme } from "./ChatPreferencesContext";
 import Colors from "@/constants/colors";
+import { useAuth } from "@/context/AuthContext";
 
 const STORAGE_KEY = "app_color_theme";
 
@@ -19,19 +20,26 @@ const AppAccentContext = createContext<AppAccentContextType>({
 
 export function AppAccentProvider({ children }: { children: React.ReactNode }) {
   const [appTheme, setAppThemeState] = useState<ChatTheme>("Teal");
+  const { isPremium, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isPremium) {
+      setAppThemeState("Teal");
+      return;
+    }
     AsyncStorage.getItem(STORAGE_KEY)
       .then((v) => {
         if (v && v in CHAT_THEME_COLORS) setAppThemeState(v as ChatTheme);
       })
       .catch(() => {});
-  }, []);
+  }, [authLoading, isPremium]);
 
   const setAppTheme = useCallback((t: ChatTheme) => {
+    if (authLoading || !isPremium || !(t in CHAT_THEME_COLORS)) return;
     setAppThemeState(t);
     AsyncStorage.setItem(STORAGE_KEY, t).catch(() => {});
-  }, []);
+  }, [authLoading, isPremium]);
 
   const accent = CHAT_THEME_COLORS[appTheme]?.accent || Colors.brand;
 

@@ -31,7 +31,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.13",
     "@expo-google-fonts/inter": "^0.4.0",
-    "@expo/cli": "58.1.19",
+    "@expo/cli": "58.1.20",
     "@expo/ngrok": "^4.1.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -106,7 +106,7 @@
     "expo-video": "~58.0.14",
     "expo-video-thumbnails": "~58.0.3",
     "fflate": "^0.8.3",
-    "libphonenumber-js": "^1.13.15",
+    "libphonenumber-js": "^1.13.16",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
     "react-native": "0.88.1",
@@ -117,7 +117,7 @@
     "react-native-url-polyfill": "^3.0.0",
     "react-native-view-shot": "^6.1.1",
     "react-native-web": "^0.21.4",
-    "react-native-webrtc": "124.0.1",
+    "react-native-webrtc": "155.0.1",
     "react-native-webview": "14.0.1",
     "react-native-worklets": "0.13.0",
     "rn-emoji-keyboard": "^1.7.0"

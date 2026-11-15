@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { isExpoGo } from "@/lib/expoEnvironment";
 import { notifyCallRecipient } from "@/lib/pushNotifications";
 import { setNativeSpeakerphone } from "@/lib/nativeShareShortcuts";
+import { getCallIceServers, type CallIceServer } from "@/lib/callIceServers";
 
 export type CallStatus =
   | "idle"
@@ -55,12 +56,6 @@ type CallSessionStatus =
   | "declined"
   | "busy"
   | "failed";
-type TurnIceServer = {
-  urls: string | string[];
-  username?: string;
-  credential?: string;
-};
-
 let rtc: RtcBridge | null | undefined;
 let status: CallStatus = "idle";
 let info: CallInfo | null = null;
@@ -188,21 +183,6 @@ async function updateCallStatus(callId: string, next: CallSessionStatus) {
   if (error || !data) throw new Error(error?.message || "Could not update call status");
 }
 
-async function getTurnIceServers(callId: string): Promise<TurnIceServer[]> {
-  const { data, error } = await supabase.functions.invoke("call-turn-credentials", {
-    body: { callId },
-  });
-  const servers = data?.iceServers;
-  const hasTurn = Array.isArray(servers) && servers.some((server: TurnIceServer) => {
-    const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
-    return urls.some((url) => typeof url === "string" && url.toLowerCase().startsWith("turn"));
-  });
-  if (error || !hasTurn) {
-    throw new Error("Secure call relay is unavailable. Please try again later.");
-  }
-  return servers as TurnIceServer[];
-}
-
 async function sendSignal(event: string, payload: Record<string, unknown>) {
   if (!signalChannel) return;
   try {
@@ -267,7 +247,7 @@ async function finishCall(sendEnd: boolean, finalStatus?: CallSessionStatus) {
   }, 350);
 }
 
-function configurePeer(callId: string, isCaller: boolean, iceServers: TurnIceServer[]) {
+function configurePeer(callId: string, isCaller: boolean, iceServers: CallIceServer[]) {
   const bridge = detectRtc();
   if (!bridge) throw new Error("Voice calling is unavailable in this session.");
 
@@ -292,6 +272,10 @@ function configurePeer(callId: string, isCaller: boolean, iceServers: TurnIceSer
         setStatus("active");
       }
     } else if (state === "failed") {
+      emit({
+        type: "error",
+        message: "This network could not connect a direct call. Try switching networks.",
+      });
       void finishCall(false, "failed");
     }
   };
@@ -541,7 +525,7 @@ export async function startCall(params: {
       answeredAt: null,
       isCaller: true,
     };
-    const iceServers = await getTurnIceServers(createdCallId);
+    const iceServers = getCallIceServers();
     configurePeer(createdCallId, true, iceServers);
     configureSignalChannel(createdCallId, true);
     await subscribe(signalChannel);
@@ -613,7 +597,7 @@ export async function acceptCall(notice: IncomingCallNotice, params: {
       answeredAt: call.answered_at ? Date.parse(call.answered_at) : null,
       isCaller: false,
     };
-    const iceServers = await getTurnIceServers(notice.callId);
+    const iceServers = getCallIceServers();
     localStream = await bridge.mediaDevices.getUserMedia({ audio: true, video: false });
     setNativeSpeakerphone(false);
     configurePeer(notice.callId, false, iceServers);

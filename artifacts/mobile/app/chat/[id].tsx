@@ -1216,7 +1216,7 @@ function AiInvoiceCard({ invoice, colors: c }: { invoice: AiInvoiceData; colors:
         <Ionicons name="receipt" size={14} color={Colors.brand} />
         <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: Colors.brand, textTransform: "uppercase", letterSpacing: 0.5 }}>Invoice</Text>
       </View>
-      {rows.map((r, i) => <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 }}><Text style={{ fontSize: 13, color: c.textMuted, fontFamily: "Inter_400Regular" }}>{r.label}</Text><Text style={{ fontSize: 13, color: r.highlight ? "#1018D8" : c.text, fontFamily: "Inter_600SemiBold" }}>{r.value}</Text></View>)}
+      {rows.map((r, i) => <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 }}><Text style={{ fontSize: 13, color: c.textMuted, fontFamily: "Inter_400Regular" }}>{r.label}</Text><Text style={{ fontSize: 13, color: r.highlight ? "#258FE5" : c.text, fontFamily: "Inter_600SemiBold" }}>{r.value}</Text></View>)}
       <View style={{ height: 1, backgroundColor: c.border, marginVertical: 6 }} />
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <Text style={{ fontSize: 13, color: c.textMuted, fontFamily: "Inter_400Regular" }}>Status</Text>

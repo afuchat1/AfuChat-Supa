@@ -277,7 +277,7 @@ export default function ShopManage() {
           </View>
         ) : (
           <>
-            <LinearGradient colors={[colors.accent + "22", "#0B10A822"]} style={[styles.shopOverviewCard, { borderColor: colors.accent + "44" }]}>
+            <LinearGradient colors={[colors.accent + "22", "#1D73B722"]} style={[styles.shopOverviewCard, { borderColor: colors.accent + "44" }]}>
               <View style={styles.shopOverviewHeader}>
                 {shop.logo_url ? (
                   <Image source={{ uri: shop.logo_url }} style={styles.shopOverviewLogo} />

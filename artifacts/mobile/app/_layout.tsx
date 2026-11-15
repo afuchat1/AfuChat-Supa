@@ -607,15 +607,15 @@ export default function RootLayout() {
         <ErrorBoundary>
         <GestureHandlerRootView style={styles.root}>
           <SafeAreaProvider>
-            <ThemeProvider>
-              <ThemedRoot>
-                <WebGlobalStyles />
-                <AppAccentProvider>
+            <DataModeProvider>
+              <AuthProvider>
+                <ThemeProvider>
+                  <AppAccentProvider>
+                    <ThemedRoot>
+                      <WebGlobalStyles />
                 <ThemedStatusBar />
                 {/* OOM guard: cancels all animations on app-background / memory-pressure */}
                 <AnimationGuardInit />
-                <DataModeProvider>
-                  <AuthProvider>
                     <CallProvider>
                     <ActivityTrackerSync />
                       <CrashReporterUserSync />
@@ -645,11 +645,11 @@ export default function RootLayout() {
                         </LanguageDirectionShell>
                       </LanguageProvider>
                     </CallProvider>
-                  </AuthProvider>
-                </DataModeProvider>
-                </AppAccentProvider>
-              </ThemedRoot>
-            </ThemeProvider>
+                    </ThemedRoot>
+                  </AppAccentProvider>
+                </ThemeProvider>
+              </AuthProvider>
+            </DataModeProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
         </ErrorBoundary>
@@ -689,7 +689,7 @@ function BootstrapErrorFallback({
           paddingHorizontal: 18,
           paddingVertical: 12,
           borderRadius: 12,
-          backgroundColor: "#1018D8",
+          backgroundColor: "#258FE5",
         }}
       >
         <Text style={{ color: "#fff", fontWeight: "600" }}>Try again</Text>

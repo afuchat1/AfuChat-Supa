@@ -164,35 +164,56 @@ export default function SettingsScreen() {
 
         {/* ── Appearance ────────────────────────────────────────────────── */}
         <Section title={t("APPEARANCE")} colors={colors}>
-          <View style={s.themeRow}>
-            {([
-              { key: "system", label: t("System"), icon: "phone-portrait-outline" },
-              { key: "light", label: t("Light"), icon: "sunny-outline" },
-              { key: "dark", label: t("Dark"), icon: "moon-outline" },
-            ] as const).map((option) => {
-              const active = themeMode === option.key;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  onPress={() => setThemeMode(option.key)}
-                  style={[
-                    s.themeBtn,
-                    { borderColor: active ? accent : colors.border },
-                    active && { backgroundColor: accent + "18" },
-                  ]}
-                  activeOpacity={0.75}
-                >
-                  <Ionicons name={option.icon} size={16} color={active ? accent : colors.textMuted} />
-                  <Text style={[s.themeBtnText, { color: active ? accent : colors.textMuted }]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <Text style={[s.appearanceNote, { color: colors.textMuted }]}>
-            {t("settings.appearance_note")}
-          </Text>
+          {isPremium ? (
+            <>
+              <View style={s.themeRow}>
+                {([
+                  { key: "system", label: t("System"), icon: "phone-portrait-outline" },
+                  { key: "light", label: t("Light"), icon: "sunny-outline" },
+                  { key: "dark", label: t("Dark"), icon: "moon-outline" },
+                ] as const).map((option) => {
+                  const active = themeMode === option.key;
+                  return (
+                    <TouchableOpacity
+                      key={option.key}
+                      testID={`appearance-mode-${option.key}`}
+                      onPress={() => setThemeMode(option.key)}
+                      style={[
+                        s.themeBtn,
+                        { borderColor: active ? accent : colors.border },
+                        active && { backgroundColor: accent + "18" },
+                      ]}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name={option.icon} size={16} color={active ? accent : colors.textMuted} />
+                      <Text style={[s.themeBtnText, { color: active ? accent : colors.textMuted }]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[s.appearanceNote, { color: colors.textMuted }]}>
+                {t("settings.appearance_note")}
+              </Text>
+            </>
+          ) : (
+            <TouchableOpacity
+              testID="appearance-premium-gate"
+              accessibilityRole="button"
+              accessibilityLabel="Unlock appearance customization with Premium"
+              onPress={() => router.push("/premium")}
+              activeOpacity={0.75}
+              style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 14 }}
+            >
+              <Ionicons name="lock-closed" size={19} color={accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.rowLabel, { color: colors.text }]}>Customize appearance</Text>
+                <Text style={[s.rowSub, { color: colors.textMuted }]}>App colors and theme modes are for Premium members</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
           <View style={[s.divider, { backgroundColor: colors.separator }]} />
           <Row
             icon="language"

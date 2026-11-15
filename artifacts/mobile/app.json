@@ -13,7 +13,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#1018D8"
+        "backgroundColor": "#258FE5"
       },
       "permissions": [
         "android.permission.INTERNET",

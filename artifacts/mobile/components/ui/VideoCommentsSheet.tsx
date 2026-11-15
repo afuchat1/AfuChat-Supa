@@ -65,7 +65,7 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USE_NATIVE = true;
-const VID_THREAD_COLORS = ["#1018D8", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
+const VID_THREAD_COLORS = ["#258FE5", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
 export const QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
 export const MAX_VOICE_SECS = 60;
 const WAVEFORM_BARS = 30;

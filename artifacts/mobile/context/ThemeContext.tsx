@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { Appearance, type ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/context/AuthContext";
 
 export type ThemeMode = "system" | "light" | "dark";
 export const THEME_MODE_KEY = "afuchat_theme_mode";
@@ -24,6 +25,7 @@ export function ThemeProvider({
   children: React.ReactNode;
   forcedMode?: ThemeMode;
 }) {
+  const { isPremium, loading: authLoading } = useAuth();
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(Appearance.getColorScheme() ?? "light");
 
@@ -37,23 +39,27 @@ export function ThemeProvider({
   }, [forcedMode]);
 
   useEffect(() => {
-    if (forcedMode) return;
+    if (forcedMode || authLoading) return;
+    if (!isPremium) {
+      setThemeModeState("system");
+      return;
+    }
     AsyncStorage.getItem(THEME_MODE_KEY).then((saved) => {
       if (saved === "system" || saved === "light" || saved === "dark") {
         setThemeModeState(saved);
       }
     }).catch(() => {});
-  }, [forcedMode]);
+  }, [forcedMode, isPremium, authLoading]);
 
   const setThemeMode = useCallback((mode: ThemeMode) => {
-    if (forcedMode) return;
+    if (forcedMode || authLoading || !isPremium) return;
     setThemeModeState(mode);
     AsyncStorage.setItem(THEME_MODE_KEY, mode).catch(() => {});
-  }, [forcedMode]);
+  }, [forcedMode, authLoading, isPremium]);
 
   // System is the default: an unknown scheme follows the safer light palette
   // instead of making the app appear dark on devices without a reported scheme.
-  const effectiveMode = forcedMode ?? themeMode;
+  const effectiveMode = forcedMode ?? (isPremium ? themeMode : "system");
   const isDark = effectiveMode === "system" ? systemScheme === "dark" : effectiveMode === "dark";
 
   return (

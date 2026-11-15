@@ -74,8 +74,8 @@ type Props = AfuMusicCallbacks & {
 };
 
 const INK = "#000000";
-const CORAL = "#1018D8";
-const COBALT = "#1018D8";
+const CORAL = "#258FE5";
+const COBALT = "#258FE5";
 const GOLD = "#D4A853";
 const CANVAS = "#F0EBE1";
 const PAPER = "#FFFFFF";
