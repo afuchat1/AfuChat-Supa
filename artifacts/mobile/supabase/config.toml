@@ -29,3 +29,8 @@ verify_jwt = true
 
 [functions.whop-checkout]
 verify_jwt = false
+
+# Called asynchronously by the notification_events database trigger. The
+# function can only dispatch an already-persisted notification event.
+[functions.deliver-notification-push]
+verify_jwt = false

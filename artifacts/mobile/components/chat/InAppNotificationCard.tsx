@@ -41,6 +41,9 @@ function getNotificationVerb(notification: NotificationMessageData): string {
   const metadata = notification.metadata ?? {};
   switch (notification.kind.toLowerCase()) {
     case "follow":
+      if (notification.title?.toLowerCase().includes("followed you back")) {
+        return "followed you back";
+      }
       return "started following you";
     case "like":
       if (metadata.story_id) return "liked your story";

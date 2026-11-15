@@ -15,6 +15,7 @@ export type QueueActionType =
   | "follow_user"
   | "unfollow_user"
   | "add_reaction"
+  | "remove_reaction"
   | "mark_delivered"
   | "mark_read"
   | "delete_message";
@@ -205,8 +206,16 @@ async function executeAction(
         const { error } = await supabase.from("message_reactions").insert({
           message_id: payload.message_id,
           user_id: payload.user_id,
-          emoji: payload.emoji,
+          reaction: payload.emoji,
         });
+        return !error || error.code === "23505";
+      }
+      case "remove_reaction": {
+        const { error } = await supabase.from("message_reactions")
+          .delete()
+          .eq("message_id", payload.message_id)
+          .eq("user_id", payload.user_id)
+          .eq("reaction", payload.emoji);
         return !error;
       }
       case "send_message": {

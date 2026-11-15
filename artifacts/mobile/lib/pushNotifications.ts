@@ -25,9 +25,11 @@ export const PUSH_ACTION_OPEN = "open";
 export const PUSH_ACTION_ACCEPT_CALL = "accept_call";
 export const PUSH_ACTION_DECLINE_CALL = "decline_call";
 export const PUSH_ACTION_DEFAULT = "expo.modules.notifications.actions.DEFAULT";
+export const PUSH_ACTION_FOLLOW_BACK = "follow_back";
 export const PUSH_CATEGORY_MESSAGE = "message";
 export const PUSH_CATEGORY_CALL = "call";
 export const PUSH_CATEGORY_SOCIAL = "social";
+export const PUSH_CATEGORY_SOCIAL_FOLLOW = "social_follow";
 export const PUSH_CATEGORY_COMMERCE = "commerce";
 export const PUSH_BACKGROUND_TASK = "AFUCHAT_NOTIFICATION_ACTION_TASK";
 
@@ -104,6 +106,8 @@ function getTarget(response: PushResponse) {
     callerId: stringValue(data.callerId ?? data.caller_id),
     callerName: stringValue(data.callerName ?? data.caller_name),
     callerAvatar: stringValue(data.callerAvatar ?? data.caller_avatar),
+    actorId: stringValue(data.actorId ?? data.actor_id),
+    followerId: stringValue(data.followerId ?? data.follower_id),
   };
 }
 
@@ -250,6 +254,22 @@ async function muteChat(response: PushResponse, userId: string) {
   );
 }
 
+async function followBackFromNotification(response: PushResponse, userId: string) {
+  const { followerId, notificationId } = getTarget(response);
+  if (!followerId || followerId === userId) return;
+  const { error } = await supabase.from("follows").upsert(
+    { follower_id: userId, following_id: followerId },
+    { onConflict: "follower_id,following_id", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+  if (notificationId) {
+    await supabase.from("notification_events")
+      .update({ read_at: new Date().toISOString() })
+      .eq("id", notificationId)
+      .eq("recipient_id", userId);
+  }
+}
+
 async function handleCallAction(
   response: PushResponse,
   userId: string,
@@ -293,6 +313,10 @@ export async function handleNotificationResponse(
     await muteChat(response, userId);
     return;
   }
+  if (response.actionIdentifier === PUSH_ACTION_FOLLOW_BACK) {
+    await followBackFromNotification(response, userId);
+    return;
+  }
   if (
     response.actionIdentifier === PUSH_ACTION_ACCEPT_CALL ||
     response.actionIdentifier === PUSH_ACTION_DECLINE_CALL
@@ -316,6 +340,7 @@ function defineBackgroundTask() {
           data.actionIdentifier === PUSH_ACTION_REPLY ||
           data.actionIdentifier === PUSH_ACTION_MUTE ||
           data.actionIdentifier === PUSH_ACTION_MARK_READ ||
+          data.actionIdentifier === PUSH_ACTION_FOLLOW_BACK ||
           data.actionIdentifier === PUSH_ACTION_DECLINE_CALL
         ) {
           await handleNotificationResponse(data as PushResponse, userId);
@@ -386,6 +411,10 @@ export function configurePushNotifications() {
     notifications.setNotificationCategoryAsync(PUSH_CATEGORY_SOCIAL, [
       { identifier: PUSH_ACTION_MARK_READ, buttonTitle: "Mark as read", options: { opensAppToForeground: false } },
       { identifier: PUSH_ACTION_OPEN, buttonTitle: "View", options: { opensAppToForeground: true } },
+    ]),
+    notifications.setNotificationCategoryAsync(PUSH_CATEGORY_SOCIAL_FOLLOW, [
+      { identifier: PUSH_ACTION_FOLLOW_BACK, buttonTitle: "Follow back", options: { opensAppToForeground: false } },
+      { identifier: PUSH_ACTION_OPEN, buttonTitle: "View profile", options: { opensAppToForeground: true } },
     ]),
     notifications.setNotificationCategoryAsync(PUSH_CATEGORY_COMMERCE, [
       { identifier: PUSH_ACTION_MARK_READ, buttonTitle: "Mark as read", options: { opensAppToForeground: false } },

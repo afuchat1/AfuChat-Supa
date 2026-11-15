@@ -6587,6 +6587,7 @@ STRICT RULES:
     setShowReactions(null);
 
     const isRemoving = !!(msg.reactions?.find((r) => r.emoji === emoji && r.myReaction));
+    const previousReactions = msg.reactions ?? [];
 
     // Optimistic update — update local state immediately so the UI responds instantly
     setMessages((prev) =>
@@ -6609,11 +6610,34 @@ STRICT RULES:
       })
     );
 
-    // Persist to database
-    if (isRemoving) {
-      await supabase.from("message_reactions").delete().eq("message_id", msg.id).eq("user_id", user.id).eq("reaction", emoji);
-    } else {
-      await supabase.from("message_reactions").insert({ message_id: msg.id, user_id: user.id, reaction: emoji });
+    try {
+      if (!isOnline()) {
+        await enqueue(isRemoving ? "remove_reaction" : "add_reaction", {
+          message_id: msg.id,
+          user_id: user.id,
+          emoji,
+        });
+        return;
+      }
+
+      const result = isRemoving
+        ? await supabase.from("message_reactions")
+            .delete()
+            .eq("message_id", msg.id)
+            .eq("user_id", user.id)
+            .eq("reaction", emoji)
+        : await supabase.from("message_reactions")
+            .insert({ message_id: msg.id, user_id: user.id, reaction: emoji });
+
+      if (result.error) throw result.error;
+    } catch (error) {
+      setMessages((prev) =>
+        prev.map((m) => m.id === msg.id ? { ...m, reactions: previousReactions } : m)
+      );
+      globalShowToast(
+        error instanceof Error ? `Reaction failed: ${error.message}` : "Reaction failed. Please try again.",
+        { type: "error" },
+      );
     }
   }
 
