@@ -127,7 +127,7 @@ function useTotalUnread(userId: string | undefined): number {
         if (
           status === "CHANNEL_ERROR" &&
           !cancelled &&
-          (__DEV__ || process.env.EXPO_PUBLIC_NOTIFICATION_DIAGNOSTICS === "1")
+          __DEV__
         ) {
           console.warn("[tab-bar-unread] Realtime channel error", {
             channel: chName,

@@ -11,6 +11,17 @@
  *  - Import from this file; never call process.env.EXPO_PUBLIC_* elsewhere.
  */
 
+const configuredAppEnvironment = (process.env.EXPO_PUBLIC_APP_ENV ?? "").trim();
+
+export const APP_ENVIRONMENT: "development" | "preview" | "production" =
+  configuredAppEnvironment === "development" || configuredAppEnvironment === "preview"
+    ? configuredAppEnvironment
+    : configuredAppEnvironment === "production"
+      ? "production"
+      : __DEV__
+        ? "development"
+        : "production";
+
 export const SUPABASE_URL: string =
   (process.env.EXPO_PUBLIC_SUPABASE_URL ?? "").trim() ||
   "https://rhnsjqqtdzlkvqazfcbg.supabase.co";
@@ -38,7 +49,9 @@ export const ENGAGERA_API_KEY: string =
   (process.env.EXPO_PUBLIC_ENGAGERA_API_KEY ?? "").trim();
 
 export const REVENUECAT_TEST_API_KEY: string =
-  (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? "").trim();
+  APP_ENVIRONMENT === "production"
+    ? ""
+    : (process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? "").trim();
 
 export const REVENUECAT_ANDROID_API_KEY: string =
   (process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? "").trim();

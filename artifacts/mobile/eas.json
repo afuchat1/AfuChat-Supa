@@ -6,6 +6,10 @@
   },
   "build": {
     "preview": {
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "preview"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -13,10 +17,15 @@
       "autoIncrement": false
     },
     "production": {
-      "android": {
-        "buildType": "app-bundle"
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_REVENUECAT_TEST_API_KEY": ""
       },
-      "autoIncrement": false
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": "versionCode"
+      }
     }
   },
   "submit": {

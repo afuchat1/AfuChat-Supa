@@ -38,7 +38,6 @@ function buildDeviceInfo(): string {
   ];
   if (Device.modelName) lines.push(`Device      : ${Device.modelName}`);
   if (Device.osName)    lines.push(`OS          : ${Device.osName} ${Device.osVersion ?? ""}`);
-  lines.push(`Dev mode    : ${String(__DEV__)}`);
   return lines.join("\n");
 }
 
@@ -139,7 +138,9 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           <Feather name="alert-octagon" size={22} color={danger} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: text }]}>App crashed</Text>
+          <Text style={[s.headerTitle, { color: text }]}>
+            {__DEV__ ? "App crashed" : "Something went wrong"}
+          </Text>
           <Text style={[s.headerSub, { color: muted }]}>
             v{appVer} · {Platform.OS} {Platform.Version}
           </Text>
@@ -154,7 +155,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       </View>
 
       {/* ── Tab bar (only when a previous crash exists) ── */}
-      {prevLog ? (
+      {__DEV__ && prevLog ? (
         <View style={[s.tabRow, { backgroundColor: surface, borderBottomColor: border }]}>
           <Pressable
             style={[s.tab, !showPrev && [s.tabActive, { borderBottomColor: blue }]]}
@@ -175,49 +176,69 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       <View style={[s.errorBanner, { backgroundColor: danger + "15" }]}>
         <Feather name="zap" size={13} color={danger} style={{ marginTop: 1 }} />
         <Text
-          style={[s.errorMsgText, { color: danger, fontFamily: mono }]}
-          selectable
+          style={[
+            s.errorMsgText,
+            {
+              color: danger,
+              fontFamily: __DEV__ ? mono : undefined,
+              fontSize: __DEV__ ? 12 : 14,
+              lineHeight: __DEV__ ? 18 : 20,
+            },
+          ]}
+          selectable={__DEV__}
           numberOfLines={5}
         >
-          {safeCrashSummary(error.message ?? "Unknown error")}
+          {__DEV__
+            ? safeCrashSummary(error.message ?? "Unknown error")
+            : "AfuChat encountered an unexpected problem. Restart the app to continue."}
         </Text>
       </View>
 
-      {/* ── Full crash log (scrollable, always visible) ── */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 12, paddingBottom: 20 }}
         showsVerticalScrollIndicator
       >
-        <View style={[s.logBox, { backgroundColor: surface, borderColor: border }]}>
-          <Text
-            style={[s.logText, { color: text, fontFamily: mono }]}
-            selectable
-          >
-            {activeLog || "Generating crash report…"}
+        {__DEV__ ? (
+          <View style={[s.logBox, { backgroundColor: surface, borderColor: border }]}>
+            <Text
+              style={[s.logText, { color: text, fontFamily: mono }]}
+              selectable
+            >
+              {activeLog || "Generating crash report…"}
+            </Text>
+          </View>
+        ) : (
+          <Text style={{ color: muted, fontSize: 15, lineHeight: 22, padding: 8 }}>
+            Restart AfuChat and try again. If the issue continues, contact support
+            from the Help section.
           </Text>
-        </View>
+        )}
       </ScrollView>
 
       {/* ── Action bar ── */}
       <View style={[s.actionBar, { backgroundColor: surface, borderTopColor: border }]}>
-        <Pressable
-          onPress={handleCopy}
-          style={({ pressed }) => [s.actionBtn, { borderColor: border, opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Feather name={copied ? "check" : "copy"} size={15} color={copied ? green : text} />
-          <Text style={[s.actionBtnLabel, { color: copied ? green : text }]}>
-            {copied ? "Copied" : "Copy log"}
-          </Text>
-        </Pressable>
+        {__DEV__ ? (
+          <>
+            <Pressable
+              onPress={handleCopy}
+              style={({ pressed }) => [s.actionBtn, { borderColor: border, opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Feather name={copied ? "check" : "copy"} size={15} color={copied ? green : text} />
+              <Text style={[s.actionBtnLabel, { color: copied ? green : text }]}>
+                {copied ? "Copied" : "Copy log"}
+              </Text>
+            </Pressable>
 
-        <Pressable
-          onPress={handleShare}
-          style={({ pressed }) => [s.actionBtn, { borderColor: border, opacity: pressed ? 0.7 : 1 }]}
-        >
-          <Feather name="share-2" size={15} color={text} />
-          <Text style={[s.actionBtnLabel, { color: text }]}>Share</Text>
-        </Pressable>
+            <Pressable
+              onPress={handleShare}
+              style={({ pressed }) => [s.actionBtn, { borderColor: border, opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="share-2" size={15} color={text} />
+              <Text style={[s.actionBtnLabel, { color: text }]}>Share</Text>
+            </Pressable>
+          </>
+        ) : null}
 
         <Pressable
           onPress={handleRestart}

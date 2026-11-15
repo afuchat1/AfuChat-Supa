@@ -2,6 +2,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 import Purchases, { type PurchasesPackage } from "react-native-purchases";
 import {
+  APP_ENVIRONMENT,
   REVENUECAT_ANDROID_API_KEY,
   REVENUECAT_IOS_API_KEY,
   REVENUECAT_TEST_API_KEY,
@@ -19,7 +20,11 @@ let configuredUserId: string | null = null;
 let configurePromise: Promise<void> | null = null;
 
 function isDevelopmentStore(): boolean {
-  return __DEV__ || Constants.executionEnvironment === "storeClient";
+  return APP_ENVIRONMENT !== "production" && (
+    APP_ENVIRONMENT === "preview" ||
+    __DEV__ ||
+    Constants.executionEnvironment === "storeClient"
+  );
 }
 
 function getApiKey(): string {
