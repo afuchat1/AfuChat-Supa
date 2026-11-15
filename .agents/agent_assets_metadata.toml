@@ -220,14 +220,14 @@ content_type = "image/png"
 id = "-yCdGlEwrPCc_8bjnwDE-"
 uri = "file://artifacts/mobile/.expo/expo-go-qr.png"
 type = "image"
-title = "AfuChat Expo Go QR code"
-description = "Scan with Expo Go. The Android manifest and JavaScript bundle both returned HTTP 200."
+title = "AfuChat Expo Go QR"
+description = "Scan with Expo Go on Android to open the current development preview."
 logical_id = "58cc0b3e-630b-45be-9f44-5f1ca35ea9d6"
-content_hash = "sha256:757707c7af030f1d4e6db7e78bdd3317d62fd84f590cfb1127ec6b01f5e57efd"
-size = 4249
-mtime_ms = 1794628298734
-storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:b13b4b78-3531-43bc-af86-e762b8a1d3b6/58cc0b3e-630b-45be-9f44-5f1ca35ea9d6/19b9d194-c657-4831-bbff-feb9a95c1167"
-storage_version_token = "1794628354386577"
+content_hash = "sha256:060c95ae7b52135f7dd77e0704fc26c53a60efa9a63a73dbb1e1f2e52e736b4a"
+size = 4712
+mtime_ms = 1794720246366
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:467a7a0c-6da7-412c-8ad2-29ac8c4f2fa0/58cc0b3e-630b-45be-9f44-5f1ca35ea9d6/9d5d85b4-dc77-4a3e-aec5-cb1f4a684394"
+storage_version_token = "1794720247006014"
 content_type = "image/png"
 
 [[outputs]]
