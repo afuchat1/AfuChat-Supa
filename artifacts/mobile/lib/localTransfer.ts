@@ -205,7 +205,7 @@ function failSession(session: TransferSession, message: string): void {
 
 function createSignalChannel(session: TransferSession): any {
   const bridge = detectRtc();
-  if (!bridge) throw new Error("Nearby transfer requires a native build with WebRTC support");
+  if (!bridge) throw new Error("Nearby transfer is unavailable on this device.");
 
   const channel = supabase
     .channel(`file-transfer:${session.transferId}`, { config: { broadcast: { self: false } } })
@@ -465,7 +465,7 @@ function wireReceiverDataChannel(session: TransferSession, channel: any): void {
 
 function createPeer(session: TransferSession): void {
   const bridge = detectRtc();
-  if (!bridge) throw new Error("Nearby transfer requires a native build with WebRTC support");
+  if (!bridge) throw new Error("Nearby transfer is unavailable on this device.");
   session.peer = new bridge.RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
   });
@@ -515,7 +515,7 @@ export async function startLocalTransfer(params: {
   recipientName: string;
   file: { uri: string; name: string; size: number; mimeType?: string };
 }): Promise<string> {
-  if (!detectRtc()) throw new Error("Nearby transfer requires the installed Android or iOS app.");
+  if (!detectRtc()) throw new Error("Nearby transfer is unavailable on this device.");
   if (!params.file.uri || params.file.size > MAX_TRANSFER_BYTES) {
     throw new Error("This file is too large for a direct nearby transfer.");
   }
@@ -574,7 +574,7 @@ export async function acceptLocalTransfer(
   invite: LocalTransferInvite,
   receiverId: string,
 ): Promise<void> {
-  if (!detectRtc()) throw new Error("Nearby transfer requires the installed Android or iOS app.");
+  if (!detectRtc()) throw new Error("Nearby transfer is unavailable on this device.");
   const directory = `${FileSystem.documentDirectory ?? ""}afuchat_transfers/`;
   if (!FileSystem.documentDirectory) throw new Error("Device file storage is unavailable.");
 

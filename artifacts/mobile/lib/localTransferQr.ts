@@ -197,7 +197,7 @@ async function waitForIceGathering(peer: any): Promise<void> {
 function createPeer(session: Session): void {
   const bridge = detectRtc();
   if (!bridge) {
-    throw new Error("Nearby transfer requires an installed Android or iOS build.");
+    throw new Error("Nearby transfer is unavailable on this device.");
   }
 
   // Host candidates are enough when both phones are on the same Wi-Fi or
@@ -429,7 +429,7 @@ export async function createLocalTransferOffer(params: {
   file: { uri: string; name: string; size: number; mimeType?: string };
 }): Promise<{ transferId: string; code: string }> {
   if (!detectRtc()) {
-    throw new Error("Install the Android or iOS build to use nearby transfer. Expo Go cannot load WebRTC.");
+    throw new Error("Nearby transfer is unavailable on this device.");
   }
   const source = new File(params.file.uri);
   const fileSize = Number.isFinite(params.file.size) && params.file.size > 0
@@ -495,7 +495,7 @@ export async function acceptLocalTransferOffer(params: {
   receiverName: string;
 }): Promise<{ transferId: string; code: string; localUri: string }> {
   if (!detectRtc()) {
-    throw new Error("Install the Android or iOS build to use nearby transfer. Expo Go cannot load WebRTC.");
+    throw new Error("Nearby transfer is unavailable on this device.");
   }
   const parsed = parseLocalTransferCode(params.code);
   if (parsed.description.type !== "offer") {

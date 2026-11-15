@@ -26,6 +26,7 @@
 - [Expo Router SDK 58 web routes](expo-router-sdk58-web-routes.md) — Keep web route loading synchronous until the static preview can safely load async route chunks.
 - [React Native strict API migration](rn-strict-api-migration.md) — Keep SDK 58 on React Native's strict instance types; run the mobile typecheck after API changes.
 - [AfuChat production-branch workflow](afuchat-production-branch-workflow.md) — For urgent AfuChat fixes, work directly on the production branch instead of creating a feature branch.
+- [AfuChat production feature policy](afuchat-production-feature-policy.md) — Keep real features production-ready; do not direct users to install another environment to access them.
 - [ACoin transfer safety](acoin-transfer-safety.md) — Keep wallet transfers atomic and use the live money-request status values.
 - [AfuChat app scope](afuchat-database-scope.md) — Treat this workspace as AfuChat only; follow the current remote baseline, not historical assumptions.
 - [Username ownership security](username-ownership-security.md) — Free primary handles are not purchases; only trusted marketplace flows may create durable aliases.

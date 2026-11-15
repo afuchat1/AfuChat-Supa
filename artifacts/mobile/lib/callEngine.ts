@@ -269,7 +269,7 @@ async function finishCall(sendEnd: boolean, finalStatus?: CallSessionStatus) {
 
 function configurePeer(callId: string, isCaller: boolean, iceServers: TurnIceServer[]) {
   const bridge = detectRtc();
-  if (!bridge) throw new Error("Voice calls require a native build or WebRTC-enabled browser");
+  if (!bridge) throw new Error("Voice calling is unavailable in this session.");
 
   peer = new bridge.RTCPeerConnection({
     iceServers,
@@ -498,12 +498,12 @@ export async function startCall(params: {
   if (!params.chatId) throw new Error("Calls can only be started from a direct chat.");
   if (!detectRtc()) {
     if (Platform.OS === "web") {
-      throw new Error("Voice calls need a secure browser connection and microphone access.");
+      throw new Error("Allow microphone access in a secure browser to make voice calls.");
     }
     if (isExpoGo()) {
-      throw new Error("Voice calls need the installed AfuChat app; Expo Go does not include WebRTC.");
+      throw new Error("Voice calling is unavailable in this app session.");
     }
-    throw new Error("Voice calls are unavailable in this AfuChat build. Update the app and try again.");
+    throw new Error("Voice calling could not start on this device.");
   }
   const bridge = detectRtc() as RtcBridge;
   let callId: string | null = null;
@@ -580,12 +580,12 @@ export async function acceptCall(notice: IncomingCallNotice, params: {
   const bridge = detectRtc();
   if (!bridge) {
     if (Platform.OS === "web") {
-      throw new Error("Voice calls need a secure browser connection and microphone access.");
+      throw new Error("Allow microphone access in a secure browser to answer voice calls.");
     }
     if (isExpoGo()) {
-      throw new Error("Voice calls need the installed AfuChat app; Expo Go does not include WebRTC.");
+      throw new Error("Voice calling is unavailable in this app session.");
     }
-    throw new Error("Voice calls are unavailable in this AfuChat build. Update the app and try again.");
+    throw new Error("Voice calling could not start on this device.");
   }
   try {
     const { data: call, error: callError } = await supabase

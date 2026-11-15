@@ -221,7 +221,7 @@ export default function NearbyTransferSheet({ visible, file, onClose }: Props) {
 
   const enterScanner = useCallback(async (nextStep: "scan-offer" | "scan-answer") => {
     if (Platform.OS === "web") {
-      setError("Nearby transfer needs the installed Android or iOS build. Expo Go and the web preview cannot use WebRTC.");
+      setError("Nearby transfer is available on compatible mobile devices only.");
       return;
     }
     if (!permission?.granted) {

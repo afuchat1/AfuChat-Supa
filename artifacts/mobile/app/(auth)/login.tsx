@@ -37,6 +37,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
+import { signInWithGoogleOAuth } from "@/lib/googleOAuth";
 import AfuLogo from "@/components/ui/AfuLogo";
 import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
@@ -624,18 +625,27 @@ export default function SignInScreen() {
   async function handleGoogle() {
     try {
       setOauthLoading("google");
-      if (Platform.OS !== "android") {
-        showAlert("Google sign-in unavailable", "Google sign-in is available in the Android app.");
-        return;
+      if (Platform.OS === "android") {
+        const nativeResult = await signInWithNativeGoogle();
+        if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
+        if (nativeResult.kind === "success") {
+          await finishGoogleIdTokenSignIn(nativeResult.idToken);
+          return;
+        }
       }
 
-      const nativeResult = await signInWithNativeGoogle();
-      if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
-      if (nativeResult.kind === "unavailable") {
-        showAlert("Google sign-in unavailable", "Install the Android app to use native Google sign-in.");
-        return;
+      const userId = await signInWithGoogleOAuth("afuchat://(auth)/login");
+      if (!userId) return;
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!prof?.onboarding_completed) {
+        router.replace({ pathname: "/onboarding", params: { userId } } as any);
+      } else {
+        router.replace("/(tabs)/chats");
       }
-      await finishGoogleIdTokenSignIn(nativeResult.idToken);
     } catch (error: any) {
       showAlert("Google sign-in failed", error?.message || "Could not complete Google sign-in.");
     } finally {

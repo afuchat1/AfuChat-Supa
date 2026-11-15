@@ -87,7 +87,15 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     // Report whether this build can support calls without touching the native
     // WebRTC module. Loading it here can abort the whole Android process in
     // release builds before the user reaches the call feature.
-    setIsAvailable(getWebRTCAvailable());
+    const available = getWebRTCAvailable();
+    setIsAvailable(available);
+    if (!available) {
+      setIncomingNotice(null);
+      setStatus("idle");
+      return () => {
+        disposed = true;
+      };
+    }
 
     const removeListener = addCallEngineListener((event) => {
       if (disposed) return;

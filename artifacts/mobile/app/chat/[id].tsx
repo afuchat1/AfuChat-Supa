@@ -2561,7 +2561,7 @@ function ChatScreen() {
   }>();
   const isDraft = id === "new";
   const { user, session, profile, isPremium, subscription, refreshProfile, equippedGoods } = useAuth();
-  const { status: callStatus, startCall: callStart } = useCall();
+  const { status: callStatus, isAvailable: callAvailable, startCall: callStart } = useCall();
   const callStartingRef = useRef(false);
   const { openApp } = useSuperApp();
   const { colors, isDark } = useTheme();
@@ -8893,6 +8893,7 @@ STRICT RULES:
             !isAfuAiDirectChat &&
             !isNotificationsChat &&
             chatInfo.other_id &&
+            callAvailable &&
             callStatus === "idle" &&
             (
             <TouchableOpacity
