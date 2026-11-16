@@ -16,7 +16,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
+import { fetchWithTimeout, supabase, supabaseUrl, supabaseAnonKey } from "./supabase";
 import * as FileSystem from "expo-file-system/legacy";
 import { FileSystemUploadType } from "expo-file-system/legacy";
 
@@ -395,7 +395,7 @@ async function getSignedUpload(
 
   let resp: Response;
   try {
-    resp = await fetch(uploadsUrl("sign"), {
+    resp = await fetchWithTimeout(uploadsUrl("sign"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -697,7 +697,7 @@ export async function getSignedR2ReadUrl(
   try {
     const token = await getAccessToken();
     if (!token) return { url: null, error: "Not authenticated" };
-    const response = await fetch(uploadsUrl("read"), {
+    const response = await fetchWithTimeout(uploadsUrl("read"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -810,7 +810,7 @@ export async function getStorageUsage(): Promise<StorageUsage | null> {
   try {
     const token = await getAccessToken();
     if (!token) return null;
-    const r = await fetch(uploadsUrl("usage"), {
+    const r = await fetchWithTimeout(uploadsUrl("usage"), {
       headers: await edgeFnHeaders(token),
     });
     if (!r.ok) return null;
@@ -831,7 +831,7 @@ export async function listUserFiles(
     if (!accessToken) return null;
     const qs = new URLSearchParams({ bucket });
     if (token) qs.set("token", token);
-    const r = await fetch(`${uploadsUrl("list")}?${qs}`, {
+    const r = await fetchWithTimeout(`${uploadsUrl("list")}?${qs}`, {
       headers: await edgeFnHeaders(accessToken),
     });
     if (!r.ok) return null;
@@ -849,7 +849,7 @@ export async function deleteUserFile(key: string): Promise<{ ok: boolean; error:
   try {
     const token = await getAccessToken();
     if (!token) return { ok: false, error: "Not signed in" };
-    const r = await fetch(uploadsUrl("object"), {
+    const r = await fetchWithTimeout(uploadsUrl("object"), {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",

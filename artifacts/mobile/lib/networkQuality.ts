@@ -6,7 +6,7 @@
  * background, so they can be called anywhere without async overhead.
  */
 
-import NetInfo from "@react-native-community/netinfo";
+import { subscribeToNativeNetworkState } from "./networkState";
 
 export type NetworkType = "wifi" | "cellular" | "unknown";
 export type NetworkProfile = {
@@ -51,8 +51,7 @@ function updateFromState(state: any): void {
 function ensureSubscribed() {
   if (_subscribed) return;
   _subscribed = true;
-  NetInfo.fetch().then(updateFromState).catch(() => {});
-  NetInfo.addEventListener(updateFromState);
+  subscribeToNativeNetworkState(updateFromState);
 }
 
 /** Current network type (synchronous, cached). */
@@ -106,10 +105,9 @@ export function isOffline(): boolean {
  */
 export function subscribeToNetworkChanges(callback: (offline: boolean) => void): () => void {
   ensureSubscribed();
-  const unsub = NetInfo.addEventListener((state) => {
+  return subscribeToNativeNetworkState((state) => {
     callback(state.isConnected === false);
   });
-  return unsub;
 }
 
 /**

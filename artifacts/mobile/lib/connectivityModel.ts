@@ -1,6 +1,11 @@
 export type ConnectivityPhase = "offline" | "connecting" | "online";
 export type OfflineBannerState = ConnectivityPhase | "updating" | "hidden";
 
+/** Network requests remain allowed while connectivity is being verified. */
+export function canAttemptNetwork(phase: ConnectivityPhase): boolean {
+  return phase !== "offline";
+}
+
 export function resolveConnectivityPhase(input: {
   transportConnected: boolean | null;
   internetReachable: boolean | null;

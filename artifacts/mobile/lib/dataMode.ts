@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { subscribeToNativeNetworkState } from "./networkState";
 
 export type DataMode = "low" | "high";
 
@@ -55,17 +56,9 @@ export async function initDataMode() {
     }
   } catch (_) {}
 
-  try {
-    const NetInfo = require("@react-native-community/netinfo").default;
-    NetInfo.fetch()
-      .then((state: any) => {
-        applyNetworkState(detectFromNetState(state));
-      })
-      .catch(() => {});
-    NetInfo.addEventListener((state: any) => {
-      applyNetworkState(detectFromNetState(state));
-    });
-  } catch (_) {}
+  subscribeToNativeNetworkState((state) => {
+    applyNetworkState(detectFromNetState(state));
+  });
 }
 
 export function getCurrentDataMode(): DataMode {

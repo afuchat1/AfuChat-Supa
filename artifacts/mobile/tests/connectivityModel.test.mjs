@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  canAttemptNetwork,
   resolveConnectivityPhase,
   resolveOfflineBannerState,
 } from "../lib/connectivityModel.ts";
@@ -27,6 +28,8 @@ test("active transport without confirmed internet means connecting", () => {
     backendReachable: null,
     browserOnline: null,
   }), "connecting");
+  assert.equal(canAttemptNetwork("connecting"), true);
+  assert.equal(canAttemptNetwork("offline"), false);
 });
 
 test("a real backend response overrides a stale Android reachability probe", () => {

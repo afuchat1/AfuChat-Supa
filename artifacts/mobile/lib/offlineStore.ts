@@ -1,9 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { storage, KEYS } from "./storage/mmkv";
 import {
+  canAttemptNetwork as canAttemptNetworkPhase,
   resolveConnectivityPhase,
   type ConnectivityPhase,
 } from "./connectivityModel";
+import {
+  getNativeNetworkState,
+  subscribeToNativeNetworkState,
+} from "./networkState";
 
 const FEED_CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -61,6 +66,7 @@ function browserOnline(): boolean | null {
 
 function publishConnectionState(): void {
   const previousOnline = _isOnline;
+  const previousCanAttempt = canAttemptNetworkPhase(_connectionPhase);
   const previousPhase = _connectionPhase;
   const hadInitialReport = _connectivityReported;
   _connectionPhase = resolveConnectivityPhase({
@@ -71,6 +77,7 @@ function publishConnectionState(): void {
   });
   _isOnline = _connectionPhase === "online";
   _connectivityReported = true;
+  const becameOnline = _connectionPhase === "online" && previousPhase !== "online";
   if (_connectionPhase === "offline" || previousPhase === "online" && !_isOnline) {
     _connectionWasLost = true;
   }
@@ -80,8 +87,9 @@ function publishConnectionState(): void {
       try { fn(_connectionPhase); } catch {}
     });
   }
-  if (previousOnline !== _isOnline || !hadInitialReport) {
-    _listeners.forEach((fn) => { try { fn(_isOnline); } catch {} });
+  const canAttempt = canAttemptNetworkPhase(_connectionPhase);
+  if (previousCanAttempt !== canAttempt || !hadInitialReport || becameOnline) {
+    _listeners.forEach((fn) => { try { fn(canAttempt); } catch {} });
   }
   // Do not classify the first NetInfo or request result as a reconnect.
   if (_isOnline && hadInitialReport && !previousOnline && _connectionWasLost) {
@@ -106,26 +114,17 @@ function updateFromNetInfo(state: any): void {
 function initNetInfo() {
   if (_netInfoInitialized) return;
   _netInfoInitialized = true;
-
-  try {
-    const NetInfo = require("@react-native-community/netinfo").default;
-    NetInfo.fetch().then(updateFromNetInfo).catch(() => {});
-    NetInfo.addEventListener(updateFromNetInfo);
-  } catch {}
+  const state = getNativeNetworkState();
+  if (state) updateFromNetInfo(state);
+  subscribeToNativeNetworkState(updateFromNetInfo);
 }
 
 export function isOnline(): boolean {
   initNetInfo();
-  // Let existing screens attempt their first request while NetInfo is still
-  // resolving an unknown state. A failed request immediately changes this to
-  // false; the banner continues to show Connecting until the backend responds.
-  return _isOnline || (
-    _connectionPhase === "connecting" &&
-    _backendReachable === null &&
-    _transportConnected !== false &&
-    _internetReachable === null &&
-    browserOnline() !== false
-  );
+  // "Connecting" is not the same as offline. Allow bounded requests whenever
+  // the native transport is present or still unknown; Android's reachability
+  // probe can report false on a usable carrier connection.
+  return canAttemptNetworkPhase(_connectionPhase);
 }
 
 export function getConnectivityState(): ConnectivityPhase {
@@ -136,7 +135,7 @@ export function getConnectivityState(): ConnectivityPhase {
 /** A request can still be attempted while the OS is checking internet access. */
 export function canAttemptNetwork(): boolean {
   initNetInfo();
-  return _connectionPhase !== "offline";
+  return canAttemptNetworkPhase(_connectionPhase);
 }
 
 /** Report whether Supabase returned a usable HTTP response. */
@@ -152,7 +151,7 @@ export function onConnectivityChange(fn: (online: boolean) => void): () => void 
   if (_connectivityReported) {
     setTimeout(() => {
       if (_listeners.includes(fn)) {
-        try { fn(_isOnline); } catch {}
+        try { fn(canAttemptNetworkPhase(_connectionPhase)); } catch {}
       }
     }, 0);
   }

@@ -72,16 +72,25 @@ class StaticRenderWebSocket {
   close() {}
 }
 
-const SUPABASE_REQUEST_TIMEOUT_MS = 15_000;
-const fetchWithTimeout: typeof fetch = async (input, init) => {
+const SUPABASE_REQUEST_TIMEOUT_MS = 45_000;
+const RETRYABLE_READ_STATUSES = new Set([408, 425, 429, 502, 503, 504]);
+
+async function fetchOnceWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, SUPABASE_REQUEST_TIMEOUT_MS);
-  const callerSignal = init?.signal;
+  const requestSignal = typeof Request !== "undefined" && input instanceof Request
+    ? input.signal
+    : undefined;
+  const callerSignal = init?.signal ?? requestSignal;
   const abortFromCaller = () => controller.abort();
+  if (callerSignal?.aborted) controller.abort();
   callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
     const response = await fetch(input, {
@@ -97,6 +106,81 @@ const fetchWithTimeout: typeof fetch = async (input, init) => {
     clearTimeout(timer);
     callerSignal?.removeEventListener("abort", abortFromCaller);
   }
+}
+
+function getCallerSignal(input: RequestInfo | URL, init?: RequestInit): AbortSignal | undefined {
+  const requestSignal = typeof Request !== "undefined" && input instanceof Request
+    ? input.signal
+    : undefined;
+  return init?.signal ?? requestSignal;
+}
+
+function abortError(): Error {
+  if (typeof DOMException !== "undefined") {
+    return new DOMException("The request was aborted.", "AbortError");
+  }
+  const error = new Error("The request was aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function waitForRetry(delayMs: number, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const finish = (shouldRetry: boolean) => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", handleAbort);
+      resolve(shouldRetry);
+    };
+    const handleAbort = () => finish(false);
+    const timer = setTimeout(() => finish(true), delayMs);
+    signal?.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+function retryDelay(response?: Response): number {
+  const retryAfter = response?.headers.get("Retry-After");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      return Math.min(3_000, seconds * 1_000);
+    }
+  }
+  return 800;
+}
+
+export const fetchWithTimeout: typeof fetch = async (input, init) => {
+  const method = String(init?.method ?? (input as any)?.method ?? "GET").toUpperCase();
+  const callerSignal = getCallerSignal(input, init);
+  const canRetry = method === "GET" && !callerSignal?.aborted;
+  const maxAttempts = canRetry ? 2 : 1;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetchOnceWithTimeout(input, init);
+      if (
+        canRetry &&
+        attempt + 1 < maxAttempts &&
+        RETRYABLE_READ_STATUSES.has(response.status) &&
+        !callerSignal?.aborted
+      ) {
+        const delayMs = retryDelay(response);
+        try { await response.body?.cancel(); } catch {}
+        if (!await waitForRetry(delayMs, callerSignal)) throw abortError();
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (!canRetry || attempt + 1 >= maxAttempts || callerSignal?.aborted) {
+        throw error;
+      }
+      if (!await waitForRetry(800, callerSignal)) throw abortError();
+    }
+  }
+
+  throw lastError;
 };
 
 // AsyncStorage is the correct durable store for native builds. On web, use the
