@@ -9,6 +9,7 @@ export * from "./localContacts";
 export * from "./localProfile";
 export * from "./localSettings";
 export * from "./syncQueue";
+export * from "./postLikes";
 export * from "./mediaCache";
 export * from "./chatAttachmentCache";
 export * from "./tempCache";

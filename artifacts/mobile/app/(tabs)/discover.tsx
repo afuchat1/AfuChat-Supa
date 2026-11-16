@@ -52,7 +52,8 @@ import UserName from "@/components/ui/UserName";
 import PostUploadBanner from "@/components/ui/PostUploadBanner";
 import { isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getNetworkProfile } from "@/lib/networkQuality";
-import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
+import { getLocalFeedPosts, saveFeedPosts, getNewestFeedPostDate, updateLocalPostLike, type FeedTab as LocalFeedTab } from "@/lib/storage/localFeed";
+import { applyPostLikeSnapshots, cacheServerPostLikeStates, getPostLikeStates, resolvePostLikePresentation, savePostLikeIntent, syncPendingPostLikes } from "@/lib/storage/postLikes";
 import { getCachedFeedTab, getCachedMoments } from "@/lib/offlineStore";
 import { timeAgo as formatRelative, formatPostDate } from "@/lib/timeAgo";
 import { sharePost, shareVideo } from "@/lib/share";
@@ -1649,15 +1650,20 @@ export default function DiscoverScreen() {
             isFollowing: activeTab === "following",
           }) as unknown as PostItem;
           if (isRefresh) {
-            const p = localPosts.map(toItem);
+            const items = localPosts.map(toItem);
+            const localLikes = user ? await getPostLikeStates(user.id, items.map((p) => p.id)) : new Map();
+            const p = applyPostLikeSnapshots(items, localLikes, false);
             setPosts(p);
             tabPostsCache.current[activeTab] = p;
             tabCacheTimestamp.current[activeTab] = localPosts[0]?.stored_at ?? Date.now();
           } else {
+            const items = localPosts.map(toItem);
+            const localLikes = user ? await getPostLikeStates(user.id, items.map((p) => p.id)) : new Map();
+            const cachedItems = applyPostLikeSnapshots(items, localLikes, false);
             // Load-more: append without duplicates (same as online path)
             setPosts((prev) => {
               const ids = new Set(prev.map((p) => p.id));
-              const fresh = localPosts.map(toItem).filter((p) => !ids.has(p.id));
+              const fresh = cachedItems.filter((p) => !ids.has(p.id));
               return fresh.length > 0 ? [...prev, ...fresh] : prev;
             });
           }
@@ -1667,13 +1673,19 @@ export default function DiscoverScreen() {
           // SQLite empty: fall back to AsyncStorage legacy cache (refresh only)
           const cached = await getCachedFeedTab(activeTab);
           if (cached?.posts?.length) {
-            const p = cached.posts as PostItem[];
+            const items = cached.posts as PostItem[];
+            const localLikes = user ? await getPostLikeStates(user.id, items.map((p) => p.id)) : new Map();
+            const p = applyPostLikeSnapshots(items, localLikes, false);
             setPosts(p);
             tabPostsCache.current[activeTab] = p;
             tabCacheTimestamp.current[activeTab] = cached.cachedAt;
           } else {
             const legacyCached = await getCachedMoments();
-            if (legacyCached.length > 0) setPosts(legacyCached as PostItem[]);
+            if (legacyCached.length > 0) {
+              const items = legacyCached as PostItem[];
+              const localLikes = user ? await getPostLikeStates(user.id, items.map((p) => p.id)) : new Map();
+              setPosts(applyPostLikeSnapshots(items, localLikes, false));
+            }
           }
           setHasMore(false);
         } else {
@@ -1761,18 +1773,39 @@ export default function DiscoverScreen() {
 
         const postIds = data.map((p: any) => p.id);
         const _followLimit = Math.max(pageSize * 3, postIds.length * 3);
-        const [{ data: myLikes }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
-          postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
+        const likeSnapshotStartedAt = Date.now();
+        const [{ data: myLikes, error: myLikesError }, { data: replyCounts }, { data: myBookmarks }] = await Promise.all([
+          postIds.length > 0 && user ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [], error: null },
           postIds.length > 0 ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_followLimit) : { data: [] },
           postIds.length > 0 && user ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_followLimit) : { data: [] },
         ]);
 
         const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+        const likeSnapshotKnown = !!user && !myLikesError;
+        if (user && likeSnapshotKnown) {
+          await cacheServerPostLikeStates(
+            user.id,
+            new Map(data.map((p: any) => [p.id, {
+              liked: myLikeSet.has(p.id),
+              likeCount: p.like_count || 0,
+            }])),
+            likeSnapshotStartedAt,
+          );
+        }
+        const localLikeStates = user ? await getPostLikeStates(user.id, postIds) : new Map();
         const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
         const replyMap: Record<string, number> = {};
         for (const r of (replyCounts || [])) { replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1; }
 
-        const mapped: PostItem[] = data.map((p: any) => ({
+        const mapped: PostItem[] = data.map((p: any) => {
+          const likePresentation = resolvePostLikePresentation(
+            myLikeSet.has(p.id),
+            p.like_count || 0,
+            localLikeStates.get(p.id),
+            likeSnapshotKnown,
+            likeSnapshotStartedAt,
+          );
+          return ({
           id: p.id, author_id: p.author_id, content: p.content || "",
           image_url: p.image_url,
           images: (p.post_images || []).sort((a: any, b: any) => a.display_order - b.display_order).map((i: any) => i.image_url),
@@ -1781,12 +1814,13 @@ export default function DiscoverScreen() {
           is_verified: p.profiles?.is_verified || false,
           is_organization_verified: p.profiles?.is_organization_verified || false,
           profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, bio: p.profiles?.bio || null },
-          liked: myLikeSet.has(p.id), likeCount: p.like_count || 0, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
+          liked: likePresentation.liked, likeCount: likePresentation.likeCount, replyCount: replyMap[p.id] || 0, score: 0, bookmarked: myBookmarkSet.has(p.id),
           post_type: p.post_type || "post", article_title: p.article_title || null, article_body: p.article_body || null, video_url: p.video_url || null,
           duration_seconds: (() => { const arr = Array.isArray(p.video_assets) ? p.video_assets : (p.video_assets ? [p.video_assets] : []); return arr.length > 0 ? (arr[0].duration_seconds ?? null) : null; })(),
           isFollowing: true,
           language_code: p.language_code || null,
-        }));
+        });
+        });
 
         // Enrichment is deliberately deferred until the first interactions
         // have been handled. The post rows can paint without warming every
@@ -1996,8 +2030,9 @@ export default function DiscoverScreen() {
       if (fyOlderThan) _orgQ = _orgQ.lt("created_at", fyOlderThan);
 
       const _fyLimit = Math.max(pageSize * 3, postIds.length * 3);
+      const likeSnapshotStartedAt = Date.now();
       const [
-        { data: myLikes },
+        { data: myLikes, error: myLikesError },
         { data: replyCounts },
         { data: myAuthorLikes },
         { data: followingData },
@@ -2008,7 +2043,7 @@ export default function DiscoverScreen() {
       ] = await Promise.all([
         postIds.length > 0 && user
           ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", user.id).limit(_fyLimit)
-          : { data: [] },
+          : { data: [], error: null },
         postIds.length > 0
           ? supabase.from("post_replies").select("post_id").in("post_id", postIds).limit(_fyLimit)
           : { data: [] },
@@ -2044,6 +2079,18 @@ export default function DiscoverScreen() {
       const _orgData: any[] | null = (_orgResult as any)?.data ?? null;
 
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+      const likeSnapshotKnown = !!user && !myLikesError;
+      if (user && likeSnapshotKnown) {
+        await cacheServerPostLikeStates(
+          user.id,
+          new Map(data.map((p: any) => [p.id, {
+            liked: myLikeSet.has(p.id),
+            likeCount: p.like_count || 0,
+          }])),
+          likeSnapshotStartedAt,
+        );
+      }
+      const localLikeStates = user ? await getPostLikeStates(user.id, postIds) : new Map();
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
 
       const replyMap: Record<string, number> = {};
@@ -2091,7 +2138,15 @@ export default function DiscoverScreen() {
       const seenPostIds = await seenPostIdsPromise;
 
       const scored = visibleData.map((p: any) => {
-        const likeCount = p.like_count || 0;
+        const serverLikeCount = p.like_count || 0;
+        const likePresentation = resolvePostLikePresentation(
+          myLikeSet.has(p.id),
+          serverLikeCount,
+          localLikeStates.get(p.id),
+          likeSnapshotKnown,
+          likeSnapshotStartedAt,
+        );
+        const likeCount = likePresentation.likeCount;
         const replyCount = replyMap[p.id] || 0;
         const hasImages = (p.post_images?.length > 0) || !!p.image_url;
         const content = p.content || "";
@@ -2141,7 +2196,7 @@ export default function DiscoverScreen() {
             avatar_url: p.profiles?.avatar_url || null,
             bio: p.profiles?.bio || null,
           },
-          liked: myLikeSet.has(p.id),
+          liked: likePresentation.liked,
           likeCount,
           replyCount,
           score,
@@ -2404,13 +2459,17 @@ export default function DiscoverScreen() {
       ]);
       if (fyLocal.length > 0) {
         const toItem = (r: any) => ({ ...r, likeCount: r.like_count, replyCount: r.reply_count, is_organization_verified: r.is_org_verified, profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null, bio: null }, article_body: null, duration_seconds: null, isFollowing: false }) as unknown as PostItem;
-        tabPostsCache.current.for_you = fyLocal.map(toItem);
+        const items = fyLocal.map(toItem);
+        const localLikes = user ? await getPostLikeStates(user.id, items.map((p) => p.id)) : new Map();
+        tabPostsCache.current.for_you = applyPostLikeSnapshots(items, localLikes, false);
         tabCacheTimestamp.current.for_you = fyLocal[0]?.stored_at ?? Date.now();
         if (feedTabRef.current === "for_you") { setPosts(tabPostsCache.current.for_you); setLoading(false); }
       }
       if (flLocal.length > 0) {
         const toItem = (r: any) => ({ ...r, likeCount: r.like_count, replyCount: r.reply_count, is_organization_verified: r.is_org_verified, profile: { display_name: r.author_name ?? "User", handle: r.author_handle ?? "user", avatar_url: r.author_avatar ?? null, bio: null }, article_body: null, duration_seconds: null, isFollowing: true }) as unknown as PostItem;
-        tabPostsCache.current.following = flLocal.map(toItem);
+        const items = flLocal.map(toItem);
+        const localLikes = user ? await getPostLikeStates(user.id, items.map((p) => p.id)) : new Map();
+        tabPostsCache.current.following = applyPostLikeSnapshots(items, localLikes, false);
         tabCacheTimestamp.current.following = flLocal[0]?.stored_at ?? Date.now();
         if (feedTabRef.current === "following") { setPosts(tabPostsCache.current.following); setLoading(false); }
       }
@@ -2420,7 +2479,9 @@ export default function DiscoverScreen() {
         flLocal.length > 0 ? Promise.resolve(null) : getCachedFeedTab("following"),
       ]);
       if (fyCache?.posts?.length) {
-        const p = fyCache.posts as PostItem[];
+        const items = fyCache.posts as PostItem[];
+        const localLikes = user ? await getPostLikeStates(user.id, items.map((post) => post.id)) : new Map();
+        const p = applyPostLikeSnapshots(items, localLikes, false);
         tabPostsCache.current.for_you = p;
         tabCacheTimestamp.current.for_you = fyCache.cachedAt;
         if (feedTabRef.current === "for_you") {
@@ -2429,7 +2490,9 @@ export default function DiscoverScreen() {
         }
       }
       if (flCache?.posts?.length) {
-        tabPostsCache.current.following = flCache.posts as PostItem[];
+        const items = flCache.posts as PostItem[];
+        const localLikes = user ? await getPostLikeStates(user.id, items.map((post) => post.id)) : new Map();
+        tabPostsCache.current.following = applyPostLikeSnapshots(items, localLikes, false);
         tabCacheTimestamp.current.following = flCache.cachedAt;
       }
       initialHydrationDoneRef.current = true;
@@ -2586,7 +2649,7 @@ export default function DiscoverScreen() {
       if (!newPostsData.length || cancelled) return;
 
       // Map to PostItem
-      const mappedPosts: PostItem[] = newPostsData.map((p: any) => ({
+      const mappedPostsRaw: PostItem[] = newPostsData.map((p: any) => ({
         id: p.id,
         author_id: p.author_id,
         content: p.content ?? "",
@@ -2620,6 +2683,10 @@ export default function DiscoverScreen() {
         })(),
         isFollowing: activeTab === "following",
       }));
+      const localLikes = user
+        ? await getPostLikeStates(user.id, mappedPostsRaw.map((post) => post.id))
+        : new Map();
+      const mappedPosts = applyPostLikeSnapshots(mappedPostsRaw, localLikes, false);
 
       // Deduplicate against current feed and existing pending buffer
       const existingIds = new Set([
@@ -2751,46 +2818,37 @@ export default function DiscoverScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const post = postsRef.current.find((p) => p.id === postId);
     if (!post) return;
+    const nextLiked = !post.liked;
+    const nextLikeCount = Math.max(0, post.likeCount + (nextLiked ? 1 : -1));
 
-    if (post.liked) {
-      // Optimistic update — flip instantly
-      setPosts((prev) =>
-        prev.map((p) => p.id === postId ? { ...p, liked: false, likeCount: Math.max(0, p.likeCount - 1) } : p)
-      );
-      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", user.id);
-      if (error) {
-        // Revert on failure
-        setPosts((prev) =>
-          prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
-        );
-      } else if (post.org_page_id) {
-        await supabase.from("organization_page_posts")
-          .update({ likes: Math.max(0, post.likeCount - 1) })
-          .eq("id", post.id);
-      }
-    } else {
-      // Optimistic update — flip instantly
-      setPosts((prev) =>
-        prev.map((p) => p.id === postId ? { ...p, liked: true, likeCount: p.likeCount + 1 } : p)
-      );
+    // Persist the user's intent before attempting the network write. A timeout
+    // or offline response keeps the heart/count stable and leaves work to retry.
+    setPosts((prev) => prev.map((p) => p.id === postId
+      ? { ...p, liked: nextLiked, likeCount: nextLikeCount }
+      : p));
+    updateLocalPostLike(postId, nextLiked, nextLikeCount).catch(() => {});
+    try {
+      await savePostLikeIntent(user.id, postId, nextLiked, nextLikeCount);
+    } catch (error) {
+      console.error("[PostLike] Could not persist local like state:", error);
+      showAlert("Like not saved", "Your change is still shown for now, but this device could not save it. Please try again.");
+      return;
+    }
+
+    if (nextLiked) {
       const content = [post.content, post.article_title].filter(Boolean).join(" ");
       recordInteraction(content, "like").then(async () => {
         learnedWeightsRef.current = await getMergedLearnedWeights();
       });
       trackEvent("like_post", { post_id: postId, author_id: post.author_id });
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
-      const { error } = await supabase.from("post_acknowledgments").upsert({ post_id: postId, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
-      if (error) {
-        // Revert on failure
-        setPosts((prev) =>
-          prev.map((p) => p.id === postId ? { ...p, liked: false, likeCount: Math.max(0, p.likeCount - 1) } : p)
-        );
-      } else if (post.org_page_id) {
-        await supabase.from("organization_page_posts")
-          .update({ likes: post.likeCount + 1 })
-          .eq("id", post.id);
-      }
     }
+    if (post.org_page_id && isOnline()) {
+      void supabase.from("organization_page_posts")
+        .update({ likes: nextLikeCount })
+        .eq("id", post.id);
+    }
+    void syncPendingPostLikes(user.id);
   }, [user, profile, postsRef]);
 
   const toggleFollow = useCallback(async (authorId: string) => {

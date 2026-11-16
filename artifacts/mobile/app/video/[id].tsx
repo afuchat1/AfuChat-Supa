@@ -69,7 +69,8 @@ import { getCachedVideoUri, cacheVideo, markVideoWatched, saveVideoForOffline, g
 import { storage } from "@/lib/storage/mmkv";
 import { recordWatchHistory } from "@/lib/watchHistory";
 import { onShortsRefresh } from "@/lib/shortsRefresh";
-import { getLocalFeedPost } from "@/lib/storage/localFeed";
+import { getLocalFeedPost, updateLocalPostLike } from "@/lib/storage/localFeed";
+import { applyPostLikeSnapshots, cacheServerPostLikeStates, getPostLikeStates, resolvePostLikePresentation, savePostLikeIntent, syncPendingPostLikes } from "@/lib/storage/postLikes";
 import { showActionToast as globalShowActionToast } from "@/lib/toast";
 import { trackEvent } from "@/lib/activityTracker";
 import { saveVideoProgress, clearVideoProgress } from "@/lib/videoProgress";
@@ -1252,7 +1253,7 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   // paths as video_url so they play without any network access.
   const buildOfflineFeed = useCallback(async (): Promise<VideoPost[]> => {
     const entries = await getOfflineVideos();
-    return entries
+    const offlineItems = entries
       .filter((e) => !!e.fileUri)
       .map((e): VideoPost => ({
         id: e.postId,
@@ -1276,6 +1277,11 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         likeCount: 0,
         replyCount: 0,
       }));
+    const currentUser = userRef.current;
+    const localLikes = currentUser
+      ? await getPostLikeStates(currentUser.id, offlineItems.map((video) => video.id))
+      : new Map();
+    return applyPostLikeSnapshots(offlineItems, localLikes, false);
   }, []);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -1296,6 +1302,16 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
         const local = await getLocalFeedPost(id);
         if (local?.video_url) {
           showedLocalVideo = true;
+          const localUser = userRef.current;
+          const localLikeState = localUser
+            ? (await getPostLikeStates(localUser.id, [id])).get(id)
+            : null;
+          const localLike = resolvePostLikePresentation(
+            local.liked,
+            local.like_count,
+            localLikeState,
+            false,
+          );
           setVideos([{
             id: local.id,
             author_id: local.author_id,
@@ -1313,9 +1329,9 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
               is_verified: false,
               is_organization_verified: false,
             },
-            liked: local.liked,
+            liked: localLike.liked,
             bookmarked: local.bookmarked,
-            likeCount: local.like_count,
+            likeCount: localLike.likeCount,
             replyCount: local.reply_count,
           }]);
           setLoading(false);
@@ -1406,15 +1422,16 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const postIds = data.map((p: any) => p.id);
       const authorIds = [...new Set(data.map((p: any) => p.author_id))] as string[];
 
+      const likeSnapshotStartedAt = Date.now();
       const [
-        { data: likesData }, { data: repliesData }, { data: viewsData },
-        { data: myLikes }, { data: myBookmarks }, { data: myFollows },
+        { data: likesData, error: likesError }, { data: repliesData }, { data: viewsData },
+        { data: myLikes, error: myLikesError }, { data: myBookmarks }, { data: myFollows },
         { data: creatorSubscriptions },
       ] = await Promise.all([
         supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         supabase.from("post_views").select("post_id").in("post_id", postIds),
-        currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
+        currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [], error: null },
         currentUser ? supabase.from("post_bookmarks").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [] },
         currentUser ? supabase.from("follows").select("following_id").eq("follower_id", currentUser.id).in("following_id", authorIds) : { data: [] },
         supabase.from("user_subscriptions")
@@ -1433,6 +1450,20 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const viewMap: Record<string, number> = {};
       for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
+      const likeSnapshotKnown = !!currentUser && !likesError && !myLikesError;
+      if (currentUser && likeSnapshotKnown) {
+        await cacheServerPostLikeStates(
+          currentUser.id,
+          new Map(postIds.map((postId: string) => [postId, {
+            liked: myLikeSet.has(postId),
+            likeCount: likeMap[postId] || 0,
+          }])),
+          likeSnapshotStartedAt,
+        );
+      }
+      const localLikeStates = currentUser
+        ? await getPostLikeStates(currentUser.id, postIds)
+        : new Map();
       const myBookmarkSet = new Set((myBookmarks || []).map((b: any) => b.post_id));
       const followedSet = new Set((myFollows || []).map((f: any) => f.following_id as string));
       const verifiedPlanAuthorIds = new Set(
@@ -1446,14 +1477,23 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
           .map((s: any) => s.user_id)
       );
 
-      const allMapped: VideoPost[] = data.map((p: any) => ({
+      const allMapped: VideoPost[] = data.map((p: any) => {
+        const likePresentation = resolvePostLikePresentation(
+          myLikeSet.has(p.id),
+          likeMap[p.id] || 0,
+          localLikeStates.get(p.id),
+          likeSnapshotKnown,
+          likeSnapshotStartedAt,
+        );
+        return ({
         id: p.id, author_id: p.author_id, content: p.content || "",
         video_url: p.video_url, image_url: p.image_url || null, created_at: p.created_at,
         view_count: viewMap[p.id] || 0, audio_name: p.audio_name || null, music_track_id: readMusicTrackId(p.overlay_metadata),
         profile: { display_name: p.profiles?.display_name || "User", handle: p.profiles?.handle || "user", avatar_url: p.profiles?.avatar_url || null, is_verified: !!p.profiles?.is_verified || verifiedPlanAuthorIds.has(p.author_id), is_organization_verified: !!p.profiles?.is_organization_verified },
-        liked: myLikeSet.has(p.id), bookmarked: myBookmarkSet.has(p.id),
-        likeCount: likeMap[p.id] || 0, replyCount: replyMap[p.id] || 0,
-      }));
+        liked: likePresentation.liked, bookmarked: myBookmarkSet.has(p.id),
+        likeCount: likePresentation.likeCount, replyCount: replyMap[p.id] || 0,
+      });
+      });
 
       // Deduplicate against videos already shown this session (matters on wrap-around)
       const mapped = tab === "for_you"
@@ -1559,12 +1599,37 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
               .select(`id, author_id, content, video_url, image_url, created_at, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
               .eq("id", id).not("video_url", "is", null).maybeSingle();
             if (tRow) {
+              const targetLikeStartedAt = Date.now();
+              const [{ data: targetMyLike, error: targetMyLikeError }, { count: targetLikeCount, error: targetLikeCountError }] = await Promise.all([
+                currentUser
+                  ? supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", currentUser.id).maybeSingle()
+                  : Promise.resolve({ data: null, error: null }),
+                supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", id),
+              ]);
+              const targetLikesKnown = !!currentUser && !targetMyLikeError && !targetLikeCountError;
+              if (currentUser && targetLikesKnown) {
+                await cacheServerPostLikeStates(
+                  currentUser.id,
+                  new Map([[id, { liked: !!targetMyLike, likeCount: targetLikeCount || 0 }]]),
+                  targetLikeStartedAt,
+                );
+              }
+              const targetLocalLike = currentUser
+                ? (await getPostLikeStates(currentUser.id, [id])).get(id)
+                : null;
+              const targetLike = resolvePostLikePresentation(
+                !!targetMyLike,
+                targetLikeCount || 0,
+                targetLocalLike,
+                targetLikesKnown,
+                targetLikeStartedAt,
+              );
               newVideos = [{
                 id: tRow.id, author_id: tRow.author_id, content: tRow.content || "",
                 video_url: tRow.video_url, image_url: tRow.image_url || null, created_at: tRow.created_at,
                 view_count: 0, audio_name: tRow.audio_name || null, music_track_id: readMusicTrackId(tRow.overlay_metadata),
                 profile: { display_name: (tRow.profiles as any)?.display_name || "User", handle: (tRow.profiles as any)?.handle || "user", avatar_url: (tRow.profiles as any)?.avatar_url || null, is_verified: !!(tRow.profiles as any)?.is_verified, is_organization_verified: !!(tRow.profiles as any)?.is_organization_verified },
-                liked: false, bookmarked: false, likeCount: 0, replyCount: 0,
+                liked: targetLike.liked, bookmarked: false, likeCount: targetLike.likeCount, replyCount: 0,
               }, ...newVideos];
             }
           }

@@ -11,6 +11,7 @@ import {
   isOnline,
 } from "./offlineStore";
 import { drainQueue, startSyncQueue, stopSyncQueue } from "./storage/syncQueue";
+import { startPostLikeSync, stopPostLikeSync, syncPendingPostLikes } from "./storage/postLikes";
 import { resolveMessageTimestamp } from "./messageTimestamps";
 import {
   getPendingLocalMessages,
@@ -303,6 +304,7 @@ function startRetryInterval(): void {
       const pending = await getPendingLocalMessages();
       if (pending.length > 0) await syncPendingMessages();
     } catch {}
+    void syncPendingPostLikes();
   }, 30_000);
 }
 
@@ -318,6 +320,7 @@ export function startOfflineSync(): void {
     if (isOnline()) {
       void syncPendingMessages();
       void drainQueue(MAX_ITEMS_PER_SYNC);
+      void syncPendingPostLikes();
     }
     return;
   }
@@ -325,6 +328,7 @@ export function startOfflineSync(): void {
   // Keep both offline systems under the same authenticated lifecycle. The root
   // layout must not start either one before Supabase has restored identity.
   startSyncQueue();
+  startPostLikeSync();
 
   connectionStateUnsubscribe = onConnectionStateChange((state) => {
     if (state === "offline") {
@@ -343,6 +347,7 @@ export function startOfflineSync(): void {
       clearConnectionProbe();
       connectionProbeAttempt = 0;
       void syncPendingMessages();
+      void syncPendingPostLikes();
       reconnectRealtime();
       onlineListeners.forEach((fn) => { try { fn(); } catch {} });
     }
@@ -350,6 +355,7 @@ export function startOfflineSync(): void {
 
   if (isOnline()) {
     void syncPendingMessages();
+    void syncPendingPostLikes();
   }
 
   startRetryInterval();
@@ -368,6 +374,7 @@ export function stopOfflineSync(): void {
   connectionProbeAttempt = 0;
   stopRetryInterval();
   stopSyncQueue();
+  stopPostLikeSync();
 }
 
 /**

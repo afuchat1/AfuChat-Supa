@@ -377,4 +377,21 @@ async function runMigrations(db: DB) {
       throw error;
     }
   }
+
+  if (currentVersion < 22) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS post_like_state (
+        user_id TEXT NOT NULL,
+        post_id TEXT NOT NULL,
+        liked INTEGER NOT NULL DEFAULT 0,
+        like_count INTEGER NOT NULL DEFAULT 0,
+        pending INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, post_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_post_like_state_pending
+        ON post_like_state(user_id, pending, updated_at);
+    `);
+    await db.runAsync("UPDATE schema_version SET version = 22");
+  }
 }
