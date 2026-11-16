@@ -33,3 +33,4 @@
 - [Username ownership security](username-ownership-security.md) — Free primary handles are not purchases; only trusted marketplace flows may create durable aliases.
 - [Selective verification policy](manual-verification-policy.md) — Keep personal verification selective, based on sustained authentic participation, with concise, actionable qualification guidance.
 - [Achievement reward integrity](achievement-reward-integrity.md) — Verify eligibility and enforce one-time XP claims on the server; clients only request synchronization.
+- [Wallet receipt notifications](wallet-receipt-notifications.md) — Notify recipients about completed incoming wallet transactions once, with clear wording and no self top-up or conversion noise.

@@ -71,9 +71,81 @@ type SocialNotificationEvent = {
 
 type SocialPushDevice = {
   id: string;
+  user_id: string;
   token: string;
   notification_preferences: Record<string, unknown> | null;
 };
+
+type UserNotificationPreference = {
+  user_id: string;
+  push_enabled: boolean;
+  message_notifications: boolean;
+  call_notifications: boolean;
+  social_notifications: boolean;
+  commerce_notifications: boolean;
+  group_notifications: boolean;
+  muted_until: string | null;
+};
+
+const PREFERENCE_COLUMN_BY_CATEGORY: Record<string, keyof UserNotificationPreference> = {
+  message: "message_notifications",
+  call: "call_notifications",
+  social: "social_notifications",
+  social_follow: "social_notifications",
+  commerce: "commerce_notifications",
+};
+
+function isNotificationEnabled(
+  categoryId: string,
+  userPreference: UserNotificationPreference | null,
+  devicePreference: Record<string, unknown> | null,
+) {
+  if (userPreference) {
+    if (userPreference.push_enabled === false) return false;
+    const mutedUntil = userPreference.muted_until ? Date.parse(userPreference.muted_until) : NaN;
+    if (Number.isFinite(mutedUntil) && mutedUntil > Date.now()) return false;
+    const preferenceColumn = PREFERENCE_COLUMN_BY_CATEGORY[categoryId];
+    return !preferenceColumn || userPreference[preferenceColumn] !== false;
+  }
+
+  const preferences = devicePreference ?? {};
+  const legacyKeys = categoryId === "commerce"
+    ? ["commerce", "commerce_notifications"]
+    : categoryId === "social" || categoryId === "social_follow"
+      ? ["social", "social_notifications"]
+      : categoryId === "call"
+        ? ["calls", "call_notifications", "calls_notifications"]
+        : ["messages", "message_notifications", "messages_notifications"];
+  return legacyKeys.every((key) => preferences[key] !== false);
+}
+
+function getNotificationThreadId(
+  categoryId: string,
+  groupEnabled: boolean,
+  uniqueId: string,
+  chatId = "",
+  callId = "",
+) {
+  if (!groupEnabled) return uniqueId || categoryId;
+  if (categoryId === "message" && chatId) return `chat-${chatId}`;
+  if (categoryId === "call" && (callId || chatId)) return `call-${callId || chatId}`;
+  if (categoryId === "social_follow") return "social-follow";
+  if (categoryId === "social") return "social";
+  if (categoryId === "commerce") return "commerce";
+  return uniqueId || categoryId;
+}
+
+function getAndroidNotificationTag(
+  categoryId: string,
+  groupEnabled: boolean,
+  uniqueId: string,
+  chatId = "",
+  callId = "",
+) {
+  if (groupEnabled && categoryId === "message" && chatId) return `chat-${chatId}`;
+  if (groupEnabled && categoryId === "call" && (callId || chatId)) return `call-${callId || chatId}`;
+  return uniqueId || `${categoryId}-${Date.now()}`;
+}
 
 async function setSocialPushStatus(
   admin: ReturnType<typeof createClient>,
@@ -130,9 +202,19 @@ async function dispatchSocialNotification(eventId: string) {
     return json({ ok: false, sent: 0, status: "failed", reason: "FCM credentials are invalid" }, 503);
   }
 
+  const metadata = event.metadata ?? {};
+  const isWalletTransaction = event.kind === "transaction_received";
+  const followBackEligible =
+    event.kind === "follow" && metadata.follow_back_eligible === true;
+  const categoryId = isWalletTransaction
+    ? "commerce"
+    : followBackEligible
+      ? "social_follow"
+      : "social";
+
   const { data: devices, error: deviceError } = await admin
     .from("push_devices")
-    .select("id, token, notification_preferences")
+    .select("id, user_id, token, notification_preferences")
     .eq("user_id", event.recipient_id)
     .eq("enabled", true);
   if (deviceError) {
@@ -140,9 +222,18 @@ async function dispatchSocialNotification(eventId: string) {
     return json({ ok: false, sent: 0, status: "failed" }, 500);
   }
 
+  const { data: preferenceRow, error: preferenceError } = await admin
+    .from("user_notification_preferences")
+    .select("user_id, push_enabled, message_notifications, call_notifications, social_notifications, commerce_notifications, group_notifications, muted_until")
+    .eq("user_id", event.recipient_id)
+    .maybeSingle();
+  if (preferenceError) {
+    await setSocialPushStatus(admin, event.id, "failed", "Could not load recipient notification settings");
+    return json({ ok: false, sent: 0, status: "failed" }, 500);
+  }
+  const userPreference = preferenceRow as UserNotificationPreference | null;
   const eligibleDevices = ((devices ?? []) as SocialPushDevice[]).filter((device) => {
-    const preferences = device.notification_preferences ?? {};
-    return preferences.social !== false && preferences.social_notifications !== false;
+    return isNotificationEnabled(categoryId, userPreference, device.notification_preferences);
   });
   if (!eligibleDevices.length) {
     await setSocialPushStatus(admin, event.id, "skipped");
@@ -157,7 +248,6 @@ async function dispatchSocialNotification(eventId: string) {
     return json({ ok: false, sent: 0, attempted: eligibleDevices.length, status: "failed" }, 502);
   }
 
-  const metadata = event.metadata ?? {};
   const actorId = [
     event.actor_id,
     metadata.actor_id,
@@ -165,12 +255,15 @@ async function dispatchSocialNotification(eventId: string) {
     metadata.liker_id,
     metadata.replier_id,
   ].find((value): value is string => typeof value === "string" && value.length > 0) ?? "";
-  const followBackEligible =
-    event.kind === "follow" && metadata.follow_back_eligible === true;
-  const categoryId = followBackEligible ? "social_follow" : "social";
+  const threadId = getNotificationThreadId(
+    categoryId,
+    userPreference?.group_notifications !== false,
+    event.id,
+  );
   const pushData = Object.fromEntries(Object.entries({
     categoryId,
     notificationId: event.id,
+    tag: event.id,
     eventKind: event.kind,
     actorId,
     followerId: event.kind === "follow" ? actorId : "",
@@ -179,6 +272,10 @@ async function dispatchSocialNotification(eventId: string) {
     messageId: typeof metadata.message_id === "string" ? metadata.message_id : "",
     route: event.cta_route ?? "",
     entityId: event.entity_id ?? "",
+    transactionId: typeof metadata.transaction_id === "string" ? metadata.transaction_id : "",
+    transactionType: typeof metadata.transaction_type === "string" ? metadata.transaction_type : "",
+    amount: typeof metadata.amount === "number" ? metadata.amount : "",
+    currency: typeof metadata.currency === "string" ? metadata.currency : "",
   }).map(([key, value]) => [key, String(value ?? "")]));
 
   let sent = 0;
@@ -203,7 +300,10 @@ async function dispatchSocialNotification(eventId: string) {
               android: {
                 priority: "HIGH",
                 notification: {
-                  channel_id: "social_notifications_v1",
+                  tag: event.id,
+                  channel_id: isWalletTransaction
+                    ? "commerce_notifications_v1"
+                    : "social_notifications_v1",
                   sound: "default",
                 },
               },
@@ -211,9 +311,10 @@ async function dispatchSocialNotification(eventId: string) {
                 headers: {
                   "apns-push-type": "alert",
                   "apns-priority": "10",
+                  "apns-collapse-id": event.id,
                 },
                 payload: {
-                  aps: { sound: "default", category: categoryId },
+                  aps: { sound: "default", category: categoryId, "thread-id": threadId },
                 },
               },
             },
@@ -292,6 +393,7 @@ Deno.serve(async (request) => {
   }
   const chatId = typeof body?.chatId === "string" ? body.chatId.trim() : "";
   const messageId = typeof body?.messageId === "string" ? body.messageId.trim() : "";
+  const callId = typeof body?.callId === "string" ? body.callId.trim() : "";
   let authorizedCallRecipientId: string | null = null;
   if (categoryId === "message") {
     if (!chatId || !messageId) return json({ error: "A chat and message are required" }, 400);
@@ -309,7 +411,6 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (messageError || !ownMessage) return json({ error: "Message is not owned by the authenticated user" }, 403);
   } else if (categoryId === "call") {
-    const callId = typeof body?.callId === "string" ? body.callId.trim() : "";
     if (!callId || !chatId) {
       return json({ error: "A call ID is required" }, 400);
     }
@@ -378,12 +479,51 @@ Deno.serve(async (request) => {
       return json({ ok: true, sent: 0, attempted: 0, suppressed: "chat-active" });
     }
   }
+
+  // A Mute action from a chat notification must also suppress later pushes.
+  if (categoryId === "message" && chatId) {
+    const { data: mutedUsers, error: muteError } = await admin
+      .from("chat_mutes")
+      .select("user_id")
+      .eq("chat_id", chatId)
+      .gt("muted_until", new Date().toISOString())
+      .in("user_id", [...authorizedRecipientIds]);
+    if (muteError) return json({ error: "Could not verify chat notification mutes" }, 500);
+    for (const row of mutedUsers ?? []) authorizedRecipientIds.delete(row.user_id);
+    if (authorizedRecipientIds.size === 0) {
+      return json({ ok: true, sent: 0, attempted: 0, suppressed: "chat-muted" });
+    }
+  }
+
+  const { data: preferenceRows, error: preferenceError } = await admin
+    .from("user_notification_preferences")
+    .select("user_id, push_enabled, message_notifications, call_notifications, social_notifications, commerce_notifications, group_notifications, muted_until")
+    .in("user_id", [...authorizedRecipientIds]);
+  if (preferenceError) return json({ error: "Could not load recipient notification settings" }, 500);
+  const preferencesByUser = new Map<string, UserNotificationPreference>(
+    ((preferenceRows ?? []) as UserNotificationPreference[]).map((preference) => [
+      preference.user_id,
+      preference,
+    ]),
+  );
+
   const { data: devices, error: deviceError } = await admin
     .from("push_devices")
-    .select("id, token")
+    .select("id, user_id, token, notification_preferences")
     .in("user_id", [...authorizedRecipientIds])
     .eq("enabled", true);
   if (deviceError) return json({ error: "Could not load push devices" }, 500);
+
+  const eligibleDevices = ((devices ?? []) as SocialPushDevice[]).filter((device) =>
+    isNotificationEnabled(
+      categoryId,
+      preferencesByUser.get(device.user_id) ?? null,
+      device.notification_preferences,
+    )
+  );
+  if (!eligibleDevices.length) {
+    return json({ ok: true, sent: 0, attempted: 0, status: "muted" });
+  }
 
   const serviceAccount = JSON.parse(firebaseJson);
   const bearer = await accessToken(serviceAccount);
@@ -391,7 +531,7 @@ Deno.serve(async (request) => {
   const androidChannelId = ANDROID_NOTIFICATION_CHANNELS.has(requestedChannelId)
     ? requestedChannelId
     : DEFAULT_ANDROID_NOTIFICATION_CHANNEL_ID;
-  const data = Object.fromEntries(Object.entries({
+  const baseData = {
     ...(body.data ?? {}),
     categoryId,
     chatId: body.chatId ?? "",
@@ -404,9 +544,36 @@ Deno.serve(async (request) => {
     callerName: body.callerName ?? body.senderName ?? "",
     callerAvatar: body.callerAvatar ?? body.senderAvatarUrl ?? "",
     senderName: body.senderName ?? "",
-  }).map(([key, value]) => [key, String(value ?? "")]));
+  };
+  const notificationKey = [
+    body.notificationId,
+    messageId,
+    callId,
+    body.entityId,
+  ].find((value) => typeof value === "string" && value.length > 0) as string | undefined
+    ?? `${categoryId}-${crypto.randomUUID()}`;
   let sent = 0;
-  for (const device of devices ?? []) {
+  for (const device of eligibleDevices) {
+    const userPreference = preferencesByUser.get(device.user_id) ?? null;
+    const groupEnabled = userPreference?.group_notifications !== false;
+    const androidTag = getAndroidNotificationTag(
+      categoryId,
+      groupEnabled,
+      notificationKey,
+      chatId,
+      callId,
+    );
+    const threadId = getNotificationThreadId(
+      categoryId,
+      groupEnabled,
+      notificationKey,
+      chatId,
+      callId,
+    );
+    const data = Object.fromEntries(Object.entries({
+      ...baseData,
+      tag: androidTag,
+    }).map(([key, value]) => [key, String(value ?? "")]));
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(serviceAccount.project_id)}/messages:send`, {
       method: "POST",
       headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
@@ -421,6 +588,7 @@ Deno.serve(async (request) => {
           android: {
             priority: "HIGH",
             notification: {
+              tag: androidTag,
               channel_id: androidChannelId,
               // Use the system notification sound. The channel above is
               // intentionally separate from older channels whose sound may
@@ -435,10 +603,12 @@ Deno.serve(async (request) => {
             headers: {
               "apns-push-type": "alert",
               "apns-priority": "10",
+              "apns-collapse-id": notificationKey,
             },
             payload: {
               aps: {
                 "content-available": 1,
+                "thread-id": threadId,
               },
             },
           },
@@ -448,7 +618,7 @@ Deno.serve(async (request) => {
     if (response.ok) sent += 1;
     else if ([404, 410].includes(response.status)) await admin.from("push_devices").update({ enabled: false }).eq("id", device.id);
   }
-  return json({ ok: true, sent, attempted: devices?.length ?? 0 });
+  return json({ ok: true, sent, attempted: eligibleDevices.length });
 });
 
 async function adminlessMembershipCheck(
