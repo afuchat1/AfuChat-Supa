@@ -8572,13 +8572,13 @@ STRICT RULES:
       };
     }
     markNotificationRead(notification);
-    router.push(route as any);
+    router.navigate(route as any);
   }, [markNotificationRead]);
 
   const handleNotificationActorPress = useCallback((actorId: string, notification: NotificationMessageData) => {
     if (!actorId) return;
     markNotificationRead(notification);
-    router.push({ pathname: "/contact/[id]", params: { id: actorId } } as any);
+    router.navigate({ pathname: "/contact/[id]", params: { id: actorId } } as any);
   }, [markNotificationRead]);
 
   const handleNotificationFollowBack = useCallback(async (notification: NotificationMessageData) => {

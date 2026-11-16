@@ -53,6 +53,22 @@ function identity(pathname: string, queryPairs: Array<[string, string]>): string
   return `${normalizePath(pathname)}${serializeQuery(queryPairs)}`;
 }
 
+const NON_DESTINATION_QUERY_PARAMS = new Set(["messageid", "source"]);
+
+/** Route identity without metadata that must not create another page instance. */
+function routeDestinationIdentity(routeIdentity: string): string {
+  try {
+    const parsed = new URL(routeIdentity, "https://afuchat.invalid");
+    const queryPairs = Array.from(parsed.searchParams.entries()).filter(([key]) => {
+      const normalizedKey = key.toLowerCase();
+      return !NON_DESTINATION_QUERY_PARAMS.has(normalizedKey) && !normalizedKey.startsWith("utm_");
+    });
+    return identity(parsed.pathname, queryPairs);
+  } catch {
+    return routeIdentity;
+  }
+}
+
 /** Stable identity for equivalent Expo Router hrefs and concrete locations. */
 export function routeIdentityFromHref(href: unknown): string | null {
   try {
@@ -167,6 +183,7 @@ export type NavigationRouteDecision = {
 /** Decides whether an imperative navigation would duplicate a route. */
 export class NavigationRouteGate {
   private currentRouteIdentity: string | null = null;
+  private currentDestinationIdentity: string | null = null;
   private currentScreenIdentity: string | null = null;
   private readonly visitedScreens = new Set<string>();
   private readonly recentActions = new Map<string, number>();
@@ -185,6 +202,7 @@ export class NavigationRouteGate {
       this.recentActions.clear();
     }
     this.currentRouteIdentity = identity;
+    this.currentDestinationIdentity = identity ? routeDestinationIdentity(identity) : null;
     this.currentScreenIdentity = screenIdentity;
     if (!screenIdentity) return;
     this.visitedScreens.add(screenIdentity);
@@ -205,20 +223,31 @@ export class NavigationRouteGate {
     if (identity === this.currentRouteIdentity) {
       return { skip: true, reuseVisitedRoute: false };
     }
+    const destinationIdentity = routeDestinationIdentity(identity);
+
+    // The page may have mounted between delivery of a deep link and its
+    // notification-response callback. Reuse the visible page when only
+    // non-destination params (for example, messageId) differ.
+    if (
+      screenIdentity === this.currentScreenIdentity &&
+      destinationIdentity === this.currentDestinationIdentity
+    ) {
+      return { skip: false, reuseVisitedRoute: kind === "push" };
+    }
 
     for (const [routeIdentity, startedAt] of this.recentActions) {
       if (now - startedAt >= this.duplicateWindowMs) {
         this.recentActions.delete(routeIdentity);
       }
     }
-    const previousActionAt = this.recentActions.get(identity);
+    const previousActionAt = this.recentActions.get(destinationIdentity);
     if (
       previousActionAt !== undefined &&
       now - previousActionAt < this.duplicateWindowMs
     ) {
       return { skip: true, reuseVisitedRoute: false };
     }
-    this.recentActions.set(identity, now);
+    this.recentActions.set(destinationIdentity, now);
     return {
       skip: false,
       reuseVisitedRoute: kind === "push" && this.visitedScreens.has(screenIdentity),

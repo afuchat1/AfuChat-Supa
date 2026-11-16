@@ -34,7 +34,7 @@ export function IncomingCallModal() {
               onPress={() => {
                 const callId = incomingNotice.callId;
                 void acceptCall().then(() => {
-                  router.push({ pathname: "/call/[id]", params: { id: callId } } as any);
+                  router.navigate({ pathname: "/call/[id]", params: { id: callId } } as any);
                 }).catch(() => {});
               }}
             >

@@ -77,12 +77,12 @@ export default function PushNotificationManager() {
           response.actionIdentifier === PUSH_ACTION_ACCEPT_CALL;
         if (shouldOpen) {
           if (response.actionIdentifier === PUSH_ACTION_ACCEPT_CALL && target.callId) {
-            safeRouter.push({ pathname: "/call/[id]", params: { id: target.callId } } as any);
+            safeRouter.navigate({ pathname: "/call/[id]", params: { id: target.callId } } as any);
           } else if (target.callId) {
-            safeRouter.push({ pathname: "/call/[id]", params: { id: target.callId } } as any);
+            safeRouter.navigate({ pathname: "/call/[id]", params: { id: target.callId } } as any);
           } else if (target.chatId) {
             void dismissChatNotifications(target.chatId);
-            safeRouter.push({
+            safeRouter.navigate({
               pathname: "/chat/[id]",
               params: {
                 id: target.chatId,
@@ -90,7 +90,7 @@ export default function PushNotificationManager() {
               },
             } as any);
           } else if (target.route) {
-            safeRouter.push({
+            safeRouter.navigate({
               pathname: target.route as any,
               params: target.entityId ? { id: target.entityId } : undefined,
             } as any);

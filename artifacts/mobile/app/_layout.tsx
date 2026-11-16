@@ -432,6 +432,9 @@ function IncomingShareGate({ navigationReady }: { navigationReady: boolean }) {
  */
 function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
   const { session, loading, user } = useAuth();
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
   const pendingActionRef = useRef<any>(null);
   const handledLinksRef = useRef(new RecentEventGate(5_000, 64));
   const [pendingVersion, setPendingVersion] = useState(0);
@@ -440,14 +443,23 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
 
   const routeAction = useCallback((action: any) => {
     if (action?.type === "join_group") {
-      safeRouter.push({ pathname: "/join/[code]", params: { code: action.code } } as any);
+      const destination = { pathname: "/join/[code]", params: { code: action.code } } as any;
+      if (pathnameRef.current === "/" || pathnameRef.current === "/index") safeRouter.replace(destination);
+      else safeRouter.navigate(destination);
       return;
     }
     if (action?.type === "navigate") {
-      // A launcher shortcut is an explicit destination. Replace the root
-      // handoff rather than pushing it, so app/index.tsx cannot leave the
-      // user on Chats after the shortcut has already selected a conversation.
-      const route = action.path === "/chat/[id]" ? safeRouter.replace : safeRouter.push;
+      // External destinations may arrive through both Expo Router's native
+      // linking integration and this custom URL parser. Navigate reuses an
+      // existing matching destination instead of stacking the same page.
+      // Replace the root handoff (or the current chat shortcut) so index.tsx
+      // cannot remain underneath the linked destination.
+      const route =
+        pathnameRef.current === "/" ||
+        pathnameRef.current === "/index" ||
+        action.path === "/chat/[id]"
+          ? safeRouter.replace
+          : safeRouter.navigate;
       if (action.params) {
         route({ pathname: action.path as any, params: action.params });
       } else {

@@ -114,3 +114,58 @@ test("query changes reuse the current screen instead of stacking a copy", () => 
     reuseVisitedRoute: true,
   });
 });
+
+test("notification and deep-link variants reuse the same exact chat page", () => {
+  const gate = new NavigationRouteGate(5_000, 10);
+  const deepLinkChat = routeIdentityFromHref({
+    pathname: "/chat/[id]",
+    params: { id: "conversation-123" },
+  });
+  const notificationChat = routeIdentityFromHref({
+    pathname: "/chat/[id]",
+    params: { id: "conversation-123", messageId: "message-456" },
+  });
+  const anotherChat = routeIdentityFromHref({
+    pathname: "/chat/[id]",
+    params: { id: "conversation-789", messageId: "message-456" },
+  });
+  const chatPage = routeScreenIdentityFromHref({
+    pathname: "/chat/[id]",
+    params: { id: "conversation-123" },
+  });
+  const anotherChatPage = routeScreenIdentityFromHref({
+    pathname: "/chat/[id]",
+    params: { id: "conversation-789" },
+  });
+
+  gate.updateCurrentRoute(deepLinkChat, chatPage);
+  assert.deepEqual(gate.decide("push", notificationChat, chatPage, 10_000), {
+    skip: false,
+    reuseVisitedRoute: true,
+  });
+  assert.deepEqual(gate.decide("push", anotherChat, anotherChatPage, 10_001), {
+    skip: false,
+    reuseVisitedRoute: false,
+  });
+
+  const pendingGate = new NavigationRouteGate(5_000, 10);
+  assert.deepEqual(pendingGate.decide("push", notificationChat, chatPage, 20_000), {
+    skip: false,
+    reuseVisitedRoute: false,
+  });
+  assert.deepEqual(
+    pendingGate.decide(
+      "push",
+      routeIdentityFromHref({
+        pathname: "/chat/[id]",
+        params: { id: "conversation-123", messageId: "message-789" },
+      }),
+      chatPage,
+      20_001,
+    ),
+    {
+      skip: true,
+      reuseVisitedRoute: false,
+    },
+  );
+});
