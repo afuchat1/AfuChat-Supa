@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
+import { syncAchievementRewards } from "@/lib/achievementRewards";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ type Achievement = {
   rarity: Rarity;
   xpReward: number;
   unlocked: boolean;
+  rewarded: boolean;
   progress?: number;
   total?: number;
 };
@@ -87,7 +89,7 @@ async function fetchStats(userId: string): Promise<Stats> {
 
   const [posts, stories, messages] = await Promise.all([
     safe(
-      supabase.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId)
+      supabase.from("posts").select("id", { count: "exact", head: true }).eq("author_id", userId)
         .then(r => r.count ?? 0), 0),
     safe(
       supabase.from("stories").select("id", { count: "exact", head: true }).eq("user_id", userId)
@@ -102,7 +104,12 @@ async function fetchStats(userId: string): Promise<Stats> {
 
 // ─── Achievement definitions ──────────────────────────────────────────────────
 
-function buildAchievements(profile: any, isPremium: boolean, stats: Stats): Achievement[] {
+function buildAchievements(
+  profile: any,
+  isPremium: boolean,
+  stats: Stats,
+  rewardedIds: ReadonlySet<string> = new Set(),
+): Achievement[] {
   const xp       = profile?.xp      ?? 0;
   const acoin    = profile?.acoin    ?? 0;
   const level    = Math.floor(Math.sqrt(xp / 100)) + 1;
@@ -113,7 +120,23 @@ function buildAchievements(profile: any, isPremium: boolean, stats: Stats): Achi
     icon: string, category: Exclude<Category,"All">, rarity: Rarity,
     xpReward: number, unlocked: boolean,
     progress?: number, total?: number,
-  ): Achievement => ({ id, title, desc, howTo, icon, category, rarity, xpReward, unlocked, progress, total });
+  ): Achievement => {
+    const rewarded = rewardedIds.has(id);
+    return {
+      id,
+      title,
+      desc,
+      howTo,
+      icon,
+      category,
+      rarity,
+      xpReward,
+      unlocked: unlocked || rewarded,
+      rewarded,
+      progress: rewarded && total != null ? total : progress,
+      total,
+    };
+  };
 
   return [
     // ── Social ───────────────────────────────────────────────────────────────
@@ -500,7 +523,11 @@ function DetailModal({ achievement, onClose }: { achievement: Achievement | null
               <View style={[dm.xpRow, { backgroundColor: "#FF9F0A" + "18" }]}>
                 <Ionicons name="flash" size={15} color="#FF9F0A" />
                 <Text style={dm.xpText}>
-                  {achievement.unlocked ? "Earned" : "Reward"}:{" "}
+                  {achievement.rewarded
+                    ? "Earned"
+                    : achievement.unlocked
+                      ? "Unlocked · reward pending"
+                      : "Reward"}:{" "}
                   <Text style={{ color: "#FF9F0A", fontFamily: "Inter_700Bold" }}>
                     +{achievement.xpReward.toLocaleString()} XP
                   </Text>
@@ -544,12 +571,13 @@ const dm = StyleSheet.create({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function AchievementsScreen() {
-  const { profile, user, isPremium } = useAuth();
+  const { profile, user, isPremium, isAuthenticated, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [selectedCategory, setSelectedCategory] = useState<Category>("All");
-  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+  const [selectedAchievementId, setSelectedAchievementId] = useState<string | null>(null);
+  const [rewardedIds, setRewardedIds] = useState<Set<string>>(() => new Set());
   const [stats, setStats] = useState<Stats>({ posts: 0, stories: 0, messages: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
 
@@ -560,9 +588,33 @@ export default function AchievementsScreen() {
       .catch(() => setLoadingStats(false));
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    let active = true;
+
+    syncAchievementRewards({ force: true })
+      .then((result) => {
+        if (!active) return;
+        setRewardedIds(new Set(result.rewardedAchievementIds));
+        if (result.xpAwarded > 0) void refreshProfile();
+      })
+      .catch((error) => {
+        console.warn("Could not sync achievement rewards:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user?.id]);
+
   const achievements = useMemo(
-    () => buildAchievements(profile, isPremium, stats),
-    [profile, isPremium, stats],
+    () => buildAchievements(profile, isPremium, stats, rewardedIds),
+    [profile, isPremium, stats, rewardedIds],
+  );
+
+  const selectedAchievement = useMemo(
+    () => achievements.find((achievement) => achievement.id === selectedAchievementId) ?? null,
+    [achievements, selectedAchievementId],
   );
 
   const filtered = useMemo(
@@ -589,7 +641,7 @@ export default function AchievementsScreen() {
         <HeroCard achievements={achievements} />
 
         {/* Almost There */}
-        <AlmostThere achievements={achievements} onPress={setSelectedAchievement} />
+        <AlmostThere achievements={achievements} onPress={(achievement) => setSelectedAchievementId(achievement.id)} />
 
         {/* Category tabs */}
         <ScrollView
@@ -631,7 +683,7 @@ export default function AchievementsScreen() {
             </View>
             <View style={sc.grid}>
               {unlockedFiltered.map(a => (
-                <AchievementBadge key={a.id} achievement={a} onPress={() => setSelectedAchievement(a)} />
+                <AchievementBadge key={a.id} achievement={a} onPress={() => setSelectedAchievementId(a.id)} />
               ))}
             </View>
           </>
@@ -646,7 +698,7 @@ export default function AchievementsScreen() {
             </View>
             <View style={sc.grid}>
               {lockedFiltered.map(a => (
-                <AchievementBadge key={a.id} achievement={a} onPress={() => setSelectedAchievement(a)} />
+                <AchievementBadge key={a.id} achievement={a} onPress={() => setSelectedAchievementId(a.id)} />
               ))}
             </View>
           </>
@@ -654,7 +706,7 @@ export default function AchievementsScreen() {
       </ScrollView>
 
       {/* Detail modal */}
-      <DetailModal achievement={selectedAchievement} onClose={() => setSelectedAchievement(null)} />
+      <DetailModal achievement={selectedAchievement} onClose={() => setSelectedAchievementId(null)} />
     </View>
   );
 }

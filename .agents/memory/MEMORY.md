@@ -32,3 +32,4 @@
 - [AfuChat app scope](afuchat-database-scope.md) — Treat this workspace as AfuChat only; follow the current remote baseline, not historical assumptions.
 - [Username ownership security](username-ownership-security.md) — Free primary handles are not purchases; only trusted marketplace flows may create durable aliases.
 - [Selective verification policy](manual-verification-policy.md) — Keep personal verification selective, based on sustained authentic participation, with concise, actionable qualification guidance.
+- [Achievement reward integrity](achievement-reward-integrity.md) — Verify eligibility and enforce one-time XP claims on the server; clients only request synchronization.

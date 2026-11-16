@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { syncAchievementRewards } from "./achievementRewards";
 
 const REWARDS: Record<string, { xp: number; cooldown: number }> = {
   profile_completed: { xp: 1000, cooldown: 0 },
@@ -32,7 +33,13 @@ export async function rewardXp(
       p_metadata: metadata,
     });
 
-    return data || { success: false };
+    const result = data || { success: false };
+    if (result.success) {
+      void syncAchievementRewards().catch((error) => {
+        console.warn("Could not sync achievement rewards:", error);
+      });
+    }
+    return result;
   } catch {
     return { success: false };
   }
