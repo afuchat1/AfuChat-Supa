@@ -88,7 +88,7 @@
           "imageWidth": 180,
           "dark": {
             "backgroundColor": "#202124",
-            "image": "./assets/images/white-logo-bold.png"
+            "image": "./assets/images/notification-icon.png"
           }
         }
       ],

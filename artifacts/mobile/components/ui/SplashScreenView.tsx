@@ -22,14 +22,13 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LOGO_BLACK_B64 } from "@/lib/logoAssets";
-import { LOGO_WHITE_BOLD_B64 } from "@/lib/logoWhiteBold";
 import Colors from "@/constants/colors";
 import { THEME_MODE_KEY } from "@/context/ThemeContext";
 import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 
 const { width } = Dimensions.get("window");
 const LOGO_SIZE = Math.min(width * 0.32, 130);
-const LOGO_WHITE = { uri: LOGO_WHITE_BOLD_B64 };
+const LOGO_WHITE = require("../../assets/images/notification-icon.png");
 
 interface Props {
   ready: boolean;
