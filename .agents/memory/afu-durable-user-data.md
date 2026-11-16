@@ -3,8 +3,8 @@ name: AfuChat durable user data
 description: Project rule for keeping user data out of OS-clearable caches.
 ---
 
-Do not place durable user data in OS-clearable cache storage. Use persistent app storage or the server for user data; use only memory or disposable staging for re-fetchable media and in-progress operations.
+Do not place durable user data in OS-clearable cache storage. Use persistent app storage or the server for user data. Re-fetchable remote images should use the shared Expo Image memory-and-disk cache so the same image can be reused across screens.
 
-**Why:** The user explicitly said caches are cleared unpredictably and asked to avoid data loss, including for offline media.
+**Why:** The user asked to reuse previously downloaded images across the mobile app to avoid repeated network fetches and make navigation smoother. Image bytes are re-creatable; saved offline media and other user data are not.
 
-**How to apply:** When changing AfuChat storage or network behavior, distinguish canonical user data from re-creatable media. Disk image caches should be disabled; persistent user content belongs in SQLite, AsyncStorage/MMKV, or durable files and server sync. Offline video and music saves must be explicit and cannot expire or be evicted automatically; if storage is full, reject a new save rather than deleting saved media. Avoid adjacent media prefetch on cellular or unknown connections, and keep feed requests bounded and paginated.
+**How to apply:** Route remote images through the shared cached image components with memory-and-disk caching and preserve their exact source URLs. Do not add a second file-cache owner for the same images. Keep saved offline videos, music, and other canonical user content in persistent storage with explicit save semantics; do not prefetch adjacent media on cellular or unknown connections, and keep feed requests bounded and paginated.

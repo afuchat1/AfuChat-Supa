@@ -723,7 +723,7 @@ export default function FindPeopleTab() {
                           source={{ uri: person.banner_url }}
                           style={StyleSheet.absoluteFill}
                           contentFit="cover"
-                          cachePolicy="memory"
+                          cachePolicy="memory-disk"
                         />
                       ) : (
                         <View style={[styles.bannerFallback, { backgroundColor: accent + "18" }]}>

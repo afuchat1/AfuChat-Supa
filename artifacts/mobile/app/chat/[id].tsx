@@ -1902,7 +1902,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                         source={{ uri: groupAttachUris[url] ?? url }}
                         style={groupedImageUrls.length === 1 ? st.attachImage : st.imageGroupTile}
                         contentFit="cover"
-                        cachePolicy="memory"
+                        cachePolicy="memory-disk"
                         transition={0}
                       />
                     ))}
@@ -1912,7 +1912,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
                     source={{ uri: attachUri || msg.attachment_url! }}
                     style={st.attachImage}
                     contentFit="cover"
-                    cachePolicy="memory"
+                    cachePolicy="memory-disk"
                     transition={0}
                     autoplay={msg.attachment_type !== "gif" || chatPrefsLocal.autoplay_gifs}
                   />

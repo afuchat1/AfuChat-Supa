@@ -33,16 +33,17 @@ function getRecyclingKey(source: ImageProps["source"]): string | undefined {
 }
 
 /**
- * Memory-safe image primitive for all remote and local media previews.
+ * Shared image primitive for remote and local media previews.
  *
- * expo-image uses its managed memory + disk cache for reusable remote media, plus downsampling.
+ * Remote files use Expo Image's shared memory + disk cache by default, so the
+ * same URL can be reused across routes instead of fetched again after navigation.
  * `recyclingKey` prevents recycled list cells from briefly showing the previous image.
  */
 export function OptimizedImage({
   source,
   resizeMode = "cover",
   contentFit,
-  cachePolicy = "memory",
+  cachePolicy = "memory-disk",
   transition = 0,
   allowDownscaling = true,
   recyclingKey,

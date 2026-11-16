@@ -91,7 +91,7 @@ function AvatarViewerContent({ visible, uri, name, onClose }: Props) {
                 backgroundColor: colors.surface,
               }}
               contentFit="contain"
-              cachePolicy="memory"
+              cachePolicy="memory-disk"
               transition={0}
             />
           ) : (
