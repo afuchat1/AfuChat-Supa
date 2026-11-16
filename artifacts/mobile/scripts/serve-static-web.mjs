@@ -1,8 +1,14 @@
 import { createReadStream } from "node:fs";
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
 import { extname, join, normalize, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  constants as zlibConstants,
+  createBrotliCompress,
+  createGzip,
+} from "node:zlib";
 import { decoratePublicHtml } from "./public-crawler.mjs";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..", "dist");
@@ -72,6 +78,70 @@ const contentTypes = {
   ".woff2": "font/woff2",
 };
 
+function acceptsEncoding(header, encoding) {
+  const entries = String(header || "")
+    .toLowerCase()
+    .split(",")
+    .map((part) => part.trim().split(";").map((value) => value.trim()));
+  const entry = entries.find(([name]) => name === encoding)
+    ?? entries.find(([name]) => name === "*");
+  if (!entry) return false;
+
+  const quality = entry
+    .slice(1)
+    .map((parameter) => parameter.split("="))
+    .find(([name]) => name === "q")?.[1];
+  return quality === undefined || Number(quality) > 0;
+}
+
+function compressibleContentType(contentType) {
+  const mimeType = contentType.split(";")[0].trim().toLowerCase();
+  return mimeType.startsWith("text/")
+    || mimeType === "application/javascript"
+    || mimeType === "application/json"
+    || mimeType === "application/wasm"
+    || mimeType === "image/svg+xml";
+}
+
+function sendContent(request, response, {
+  cacheControl,
+  contentType,
+  body,
+}) {
+  const canCompress = compressibleContentType(contentType);
+  const acceptEncoding = request.headers["accept-encoding"];
+  const encoding = canCompress && acceptsEncoding(acceptEncoding, "br")
+    ? "br"
+    : canCompress && acceptsEncoding(acceptEncoding, "gzip")
+      ? "gzip"
+      : null;
+  const headers = {
+    "Cache-Control": cacheControl,
+    "Content-Type": contentType,
+    ...(canCompress ? { Vary: "Accept-Encoding" } : {}),
+    ...(encoding ? { "Content-Encoding": encoding } : {}),
+  };
+
+  response.writeHead(200, headers);
+  if (request.method === "HEAD") {
+    response.end();
+    return;
+  }
+
+  const source = typeof body === "string" ? Readable.from([body]) : body;
+  if (encoding === "br") {
+    source
+      .pipe(createBrotliCompress({
+        params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 4 },
+      }))
+      .pipe(response);
+  } else if (encoding === "gzip") {
+    source.pipe(createGzip({ level: 5 })).pipe(response);
+  } else {
+    source.pipe(response);
+  }
+}
+
 async function exists(filePath) {
   try {
     await access(filePath);
@@ -140,19 +210,19 @@ createServer(async (request, response) => {
     if (filePath.endsWith(".html")) {
       const html = await readFile(filePath, "utf8");
       const enhancedHtml = await decoratePublicHtml(pathname, html);
-      response.writeHead(200, {
-        "Cache-Control": "public, max-age=60",
-        "Content-Type": "text/html; charset=utf-8",
+      sendContent(request, response, {
+        cacheControl: "public, max-age=60",
+        contentType: "text/html; charset=utf-8",
+        body: enhancedHtml,
       });
-      response.end(enhancedHtml);
       return;
     }
 
-    response.writeHead(200, {
-      "Cache-Control": filePath.endsWith(".html") ? "public, max-age=60" : "public, max-age=31536000, immutable",
-      "Content-Type": fileType,
+    sendContent(request, response, {
+      cacheControl: "public, max-age=31536000, immutable",
+      contentType: fileType,
+      body: createReadStream(filePath),
     });
-    createReadStream(filePath).pipe(response);
   } catch (error) {
     console.error("[static-web] request failed", error);
     response.writeHead(500);

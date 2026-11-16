@@ -23,7 +23,7 @@
 - [AfuChat media reuse](afu-media-reuse.md) — Use the profile’s exact avatar URL and reuse stored media paths instead of uploading duplicate files.
 - [AfuChat durable user data](afu-durable-user-data.md) — Keep durable user data out of OS-clearable cache storage; use persistent app storage or the server.
 - [Expo Router navigation hooks](expo-router-navigation-hooks.md) — In SDK 57, import navigation hooks from Expo Router to share its bundled navigation context.
-- [Expo Router SDK 58 web routes](expo-router-sdk58-web-routes.md) — Keep web route loading synchronous until the static preview can safely load async route chunks.
+- [Expo Router SDK 58 web routes](expo-router-sdk58-web-routes.md) — Keep static web route chunks enabled; retest root, welcome, and dynamic routes after router changes.
 - [React Native strict API migration](rn-strict-api-migration.md) — Keep SDK 58 on React Native's strict instance types; run the mobile typecheck after API changes.
 - [AfuChat production-branch workflow](afuchat-production-branch-workflow.md) — For urgent AfuChat fixes, work directly on the production branch instead of creating a feature branch.
 - [AfuChat production feature policy](afuchat-production-feature-policy.md) — Keep real features production-ready; do not direct users to install another environment to access them.

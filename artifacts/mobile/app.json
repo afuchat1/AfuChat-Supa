@@ -96,7 +96,7 @@
         "expo-router",
         {
           "asyncRoutes": {
-            "web": false
+            "web": true
           }
         }
       ],
@@ -211,7 +211,10 @@
       "enabled": false
     },
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "chunking": {
+        "mode": "granular"
+      }
     },
     "owner": "afuapp",
     "web": {

@@ -1,10 +1,10 @@
 ---
 name: Expo Router SDK 58 web route loading
-description: Why the static preview keeps synchronous route loading on web.
+description: Verified SDK 58 route-based bundle splitting for the static web preview.
 ---
 
-Keep Expo Router async routes disabled on web while preserving the SDK default on native.
+Keep Expo Router async routes enabled on web with granular production chunking for the static export.
 
-**Why:** With SDK 58's default async web routes, the static preview's first-run redirect to `/welcome` failed with `Requiring unknown module 897`. Disabling web async routes fixed the initial screen without changing native routing.
+**Why:** The synchronous static export shipped a 9.2 MiB web entry bundle. SDK 58's static renderer correctly links route chunks into each HTML page; a clean export verified the root and `/welcome` routes with 282 generated chunks and a smaller first-route payload.
 
-**How to apply:** When upgrading Expo Router or changing the static web server, retest the root-to-welcome redirect and static routes. Do not re-enable async web routes until lazy chunk loading is verified in the preview.
+**How to apply:** Preserve `{ web: true }` for async routes and `experiments.chunking.mode: "granular"`. After changing Expo Router or the static web server, verify `/`, `/welcome`, dynamic routes, and that their referenced chunk files load.
