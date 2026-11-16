@@ -394,4 +394,12 @@ async function runMigrations(db: DB) {
     `);
     await db.runAsync("UPDATE schema_version SET version = 22");
   }
+
+  if (currentVersion < 23) {
+    await execSchemaChange(
+      db,
+      "ALTER TABLE post_like_state ADD COLUMN organization_page_post INTEGER NOT NULL DEFAULT 0",
+    );
+    await db.runAsync("UPDATE schema_version SET version = 23");
+  }
 }

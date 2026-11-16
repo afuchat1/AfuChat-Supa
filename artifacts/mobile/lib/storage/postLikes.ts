@@ -10,10 +10,22 @@ export { applyPostLikeSnapshots, resolvePostLikePresentation } from "./postLikeM
 
 const WEB_KEY_PREFIX = "afuchat:post-like-state:v1:";
 const webWriteQueues = new Map<string, Promise<void>>();
+const nativeWriteQueues = new Map<string, Promise<unknown>>();
 let connectivityUnsubscribe: (() => void) | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryCount = 0;
 let syncing = false;
+
+async function serializeNativeWrite<T>(userId: string, write: () => Promise<T>): Promise<T> {
+  const previous = nativeWriteQueues.get(userId) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(write);
+  nativeWriteQueues.set(userId, next);
+  try {
+    return await next;
+  } finally {
+    if (nativeWriteQueues.get(userId) === next) nativeWriteQueues.delete(userId);
+  }
+}
 
 function webKey(userId: string): string {
   return `${WEB_KEY_PREFIX}${encodeURIComponent(userId)}`;
@@ -33,6 +45,7 @@ function parseSnapshot(value: any): PostLikeSnapshot | null {
     likeCount: Math.max(0, Math.floor(Number(value.likeCount))),
     pending: value.pending === true,
     updatedAt: Number(value.updatedAt),
+    organizationPagePost: value.organizationPagePost === true,
   };
 }
 
@@ -42,6 +55,7 @@ function rowToSnapshot(row: any): PostLikeSnapshot {
     likeCount: Math.max(0, Number(row.like_count) || 0),
     pending: row.pending === 1,
     updatedAt: Number(row.updated_at) || 0,
+    organizationPagePost: row.organization_page_post === 1,
   };
 }
 
@@ -97,13 +111,13 @@ export async function getPostLikeStates(
     const db = await getDB();
     const rows = postIds
       ? await db.getAllAsync<any>(
-          `SELECT post_id, liked, like_count, pending, updated_at
+          `SELECT post_id, liked, like_count, pending, updated_at, organization_page_post
            FROM post_like_state
            WHERE user_id = ? AND post_id IN (${postIds.map(() => "?").join(",")})`,
           [userId, ...postIds],
         )
       : await db.getAllAsync<any>(
-          `SELECT post_id, liked, like_count, pending, updated_at
+          `SELECT post_id, liked, like_count, pending, updated_at, organization_page_post
            FROM post_like_state WHERE user_id = ?`,
           [userId],
         );
@@ -126,14 +140,24 @@ async function writePostLikeState(
 
   const db = await getDB();
   await db.runAsync(
-    `INSERT INTO post_like_state (user_id, post_id, liked, like_count, pending, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO post_like_state
+       (user_id, post_id, liked, like_count, pending, updated_at, organization_page_post)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, post_id) DO UPDATE SET
        liked = excluded.liked,
        like_count = excluded.like_count,
        pending = excluded.pending,
+       organization_page_post = excluded.organization_page_post,
        updated_at = MAX(excluded.updated_at, post_like_state.updated_at + 1)`,
-    [userId, postId, state.liked ? 1 : 0, Math.max(0, state.likeCount), state.pending ? 1 : 0, state.updatedAt],
+    [
+      userId,
+      postId,
+      state.liked ? 1 : 0,
+      Math.max(0, state.likeCount),
+      state.pending ? 1 : 0,
+      state.updatedAt,
+      state.organizationPagePost ? 1 : 0,
+    ],
   );
 }
 
@@ -142,6 +166,7 @@ export async function savePostLikeIntent(
   postId: string,
   liked: boolean,
   likeCount: number,
+  options?: { organizationPagePost?: boolean },
 ): Promise<PostLikeSnapshot> {
   if (Platform.OS === "web") {
     let snapshot: PostLikeSnapshot | null = null;
@@ -152,25 +177,30 @@ export async function savePostLikeIntent(
         likeCount: Math.max(0, Math.floor(likeCount)),
         pending: true,
         updatedAt: Math.max(Date.now(), (current?.updatedAt ?? 0) + 1),
+        organizationPagePost: options?.organizationPagePost ?? current?.organizationPagePost ?? false,
       };
       return { ...states, [postId]: snapshot };
     });
     if (snapshot) return snapshot;
   }
 
-  const current = (await getPostLikeStates(userId, [postId])).get(postId);
-  await writePostLikeState(userId, postId, {
-    liked,
-    likeCount: Math.max(0, Math.floor(likeCount)),
-    pending: true,
-    updatedAt: Math.max(Date.now(), (current?.updatedAt ?? 0) + 1),
+  return serializeNativeWrite(userId, async () => {
+    const current = (await getPostLikeStates(userId, [postId])).get(postId);
+    await writePostLikeState(userId, postId, {
+      liked,
+      likeCount: Math.max(0, Math.floor(likeCount)),
+      pending: true,
+      updatedAt: Math.max(Date.now(), (current?.updatedAt ?? 0) + 1),
+      organizationPagePost: options?.organizationPagePost ?? current?.organizationPagePost ?? false,
+    });
+    return (await getPostLikeStates(userId, [postId])).get(postId) ?? {
+      liked,
+      likeCount: Math.max(0, Math.floor(likeCount)),
+      pending: true,
+      updatedAt: Date.now(),
+      organizationPagePost: options?.organizationPagePost ?? false,
+    };
   });
-  return (await getPostLikeStates(userId, [postId])).get(postId) ?? {
-    liked,
-    likeCount: Math.max(0, Math.floor(likeCount)),
-    pending: true,
-    updatedAt: Date.now(),
-  };
 }
 
 /**
@@ -209,6 +239,7 @@ export async function cacheServerPostLikeStates(
           likeCount: Math.max(0, Math.floor(server.likeCount)),
           pending: false,
           updatedAt: Math.max(Date.now(), (current?.updatedAt ?? 0) + 1),
+          organizationPagePost: current?.organizationPagePost ?? false,
         };
       }
       return next;
@@ -316,6 +347,24 @@ export async function syncPendingPostLikes(userId?: string): Promise<void> {
       if (result.error) {
         failed = true;
         continue;
+      }
+      if (state.organizationPagePost) {
+        const { count, error: countError } = await supabase
+          .from("post_acknowledgments")
+          .select("id", { count: "exact", head: true })
+          .eq("post_id", postId);
+        if (countError || count == null) {
+          failed = true;
+          continue;
+        }
+        const { error: organizationPostError } = await supabase
+          .from("organization_page_posts")
+          .update({ likes: count })
+          .eq("id", postId);
+        if (organizationPostError) {
+          failed = true;
+          continue;
+        }
       }
       await markPostLikeSynced(authenticatedUserId, postId, state.updatedAt);
     }

@@ -1299,6 +1299,7 @@ export default function DiscoverScreen() {
   const initialHydrationDoneRef = useRef(false);
   const learnedWeightsRef = useRef<Record<string, number>>({});
   const postsRef = useRef<PostItem[]>([]);
+  const postLikeActionVersionsRef = useRef(new Map<string, number>());
   const feedTabRef = useRef<"for_you" | "following">("for_you");
   // Cache following IDs for 5 min — eliminates the serial round-trip on every Following tab load.
   const followingIdsCacheRef = useRef<{ ids: string[]; cachedAt: number }>({ ids: [], cachedAt: 0 });
@@ -2251,19 +2252,41 @@ export default function DiscoverScreen() {
         const orgData = _orgData;
         if (orgData && orgData.length > 0) {
           const orgIds = orgData.map((op: any) => op.id);
-          const [{ data: orgReplies }, { data: orgLikes }] = await Promise.all([
+          const orgLikeSnapshotStartedAt = Date.now();
+          const [{ data: orgReplies }, { data: orgLikes, error: orgLikesError }] = await Promise.all([
             supabase.from("post_replies").select("post_id").in("post_id", orgIds),
             user
               ? supabase.from("post_acknowledgments").select("post_id").in("post_id", orgIds).eq("user_id", user.id)
-              : Promise.resolve({ data: [] }),
+              : Promise.resolve({ data: [], error: null }),
           ]);
           const orgReplyCounts: Record<string, number> = {};
           for (const reply of (orgReplies || [])) {
             orgReplyCounts[reply.post_id] = (orgReplyCounts[reply.post_id] || 0) + 1;
           }
           const orgLiked = new Set((orgLikes || []).map((like: any) => like.post_id));
+          const orgLikeSnapshotKnown = !!user && !orgLikesError;
+          if (user && orgLikeSnapshotKnown) {
+            await cacheServerPostLikeStates(
+              user.id,
+              new Map(orgData.map((op: any) => [op.id, {
+                liked: orgLiked.has(op.id),
+                likeCount: Math.max(0, Number(op.likes) || 0),
+              }])),
+              orgLikeSnapshotStartedAt,
+            );
+          }
+          const orgLocalLikeStates = user
+            ? await getPostLikeStates(user.id, orgIds)
+            : new Map();
           orgPostItems = orgData.map((op: any) => {
             const pg = op.organization_pages;
+            const likePresentation = resolvePostLikePresentation(
+              orgLiked.has(op.id),
+              Math.max(0, Number(op.likes) || 0),
+              orgLocalLikeStates.get(op.id),
+              orgLikeSnapshotKnown,
+              orgLikeSnapshotStartedAt,
+            );
             return {
               // Organization posts use the same post-id namespace as regular
               // posts so likes, replies, bookmarks, and detail routes behave
@@ -2283,8 +2306,8 @@ export default function DiscoverScreen() {
                 handle: pg?.slug || "",
                 avatar_url: pg?.logo_url || null,
               },
-              liked: orgLiked.has(op.id),
-              likeCount: op.likes || 0,
+              liked: likePresentation.liked,
+              likeCount: likePresentation.likeCount,
               replyCount: orgReplyCounts[op.id] || 0,
               score: 50,
               bookmarked: false,
@@ -2820,18 +2843,38 @@ export default function DiscoverScreen() {
     if (!post) return;
     const nextLiked = !post.liked;
     const nextLikeCount = Math.max(0, post.likeCount + (nextLiked ? 1 : -1));
+    const version = (postLikeActionVersionsRef.current.get(postId) ?? 0) + 1;
+    postLikeActionVersionsRef.current.set(postId, version);
+    const applyLikeState = (items: PostItem[]) => items.map((item) => item.id === postId
+      ? { ...item, liked: nextLiked, likeCount: nextLikeCount }
+      : item);
 
     // Persist the user's intent before attempting the network write. A timeout
     // or offline response keeps the heart/count stable and leaves work to retry.
-    setPosts((prev) => prev.map((p) => p.id === postId
-      ? { ...p, liked: nextLiked, likeCount: nextLikeCount }
-      : p));
+    const nextPosts = applyLikeState(postsRef.current);
+    postsRef.current = nextPosts;
+    tabPostsCache.current.for_you = applyLikeState(tabPostsCache.current.for_you);
+    tabPostsCache.current.following = applyLikeState(tabPostsCache.current.following);
+    setPosts(nextPosts);
     updateLocalPostLike(postId, nextLiked, nextLikeCount).catch(() => {});
     try {
-      await savePostLikeIntent(user.id, postId, nextLiked, nextLikeCount);
+      await savePostLikeIntent(user.id, postId, nextLiked, nextLikeCount, {
+        organizationPagePost: !!post.org_page_id,
+      });
     } catch (error) {
       console.error("[PostLike] Could not persist local like state:", error);
-      showAlert("Like not saved", "Your change is still shown for now, but this device could not save it. Please try again.");
+      if (postLikeActionVersionsRef.current.get(postId) === version) {
+        const restoreLikeState = (items: PostItem[]) => items.map((item) => item.id === postId
+          ? { ...item, liked: post.liked, likeCount: post.likeCount }
+          : item);
+        const restoredPosts = restoreLikeState(postsRef.current);
+        postsRef.current = restoredPosts;
+        tabPostsCache.current.for_you = restoreLikeState(tabPostsCache.current.for_you);
+        tabPostsCache.current.following = restoreLikeState(tabPostsCache.current.following);
+        setPosts(restoredPosts);
+        updateLocalPostLike(postId, post.liked, post.likeCount).catch(() => {});
+        showAlert("Like not saved", "This device could not save your change. Please try again.");
+      }
       return;
     }
 
@@ -2842,11 +2885,6 @@ export default function DiscoverScreen() {
       });
       trackEvent("like_post", { post_id: postId, author_id: post.author_id });
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("post_liked"); } catch (_) {}
-    }
-    if (post.org_page_id && isOnline()) {
-      void supabase.from("organization_page_posts")
-        .update({ likes: nextLikeCount })
-        .eq("id", post.id);
     }
     void syncPendingPostLikes(user.id);
   }, [user, profile, postsRef]);

@@ -3,6 +3,7 @@ export type PostLikeSnapshot = {
   likeCount: number;
   pending: boolean;
   updatedAt: number;
+  organizationPagePost?: boolean;
 };
 
 export type PostLikePresentation = {

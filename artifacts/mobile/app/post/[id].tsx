@@ -39,6 +39,8 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
+import { getLocalFeedPost } from "@/lib/storage/localFeed";
+import { getPostLikeStates, cacheServerPostLikeStates, resolvePostLikePresentation, savePostLikeIntent, syncPendingPostLikes } from "@/lib/storage/postLikes";
 import { audioFocus } from "@/lib/audioFocus";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -273,8 +275,13 @@ export default function PostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const likeStateRef = useRef({ liked: false, likeCount: 0 });
+  const likeActionVersionRef = useRef(0);
   const [bookmarked, setBookmarked] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    likeStateRef.current = { liked, likeCount };
+  }, [liked, likeCount]);
 
   // ── Comment state ────────────────────────────────────────────────────────────
   const [replies, setReplies] = useState<Reply[]>([]);
@@ -338,6 +345,50 @@ export default function PostDetailScreen() {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      const likeSnapshotStartedAt = Date.now();
+      let localLikeState = user
+        ? (await getPostLikeStates(user.id, [id])).get(id) ?? null
+        : null;
+      if (!cancelled && localLikeState) {
+        setLiked(localLikeState.liked);
+        setLikeCount(localLikeState.likeCount);
+      }
+      if (org !== "1") {
+        const cachedPost = await getLocalFeedPost(id);
+        if (cachedPost && !cancelled) {
+          if (cachedPost.post_type === "video") {
+            router.replace({ pathname: "/video/[id]", params: { id } } as any);
+            return;
+          }
+          const localLike = resolvePostLikePresentation(
+            cachedPost.liked,
+            cachedPost.like_count,
+            localLikeState,
+            false,
+          );
+          setPost({
+            id: cachedPost.id,
+            author_id: cachedPost.author_id,
+            content: cachedPost.content ?? "",
+            image_url: cachedPost.image_url,
+            images: cachedPost.images ?? [],
+            created_at: cachedPost.created_at,
+            view_count: cachedPost.view_count ?? 0,
+            like_count: localLike.likeCount,
+            post_type: cachedPost.post_type ?? "text",
+            is_verified: cachedPost.is_verified ?? false,
+            is_organization_verified: cachedPost.is_org_verified ?? false,
+            profile: {
+              display_name: cachedPost.author_name ?? "User",
+              handle: cachedPost.author_handle ?? "user",
+              avatar_url: cachedPost.author_avatar ?? null,
+            },
+          });
+          setLiked(localLike.liked);
+          setLikeCount(localLike.likeCount);
+          setLoading(false);
+        }
+      }
       try {
         let data: any;
         if (org === "1") {
@@ -411,15 +462,41 @@ export default function PostDetailScreen() {
               avatar_url: prof.avatar_url ?? null,
             },
           });
-          setLikeCount(data.like_count ?? 0);
+          if (!user || !localLikeState) setLikeCount(data.like_count ?? 0);
         }
 
         if (user && !cancelled) {
-          const [likeRes, bmRes] = await Promise.all([
+          const [likeRes, likeCountRes, bmRes] = await Promise.all([
             supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
+            supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", id),
             supabase.from("bookmarks").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
           ]);
-          if (!cancelled) { setLiked(!!likeRes.data); setBookmarked(!!bmRes.data); }
+          if (!cancelled) {
+            const serverLikeCount = likeCountRes.error || likeCountRes.count == null
+              ? Math.max(0, Number(data.like_count) || 0)
+              : likeCountRes.count;
+            if (!likeRes.error) {
+              await cacheServerPostLikeStates(
+                user.id,
+                new Map([[id, { liked: !!likeRes.data, likeCount: serverLikeCount }]]),
+                likeSnapshotStartedAt,
+              );
+              localLikeState = (await getPostLikeStates(user.id, [id])).get(id) ?? localLikeState;
+              const likePresentation = resolvePostLikePresentation(
+                !!likeRes.data,
+                serverLikeCount,
+                localLikeState,
+                true,
+                likeSnapshotStartedAt,
+              );
+              setLiked(likePresentation.liked);
+              setLikeCount(likePresentation.likeCount);
+            } else if (localLikeState) {
+              setLiked(localLikeState.liked);
+              setLikeCount(localLikeState.likeCount);
+            }
+            setBookmarked(!!bmRes.data);
+          }
         }
       } catch {
         // fetch failed — show empty state
@@ -504,33 +581,30 @@ export default function PostDetailScreen() {
       Animated.spring(heartScale, { toValue: 1.4, useNativeDriver: true, speed: 50, bounciness: 14 }),
       Animated.spring(heartScale, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 4 }),
     ]).start();
-    if (liked) {
-      setLiked(false); setLikeCount((n) => Math.max(0, n - 1));
-      try {
-        const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", post.id).eq("user_id", user.id);
-        if (org === "1") {
-          const { error: orgError } = await supabase
-            .from("organization_page_posts")
-            .update({ likes: Math.max(0, likeCount - 1) })
-            .eq("id", post.id);
-          if (orgError) throw orgError;
-        }
-        if (error) throw error;
-      } catch { setLiked(true); setLikeCount((n) => n + 1); }
-    } else {
-      setLiked(true); setLikeCount((n) => n + 1);
-      try {
-        const { error } = await supabase.from("post_acknowledgments").upsert({ post_id: post.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
-        if (org === "1") {
-          const { error: orgError } = await supabase
-            .from("organization_page_posts")
-            .update({ likes: likeCount + 1 })
-            .eq("id", post.id);
-          if (orgError) throw orgError;
-        }
-        if (error) throw error;
-      } catch { setLiked(false); setLikeCount((n) => Math.max(0, n - 1)); }
+    const previousLikeState = likeStateRef.current;
+    const previousLiked = previousLikeState.liked;
+    const previousLikeCount = previousLikeState.likeCount;
+    const nextLiked = !previousLiked;
+    const nextLikeCount = Math.max(0, previousLikeCount + (nextLiked ? 1 : -1));
+    const actionVersion = ++likeActionVersionRef.current;
+    likeStateRef.current = { liked: nextLiked, likeCount: nextLikeCount };
+    setLiked(nextLiked);
+    setLikeCount(nextLikeCount);
+    try {
+      await savePostLikeIntent(user.id, post.id, nextLiked, nextLikeCount, {
+        organizationPagePost: org === "1",
+      });
+    } catch (error) {
+      console.error("[PostLike] Could not persist local post-detail like state:", error);
+      if (likeActionVersionRef.current === actionVersion) {
+        likeStateRef.current = previousLikeState;
+        setLiked(previousLiked);
+        setLikeCount(previousLikeCount);
+        showAlert("Like not saved", "This device could not save your change. Please try again.");
+      }
+      return;
     }
+    void syncPendingPostLikes(user.id);
   }, [user, post, liked, heartScale, org]);
 
   // ── Bookmark toggle ───────────────────────────────────────────────────────────

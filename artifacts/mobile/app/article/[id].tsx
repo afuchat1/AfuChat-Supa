@@ -20,6 +20,8 @@ import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
+import { showAlert } from "@/lib/alert";
+import { cacheServerPostLikeStates, getPostLikeStates, resolvePostLikePresentation, savePostLikeIntent, syncPendingPostLikes } from "@/lib/storage/postLikes";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -98,16 +100,31 @@ export default function ArticleDetailScreen() {
   const [loading,    setLoading]    = useState(true);
   const [liked,      setLiked]      = useState(false);
   const [likeCount,  setLikeCount]  = useState(0);
+  const likeStateRef = useRef({ liked: false, likeCount: 0 });
+  const likeActionVersionRef = useRef(0);
   const [bookmarked, setBookmarked] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
 
   const heartScale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    likeStateRef.current = { liked, likeCount };
+  }, [liked, likeCount]);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     (async () => {
       setLoading(true);
+      const likeSnapshotStartedAt = Date.now();
+      let localLikeState = user
+        ? (await getPostLikeStates(user.id, [id])).get(id) ?? null
+        : null;
+      if (localLikeState && !cancelled) {
+        setLiked(localLikeState.liked);
+        setLikeCount(localLikeState.likeCount);
+      }
+
       const { data } = await supabase
         .from("posts")
         .select(`
@@ -118,7 +135,7 @@ export default function ArticleDetailScreen() {
         .eq("id", id)
         .single();
 
-      if (!data) { setLoading(false); return; }
+      if (!data || cancelled) { if (!cancelled) setLoading(false); return; }
 
       const imgs: string[] = ((data.post_images as any[]) ?? [])
         .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
@@ -144,18 +161,47 @@ export default function ArticleDetailScreen() {
           avatar_url: prof.avatar_url ?? null,
         },
       });
-      setLikeCount(data.like_count ?? 0);
+      if (!user || !localLikeState) setLikeCount(data.like_count ?? 0);
 
       if (user) {
-        const [likeRes, bmRes] = await Promise.all([
+        const [likeRes, likeCountRes, bmRes] = await Promise.all([
           supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
+          supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", id),
           supabase.from("bookmarks").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
         ]);
-        setLiked(!!likeRes.data);
-        setBookmarked(!!bmRes.data);
+        if (!cancelled) {
+          const serverLikeCount = likeCountRes.error || likeCountRes.count == null
+            ? Math.max(0, Number(data.like_count) || 0)
+            : likeCountRes.count;
+          if (!likeRes.error) {
+            await cacheServerPostLikeStates(
+              user.id,
+              new Map([[id, { liked: !!likeRes.data, likeCount: serverLikeCount }]]),
+              likeSnapshotStartedAt,
+            );
+            localLikeState = (await getPostLikeStates(user.id, [id])).get(id) ?? localLikeState;
+            const likePresentation = resolvePostLikePresentation(
+              !!likeRes.data,
+              serverLikeCount,
+              localLikeState,
+              true,
+              likeSnapshotStartedAt,
+            );
+            setLiked(likePresentation.liked);
+            setLikeCount(likePresentation.likeCount);
+          } else if (localLikeState) {
+            setLiked(localLikeState.liked);
+            setLikeCount(localLikeState.likeCount);
+          }
+          setBookmarked(!!bmRes.data);
+        }
+      } else if (!cancelled) {
+        setLiked(false);
+        setBookmarked(false);
       }
-      setLoading(false);
-    })();
+      if (!cancelled) setLoading(false);
+    })().catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [id, user]);
 
   // ── Like toggle ───────────────────────────────────────────────────────────
@@ -168,13 +214,28 @@ export default function ArticleDetailScreen() {
       Animated.spring(heartScale, { toValue: 1,   useNativeDriver: true, speed: 22, bounciness: 4  }),
     ]).start();
 
-    if (liked) {
-      setLiked(false); setLikeCount((n) => Math.max(0, n - 1));
-      await supabase.from("post_acknowledgments").delete().eq("post_id", article.id).eq("user_id", user.id);
-    } else {
-      setLiked(true); setLikeCount((n) => n + 1);
-      await supabase.from("post_acknowledgments").upsert({ post_id: article.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
+    const previousLikeState = likeStateRef.current;
+    const previousLiked = previousLikeState.liked;
+    const previousLikeCount = previousLikeState.likeCount;
+    const nextLiked = !previousLiked;
+    const nextLikeCount = Math.max(0, previousLikeCount + (nextLiked ? 1 : -1));
+    const actionVersion = ++likeActionVersionRef.current;
+    likeStateRef.current = { liked: nextLiked, likeCount: nextLikeCount };
+    setLiked(nextLiked);
+    setLikeCount(nextLikeCount);
+    try {
+      await savePostLikeIntent(user.id, article.id, nextLiked, nextLikeCount);
+    } catch (error) {
+      console.error("[PostLike] Could not persist local article like state:", error);
+      if (likeActionVersionRef.current === actionVersion) {
+        likeStateRef.current = previousLikeState;
+        setLiked(previousLiked);
+        setLikeCount(previousLikeCount);
+        showAlert("Like not saved", "This device could not save your change. Please try again.");
+      }
+      return;
     }
+    void syncPendingPostLikes(user.id);
   }, [user, article, liked, heartScale]);
 
   // ── Bookmark toggle ───────────────────────────────────────────────────────

@@ -1217,6 +1217,7 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
   // Stable ref for videos — lets interaction callbacks (like/bookmark) always
   // read the latest videos array without being in every useCallback dep list.
   const videosRef = useRef(videos);
+  const likeActionVersionsRef = useRef(new Map<string, number>());
   // Tab indicator is driven purely by videoTab state — no Animated needed.
 
   useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
@@ -1392,7 +1393,7 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
     let query = supabase
       .from("posts")
-      .select(`id, author_id, content, video_url, image_url, created_at, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
+      .select(`id, author_id, content, video_url, image_url, created_at, like_count, audio_name, overlay_metadata, profiles!posts_author_id_fkey(display_name, handle, avatar_url, is_verified, is_organization_verified)`)
       .not("video_url", "is", null)
       .or("post_type.eq.video,post_type.is.null")
       .order("created_at", { ascending: false });
@@ -1424,11 +1425,10 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
       const likeSnapshotStartedAt = Date.now();
       const [
-        { data: likesData, error: likesError }, { data: repliesData }, { data: viewsData },
+        { data: repliesData }, { data: viewsData },
         { data: myLikes, error: myLikesError }, { data: myBookmarks }, { data: myFollows },
         { data: creatorSubscriptions },
       ] = await Promise.all([
-        supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds),
         supabase.from("post_replies").select("post_id").in("post_id", postIds),
         supabase.from("post_views").select("post_id").in("post_id", postIds),
         currentUser ? supabase.from("post_acknowledgments").select("post_id").in("post_id", postIds).eq("user_id", currentUser.id) : { data: [], error: null },
@@ -1443,20 +1443,18 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
       setFollowingSet(new Set((myFollows || []).map((f: any) => f.following_id)));
 
-      const likeMap: Record<string, number> = {};
-      for (const l of (likesData || [])) likeMap[l.post_id] = (likeMap[l.post_id] || 0) + 1;
       const replyMap: Record<string, number> = {};
       for (const r of (repliesData || [])) replyMap[r.post_id] = (replyMap[r.post_id] || 0) + 1;
       const viewMap: Record<string, number> = {};
       for (const v of (viewsData || [])) viewMap[v.post_id] = (viewMap[v.post_id] || 0) + 1;
       const myLikeSet = new Set((myLikes || []).map((l: any) => l.post_id));
-      const likeSnapshotKnown = !!currentUser && !likesError && !myLikesError;
+      const likeSnapshotKnown = !!currentUser && !myLikesError;
       if (currentUser && likeSnapshotKnown) {
         await cacheServerPostLikeStates(
           currentUser.id,
           new Map(postIds.map((postId: string) => [postId, {
             liked: myLikeSet.has(postId),
-            likeCount: likeMap[postId] || 0,
+            likeCount: Math.max(0, Number(data.find((post: any) => post.id === postId)?.like_count) || 0),
           }])),
           likeSnapshotStartedAt,
         );
@@ -1480,7 +1478,7 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       const allMapped: VideoPost[] = data.map((p: any) => {
         const likePresentation = resolvePostLikePresentation(
           myLikeSet.has(p.id),
-          likeMap[p.id] || 0,
+          Math.max(0, Number(p.like_count) || 0),
           localLikeStates.get(p.id),
           likeSnapshotKnown,
           likeSnapshotStartedAt,
@@ -1715,8 +1713,43 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
       .on("postgres_changes", { event: "*", schema: "public", table: "post_acknowledgments" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
         if (!postId || !loadedVideoIdsRef.current.has(postId)) return;
-        supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", postId)
-          .then(({ count }) => { setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, likeCount: count || 0 } : v)); });
+        const requestStartedAt = Date.now();
+        const currentUser = userRef.current;
+        const countRequest = supabase.from("post_acknowledgments")
+          .select("id", { count: "exact", head: true })
+          .eq("post_id", postId);
+        const userLikeRequest = currentUser
+          ? supabase.from("post_acknowledgments")
+              .select("post_id")
+              .eq("post_id", postId)
+              .eq("user_id", currentUser.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null });
+        void Promise.all([countRequest, userLikeRequest]).then(async ([countResult, userLikeResult]) => {
+          if (countResult.error || countResult.count == null) return;
+          if (currentUser && userLikeResult.error) return;
+          const serverLiked = !!userLikeResult.data;
+          if (currentUser) {
+            await cacheServerPostLikeStates(
+              currentUser.id,
+              new Map([[postId, { liked: serverLiked, likeCount: countResult.count }]]),
+              requestStartedAt,
+            );
+          }
+          const localLike = currentUser
+            ? (await getPostLikeStates(currentUser.id, [postId])).get(postId)
+            : null;
+          const presentation = resolvePostLikePresentation(
+            serverLiked,
+            countResult.count,
+            localLike,
+            !!currentUser,
+            requestStartedAt,
+          );
+          setVideos((prev) => prev.map((v) => v.id === postId
+            ? { ...v, liked: presentation.liked, likeCount: presentation.likeCount }
+            : v));
+        }).catch(() => {});
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "post_replies" }, (payload: any) => {
         const postId = payload.new?.post_id || payload.old?.post_id;
@@ -1774,34 +1807,37 @@ function VideoFeedContent({ isEmbedded = false }: { isEmbedded?: boolean } = {})
 
   // ── Interactions ───────────────────────────────────────────────────────────
 
-  const handleLike = useCallback(async (postId: string, currentlyLiked: boolean) => {
+  const handleLike = useCallback(async (postId: string, _currentlyLiked: boolean) => {
     const currentUser = userRef.current;
     if (!currentUser) { setShowSignInPrompt(true); return; }
+    const currentVideo = videosRef.current.find((video) => video.id === postId);
+    if (!currentVideo) return;
+    const nextLiked = !currentVideo.liked;
+    const nextLikeCount = Math.max(0, currentVideo.likeCount + (nextLiked ? 1 : -1));
+    const version = (likeActionVersionsRef.current.get(postId) ?? 0) + 1;
+    likeActionVersionsRef.current.set(postId, version);
 
-    // Optimistic update — update UI immediately before any await
-    if (currentlyLiked) {
-      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: false, likeCount: Math.max(0, v.likeCount - 1) } : v));
-    } else {
-      setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
-    }
-
-    if (currentlyLiked) {
-      const { error } = await supabase.from("post_acknowledgments").delete().eq("post_id", postId).eq("user_id", currentUser.id);
-      if (error) {
-        // Rollback on failure
-        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: true, likeCount: v.likeCount + 1 } : v));
+    const optimisticVideos = videosRef.current.map((video) => video.id === postId
+      ? { ...video, liked: nextLiked, likeCount: nextLikeCount }
+      : video);
+    videosRef.current = optimisticVideos;
+    setVideos(optimisticVideos);
+    try {
+      await savePostLikeIntent(currentUser.id, postId, nextLiked, nextLikeCount);
+      await updateLocalPostLike(postId, nextLiked, nextLikeCount);
+    } catch (error) {
+      console.error("[PostLike] Could not persist local video like state:", error);
+      if (likeActionVersionsRef.current.get(postId) === version) {
+        const restoredVideos = videosRef.current.map((video) => video.id === postId
+          ? { ...video, liked: currentVideo.liked, likeCount: currentVideo.likeCount }
+          : video);
+        videosRef.current = restoredVideos;
+        setVideos(restoredVideos);
+        showAlert("Like not saved", "This device could not save your change. Please try again.");
       }
-    } else {
-      const { error } = await supabase.from("post_acknowledgments").upsert(
-        { post_id: postId, user_id: currentUser.id },
-        { onConflict: "post_id,user_id", ignoreDuplicates: true }
-      );
-      if (error) {
-        // Rollback on failure
-        setVideos((prev) => prev.map((v) => v.id === postId ? { ...v, liked: false, likeCount: Math.max(0, v.likeCount - 1) } : v));
-      } else {
-      }
+      return;
     }
+    void syncPendingPostLikes(currentUser.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
