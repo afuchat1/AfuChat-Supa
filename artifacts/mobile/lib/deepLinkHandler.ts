@@ -181,7 +181,10 @@ function decodePathSegment(s: string): string {
  * Side-effects:
  *  - Persists pending group-join codes to AsyncStorage (PENDING_JOIN_KEY).
  */
-export async function handleIncomingUrl(url: string | null | undefined): Promise<DeepLinkAction> {
+export async function handleIncomingUrl(
+  url: string | null | undefined,
+  options: { persistJoin?: boolean } = {},
+): Promise<DeepLinkAction> {
   if (!url) return null;
 
   try {
@@ -206,7 +209,9 @@ export async function handleIncomingUrl(url: string | null | undefined): Promise
       }
 
       if (groupId) {
-        await AsyncStorage.setItem(PENDING_JOIN_KEY, code);
+        if (options.persistJoin !== false) {
+          await AsyncStorage.setItem(PENDING_JOIN_KEY, code);
+        }
         return { type: "join_group", groupId, code };
       }
     }

@@ -3,17 +3,26 @@
  *
  * Patches the expo-router `router` singleton so every call to
  * router.push / router.replace / router.back across the entire app
- * is automatically deduplicated — a repeated call for the same action within
- * DUPLICATE_WINDOW_MS is silently dropped. Different destinations are allowed
- * through immediately so a quick, intentional tap never feels blocked.
+ * is automatically deduplicated — repeated actions are dropped, the route
+ * already in front is not pushed again, and previously visited routes are
+ * reused from the stack. Different destinations remain available immediately.
  *
  * Import this module once as a side-effect at the top of the root
  * _layout.tsx and you're done. No changes needed at any call site.
  */
 import { router } from "expo-router";
 import { getCachedUserId } from "@/lib/offlineStore";
+import {
+  NavigationRouteGate,
+  routeIdentityFromHref,
+  routeIdentityFromLocation,
+  routeScreenIdentityFromHref,
+  routeScreenIdentityFromLocation,
+} from "./navigationDedupe";
 
 const DUPLICATE_WINDOW_MS = 250;
+const DUPLICATE_ROUTE_WINDOW_MS = 5_000;
+const routeGate = new NavigationRouteGate(DUPLICATE_ROUTE_WINDOW_MS);
 
 let _lastActionKey = "";
 let _lastActionAt = 0;
@@ -43,6 +52,29 @@ function acquire(actionKey: string): boolean {
 export function release(): void {
   _lastActionKey = "";
   _lastActionAt = 0;
+}
+
+/** Keep imperative navigation aware of the focused Expo Router location. */
+export function updateCurrentRoute(
+  pathname: string,
+  params: Record<string, unknown>,
+): void {
+  routeGate.updateCurrentRoute(
+    routeIdentityFromLocation(pathname, params),
+    routeScreenIdentityFromLocation(pathname),
+  );
+}
+
+function routeDecision(
+  kind: "push" | "replace" | "navigate",
+  args: unknown[],
+): { skip: boolean; reuseVisitedRoute: boolean } {
+  return routeGate.decide(
+    kind,
+    routeIdentityFromHref(args[0]),
+    routeScreenIdentityFromHref(args[0]),
+    monotonicNow(),
+  );
 }
 
 function keyFor(kind: "push" | "replace" | "navigate" | "back", args: unknown[] = []): string {
@@ -82,11 +114,17 @@ function runWithMountRetry(action: () => void, attempt = 0): void {
 
 (router as any).push = (...args: Parameters<typeof router.push>) => {
   if (!acquire(keyFor("push", args))) return;
-  runWithMountRetry(() => _origPush(...args));
+  const decision = routeDecision("push", args);
+  if (decision.skip) return;
+  runWithMountRetry(() => {
+    if (decision.reuseVisitedRoute) _origNavigate(args[0], args[1]);
+    else _origPush(...args);
+  });
 };
 
 (router as any).replace = (...args: Parameters<typeof router.replace>) => {
   if (!acquire(keyFor("replace", args))) return;
+  if (routeDecision("replace", args).skip) return;
   runWithMountRetry(() => _origReplace(...args));
 };
 
@@ -109,5 +147,6 @@ function runWithMountRetry(action: () => void, attempt = 0): void {
 
 (router as any).navigate = (...args: Parameters<typeof router.navigate>) => {
   if (!acquire(keyFor("navigate", args))) return;
+  if (routeDecision("navigate", args).skip) return;
   runWithMountRetry(() => _origNavigate(...args));
 };

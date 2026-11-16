@@ -53,7 +53,7 @@ export default function IndexScreen() {
       if (isAfuChatDeepLink(url)) {
         // Resolve the action only to stop the ordinary boot redirect from
         // racing the root deep-link gate, which owns actual navigation.
-        deepLinkPending = !!(await handleIncomingUrl(url));
+        deepLinkPending = !!(await handleIncomingUrl(url, { persistJoin: false }));
       }
       finish(deepLinkPending);
     }).catch(() => finish(false));

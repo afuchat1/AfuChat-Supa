@@ -14,7 +14,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { router, Stack, usePathname, useRootNavigationState } from "expo-router";
+import { router, Stack, useGlobalSearchParams, usePathname, useRootNavigationState } from "expo-router";
 import { setCurrentPage, resolvePageInfo } from "@/lib/pageTracker";
 import { StatusBar, setStatusBarHidden, setStatusBarStyle } from "expo-status-bar";
 import * as Font from "expo-font";
@@ -23,6 +23,8 @@ import { refreshAllPermissions } from "@/lib/permissionsManager";
 
 import { handleIncomingUrl } from "@/lib/deepLinkHandler";
 import { verifyDeepLinks } from "@/lib/deepLinkVerifier";
+import { incomingLinkEventKey, RecentEventGate } from "@/lib/navigationDedupe";
+import { updateCurrentRoute } from "@/lib/navigationGuard";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -174,9 +176,12 @@ function CrashSupportHandler() {
 
 function PageWatcher() {
   const pathname = usePathname();
+  const params = useGlobalSearchParams();
+  const paramsKey = JSON.stringify(params);
   useEffect(() => {
+    updateCurrentRoute(pathname, params as Record<string, unknown>);
     setCurrentPage(resolvePageInfo(pathname));
-  }, [pathname]);
+  }, [pathname, paramsKey]);
   return null;
 }
 
@@ -428,6 +433,7 @@ function IncomingShareGate({ navigationReady }: { navigationReady: boolean }) {
 function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
   const { session, loading, user } = useAuth();
   const pendingActionRef = useRef<any>(null);
+  const handledLinksRef = useRef(new RecentEventGate(5_000, 64));
   const [pendingVersion, setPendingVersion] = useState(0);
   const authRef = useRef({ loading, signedIn: Boolean(session?.user?.id || user?.id) });
   authRef.current = { loading, signedIn: Boolean(session?.user?.id || user?.id) };
@@ -455,6 +461,8 @@ function DeepLinkGate({ navigationReady }: { navigationReady: boolean }) {
     let cancelled = false;
 
     const processUrl = async (url: string | null | undefined) => {
+      const eventKey = incomingLinkEventKey(url);
+      if (!handledLinksRef.current.claim(eventKey)) return;
       const action = await handleIncomingUrl(url ?? null);
       if (cancelled || !action) return;
 

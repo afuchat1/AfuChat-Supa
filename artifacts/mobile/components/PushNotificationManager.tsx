@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AppState, Platform } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { safeRouter } from "@/lib/navUtils";
+import { RecentEventGate } from "@/lib/navigationDedupe";
 import {
   addNotificationResponseListener,
   addNotificationReceivedListener,
@@ -18,6 +19,25 @@ import {
   PUSH_ACTION_DEFAULT,
   PUSH_ACTION_OPEN,
 } from "@/lib/pushNotifications";
+
+const handledNotificationResponses = new RecentEventGate(15_000, 256);
+
+function notificationResponseKey(response: any): string {
+  const request = response?.notification?.request ?? response?.request;
+  const content = request?.content ?? {};
+  const data = content.data ?? response?.data ?? {};
+  const stableData = data && typeof data === "object"
+    ? Object.keys(data).sort().map((key) => [key, data[key]])
+    : String(data);
+  return JSON.stringify([
+    request?.identifier ?? "",
+    response?.actionIdentifier ?? "",
+    response?.userText ?? "",
+    content.title ?? "",
+    content.body ?? "",
+    stableData,
+  ]);
+}
 
 export default function PushNotificationManager() {
   const { user, session, profile, isAuthenticated } = useAuth();
@@ -39,6 +59,10 @@ export default function PushNotificationManager() {
     let active = true;
     const handleResponse = async (response: any) => {
       if (!active) return;
+      if (!handledNotificationResponses.claim(notificationResponseKey(response))) {
+        clearLastNotificationResponse();
+        return;
+      }
       try {
         await handleNotificationResponse(
           response,
