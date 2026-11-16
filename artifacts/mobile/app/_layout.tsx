@@ -610,43 +610,43 @@ export default function RootLayout() {
             <DataModeProvider>
               <AuthProvider>
                 <ThemeProvider>
-                  <AppAccentProvider>
-                    <ThemedRoot>
-                      <WebGlobalStyles />
-                <ThemedStatusBar />
-                {/* OOM guard: cancels all animations on app-background / memory-pressure */}
-                <AnimationGuardInit />
-                    <CallProvider>
-                    <ActivityTrackerSync />
-                      <CrashReporterUserSync />
-                      <CrashSupportHandler />
-                      <PageWatcher />
-                       <HardwareBackGuard />
-                      <GlobalInboxListener />
-                      <PushNotificationManager />
-                      <PlayStoreUpdateManager />
-                      <LanguageProvider>
-                        <LanguageDirectionShell>
-                          <AdvancedFeaturesProvider>
-                            <ChatPreferencesProvider>
-                              <MiniAppRuntimeProvider>
-                                <GlobalMusicPlayerProvider>
-                                 <DeepLinkGate navigationReady={!!rootNavigationState?.key} />
-                                <IncomingShareGate navigationReady={!!rootNavigationState?.key} />
-                                <NativeShareShortcutSync />
-                                <AppNavigationStack />
-                                <IncomingCallModal />
-                                <ToastContainer />
-                                <AlertModal />
-                                </GlobalMusicPlayerProvider>
-                              </MiniAppRuntimeProvider>
-                            </ChatPreferencesProvider>
-                          </AdvancedFeaturesProvider>
-                        </LanguageDirectionShell>
-                      </LanguageProvider>
-                    </CallProvider>
-                    </ThemedRoot>
-                  </AppAccentProvider>
+                  <ChatPreferencesProvider>
+                    <AppAccentProvider>
+                      <ThemedRoot>
+                        <WebGlobalStyles />
+                        <ThemedStatusBar />
+                        {/* OOM guard: cancels all animations on app-background / memory-pressure */}
+                        <AnimationGuardInit />
+                        <CallProvider>
+                          <ActivityTrackerSync />
+                          <CrashReporterUserSync />
+                          <CrashSupportHandler />
+                          <PageWatcher />
+                          <HardwareBackGuard />
+                          <GlobalInboxListener />
+                          <PushNotificationManager />
+                          <PlayStoreUpdateManager />
+                          <LanguageProvider>
+                            <LanguageDirectionShell>
+                              <AdvancedFeaturesProvider>
+                                <MiniAppRuntimeProvider>
+                                  <GlobalMusicPlayerProvider>
+                                    <DeepLinkGate navigationReady={!!rootNavigationState?.key} />
+                                    <IncomingShareGate navigationReady={!!rootNavigationState?.key} />
+                                    <NativeShareShortcutSync />
+                                    <AppNavigationStack />
+                                    <IncomingCallModal />
+                                    <ToastContainer />
+                                    <AlertModal />
+                                  </GlobalMusicPlayerProvider>
+                                </MiniAppRuntimeProvider>
+                              </AdvancedFeaturesProvider>
+                            </LanguageDirectionShell>
+                          </LanguageProvider>
+                      </CallProvider>
+                      </ThemedRoot>
+                    </AppAccentProvider>
+                  </ChatPreferencesProvider>
                 </ThemeProvider>
               </AuthProvider>
             </DataModeProvider>

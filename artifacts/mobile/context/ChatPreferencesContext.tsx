@@ -10,7 +10,7 @@ const CHAT_PREF_TO_LOCAL: Partial<Record<string, string>> = {
   auto_download: "chat_media_autodownload",
 };
 
-const APP_ACCENT_KEY = "app_color_theme";
+export const APP_ACCENT_KEY = "app_color_theme";
 const LOCAL_PREFS_KEY = "chat_prefs_local";
 const PENDING_SERVER_PREFS_KEY = "chat_prefs_pending_server";
 
@@ -120,6 +120,7 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     if (!user) {
       setPrefs(defaults);
       setLoading(false);
@@ -129,9 +130,10 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
       // Read local values first. They are the only source of truth while the
       // device is offline, and must not be lost just because the server query
       // is unavailable.
-      const [localRaw, pendingRaw] = await Promise.all([
+      const [localRaw, pendingRaw, localAccent] = await Promise.all([
         AsyncStorage.getItem(LOCAL_PREFS_KEY + "_" + user.id),
         AsyncStorage.getItem(PENDING_SERVER_PREFS_KEY + "_" + user.id),
+        AsyncStorage.getItem(APP_ACCENT_KEY),
       ]);
       let localPrefs: Partial<ChatPrefs> = {};
       let pendingServerPrefs: Partial<ChatPrefs> = {};
@@ -174,6 +176,15 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
         ...defaults,
         ...(data ?? {}),
         ...localPrefs,
+        ...(
+          !data?.chat_theme &&
+          !localPrefs.chat_theme &&
+          !pendingServerPrefs.chat_theme &&
+          localAccent &&
+          localAccent in CHAT_THEME_COLORS
+            ? { chat_theme: localAccent as ChatTheme }
+            : {}
+        ),
         ...pendingServerPrefs,
       };
       setPrefs(mergedPrefs);
@@ -181,10 +192,26 @@ export function ChatPreferencesProvider({ children }: { children: React.ReactNod
       // Keep the defaults available offline, but never leave the settings
       // screen in a permanent loading state.
       try {
-        const raw = await AsyncStorage.getItem(LOCAL_PREFS_KEY + "_" + user.id);
+        const [raw, pendingRaw, localAccent] = await Promise.all([
+          AsyncStorage.getItem(LOCAL_PREFS_KEY + "_" + user.id),
+          AsyncStorage.getItem(PENDING_SERVER_PREFS_KEY + "_" + user.id),
+          AsyncStorage.getItem(APP_ACCENT_KEY),
+        ]);
         const localPrefs = raw ? JSON.parse(raw) : {};
+        const pendingPrefs = pendingRaw ? JSON.parse(pendingRaw) : {};
         delete localPrefs.screenshot_protection;
-        const fallbackPrefs = { ...defaults, ...localPrefs };
+        const fallbackPrefs: ChatPrefs = {
+          ...defaults,
+          ...localPrefs,
+          ...(
+            !localPrefs.chat_theme &&
+            localAccent &&
+            localAccent in CHAT_THEME_COLORS
+              ? { chat_theme: localAccent as ChatTheme }
+              : {}
+          ),
+          ...pendingPrefs,
+        };
         setPrefs(fallbackPrefs);
       } catch {
         setPrefs(defaults);

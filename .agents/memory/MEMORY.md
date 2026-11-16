@@ -5,7 +5,7 @@
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
 - [Expo Go QR verification](expo-go-qr-verification.md) — If the managed tunnel is unavailable, use the installed ngrok provider and verify the Android bundle before sharing its QR.
 - [Expo Media Library legacy API](expo-media-library-legacy-api.md) — Use `/legacy` for `getAssetsAsync`, `MediaType`, and `SortBy`; the package root targets the newer API.
-- [AfuChat contrast and FABs](afuchat-brand-colors.md) — Keep card surfaces uniform by theme, preserve control colors, and use white icons on app-accent FABs.
+- [AfuChat brand colors](afuchat-brand-colors.md) — Use #258FE5 by default; app color and theme-mode changes are Premium-only.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
 - [Mention display policy](mention-rendering-policy.md) — Show mentions as avatar plus `@handle`, aligned on one centered line.
 - [React Native text indentation](react-native-text-indentation.md) — Raw multiline JSX text can preserve source indentation; use explicit string expressions where copy must align with row content.
