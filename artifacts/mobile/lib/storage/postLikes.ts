@@ -348,6 +348,22 @@ export async function syncPendingPostLikes(userId?: string): Promise<void> {
         failed = true;
         continue;
       }
+
+      // A mutation response alone is not enough to discard the durable local
+      // intent. Confirm the user's desired state is readable from the server
+      // before clearing `pending`; this protects against silent/no-op writes
+      // and keeps the UI stable until the server has actually caught up.
+      const confirmation = await supabase
+        .from("post_acknowledgments")
+        .select("post_id")
+        .eq("post_id", postId)
+        .eq("user_id", authenticatedUserId)
+        .maybeSingle();
+      if (confirmation.error || Boolean(confirmation.data) !== state.liked) {
+        failed = true;
+        continue;
+      }
+
       if (state.organizationPagePost) {
         const { count, error: countError } = await supabase
           .from("post_acknowledgments")

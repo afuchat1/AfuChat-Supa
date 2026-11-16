@@ -2945,6 +2945,32 @@ export default function DiscoverScreen() {
     }, [user?.id])
   );
 
+  // Details and video screens can change likes while Discover stays mounted.
+  // Rehydrate the durable per-user like snapshots on return so the visible
+  // heart/count never falls back to an older in-memory feed value.
+  useFocusEffect(
+    useCallback(() => {
+      const userId = user?.id;
+      if (!userId) return;
+      let active = true;
+      const currentIds = [...new Set(postsRef.current.map((post) => post.id))];
+      if (currentIds.length === 0) return;
+
+      void getPostLikeStates(userId, currentIds).then((localLikes) => {
+        if (!active || localLikes.size === 0) return;
+        const applyLocalLikes = (items: PostItem[]) =>
+          applyPostLikeSnapshots(items, localLikes, false);
+        const nextPosts = applyLocalLikes(postsRef.current);
+        postsRef.current = nextPosts;
+        tabPostsCache.current.for_you = applyLocalLikes(tabPostsCache.current.for_you);
+        tabPostsCache.current.following = applyLocalLikes(tabPostsCache.current.following);
+        setPosts(nextPosts);
+      }).catch(() => {});
+
+      return () => { active = false; };
+    }, [user?.id])
+  );
+
   // The dedicated Shorts experience now lives at /shorts (which redirects to
   // /video/[id]), so there is only ONE video player implementation app-wide.
   // The Shorts pill in the discover header navigates there.

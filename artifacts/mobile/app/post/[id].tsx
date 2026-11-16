@@ -30,6 +30,7 @@ import type { FlatListInstance, TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
+import { sharePost } from "@/lib/share";
 import { Ionicons } from "@expo/vector-icons";
 import { openExternalLink } from "@/lib/openExternalLink";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -39,7 +40,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
 
 import { supabase } from "@/lib/supabase";
-import { getLocalFeedPost } from "@/lib/storage/localFeed";
+import { getLocalFeedPost, updateLocalPostLike } from "@/lib/storage/localFeed";
 import { getPostLikeStates, cacheServerPostLikeStates, resolvePostLikePresentation, savePostLikeIntent, syncPendingPostLikes } from "@/lib/storage/postLikes";
 import { audioFocus } from "@/lib/audioFocus";
 import { useAuth } from "@/context/AuthContext";
@@ -282,6 +283,11 @@ export default function PostDetailScreen() {
   useEffect(() => {
     likeStateRef.current = { liked, likeCount };
   }, [liked, likeCount]);
+  const commitLikeState = useCallback((nextLiked: boolean, nextLikeCount: number) => {
+    likeStateRef.current = { liked: nextLiked, likeCount: Math.max(0, nextLikeCount) };
+    setLiked(nextLiked);
+    setLikeCount(Math.max(0, nextLikeCount));
+  }, []);
 
   // ── Comment state ────────────────────────────────────────────────────────────
   const [replies, setReplies] = useState<Reply[]>([]);
@@ -350,8 +356,7 @@ export default function PostDetailScreen() {
         ? (await getPostLikeStates(user.id, [id])).get(id) ?? null
         : null;
       if (!cancelled && localLikeState) {
-        setLiked(localLikeState.liked);
-        setLikeCount(localLikeState.likeCount);
+        commitLikeState(localLikeState.liked, localLikeState.likeCount);
       }
       if (org !== "1") {
         const cachedPost = await getLocalFeedPost(id);
@@ -384,8 +389,7 @@ export default function PostDetailScreen() {
               avatar_url: cachedPost.author_avatar ?? null,
             },
           });
-          setLiked(localLike.liked);
-          setLikeCount(localLike.likeCount);
+          commitLikeState(localLike.liked, localLike.likeCount);
           setLoading(false);
         }
       }
@@ -462,14 +466,14 @@ export default function PostDetailScreen() {
               avatar_url: prof.avatar_url ?? null,
             },
           });
-          if (!user || !localLikeState) setLikeCount(data.like_count ?? 0);
+          if (!user || !localLikeState) commitLikeState(false, data.like_count ?? 0);
         }
 
         if (user && !cancelled) {
           const [likeRes, likeCountRes, bmRes] = await Promise.all([
             supabase.from("post_acknowledgments").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
             supabase.from("post_acknowledgments").select("id", { count: "exact", head: true }).eq("post_id", id),
-            supabase.from("bookmarks").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
+            supabase.from("post_bookmarks").select("id").eq("post_id", id).eq("user_id", user.id).maybeSingle(),
           ]);
           if (!cancelled) {
             const serverLikeCount = likeCountRes.error || likeCountRes.count == null
@@ -489,11 +493,9 @@ export default function PostDetailScreen() {
                 true,
                 likeSnapshotStartedAt,
               );
-              setLiked(likePresentation.liked);
-              setLikeCount(likePresentation.likeCount);
+              commitLikeState(likePresentation.liked, likePresentation.likeCount);
             } else if (localLikeState) {
-              setLiked(localLikeState.liked);
-              setLikeCount(localLikeState.likeCount);
+              commitLikeState(localLikeState.liked, localLikeState.likeCount);
             }
             setBookmarked(!!bmRes.data);
           }
@@ -505,7 +507,7 @@ export default function PostDetailScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [id, user]);
+  }, [id, user, commitLikeState]);
 
   // ── Fetch comments ───────────────────────────────────────────────────────────
   const loadReplies = useCallback(() => {
@@ -574,7 +576,11 @@ export default function PostDetailScreen() {
 
   // ── Like toggle ───────────────────────────────────────────────────────────────
   const toggleLike = useCallback(async () => {
-    if (!user || !post) return;
+    if (!post) return;
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     heartScale.setValue(1);
     Animated.sequence([
@@ -587,42 +593,55 @@ export default function PostDetailScreen() {
     const nextLiked = !previousLiked;
     const nextLikeCount = Math.max(0, previousLikeCount + (nextLiked ? 1 : -1));
     const actionVersion = ++likeActionVersionRef.current;
-    likeStateRef.current = { liked: nextLiked, likeCount: nextLikeCount };
-    setLiked(nextLiked);
-    setLikeCount(nextLikeCount);
+    commitLikeState(nextLiked, nextLikeCount);
     try {
       await savePostLikeIntent(user.id, post.id, nextLiked, nextLikeCount, {
         organizationPagePost: org === "1",
       });
+      await updateLocalPostLike(post.id, nextLiked, nextLikeCount);
     } catch (error) {
       console.error("[PostLike] Could not persist local post-detail like state:", error);
       if (likeActionVersionRef.current === actionVersion) {
-        likeStateRef.current = previousLikeState;
-        setLiked(previousLiked);
-        setLikeCount(previousLikeCount);
+        commitLikeState(previousLiked, previousLikeCount);
+        await updateLocalPostLike(post.id, previousLiked, previousLikeCount);
         showAlert("Like not saved", "This device could not save your change. Please try again.");
       }
       return;
     }
     void syncPendingPostLikes(user.id);
-  }, [user, post, liked, heartScale, org]);
+  }, [user, post, liked, heartScale, org, commitLikeState]);
 
   // ── Bookmark toggle ───────────────────────────────────────────────────────────
   const toggleBookmark = useCallback(async () => {
-    if (!user || !post) return;
+    if (!post) return;
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (bookmarked) {
-      setBookmarked(false);
-      try {
-        await supabase.from("bookmarks").delete().eq("post_id", post.id).eq("user_id", user.id);
-      } catch { setBookmarked(true); }
-    } else {
-      setBookmarked(true);
-      try {
-        await supabase.from("bookmarks").insert({ post_id: post.id, user_id: user.id });
-      } catch { setBookmarked(false); }
+    const nextBookmarked = !bookmarked;
+    setBookmarked(nextBookmarked);
+    try {
+      const result = nextBookmarked
+        ? await supabase.from("post_bookmarks").upsert(
+            { post_id: post.id, user_id: user.id },
+            { onConflict: "post_id,user_id", ignoreDuplicates: true },
+          )
+        : await supabase.from("post_bookmarks").delete().eq("post_id", post.id).eq("user_id", user.id);
+      if (result.error) setBookmarked(!nextBookmarked);
+    } catch {
+      setBookmarked(!nextBookmarked);
+      showAlert("Bookmark not saved", "Please try again when your connection is available.");
     }
   }, [user, post, bookmarked]);
+
+  const focusCommentInput = useCallback(() => {
+    if (!user) {
+      router.push("/(auth)/login");
+      return;
+    }
+    inputRef.current?.focus();
+  }, [user]);
 
   // ── Mention suggestions ──────────────────────────────────────────────────────
   async function fetchMentionSuggestions(query: string) {
@@ -942,6 +961,62 @@ export default function PostDetailScreen() {
       {/* Link preview */}
       {previewUrl && <LinkPreviewCard url={previewUrl} colors={colors} />}
 
+      {/* Keep the main post actions available for text-only and media posts. */}
+      <View style={[st.postActionRow, { borderTopColor: separatorClr, borderBottomColor: separatorClr }]}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={liked ? `Unlike post, ${likeCount} likes` : `Like post, ${likeCount} likes`}
+          accessibilityState={{ selected: liked }}
+          style={st.postAction}
+          onPress={() => { void toggleLike(); }}
+          activeOpacity={0.7}
+        >
+          <Animated.View style={{ transform: [{ scale: heartScale }] }}>
+            <Ionicons name={liked ? "heart" : "heart-outline"} size={21} color={liked ? "#FF3B5C" : colors.textMuted} />
+          </Animated.View>
+          <Text style={[st.postActionText, { color: liked ? "#FF3B5C" : colors.textMuted }]}>
+            {formatNum(likeCount)}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Comment, ${replies.length} comments`}
+          style={st.postAction}
+          onPress={focusCommentInput}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chatbubble-outline" size={20} color={colors.textMuted} />
+          <Text style={[st.postActionText, { color: colors.textMuted }]}>{formatNum(replies.length)}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={bookmarked ? "Remove bookmark" : "Bookmark post"}
+          accessibilityState={{ selected: bookmarked }}
+          style={st.postAction}
+          onPress={() => { void toggleBookmark(); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={bookmarked ? "bookmark" : "bookmark-outline"} size={20} color={bookmarked ? accent : colors.textMuted} />
+          <Text style={[st.postActionText, { color: bookmarked ? accent : colors.textMuted }]}>Save</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Share post"
+          style={st.postAction}
+          onPress={() => {
+            void sharePost({
+              postId: post.id,
+              authorName: post.profile.display_name || post.profile.handle || "AfuChat user",
+              content: post.content || "",
+            });
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="share-outline" size={20} color={colors.textMuted} />
+          <Text style={[st.postActionText, { color: colors.textMuted }]}>Share</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Comments section header */}
       <View style={[st.commentsHeader, { borderBottomColor: separatorClr }]}>
         <Text style={[st.commentsTitle, { color: colors.text }]}>
@@ -1258,6 +1333,9 @@ const st = StyleSheet.create({
   linkCard: { flexDirection: "row", alignItems: "stretch", marginHorizontal: 16, marginBottom: 10, borderRadius: 14, overflow: "hidden", minHeight: 80 },
   linkThumb: { width: 90, minHeight: 80, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   linkBody: { flex: 1, paddingHorizontal: 10, paddingVertical: 10, gap: 4, justifyContent: "center" },
+  postActionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", marginTop: 10, marginBottom: 2, paddingVertical: 11, marginHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  postAction: { minWidth: 60, minHeight: 40, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 8 },
+  postActionText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
 
   // Comments section header
   commentsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth },
