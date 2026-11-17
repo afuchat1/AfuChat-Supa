@@ -14,7 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImageManipulator from "expo-image-manipulator";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useTheme } from "@/hooks/useTheme";
-import { calculateProfileCoverCropRect } from "@/lib/profileCoverCrop";
+import {
+  calculateProfileCoverCropRect,
+  PROFILE_COVER_ASPECT_RATIO,
+} from "@/lib/profileCoverCrop";
 
 type Offset = { x: number; y: number };
 
@@ -27,8 +30,8 @@ type Props = {
   onSave: (uri: string) => void | Promise<void>;
 };
 
-const COVER_WIDTH = 1440;
-const COVER_HEIGHT = 480;
+const COVER_WIDTH = 1200;
+const COVER_HEIGHT = 600;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -52,7 +55,7 @@ export function ProfileCoverCropModal({
   const gestureStartRef = useRef<Offset>({ x: 0, y: 0 });
 
   const viewportWidth = Math.max(240, Math.min(window.width - 72, 680));
-  const viewportHeight = viewportWidth / 3;
+  const viewportHeight = viewportWidth / PROFILE_COVER_ASPECT_RATIO;
   const sourceWidth = Math.max(1, imageWidth || 1200);
   const sourceHeight = Math.max(1, imageHeight || 800);
   const scale = Math.max(viewportWidth / sourceWidth, viewportHeight / sourceHeight);
@@ -196,7 +199,7 @@ export function ProfileCoverCropModal({
 
           <View style={styles.ratioRow}>
             <Ionicons name="crop-outline" size={15} color={colors.textMuted} />
-            <Text style={[styles.ratioText, { color: colors.textMuted }]}>Wide cover · 3:1</Text>
+            <Text style={[styles.ratioText, { color: colors.textMuted }]}>Wide cover · 2:1</Text>
           </View>
           {cropError ? <Text style={styles.errorText}>{cropError}</Text> : null}
         </View>

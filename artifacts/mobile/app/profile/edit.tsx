@@ -1127,7 +1127,7 @@ const styles = StyleSheet.create({
 
   // Banner + Avatar
   mediaSurface: { marginHorizontal: -16, marginBottom: 36 },
-  banner: { height: 160, overflow: "hidden" },
+  banner: { height: 200, overflow: "hidden" },
   bannerPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   bannerPlaceholderText: { color: "#fff", fontSize: 13, fontFamily: "Inter_500Medium" },
   bannerCameraChip: {

@@ -16,6 +16,7 @@ import { MeTabSkeleton } from "@/components/ui/Skeleton";
 import { Redirect, router } from "expo-router";
 import { navigateToProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "@/lib/haptics";
 import { useAuth } from "@/context/AuthContext";
@@ -221,6 +222,7 @@ export default function MeScreen() {
   const [followingCount, setFollowingCount] = useState(0);
   const [postCount, setPostCount] = useState(0);
   const insets = useSafeAreaInsets();
+  const profileCoverHeight = 260;
 
   // MMKV is the instant path, but SQLite is the durable fallback used by
   // Discover-style offline hydration. Do not show a reconnect warning while
@@ -397,10 +399,11 @@ export default function MeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style="light" />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[s.content, {
-          paddingTop: insets.top + 10,
+          paddingTop: 0,
           paddingBottom: insets.bottom + 96,
           alignSelf: "center",
           width: "100%",
@@ -414,17 +417,38 @@ export default function MeScreen() {
           <ProfileCover
             uri={profile?.banner_url}
             fallbackColors={coverColors}
-            style={s.heroCover}
+            fadeToColor={colors.cardSurface}
+            style={[s.heroCover, { height: profileCoverHeight + insets.top }]}
           >
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Edit profile cover"
-              onPress={() => router.push("/profile/edit")}
-              activeOpacity={0.8}
-              style={s.coverEditButton}
-            >
-              <Ionicons name="camera" size={16} color="#fff" />
-            </TouchableOpacity>
+            {profile?.banner_url ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Edit profile cover"
+                onPress={() => router.push("/profile/edit")}
+                activeOpacity={0.8}
+                style={[s.coverEditButton, { top: insets.top + 12 }]}
+              >
+                <Ionicons name="camera" size={16} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Add a profile cover background"
+                accessibilityHint="Opens profile editing to choose and crop a cover image."
+                onPress={() => router.push("/profile/edit")}
+                activeOpacity={0.86}
+                style={[s.coverAddPrompt, { top: insets.top + 58 }]}
+              >
+                <View style={s.coverAddIcon}>
+                  <Ionicons name="image-outline" size={18} color="#fff" />
+                </View>
+                <View style={s.coverAddText}>
+                  <Text style={s.coverAddTitle}>Add a cover background</Text>
+                  <Text style={s.coverAddHint}>Choose a photo to personalize your profile</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#fff" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="View profile photo"
@@ -757,7 +781,13 @@ const s = StyleSheet.create({
   content: { gap: 0, paddingHorizontal: 0 },
 
   // Hero
-  heroCard: { borderRadius: 20, overflow: "hidden" },
+  heroCard: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    overflow: "hidden",
+  },
   heroCover: { height: 138, width: "100%" },
   coverEditButton: {
     position: "absolute",
@@ -770,6 +800,32 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  coverAddPrompt: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.34)",
+    backgroundColor: "rgba(0,0,0,0.34)",
+  },
+  coverAddIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  coverAddText: { flex: 1, gap: 2 },
+  coverAddTitle: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  coverAddHint: { color: "rgba(255,255,255,0.85)", fontSize: 11, fontFamily: "Inter_400Regular" },
   heroAvatar: {
     position: "absolute",
     left: 18,

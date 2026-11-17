@@ -9,6 +9,7 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
   showTopFade?: boolean;
+  fadeToColor?: string | null;
 };
 
 export function ProfileCover({
@@ -17,6 +18,7 @@ export function ProfileCover({
   style,
   children,
   showTopFade = true,
+  fadeToColor,
 }: Props) {
   return (
     <View style={[styles.root, style]}>
@@ -43,6 +45,14 @@ export function ProfileCover({
           style={[StyleSheet.absoluteFill, styles.topFade]}
         />
       ) : null}
+      {fadeToColor ? (
+        <LinearGradient
+          colors={["transparent", fadeToColor]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.bottomFade}
+        />
+      ) : null}
       {children}
     </View>
   );
@@ -51,4 +61,11 @@ export function ProfileCover({
 const styles = StyleSheet.create({
   root: { position: "relative" },
   topFade: { height: 72 },
+  bottomFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 160,
+  },
 });

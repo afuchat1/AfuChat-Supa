@@ -271,3 +271,17 @@ mtime_ms = 1794902408346
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:101f8fa5-cc91-4ccd-a763-d96cb30fdd8e/10dd8a4a-026b-4ff0-a0f3-7d0d8b170387/2e087d1e-f362-401b-95f6-c442f59ef31e"
 storage_version_token = "1794902427810824"
 content_type = "image/png"
+
+[[outputs]]
+id = "yqLeehIpuwxCvsFUPVSJj"
+uri = "file://expo-go-qr.png"
+type = "image"
+title = "AfuChat Expo Go QR code"
+description = "Scan this with Expo Go to open the current AfuChat development session. The Android manifest and bundle were both verified through the tunnel."
+logical_id = "2c8fb4d4-0ee9-426e-9c83-b8a888c00b52"
+content_hash = "sha256:cf626b37b9af05c6c6b615cea05f29b2d9eeb1509e85d437b30764e6767d10d9"
+size = 4829
+mtime_ms = 1794905013216
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b008163f-162d-4ad4-989b-c69731d6800a/2c8fb4d4-0ee9-426e-9c83-b8a888c00b52/828a0ed8-03b4-4548-a26e-8acfb8c45b4a"
+storage_version_token = "1794905053208579"
+content_type = "image/png"

@@ -22,6 +22,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
+import { StatusBar } from "expo-status-bar";
+import { ProfileCover } from "@/components/profile/ProfileCover";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
@@ -33,6 +35,7 @@ type PrivateViewProps = {
   handle?: string;
   displayName?: string;
   avatarUrl?: string;
+  bannerUrl?: string;
   profileId?: string;
   onBack?: () => void;
 };
@@ -43,11 +46,13 @@ export function ProfilePrivateView({
   handle,
   displayName,
   avatarUrl,
+  bannerUrl,
   profileId,
   onBack,
 }: PrivateViewProps) {
   const { colors } = useTheme();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [followed, setFollowed] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -59,6 +64,7 @@ export function ProfilePrivateView({
     .toUpperCase()
     .slice(0, 2) || "?";
   const hue = name ? name.charCodeAt(0) * 37 % 360 : 200;
+  const fallbackColors = [`hsl(${hue}, 62%, 46%)`, `hsl(${(hue + 42) % 360}, 55%, 30%)`];
 
   function goBack() {
     if (onBack) { onBack(); return; }
@@ -84,88 +90,103 @@ export function ProfilePrivateView({
   }
 
   return (
-    <View style={[styles.body, { backgroundColor: colors.background }]}>
-      {/* Avatar with lock badge */}
-      <View style={styles.avatarWrap}>
-        {avatarUrl ? (
-          <ExpoImage
-            source={{ uri: avatarUrl }}
-            style={styles.avatar}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
-            <Text style={styles.avatarInitials}>{initials}</Text>
-          </View>
-        )}
-        <View style={[styles.lockBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="lock-closed" size={15} color={colors.text} />
-        </View>
-      </View>
-
-      <Text style={[styles.title, { color: colors.text }]}>
-        {displayName
-          ? `${displayName}'s account is private`
-          : handle
-          ? `@${handle}'s account is private`
-          : "This account is private"}
-      </Text>
-
-      {handle && (
-        <Text style={[styles.handleText, { color: colors.textMuted }]}>@{handle}</Text>
-      )}
-
-      <Text style={[styles.sub, { color: colors.textMuted }]}>
-        Follow this account to see their posts, photos, and videos.
-      </Text>
-
-      {user && profileId ? (
-        <TouchableOpacity
-          style={[
-            styles.btn,
-            {
-              backgroundColor: followed ? colors.surface : colors.accent,
-              borderColor: followed ? colors.border : colors.accent,
-            },
-          ]}
-          onPress={handleFollow}
-          disabled={followed || loading}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color={followed ? colors.textMuted : "#fff"} />
-          ) : (
-            <>
-              <Ionicons
-                name={followed ? "checkmark" : "person-add"}
-                size={16}
-                color={followed ? colors.textMuted : "#fff"}
-              />
-              <Text style={[styles.btnText, { color: followed ? colors.textMuted : "#fff" }]}>
-                {followed ? "Requested" : "Follow"}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-      ) : !user ? (
-        <TouchableOpacity
-          style={[styles.btn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
-          onPress={() => router.push("/(auth)/login" as any)}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="log-in" size={16} color="#fff" />
-          <Text style={[styles.btnText, { color: "#fff" }]}>Sign in to Follow</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      <TouchableOpacity
-        style={[styles.btnOutline, { borderColor: colors.border }]}
-        onPress={goBack}
-        activeOpacity={0.85}
+    <View style={[styles.page, { backgroundColor: colors.background }]}>
+      <StatusBar style="light" />
+      <ProfileCover
+        uri={bannerUrl}
+        fallbackColors={fallbackColors}
+        fadeToColor={colors.background}
+        style={[styles.cover, { height: 260 + insets.top }]}
       >
-        <Text style={[styles.btnOutlineText, { color: colors.text }]}>Go Back</Text>
-      </TouchableOpacity>
+        <GlassBackButton
+          style={[styles.coverBackButton, { top: insets.top + 6 }]}
+          onPress={goBack}
+          icon="chevron-back"
+        />
+        {/* Avatar overlaps the lower edge of the profile background. */}
+        <View style={styles.avatarWrap}>
+          {avatarUrl ? (
+            <ExpoImage
+              source={{ uri: avatarUrl }}
+              style={styles.avatar}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            </View>
+          )}
+          <View style={[styles.lockBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name="lock-closed" size={15} color={colors.text} />
+          </View>
+        </View>
+      </ProfileCover>
+
+      <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
+        <Text style={[styles.title, { color: colors.text }]}>
+          {displayName
+            ? `${displayName}'s account is private`
+            : handle
+            ? `@${handle}'s account is private`
+            : "This account is private"}
+        </Text>
+
+        {handle && (
+          <Text style={[styles.handleText, { color: colors.textMuted }]}>@{handle}</Text>
+        )}
+
+        <Text style={[styles.sub, { color: colors.textMuted }]}>
+          Follow this account to see their posts, photos, and videos.
+        </Text>
+
+        {user && profileId ? (
+          <TouchableOpacity
+            style={[
+              styles.btn,
+              {
+                backgroundColor: followed ? colors.surface : colors.accent,
+                borderColor: followed ? colors.border : colors.accent,
+              },
+            ]}
+            onPress={handleFollow}
+            disabled={followed || loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color={followed ? colors.textMuted : "#fff"} />
+            ) : (
+              <>
+                <Ionicons
+                  name={followed ? "checkmark" : "person-add"}
+                  size={16}
+                  color={followed ? colors.textMuted : "#fff"}
+                />
+                <Text style={[styles.btnText, { color: followed ? colors.textMuted : "#fff" }]}>
+                  {followed ? "Requested" : "Follow"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : !user ? (
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+            onPress={() => router.push("/(auth)/login" as any)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="log-in" size={16} color="#fff" />
+            <Text style={[styles.btnText, { color: "#fff" }]}>Sign in to Follow</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.btnOutline, { borderColor: colors.border }]}
+          onPress={goBack}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.btnOutlineText, { color: colors.text }]}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -178,37 +199,18 @@ export default function ProfilePrivateScreen() {
     display_name?: string;
     id?: string;
     avatar_url?: string;
+    banner_url?: string;
   }>();
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-        <GlassBackButton
-          style={styles.backBtn}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace("/(tabs)/discover" as any);
-            }
-          }}
-        />
-        {params.display_name ? (
-          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-            {params.display_name}
-          </Text>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
-        <View style={styles.headerSide} />
-      </View>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <ProfilePrivateView
         handle={params.handle}
         displayName={params.display_name}
         avatarUrl={params.avatar_url}
         profileId={params.id}
+        bannerUrl={params.banner_url}
       />
     </View>
   );
@@ -217,34 +219,34 @@ export default function ProfilePrivateScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  page: { flex: 1 },
+  cover: { width: "100%", overflow: "visible" },
   root: { flex: 1 },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    paddingTop: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  coverBackButton: {
+    position: "absolute",
+    left: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.35)",
   },
-  backBtn: { width: 40, height: 40, alignItems: "flex-start", justifyContent: "center" },
-  headerTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
-    textAlign: "center",
-  },
-  headerSide: { width: 40 },
 
   body: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     paddingHorizontal: 32,
     gap: 12,
-    paddingBottom: 80,
+    paddingTop: 58,
   },
-  avatarWrap: { position: "relative", marginBottom: 8 },
+  avatarWrap: {
+    position: "absolute",
+    bottom: -45,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 2,
+  },
   avatar: { width: 90, height: 90, borderRadius: 45 },
   avatarFallback: {
     width: 90,

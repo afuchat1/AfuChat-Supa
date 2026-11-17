@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
+import { StatusBar } from "expo-status-bar";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
@@ -33,8 +34,8 @@ import { showAlert } from "@/lib/alert";
 import { showToast } from "@/lib/toast";
 import * as Haptics from "@/lib/haptics";
 import { getPrestigeTier } from "@/lib/prestige";
-import { LinearGradient } from "@/components/ui/SafeGradient";
 import { openExternalLink } from "@/lib/openExternalLink";
+import { ProfileCover } from "@/components/profile/ProfileCover";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ type TabId = "posts" | "articles" | "videos";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const { width: SW } = Dimensions.get("window");
-const BANNER_H   = 100;
+const BANNER_H   = 260;
 const AVATAR_SIZE = 80;
 const AVATAR_OFFSET = 16; // how far avatar sticks below banner
 const CELL = Math.floor((SW - 3) / 3);
@@ -371,9 +372,10 @@ export default function ContactScreen() {
     </View>
   );
   if (profile.is_private && !isSelf && !isFollowing) return (
-    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ProfilePrivateView handle={profile.handle} displayName={profile.display_name}
-        avatarUrl={profile.avatar_url ?? undefined} profileId={profile.id} />
+        avatarUrl={profile.avatar_url ?? undefined} bannerUrl={profile.banner_url ?? undefined}
+        profileId={profile.id} />
     </View>
   );
 
@@ -405,7 +407,8 @@ export default function ContactScreen() {
   const isOrg = profile.is_organization_verified || profile.is_business_mode;
 
   return (
-    <View style={[s.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View style={[s.root, { backgroundColor: colors.background }]}>
+      <StatusBar style="light" />
       <ScrollView showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
@@ -413,23 +416,28 @@ export default function ContactScreen() {
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* COVER PHOTO (short + rectangular)                             */}
         {/* ══════════════════════════════════════════════════════════════ */}
-        <View style={[s.coverWrap, { height: BANNER_H }]}>
-          <LinearGradient
-            colors={[bannerColor1, bannerColor2] as any}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          {profile.banner_url ? (
-            <Image source={{ uri: profile.banner_url }}
-              style={StyleSheet.absoluteFill} contentFit="cover" />
-          ) : null}
-          <LinearGradient
-            colors={["rgba(0,0,0,0.42)", "transparent"] as any}
-            start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
-            style={[StyleSheet.absoluteFill, { height: 60 }]}
-          />
+        <ProfileCover
+          uri={profile.banner_url}
+          fallbackColors={[bannerColor1, bannerColor2]}
+          fadeToColor={colors.background}
+          style={[s.coverWrap, { height: BANNER_H + insets.top }]}
+        >
+          {isSelf && !profile.banner_url && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Add a profile cover background"
+              accessibilityHint="Opens profile editing to choose and crop a cover image."
+              onPress={() => router.push("/profile/edit")}
+              activeOpacity={0.86}
+              style={[s.coverAddPrompt, { top: insets.top + 58 }]}
+            >
+              <Ionicons name="image-outline" size={18} color="#fff" />
+              <Text style={s.coverAddPromptText} numberOfLines={1}>Add a cover background</Text>
+              <Ionicons name="chevron-forward" size={17} color="#fff" />
+            </TouchableOpacity>
+          )}
           {/* Nav row: back (left) + more (right) */}
-          <View style={[s.navRow, { top: 6 }]}>
+          <View style={[s.navRow, { top: insets.top + 6 }]}>
             <GlassBackButton
               style={s.navBtn}
               onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
@@ -446,7 +454,7 @@ export default function ContactScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </ProfileCover>
 
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* IDENTITY BAND                                                  */}
@@ -992,6 +1000,26 @@ const s = StyleSheet.create({
 
   // Cover photo (short + rectangular)
   coverWrap: { width: "100%", overflow: "hidden" },
+  coverAddPrompt: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.34)",
+    backgroundColor: "rgba(0,0,0,0.34)",
+  },
+  coverAddPromptText: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
 
   // Floating back button inside cover
   navRow: {
