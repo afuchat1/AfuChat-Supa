@@ -50,7 +50,7 @@ const SHORTCUT_STRINGS = `    <!-- ${ANDROID_MARKER} -->
 const WIDGET_INFO_XML = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
-    android:minHeight="140dp"
+    android:minHeight="190dp"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/afuchat_widget"
     android:resizeMode="horizontal|vertical"
@@ -62,7 +62,7 @@ const WIDGET_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="14dp"
     android:background="@drawable/afuchat_widget_background">
     <TextView
         android:id="@+id/widget_title"
@@ -70,14 +70,15 @@ const WIDGET_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:layout_height="wrap_content"
         android:text="@string/widget_title"
          android:textColor="@color/afuchat_widget_text"
-        android:textSize="16sp"
+        android:textSize="15sp"
         android:textStyle="bold"
+        android:layout_marginBottom="4dp"
         android:maxLines="1" />
     <TextView
         android:id="@+id/widget_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
+        android:layout_marginTop="10dp"
         android:text="@string/widget_empty"
          android:textColor="@color/afuchat_widget_text_muted"
         android:textSize="13sp"
@@ -86,19 +87,30 @@ const WIDGET_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:id="@+id/widget_row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
-        <TextView
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/afuchat_widget_avatar"
+            android:clipToOutline="true">
+            <ImageView
+                android:id="@+id/widget_row_1_avatar"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+            <TextView
             android:id="@+id/widget_row_1_initial"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:gravity="center"
          android:textColor="@color/afuchat_widget_text"
             android:textSize="13sp"
-            android:textStyle="bold"
-            android:background="@drawable/afuchat_widget_avatar" />
+            android:textStyle="bold" />
+        </FrameLayout>
         <TextView
             android:id="@+id/widget_row_1_label"
             android:layout_width="0dp"
@@ -114,19 +126,30 @@ const WIDGET_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:id="@+id/widget_row_2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
-        <TextView
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/afuchat_widget_avatar"
+            android:clipToOutline="true">
+            <ImageView
+                android:id="@+id/widget_row_2_avatar"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+            <TextView
             android:id="@+id/widget_row_2_initial"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:gravity="center"
          android:textColor="@color/afuchat_widget_text"
             android:textSize="13sp"
-            android:textStyle="bold"
-            android:background="@drawable/afuchat_widget_avatar" />
+            android:textStyle="bold" />
+        </FrameLayout>
         <TextView
             android:id="@+id/widget_row_2_label"
             android:layout_width="0dp"
@@ -142,19 +165,30 @@ const WIDGET_LAYOUT_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:id="@+id/widget_row_3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
-        <TextView
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/afuchat_widget_avatar"
+            android:clipToOutline="true">
+            <ImageView
+                android:id="@+id/widget_row_3_avatar"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+            <TextView
             android:id="@+id/widget_row_3_initial"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:gravity="center"
          android:textColor="@color/afuchat_widget_text"
             android:textSize="13sp"
-            android:textStyle="bold"
-            android:background="@drawable/afuchat_widget_avatar" />
+            android:textStyle="bold" />
+        </FrameLayout>
         <TextView
             android:id="@+id/widget_row_3_label"
             android:layout_width="0dp"
@@ -372,6 +406,7 @@ import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
+ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReactApplicationContext
@@ -379,7 +414,11 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
  import org.json.JSONArray
  import org.json.JSONObject
+ import java.io.File
+ import java.io.FileOutputStream
+ import java.security.MessageDigest
 import java.net.URL
+ import kotlin.math.max
 
 class AfuChatShareShortcutsModule(
   private val reactContext: ReactApplicationContext,
@@ -422,11 +461,13 @@ class AfuChatShareShortcutsModule(
           return@Thread
         }
 
-         val widgetRows = JSONArray()
-         chats.take(8).forEach { chat ->
+          val widgetRows = JSONArray()
+          chats.take(3).forEach { chat ->
+            val avatarPath = saveWidgetAvatar(context, chat.avatarUrl)
            widgetRows.put(JSONObject().apply {
              put("chatId", chat.chatId)
              put("label", chat.label)
+              put("avatarPath", avatarPath ?: "")
            })
          }
          context.getSharedPreferences("afuchat_widget", Context.MODE_PRIVATE)
@@ -466,22 +507,59 @@ class AfuChatShareShortcutsModule(
     }.start()
   }
 
-  private fun loadAvatarIcon(avatarUrl: String?): Icon? {
+  private fun loadAvatarBitmap(avatarUrl: String?): Bitmap? {
     if (avatarUrl.isNullOrBlank()) return null
     synchronized(avatarCache) {
-      avatarCache[avatarUrl]?.let { return Icon.createWithBitmap(it) }
+      avatarCache[avatarUrl]?.let { return it }
     }
     return try {
       val connection = URL(avatarUrl).openConnection()
       connection.connectTimeout = 4000
       connection.readTimeout = 4000
-      connection.getInputStream().use { stream ->
-        val bitmap = BitmapFactory.decodeStream(stream) ?: return null
-        synchronized(avatarCache) {
-          avatarCache[avatarUrl] = bitmap
+      val decoded = connection.getInputStream().use { stream ->
+        BitmapFactory.decodeStream(stream)
+      } ?: return null
+      val bitmap = centerCropAvatar(decoded, 128)
+      if (bitmap !== decoded && !decoded.isRecycled) decoded.recycle()
+      synchronized(avatarCache) { avatarCache[avatarUrl] = bitmap }
+      bitmap
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  private fun loadAvatarIcon(avatarUrl: String?): Icon? =
+    loadAvatarBitmap(avatarUrl)?.let { Icon.createWithBitmap(it) }
+
+  private fun centerCropAvatar(source: Bitmap, size: Int): Bitmap {
+    val scale = max(size.toFloat() / source.width, size.toFloat() / source.height)
+    val width = max(size, (source.width * scale).toInt())
+    val height = max(size, (source.height * scale).toInt())
+    val scaled = Bitmap.createScaledBitmap(source, width, height, true)
+    val left = (width - size) / 2
+    val top = (height - size) / 2
+    val cropped = Bitmap.createBitmap(scaled, left, top, size, size)
+    if (scaled !== source && cropped !== scaled && !scaled.isRecycled) scaled.recycle()
+    return cropped
+  }
+
+  private fun saveWidgetAvatar(context: Context, avatarUrl: String?): String? {
+    if (avatarUrl.isNullOrBlank()) return null
+    val bitmap = loadAvatarBitmap(avatarUrl) ?: return null
+    return try {
+      val directory = File(context.filesDir, "afuchat_widget_avatars")
+      if (!directory.exists() && !directory.mkdirs()) return null
+      val digest = MessageDigest.getInstance("SHA-256")
+        .digest(avatarUrl.toByteArray(Charsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+      val file = File(directory, "$digest.png")
+      FileOutputStream(file).use { output ->
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+          file.delete()
+          return null
         }
-        Icon.createWithBitmap(bitmap)
       }
+      file.absolutePath
     } catch (_: Exception) {
       null
     }
@@ -542,6 +620,14 @@ class AfuChatShareShortcutsModule(
           promise.resolve(false)
           return@post
         }
+        if (manager.getAppWidgetIds(provider).isNotEmpty()) {
+          context.getSharedPreferences("afuchat_widget", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("widget_was_added", true)
+            .apply()
+          promise.resolve(true)
+          return@post
+        }
         if (manager.isRequestPinAppWidgetSupported) {
           promise.resolve(manager.requestPinAppWidget(provider, null, null))
           return@post
@@ -562,6 +648,42 @@ class AfuChatShareShortcutsModule(
       } catch (error: Exception) {
         promise.reject("WIDGET_PIN_REQUEST_FAILED", error)
       }
+    }
+  }
+
+  @ReactMethod
+  fun getWidgetStatus(promise: Promise) {
+    try {
+      val context = reactApplicationContext.applicationContext
+      val manager = context.getSystemService(Context.APPWIDGET_SERVICE) as? AppWidgetManager
+      if (manager == null) {
+        promise.resolve(null)
+        return
+      }
+      val provider = ComponentName(context, AfuChatWidgetProvider::class.java)
+      val preferences = context.getSharedPreferences("afuchat_widget", Context.MODE_PRIVATE)
+      val status = Arguments.createMap().apply {
+        putBoolean("installed", manager.getAppWidgetIds(provider).isNotEmpty())
+        putBoolean("wasAdded", preferences.getBoolean("widget_was_added", false))
+        putBoolean("dismissed", preferences.getBoolean("widget_offer_dismissed", false))
+      }
+      promise.resolve(status)
+    } catch (error: Exception) {
+      promise.reject("WIDGET_STATUS_FAILED", error)
+    }
+  }
+
+  @ReactMethod
+  fun dismissWidgetOffer(promise: Promise) {
+    try {
+      reactApplicationContext.applicationContext
+        .getSharedPreferences("afuchat_widget", Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean("widget_offer_dismissed", true)
+        .apply()
+      promise.resolve(true)
+    } catch (error: Exception) {
+      promise.reject("WIDGET_OFFER_DISMISS_FAILED", error)
     }
   }
 
@@ -601,17 +723,32 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
 import org.json.JSONArray
 
 class AfuChatWidgetProvider : AppWidgetProvider() {
+  override fun onEnabled(context: Context) {
+    super.onEnabled(context)
+    context.getSharedPreferences("afuchat_widget", Context.MODE_PRIVATE)
+      .edit()
+      .putBoolean("widget_was_added", true)
+      .apply()
+  }
+
   override fun onUpdate(
     context: Context,
     appWidgetManager: AppWidgetManager,
     appWidgetIds: IntArray,
   ) {
+    if (appWidgetIds.isNotEmpty()) {
+      context.getSharedPreferences("afuchat_widget", Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean("widget_was_added", true)
+        .apply()
+    }
     appWidgetIds.forEach { appWidgetId ->
       updateWidget(context, appWidgetManager, appWidgetId)
     }
@@ -638,6 +775,11 @@ class AfuChatWidgetProvider : AppWidgetProvider() {
       R.id.widget_row_2_initial,
       R.id.widget_row_3_initial,
     )
+    val avatarIds = intArrayOf(
+      R.id.widget_row_1_avatar,
+      R.id.widget_row_2_avatar,
+      R.id.widget_row_3_avatar,
+    )
     val labelIds = intArrayOf(
       R.id.widget_row_1_label,
       R.id.widget_row_2_label,
@@ -663,7 +805,21 @@ class AfuChatWidgetProvider : AppWidgetProvider() {
       val chatId = chat.optString("chatId")
       val label = chat.optString("label", "Chat")
       views.setViewVisibility(rowIds[index], View.VISIBLE)
-      views.setTextViewText(initialIds[index], label.trim().firstOrNull()?.uppercase() ?: "A")
+      val avatarPath = chat.optString("avatarPath")
+      val avatar = if (avatarPath.isNotBlank() && avatarPath != "null") {
+        BitmapFactory.decodeFile(avatarPath)
+      } else {
+        null
+      }
+      if (avatar != null) {
+        views.setImageViewBitmap(avatarIds[index], avatar)
+        views.setViewVisibility(avatarIds[index], View.VISIBLE)
+        views.setViewVisibility(initialIds[index], View.GONE)
+      } else {
+        views.setViewVisibility(avatarIds[index], View.GONE)
+        views.setViewVisibility(initialIds[index], View.VISIBLE)
+        views.setTextViewText(initialIds[index], label.trim().firstOrNull()?.uppercase() ?: "A")
+      }
       views.setTextViewText(labelIds[index], label)
       views.setOnClickPendingIntent(
         rowIds[index],

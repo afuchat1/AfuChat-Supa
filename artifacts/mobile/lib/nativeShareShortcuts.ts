@@ -9,10 +9,18 @@ export type ShareShortcutChat = {
   isChannel?: boolean;
 };
 
+export type NativeWidgetStatus = {
+  installed: boolean;
+  wasAdded: boolean;
+  dismissed: boolean;
+};
+
 type ShareShortcutsModule = {
   update?: (chats: ShareShortcutChat[]) => Promise<boolean> | void;
   getInitialChatId?: () => Promise<string | null>;
   requestWidgetPin?: () => Promise<boolean> | void;
+  getWidgetStatus?: () => Promise<NativeWidgetStatus | null> | NativeWidgetStatus | null;
+  dismissWidgetOffer?: () => Promise<boolean> | boolean;
   setSpeakerphone?: (enabled: boolean) => Promise<boolean> | void;
 };
 
@@ -75,6 +83,41 @@ export async function requestNativeWidgetPin(): Promise<boolean> {
   if (!native?.requestWidgetPin) return false;
   try {
     return (await native.requestWidgetPin()) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads launcher-owned widget state so Settings can show the one-time setup
+ * offer only when no AfuChat widget has been added or dismissed.
+ */
+export async function getNativeWidgetStatus(): Promise<NativeWidgetStatus | null> {
+  if (Platform.OS !== "android") return null;
+  const native = NativeModules.AfuChatShareShortcuts as ShareShortcutsModule | undefined;
+  if (!native?.getWidgetStatus) return null;
+  try {
+    const status = await native.getWidgetStatus();
+    if (!status) return null;
+    return {
+      installed: status.installed === true,
+      wasAdded: status.wasAdded === true,
+      dismissed: status.dismissed === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Permanently dismisses the one-time widget setup offer on this device.
+ */
+export async function dismissNativeWidgetOffer(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const native = NativeModules.AfuChatShareShortcuts as ShareShortcutsModule | undefined;
+  if (!native?.dismissWidgetOffer) return false;
+  try {
+    return (await native.dismissWidgetOffer()) === true;
   } catch {
     return false;
   }

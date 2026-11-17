@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  AppState,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,7 +21,12 @@ import { AfuLogo } from "@/components/ui/AfuLogo";
 import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import Colors from "@/constants/colors";
 import { openAppReview } from "@/lib/appReview";
-import { requestNativeWidgetPin } from "@/lib/nativeShareShortcuts";
+import {
+  dismissNativeWidgetOffer,
+  getNativeWidgetStatus,
+  requestNativeWidgetPin,
+  type NativeWidgetStatus,
+} from "@/lib/nativeShareShortcuts";
 
 // ─── Theme toggle options ──────────────────────────────────────────────────────
 // ─── Reusable row primitives ───────────────────────────────────────────────────
@@ -114,6 +120,27 @@ export default function SettingsScreen() {
   const { langLabel, t } = useLanguage();
   const { user, profile, isPremium } = useAuth();
   const insets = useSafeAreaInsets();
+  const [widgetStatus, setWidgetStatus] = React.useState<NativeWidgetStatus | null>(null);
+
+  const refreshWidgetStatus = React.useCallback(async () => {
+    setWidgetStatus(await getNativeWidgetStatus());
+  }, []);
+
+  React.useEffect(() => {
+    if (Platform.OS !== "android") return;
+    void refreshWidgetStatus();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refreshWidgetStatus();
+    });
+    return () => subscription.remove();
+  }, [refreshWidgetStatus]);
+
+  const showWidgetOffer =
+    Platform.OS === "android" &&
+    !!widgetStatus &&
+    !widgetStatus.installed &&
+    !widgetStatus.wasAdded &&
+    !widgetStatus.dismissed;
 
   const BRAND = Colors.brand;
 
@@ -226,25 +253,52 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        {Platform.OS === "android" && (
+        {showWidgetOffer && (
           <Section title="settings.home_screen" colors={colors}>
-            <Row
-              icon="grid-outline"
-              label="settings.add_widget"
-              sublabel="settings.widget_description"
-              onPress={async () => {
-                const pinned = await requestNativeWidgetPin();
-                if (!pinned) {
-                  showAlert(
-                    t("settings.widget_help_title"),
-                    t("settings.widget_help_body"),
-                  );
-                }
-              }}
-              last
-              colors={colors}
-              accent={accent}
-            />
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <TouchableOpacity
+                testID="add-widget-offer"
+                style={[s.row, { flex: 1 }]}
+                onPress={async () => {
+                  const pinned = await requestNativeWidgetPin();
+                  if (!pinned) {
+                    showAlert(
+                      t("settings.widget_help_title"),
+                      t("settings.widget_help_body"),
+                    );
+                  }
+                  void refreshWidgetStatus();
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={s.iconWrap}>
+                  <Ionicons name="grid-outline" size={22} color={colors.text} />
+                </View>
+                <View style={s.rowText}>
+                  <Text style={[s.rowLabel, { color: colors.text }]}>{t("settings.add_widget")}</Text>
+                  <Text style={[s.rowSub, { color: colors.textMuted }]} numberOfLines={2}>
+                    {t("settings.widget_description")}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} style={{ marginLeft: 2 }} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="dismiss-widget-offer"
+                accessibilityRole="button"
+                accessibilityLabel={t("Close")}
+                hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                onPress={async () => {
+                  const dismissed = await dismissNativeWidgetOffer();
+                  if (dismissed) {
+                    setWidgetStatus((current) => current ? { ...current, dismissed: true } : current);
+                  }
+                }}
+                activeOpacity={0.65}
+                style={{ paddingHorizontal: 12, paddingVertical: 14 }}
+              >
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           </Section>
         )}
 
