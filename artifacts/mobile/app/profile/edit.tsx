@@ -30,7 +30,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import { ProfileCoverCropModal } from "@/components/profile/ProfileCoverCropModal";
 import { showAlert } from "@/lib/alert";
-import { getPrestigeTier } from "@/lib/prestige";
+import { PROFILE_COVER_DISPLAY_HEIGHT } from "@/lib/profileCoverCrop";
 import { aiGenerateBio } from "@/lib/aiHelper";
 import type { Country } from "@/constants/countries";
 const getCountries = () => (require("@/constants/countries").COUNTRIES as Country[]);
@@ -336,6 +336,8 @@ export default function EditProfileScreen() {
   const { colors, accent } = useTheme();
   const { user, profile, patchProfile } = useAuth();
   const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
+  const profileCoverPreviewHeight = Math.max(PROFILE_COVER_DISPLAY_HEIGHT, topInset + 48);
 
   // ── Form state ──
   const [displayName, setDisplayName] = useState(profile?.display_name || "");
@@ -596,7 +598,6 @@ export default function EditProfileScreen() {
 
   const currentAvatar = avatarUri || profile?.avatar_url;
   const currentBanner = bannerRemoved ? null : bannerUri || profile?.banner_url;
-  const coverColors = getPrestigeTier(profile?.acoin ?? 0).ringColors;
 
   // ── DOB picker data ────────────────────────────────────────────────────────
   const currentYear = new Date().getFullYear();
@@ -630,7 +631,7 @@ export default function EditProfileScreen() {
       />
 
       {/* Native-style navigation header */}
-      <View style={[styles.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      <View style={[styles.navBar, { paddingTop: topInset, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.navBarInner}>
           {/* Left — back */}
           <GlassBackButton
@@ -668,38 +669,32 @@ export default function EditProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Banner + Avatar ── */}
-        <View style={styles.mediaSurface}>
-          {/* Banner */}
-          <View style={[styles.banner, { backgroundColor: colors.backgroundTertiary }]}>
-            <ProfileCover
-              uri={currentBanner}
-              fallbackColors={coverColors}
-              showTopFade={false}
-              style={StyleSheet.absoluteFill}
-            >
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={currentBanner ? "Change profile cover" : "Add profile cover"}
-                onPress={pickBanner}
-                activeOpacity={0.9}
+        <View style={[styles.mediaSurface, !currentBanner && styles.mediaSurfaceNoCover]}>
+          {currentBanner ? (
+            <View style={[styles.banner, { height: profileCoverPreviewHeight }]}>
+              <ProfileCover
+                uri={currentBanner}
+                showTopFade={false}
                 style={StyleSheet.absoluteFill}
-              />
-              {!currentBanner && (
-                <View pointerEvents="none" style={styles.bannerPlaceholder}>
-                  <Ionicons name="image" size={28} color="#fff" />
-                  <Text style={styles.bannerPlaceholderText}>Tap to add cover photo</Text>
+              >
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Change profile cover"
+                  accessibilityHint="Opens the landscape crop tool before saving the new cover."
+                  onPress={pickBanner}
+                  disabled={uploadingBanner}
+                  activeOpacity={0.9}
+                  style={StyleSheet.absoluteFill}
+                />
+                {uploadingBanner && (
+                  <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.uploadOverlay]}>
+                    <ActivityIndicator color="#fff" />
+                  </View>
+                )}
+                <View pointerEvents="none" style={styles.bannerCameraChip}>
+                  <Ionicons name="camera" size={14} color="#fff" />
                 </View>
-              )}
-              {uploadingBanner && (
-                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.uploadOverlay]}>
-                  <ActivityIndicator color="#fff" />
-                </View>
-              )}
-              <View pointerEvents="none" style={styles.bannerCameraChip}>
-                <Ionicons name="camera" size={14} color="#fff" />
-              </View>
-            </ProfileCover>
-            {currentBanner && (
+              </ProfileCover>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Remove profile cover"
@@ -710,11 +705,34 @@ export default function EditProfileScreen() {
                 <Ionicons name="trash-outline" size={13} color="#fff" />
                 <Text style={styles.bannerRemoveText}>Remove</Text>
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Add profile cover"
+              accessibilityHint="Opens the landscape crop tool before saving a cover."
+              onPress={pickBanner}
+              disabled={uploadingBanner}
+              activeOpacity={0.85}
+              style={[
+                styles.bannerAddButton,
+                { backgroundColor: colors.cardSurface, borderColor: colors.border },
+              ]}
+            >
+              {uploadingBanner
+                ? <ActivityIndicator size="small" color={accent} />
+                : <Ionicons name="image-outline" size={18} color={accent} />}
+              <Text style={[styles.bannerAddText, { color: colors.text }]}>Add profile cover</Text>
+              <Ionicons name="add" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
 
           {/* Avatar */}
-          <View style={[styles.avatarContainer, { borderColor: colors.backgroundSecondary }]}>
+          <View style={[
+            styles.avatarContainer,
+            !currentBanner && styles.avatarContainerWithoutCover,
+            { borderColor: colors.backgroundSecondary },
+          ]}>
             <TouchableOpacity onPress={pickAvatar} activeOpacity={0.85} style={styles.avatarTouchable}>
               {currentAvatar ? (
                 <ExpoImage source={{ uri: currentAvatar }} style={styles.avatarImg} contentFit="cover" />
@@ -1127,9 +1145,19 @@ const styles = StyleSheet.create({
 
   // Banner + Avatar
   mediaSurface: { marginHorizontal: -16, marginBottom: 36 },
-  banner: { height: 200, overflow: "hidden" },
-  bannerPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
-  bannerPlaceholderText: { color: "#fff", fontSize: 13, fontFamily: "Inter_500Medium" },
+  mediaSurfaceNoCover: { marginBottom: 14 },
+  banner: { overflow: "hidden" },
+  bannerAddButton: {
+    minHeight: 48,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  bannerAddText: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
   bannerCameraChip: {
     position: "absolute", bottom: 10, right: 12,
     backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20,
@@ -1156,6 +1184,13 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     borderWidth: 3,
     overflow: "hidden",
+  },
+  avatarContainerWithoutCover: {
+    position: "relative",
+    bottom: 0,
+    left: 20,
+    alignSelf: "flex-start",
+    marginTop: 12,
   },
   avatarTouchable: { width: 88, height: 88 },
   avatarImg: { width: 88, height: 88, borderRadius: 44 },

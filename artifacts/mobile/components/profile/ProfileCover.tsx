@@ -4,8 +4,7 @@ import { LinearGradient } from "@/components/ui/SafeGradient";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 type Props = {
-  uri?: string | null;
-  fallbackColors: readonly (string | number)[];
+  uri: string;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
   showTopFade?: boolean;
@@ -14,7 +13,6 @@ type Props = {
 
 export function ProfileCover({
   uri,
-  fallbackColors,
   style,
   children,
   showTopFade = true,
@@ -22,21 +20,13 @@ export function ProfileCover({
 }: Props) {
   return (
     <View style={[styles.root, style]}>
-      <LinearGradient
-        colors={fallbackColors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <OptimizedImage
+        source={{ uri }}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
         style={StyleSheet.absoluteFill}
       />
-      {uri ? (
-        <OptimizedImage
-          source={{ uri }}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={150}
-          style={StyleSheet.absoluteFill}
-        />
-      ) : null}
       {showTopFade ? (
         <LinearGradient
           colors={["rgba(0,0,0,0.36)", "transparent"]}
@@ -66,6 +56,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 160,
+    height: 72,
   },
 });

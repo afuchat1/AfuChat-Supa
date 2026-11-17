@@ -36,6 +36,7 @@ import * as Haptics from "@/lib/haptics";
 import { getPrestigeTier } from "@/lib/prestige";
 import { openExternalLink } from "@/lib/openExternalLink";
 import { ProfileCover } from "@/components/profile/ProfileCover";
+import { PROFILE_COVER_DISPLAY_HEIGHT } from "@/lib/profileCoverCrop";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,6 @@ type TabId = "posts" | "articles" | "videos";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const { width: SW } = Dimensions.get("window");
-const BANNER_H   = 260;
 const AVATAR_SIZE = 80;
 const AVATAR_OFFSET = 16; // how far avatar sticks below banner
 const CELL = Math.floor((SW - 3) / 3);
@@ -136,6 +136,7 @@ export default function ContactScreen() {
   const { colors, accent, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   const isSelf = user?.id === id;
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -395,8 +396,6 @@ export default function ContactScreen() {
   const followIcon: any = followState === "friends" ? "heart" : followState === "following" ? "checkmark-circle"
     : "person-add";
 
-  const bannerColor1 = prestige.ringColors[0];
-  const bannerColor2 = prestige.ringColors[1];
   const cardBg = colors.card;
   const TABS: { id: TabId; icon: string; label: string }[] = [
     { id: "posts",    icon: "grid",           label: "Posts"    },
@@ -405,56 +404,50 @@ export default function ContactScreen() {
   ];
 
   const isOrg = profile.is_organization_verified || profile.is_business_mode;
+  const coverHeight = Math.max(PROFILE_COVER_DISPLAY_HEIGHT, topInset + 48);
+  const profileNavControls = (
+    <>
+      <GlassBackButton
+        style={s.navBtn}
+        onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
+      />
+      {!isSelf && (
+        <TouchableOpacity
+          style={[
+            s.navBtn,
+            !profile.banner_url && { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+          ]}
+          onPress={() => showAlert(profile.display_name, undefined, [
+            { text: "Report", style: "destructive", onPress: () => {} },
+            { text: "Block",  style: "destructive", onPress: () => {} },
+            { text: "Cancel", style: "cancel" },
+          ])}
+          hitSlop={{ top: 8, left: 10, right: 8, bottom: 8 }}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={profile.banner_url ? "#fff" : colors.text} />
+        </TouchableOpacity>
+      )}
+    </>
+  );
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <StatusBar style="light" />
+      <StatusBar style={profile.banner_url || isDark ? "light" : "dark"} />
       <ScrollView showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* COVER PHOTO (short + rectangular)                             */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <ProfileCover
-          uri={profile.banner_url}
-          fallbackColors={[bannerColor1, bannerColor2]}
-          fadeToColor={colors.background}
-          style={[s.coverWrap, { height: BANNER_H + insets.top }]}
-        >
-          {isSelf && !profile.banner_url && (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Add a profile cover background"
-              accessibilityHint="Opens profile editing to choose and crop a cover image."
-              onPress={() => router.push("/profile/edit")}
-              activeOpacity={0.86}
-              style={[s.coverAddPrompt, { top: insets.top + 58 }]}
-            >
-              <Ionicons name="image-outline" size={18} color="#fff" />
-              <Text style={s.coverAddPromptText} numberOfLines={1}>Add a cover background</Text>
-              <Ionicons name="chevron-forward" size={17} color="#fff" />
-            </TouchableOpacity>
-          )}
-          {/* Nav row: back (left) + more (right) */}
-          <View style={[s.navRow, { top: insets.top + 6 }]}>
-            <GlassBackButton
-              style={s.navBtn}
-              onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)/discover" as any)}
-            />
-            {!isSelf && (
-              <TouchableOpacity style={s.navBtn}
-                onPress={() => showAlert(profile.display_name, undefined, [
-                  { text: "Report", style: "destructive", onPress: () => {} },
-                  { text: "Block",  style: "destructive", onPress: () => {} },
-                  { text: "Cancel", style: "cancel" },
-                ])}
-                hitSlop={{ top: 8, left: 10, right: 8, bottom: 8 }}>
-                <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </ProfileCover>
+        {profile.banner_url ? (
+          <ProfileCover
+            uri={profile.banner_url}
+            fadeToColor={colors.background}
+            style={[s.coverWrap, { height: coverHeight }]}
+          >
+            <View style={[s.navRow, { top: topInset + 6 }]}>{profileNavControls}</View>
+          </ProfileCover>
+        ) : (
+          <View style={[s.noCoverNavRow, { paddingTop: topInset + 6 }]}>{profileNavControls}</View>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════ */}
         {/* IDENTITY BAND                                                  */}
@@ -468,7 +461,7 @@ export default function ContactScreen() {
             <TouchableOpacity
               onPress={() => setAvatarModalVisible(true)}
               activeOpacity={0.88}
-              style={[s.avatarShell, { borderColor: colors.background, marginTop: -(AVATAR_SIZE / 2 + 4), borderRadius: isOrg ? AVATAR_SIZE * 0.22 + 3 : AVATAR_SIZE / 2 + 3 }]}>
+              style={[s.avatarShell, { borderColor: colors.background, marginTop: profile.banner_url ? -(AVATAR_SIZE / 2 + 4) : 12, borderRadius: isOrg ? AVATAR_SIZE * 0.22 + 3 : AVATAR_SIZE / 2 + 3 }]}>
               <Avatar uri={profile.avatar_url} name={profile.display_name}
                 size={AVATAR_SIZE} square={isOrg} premium={false} userId={profile.id} />
               {ls.online && <View style={[s.onlineDot, { borderColor: colors.background }]} />}
@@ -1000,32 +993,18 @@ const s = StyleSheet.create({
 
   // Cover photo (short + rectangular)
   coverWrap: { width: "100%", overflow: "hidden" },
-  coverAddPrompt: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    height: 48,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    borderRadius: 15,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.34)",
-    backgroundColor: "rgba(0,0,0,0.34)",
-  },
-  coverAddPromptText: {
-    flex: 1,
-    color: "#fff",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
-
   // Floating back button inside cover
   navRow: {
     position: "absolute", left: 12, right: 12,
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between",
+  },
+  noCoverNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   navBtn: {
     width: 32, height: 32, borderRadius: 16,

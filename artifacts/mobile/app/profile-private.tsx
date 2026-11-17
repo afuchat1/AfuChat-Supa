@@ -28,6 +28,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
+import { PROFILE_COVER_DISPLAY_HEIGHT } from "@/lib/profileCoverCrop";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,9 +51,10 @@ export function ProfilePrivateView({
   profileId,
   onBack,
 }: PrivateViewProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   const [followed, setFollowed] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -64,7 +66,7 @@ export function ProfilePrivateView({
     .toUpperCase()
     .slice(0, 2) || "?";
   const hue = name ? name.charCodeAt(0) * 37 % 360 : 200;
-  const fallbackColors = [`hsl(${hue}, 62%, 46%)`, `hsl(${(hue + 42) % 360}, 55%, 30%)`];
+  const coverHeight = Math.max(PROFILE_COVER_DISPLAY_HEIGHT, topInset + 48);
 
   function goBack() {
     if (onBack) { onBack(); return; }
@@ -89,41 +91,54 @@ export function ProfilePrivateView({
     if (router.canGoBack()) router.back(); else router.replace("/(tabs)/discover" as any);
   }
 
+  const renderAvatar = (overCover: boolean) => (
+    <View style={overCover ? styles.avatarWrap : styles.avatarInFlow}>
+      {avatarUrl ? (
+        <ExpoImage
+          source={{ uri: avatarUrl }}
+          style={styles.avatar}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
+      ) : (
+        <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
+          <Text style={styles.avatarInitials}>{initials}</Text>
+        </View>
+      )}
+      <View style={[styles.lockBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Ionicons name="lock-closed" size={15} color={colors.text} />
+      </View>
+    </View>
+  );
+
   return (
     <View style={[styles.page, { backgroundColor: colors.background }]}>
-      <StatusBar style="light" />
-      <ProfileCover
-        uri={bannerUrl}
-        fallbackColors={fallbackColors}
-        fadeToColor={colors.background}
-        style={[styles.cover, { height: 260 + insets.top }]}
-      >
-        <GlassBackButton
-          style={[styles.coverBackButton, { top: insets.top + 6 }]}
-          onPress={goBack}
-          icon="chevron-back"
-        />
-        {/* Avatar overlaps the lower edge of the profile background. */}
-        <View style={styles.avatarWrap}>
-          {avatarUrl ? (
-            <ExpoImage
-              source={{ uri: avatarUrl }}
-              style={styles.avatar}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-            />
-          ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: `hsl(${hue},55%,52%)` }]}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
-            </View>
-          )}
-          <View style={[styles.lockBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="lock-closed" size={15} color={colors.text} />
-          </View>
+      <StatusBar style={bannerUrl || isDark ? "light" : "dark"} />
+      {bannerUrl ? (
+        <ProfileCover
+          uri={bannerUrl}
+          fadeToColor={colors.background}
+          style={[styles.cover, { height: coverHeight }]}
+        >
+          <GlassBackButton
+            style={[styles.coverBackButton, { top: topInset + 6 }]}
+            onPress={goBack}
+            icon="chevron-back"
+          />
+          {renderAvatar(true)}
+        </ProfileCover>
+      ) : (
+        <View style={[styles.noCoverHeader, { paddingTop: topInset + 6 }]}>
+          <GlassBackButton
+            style={styles.noCoverBackButton}
+            onPress={goBack}
+            icon="chevron-back"
+          />
         </View>
-      </ProfileCover>
+      )}
 
-      <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
+      <View style={[styles.body, { paddingBottom: insets.bottom + 24, paddingTop: bannerUrl ? 58 : 12 }]}>
+        {!bannerUrl ? renderAvatar(false) : null}
         <Text style={[styles.title, { color: colors.text }]}>
           {displayName
             ? `${displayName}'s account is private`
@@ -230,6 +245,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "rgba(0,0,0,0.35)",
   },
+  noCoverHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+  noCoverBackButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
 
   body: {
     flex: 1,
@@ -246,6 +272,12 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: "center",
     zIndex: 2,
+  },
+  avatarInFlow: {
+    position: "relative",
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 4,
   },
   avatar: { width: 90, height: 90, borderRadius: 45 },
   avatarFallback: {

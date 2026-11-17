@@ -33,7 +33,7 @@ import { showAlert } from "@/lib/alert";
 import { getCachedProfileSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getLocalProfile } from "@/lib/storage/localProfile";
 import { showToast } from "@/lib/toast";
-import { getPrestigeTier } from "@/lib/prestige";
+import { PROFILE_COVER_DISPLAY_HEIGHT } from "@/lib/profileCoverCrop";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -222,7 +222,8 @@ export default function MeScreen() {
   const [followingCount, setFollowingCount] = useState(0);
   const [postCount, setPostCount] = useState(0);
   const insets = useSafeAreaInsets();
-  const profileCoverHeight = 260;
+  const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
+  const profileCoverHeight = Math.max(PROFILE_COVER_DISPLAY_HEIGHT, topInset + 48);
 
   // MMKV is the instant path, but SQLite is the durable fallback used by
   // Discover-style offline hydration. Do not show a reconnect warning while
@@ -395,11 +396,45 @@ export default function MeScreen() {
   }
 
   const acoin = profile?.acoin || 0;
-  const coverColors = getPrestigeTier(acoin).ringColors;
+  const renderProfileAvatar = (placement: "cover" | "inline") => (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="View profile photo"
+      activeOpacity={0.9}
+      onPress={() => setAvatarOpen(true)}
+      onLongPress={() => { void Haptics.impactAsync(); setQrPosterOpen(true); }}
+      delayLongPress={400}
+      style={[
+        placement === "cover" ? s.heroAvatar : s.heroAvatarInline,
+        {
+          backgroundColor: colors.cardSurface,
+          borderColor: colors.cardSurface,
+          borderRadius: profile?.is_organization_verified || profile?.is_business_mode ? 22 : 42,
+        },
+      ]}
+    >
+      <Avatar
+        uri={profile?.avatar_url}
+        name={profile?.display_name}
+        size={74}
+        userId={user?.id}
+        square={!!(profile?.is_organization_verified || profile?.is_business_mode)}
+        prestigeRing={
+          equippedGoods.has("sg2") ? "void" :
+          equippedGoods.has("sg3") ? "diamond" : null
+        }
+      />
+      {isPremium && (
+        <View style={s.premiumDot}>
+          <Ionicons name="diamond" size={9} color="#fff" />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style="light" />
+      <StatusBar style={profile?.banner_url || isDark ? "light" : "dark"} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[s.content, {
@@ -414,79 +449,27 @@ export default function MeScreen() {
         {/* ── Hero Card ───────────────────────────────────────────────────── */}
       <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
 
-          <ProfileCover
-            uri={profile?.banner_url}
-            fallbackColors={coverColors}
-            fadeToColor={colors.cardSurface}
-            style={[s.heroCover, { height: profileCoverHeight + insets.top }]}
-          >
-            {profile?.banner_url ? (
+          {profile?.banner_url ? (
+            <ProfileCover
+              uri={profile.banner_url}
+              fadeToColor={colors.cardSurface}
+              style={[s.heroCover, { height: profileCoverHeight }]}
+            >
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Edit profile cover"
                 onPress={() => router.push("/profile/edit")}
                 activeOpacity={0.8}
-                style={[s.coverEditButton, { top: insets.top + 12 }]}
+                style={[s.coverEditButton, { top: topInset + 12 }]}
               >
                 <Ionicons name="camera" size={16} color="#fff" />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Add a profile cover background"
-                accessibilityHint="Opens profile editing to choose and crop a cover image."
-                onPress={() => router.push("/profile/edit")}
-                activeOpacity={0.86}
-                style={[s.coverAddPrompt, { top: insets.top + 58 }]}
-              >
-                <View style={s.coverAddIcon}>
-                  <Ionicons name="image-outline" size={18} color="#fff" />
-                </View>
-                <View style={s.coverAddText}>
-                  <Text style={s.coverAddTitle}>Add a cover background</Text>
-                  <Text style={s.coverAddHint}>Choose a photo to personalize your profile</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#fff" />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="View profile photo"
-              activeOpacity={0.9}
-              onPress={() => setAvatarOpen(true)}
-              onLongPress={() => { void Haptics.impactAsync(); setQrPosterOpen(true); }}
-              delayLongPress={400}
-              style={[
-                s.heroAvatar,
-                {
-                  backgroundColor: colors.cardSurface,
-                  borderColor: colors.cardSurface,
-                  borderRadius: profile?.is_organization_verified || profile?.is_business_mode ? 22 : 42,
-                },
-              ]}
-            >
-              <Avatar
-                uri={profile?.avatar_url}
-                name={profile?.display_name}
-                size={74}
-                userId={user?.id}
-                square={!!(profile?.is_organization_verified || profile?.is_business_mode)}
-                prestigeRing={
-                  equippedGoods.has('sg2') ? 'void' :
-                  equippedGoods.has('sg3') ? 'diamond' : null
-                }
-              />
-              {isPremium && (
-                <View style={s.premiumDot}>
-                  <Ionicons name="diamond" size={9} color="#fff" />
-                </View>
-              )}
-            </TouchableOpacity>
-          </ProfileCover>
+              {renderProfileAvatar("cover")}
+            </ProfileCover>
+          ) : null}
 
-          {/* Avatar overlaps the cover; preserve the existing identity row. */}
-          <View style={s.heroTop}>
-            <View style={s.heroAvatarSpacer} />
+          <View style={[s.heroTop, !profile?.banner_url && s.heroTopNoCover]}>
+            {profile?.banner_url ? <View style={s.heroAvatarSpacer} /> : renderProfileAvatar("inline")}
 
             <View style={{ flex: 1, gap: 3 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
@@ -788,7 +771,7 @@ const s = StyleSheet.create({
     borderBottomRightRadius: 20,
     overflow: "hidden",
   },
-  heroCover: { height: 138, width: "100%" },
+  heroCover: { width: "100%" },
   coverEditButton: {
     position: "absolute",
     top: 12,
@@ -800,32 +783,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  coverAddPrompt: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    minHeight: 60,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.34)",
-    backgroundColor: "rgba(0,0,0,0.34)",
-  },
-  coverAddIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
-  },
-  coverAddText: { flex: 1, gap: 2 },
-  coverAddTitle: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  coverAddHint: { color: "rgba(255,255,255,0.85)", fontSize: 11, fontFamily: "Inter_400Regular" },
   heroAvatar: {
     position: "absolute",
     left: 18,
@@ -837,8 +794,16 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  heroAvatarInline: {
+    width: 80,
+    height: 80,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   heroAvatarSpacer: { width: 80, height: 1 },
   heroTop: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14, gap: 14 },
+  heroTopNoCover: { alignItems: "center", paddingTop: 18 },
   heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },
   heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
   heroBio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 20, paddingBottom: 14, paddingTop: 12 },

@@ -16,6 +16,8 @@ import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useTheme } from "@/hooks/useTheme";
 import {
   calculateProfileCoverCropRect,
+  PROFILE_COVER_OUTPUT_HEIGHT,
+  PROFILE_COVER_OUTPUT_WIDTH,
   PROFILE_COVER_ASPECT_RATIO,
 } from "@/lib/profileCoverCrop";
 
@@ -29,9 +31,6 @@ type Props = {
   onCancel: () => void;
   onSave: (uri: string) => void | Promise<void>;
 };
-
-const COVER_WIDTH = 1200;
-const COVER_HEIGHT = 600;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -113,7 +112,7 @@ export function ProfileCoverCropModal({
         uri,
         [
           { crop },
-          { resize: { width: COVER_WIDTH, height: COVER_HEIGHT } },
+          { resize: { width: PROFILE_COVER_OUTPUT_WIDTH, height: PROFILE_COVER_OUTPUT_HEIGHT } },
         ],
         { compress: 0.76, format: ImageManipulator.SaveFormat.JPEG },
       );
@@ -199,7 +198,9 @@ export function ProfileCoverCropModal({
 
           <View style={styles.ratioRow}>
             <Ionicons name="crop-outline" size={15} color={colors.textMuted} />
-            <Text style={[styles.ratioText, { color: colors.textMuted }]}>Wide cover · 2:1</Text>
+            <Text style={[styles.ratioText, { color: colors.textMuted }]}>
+              Wide cover · {PROFILE_COVER_ASPECT_RATIO}:1
+            </Text>
           </View>
           {cropError ? <Text style={styles.errorText}>{cropError}</Text> : null}
         </View>
