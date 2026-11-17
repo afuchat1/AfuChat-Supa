@@ -414,16 +414,15 @@ export default function ContactScreen() {
         {/* COVER PHOTO (short + rectangular)                             */}
         {/* ══════════════════════════════════════════════════════════════ */}
         <View style={[s.coverWrap, { height: BANNER_H }]}>
+          <LinearGradient
+            colors={[bannerColor1, bannerColor2] as any}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           {profile.banner_url ? (
             <Image source={{ uri: profile.banner_url }}
               style={StyleSheet.absoluteFill} contentFit="cover" />
-          ) : (
-            <LinearGradient
-              colors={[bannerColor1, bannerColor2] as any}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          )}
+          ) : null}
           <LinearGradient
             colors={["rgba(0,0,0,0.42)", "transparent"] as any}
             start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}

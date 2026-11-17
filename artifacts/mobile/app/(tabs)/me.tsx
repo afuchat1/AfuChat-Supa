@@ -24,6 +24,7 @@ import { formatCompactNumber, formatDate } from "@/lib/i18n";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
 import { AvatarViewer } from "@/components/ui/AvatarViewer";
+import { ProfileCover } from "@/components/profile/ProfileCover";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import QRPosterSheet from "@/components/ui/QRPosterSheet";
 import Colors from "@/constants/colors";
@@ -31,6 +32,7 @@ import { showAlert } from "@/lib/alert";
 import { getCachedProfileSync, isOnline, onConnectivityChange } from "@/lib/offlineStore";
 import { getLocalProfile } from "@/lib/storage/localProfile";
 import { showToast } from "@/lib/toast";
+import { getPrestigeTier } from "@/lib/prestige";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -391,6 +393,7 @@ export default function MeScreen() {
   }
 
   const acoin = profile?.acoin || 0;
+  const coverColors = getPrestigeTier(acoin).ringColors;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -408,13 +411,35 @@ export default function MeScreen() {
         {/* ── Hero Card ───────────────────────────────────────────────────── */}
       <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
 
-          {/* Avatar + info row */}
-          <View style={s.heroTop}>
+          <ProfileCover
+            uri={profile?.banner_url}
+            fallbackColors={coverColors}
+            style={s.heroCover}
+          >
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile cover"
+              onPress={() => router.push("/profile/edit")}
+              activeOpacity={0.8}
+              style={s.coverEditButton}
+            >
+              <Ionicons name="camera" size={16} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View profile photo"
               activeOpacity={0.9}
               onPress={() => setAvatarOpen(true)}
               onLongPress={() => { void Haptics.impactAsync(); setQrPosterOpen(true); }}
               delayLongPress={400}
+              style={[
+                s.heroAvatar,
+                {
+                  backgroundColor: colors.cardSurface,
+                  borderColor: colors.cardSurface,
+                  borderRadius: profile?.is_organization_verified || profile?.is_business_mode ? 22 : 42,
+                },
+              ]}
             >
               <Avatar
                 uri={profile?.avatar_url}
@@ -433,6 +458,11 @@ export default function MeScreen() {
                 </View>
               )}
             </TouchableOpacity>
+          </ProfileCover>
+
+          {/* Avatar overlaps the cover; preserve the existing identity row. */}
+          <View style={s.heroTop}>
+            <View style={s.heroAvatarSpacer} />
 
             <View style={{ flex: 1, gap: 3 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
@@ -728,6 +758,30 @@ const s = StyleSheet.create({
 
   // Hero
   heroCard: { borderRadius: 20, overflow: "hidden" },
+  heroCover: { height: 138, width: "100%" },
+  coverEditButton: {
+    position: "absolute",
+    top: 12,
+    right: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.48)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroAvatar: {
+    position: "absolute",
+    left: 18,
+    bottom: -40,
+    zIndex: 2,
+    width: 80,
+    height: 80,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroAvatarSpacer: { width: 80, height: 1 },
   heroTop: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14, gap: 14 },
   heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },
   heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },

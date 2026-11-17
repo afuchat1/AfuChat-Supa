@@ -20,12 +20,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "@/lib/haptics";
+import * as ImageManipulator from "expo-image-manipulator";
+import { ImageManipulator as ImageManipulatorModule } from "expo-image-manipulator";
 import { supabase } from "@/lib/supabase";
 import { uploadAvatarWithError, uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import { ProfileCover } from "@/components/profile/ProfileCover";
+import { ProfileCoverCropModal } from "@/components/profile/ProfileCoverCropModal";
 import { showAlert } from "@/lib/alert";
+import { getPrestigeTier } from "@/lib/prestige";
 import { aiGenerateBio } from "@/lib/aiHelper";
 import type { Country } from "@/constants/countries";
 const getCountries = () => (require("@/constants/countries").COUNTRIES as Country[]);
@@ -358,6 +363,8 @@ export default function EditProfileScreen() {
   // Avatar & banner
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [bannerUri, setBannerUri] = useState<string | null>(null);
+  const [bannerRemoved, setBannerRemoved] = useState(false);
+  const [coverCropDraft, setCoverCropDraft] = useState<{ uri: string; width: number; height: number } | null>(null);
 
   // Handle availability
   const [handleStatus, setHandleStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid_format" | "own" | "owned" | "listed">("own");
@@ -411,10 +418,44 @@ export default function EditProfileScreen() {
   }
 
   async function pickBanner() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") { showAlert("Permission needed", "Allow photo library access to change your banner."); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [3, 1], quality: 0.85 });
-    if (!result.canceled && result.assets[0]) setBannerUri(result.assets[0].uri);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") { showAlert("Permission needed", "Allow photo library access to change your banner."); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: false,
+        quality: 1,
+      });
+      const asset = !result.canceled ? result.assets[0] : null;
+      if (!asset) return;
+
+      setUploadingBanner(true);
+      // Bound decode size before showing the crop editor to reduce memory use
+      // when the selected photo came from a high-resolution phone camera.
+      const preparedImage = await ImageManipulatorModule.manipulate(asset.uri, {
+        maxWidth: 2048,
+        maxHeight: 2048,
+      }).renderAsync();
+      const preparedFile = await preparedImage.saveAsync({
+        compress: 0.9,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+      setCoverCropDraft({
+        uri: preparedFile.uri,
+        width: preparedFile.width,
+        height: preparedFile.height,
+      });
+    } catch (error) {
+      if (__DEV__) console.warn("[profile] could not prepare cover image", error);
+      showAlert("Could not prepare cover", "Try choosing another image.");
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
+  function removeBanner() {
+    setBannerUri(null);
+    setBannerRemoved(true);
   }
 
   // ── Upload helpers ─────────────────────────────────────────────────────────
@@ -455,6 +496,7 @@ export default function EditProfileScreen() {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   async function save() {
+    if (saving || uploadingBanner) return;
     if (!displayName.trim()) { showAlert("Required", "Display name cannot be empty."); return; }
     if (bio.length > 150) { showAlert("Too long", "Bio is limited to 150 characters."); return; }
     if (handleStatus === "taken" || handleStatus === "listed" || handleStatus === "invalid_format") {
@@ -513,7 +555,8 @@ export default function EditProfileScreen() {
       updateData.date_of_birth = `${String(dobYear).padStart(4,"0")}-${String(dobMonth).padStart(2,"0")}-${String(dobDay).padStart(2,"0")}`;
     }
     if (newAvatarUrl) updateData.avatar_url = newAvatarUrl;
-    if (newBannerUrl) updateData.banner_url = newBannerUrl;
+    if (bannerRemoved) updateData.banner_url = null;
+    else if (newBannerUrl) updateData.banner_url = newBannerUrl;
 
     const { error: claimError } = handleChanged
       ? await supabase.rpc("claim_username", { p_username: cleanHandle })
@@ -552,7 +595,8 @@ export default function EditProfileScreen() {
     : "Not set";
 
   const currentAvatar = avatarUri || profile?.avatar_url;
-  const currentBanner = bannerUri || profile?.banner_url;
+  const currentBanner = bannerRemoved ? null : bannerUri || profile?.banner_url;
+  const coverColors = getPrestigeTier(profile?.acoin ?? 0).ringColors;
 
   // ── DOB picker data ────────────────────────────────────────────────────────
   const currentYear = new Date().getFullYear();
@@ -572,6 +616,19 @@ export default function EditProfileScreen() {
       style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}
       keyboardVerticalOffset={insets.top + 48}
     >
+      <ProfileCoverCropModal
+        visible={!!coverCropDraft}
+        uri={coverCropDraft?.uri ?? null}
+        imageWidth={coverCropDraft?.width ?? 0}
+        imageHeight={coverCropDraft?.height ?? 0}
+        onCancel={() => setCoverCropDraft(null)}
+        onSave={(uri) => {
+          setBannerUri(uri);
+          setBannerRemoved(false);
+          setCoverCropDraft(null);
+        }}
+      />
+
       {/* Native-style navigation header */}
       <View style={[styles.navBar, { paddingTop: insets.top, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
         <View style={styles.navBarInner}>
@@ -591,8 +648,8 @@ export default function EditProfileScreen() {
           <View style={styles.navSideRight}>
             <TouchableOpacity
               onPress={save}
-              disabled={saving}
-              style={[styles.saveChip, { backgroundColor: accent, opacity: saving ? 0.7 : 1 }]}
+              disabled={saving || uploadingBanner}
+              style={[styles.saveChip, { backgroundColor: accent, opacity: saving || uploadingBanner ? 0.7 : 1 }]}
               activeOpacity={0.8}
             >
               {saving ? (
@@ -613,24 +670,48 @@ export default function EditProfileScreen() {
         {/* ── Banner + Avatar ── */}
         <View style={styles.mediaSurface}>
           {/* Banner */}
-          <TouchableOpacity onPress={pickBanner} activeOpacity={0.9} style={[styles.banner, { backgroundColor: colors.backgroundTertiary }]}>
-            {currentBanner ? (
-              <ExpoImage source={{ uri: currentBanner }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            ) : (
-              <View style={styles.bannerPlaceholder}>
-                <Ionicons name="image" size={28} color={colors.textMuted} />
-                <Text style={[styles.bannerPlaceholderText, { color: colors.textMuted }]}>Tap to add cover photo</Text>
+          <View style={[styles.banner, { backgroundColor: colors.backgroundTertiary }]}>
+            <ProfileCover
+              uri={currentBanner}
+              fallbackColors={coverColors}
+              showTopFade={false}
+              style={StyleSheet.absoluteFill}
+            >
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={currentBanner ? "Change profile cover" : "Add profile cover"}
+                onPress={pickBanner}
+                activeOpacity={0.9}
+                style={StyleSheet.absoluteFill}
+              />
+              {!currentBanner && (
+                <View pointerEvents="none" style={styles.bannerPlaceholder}>
+                  <Ionicons name="image" size={28} color="#fff" />
+                  <Text style={styles.bannerPlaceholderText}>Tap to add cover photo</Text>
+                </View>
+              )}
+              {uploadingBanner && (
+                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.uploadOverlay]}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+              <View pointerEvents="none" style={styles.bannerCameraChip}>
+                <Ionicons name="camera" size={14} color="#fff" />
               </View>
+            </ProfileCover>
+            {currentBanner && (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Remove profile cover"
+                onPress={removeBanner}
+                activeOpacity={0.85}
+                style={styles.bannerRemoveChip}
+              >
+                <Ionicons name="trash-outline" size={13} color="#fff" />
+                <Text style={styles.bannerRemoveText}>Remove</Text>
+              </TouchableOpacity>
             )}
-            {uploadingBanner && (
-              <View style={[StyleSheet.absoluteFill, styles.uploadOverlay]}>
-                <ActivityIndicator color="#fff" />
-              </View>
-            )}
-            <View style={styles.bannerCameraChip}>
-              <Ionicons name="camera" size={14} color="#fff" />
-            </View>
-          </TouchableOpacity>
+          </View>
 
           {/* Avatar */}
           <View style={[styles.avatarContainer, { borderColor: colors.backgroundSecondary }]}>
@@ -1048,12 +1129,25 @@ const styles = StyleSheet.create({
   mediaSurface: { marginHorizontal: -16, marginBottom: 36 },
   banner: { height: 160, overflow: "hidden" },
   bannerPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
-  bannerPlaceholderText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  bannerPlaceholderText: { color: "#fff", fontSize: 13, fontFamily: "Inter_500Medium" },
   bannerCameraChip: {
     position: "absolute", bottom: 10, right: 12,
     backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 20,
     padding: 6,
   },
+  bannerRemoveChip: {
+    position: "absolute",
+    top: 10,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "rgba(0,0,0,0.52)",
+  },
+  bannerRemoveText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
   uploadOverlay: { backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
   avatarContainer: {
     position: "absolute",

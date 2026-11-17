@@ -1,0 +1,54 @@
+import React from "react";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { LinearGradient } from "@/components/ui/SafeGradient";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
+
+type Props = {
+  uri?: string | null;
+  fallbackColors: readonly (string | number)[];
+  style?: StyleProp<ViewStyle>;
+  children?: React.ReactNode;
+  showTopFade?: boolean;
+};
+
+export function ProfileCover({
+  uri,
+  fallbackColors,
+  style,
+  children,
+  showTopFade = true,
+}: Props) {
+  return (
+    <View style={[styles.root, style]}>
+      <LinearGradient
+        colors={fallbackColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {uri ? (
+        <OptimizedImage
+          source={{ uri }}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={150}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      {showTopFade ? (
+        <LinearGradient
+          colors={["rgba(0,0,0,0.36)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={[StyleSheet.absoluteFill, styles.topFade]}
+        />
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { position: "relative" },
+  topFade: { height: 72 },
+});
