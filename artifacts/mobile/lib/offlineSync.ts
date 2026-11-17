@@ -142,6 +142,11 @@ export async function syncPendingMessages(): Promise<void> {
           sender_id: msg.sender_id,
           encrypted_content: msg.content,
         };
+        if (msg.attachment_url) insertPayload.attachment_url = msg.attachment_url;
+        if (msg.attachment_type) insertPayload.attachment_type = msg.attachment_type;
+        if (msg.attachment_name) insertPayload.attachment_name = msg.attachment_name;
+        if (msg.attachment_mime_type) insertPayload.attachment_mime_type = msg.attachment_mime_type;
+        if (msg.attachment_size != null) insertPayload.attachment_size = msg.attachment_size;
         const sentAt = resolveMessageTimestamp(msg);
         if (sentAt) insertPayload.sent_at = sentAt;
         if (isClientMessageId(msg.id)) insertPayload.id = msg.id;

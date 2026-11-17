@@ -402,4 +402,11 @@ async function runMigrations(db: DB) {
     );
     await db.runAsync("UPDATE schema_version SET version = 23");
   }
+
+  if (currentVersion < 24) {
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN attachment_name TEXT");
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN attachment_mime_type TEXT");
+    await execSchemaChange(db, "ALTER TABLE messages ADD COLUMN attachment_size INTEGER");
+    await db.runAsync("UPDATE schema_version SET version = 24");
+  }
 }

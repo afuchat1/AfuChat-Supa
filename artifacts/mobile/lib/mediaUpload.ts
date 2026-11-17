@@ -475,6 +475,7 @@ async function uploadToStorageUncached(
   filePath: string,
   fileUri: string,
   contentType?: string,
+  onProgress?: (progress: number) => void,
 ): Promise<UploadResult> {
   let tempPath: string | null = null;
   const cleanupTemp = () => {
@@ -511,10 +512,15 @@ async function uploadToStorageUncached(
             headers: { "Content-Type": mime },
             body: body as any,
           });
-          if (putResp.ok) return { publicUrl: sign.data.publicUrl, error: null };
+          if (putResp.ok) {
+            onProgress?.(1);
+            return { publicUrl: sign.data.publicUrl, error: null };
+          }
         } catch {}
       }
-      return proxyUpload(realBucket, filePath, body, mime);
+      const result = await proxyUpload(realBucket, filePath, body, mime);
+      if (result.publicUrl) onProgress?.(1);
+      return result;
     }
 
     // ── Native file:// path — stream via FileSystem.uploadAsync ─────────────
@@ -553,13 +559,19 @@ async function uploadToStorageUncached(
     const sign = await getSignedUpload(realBucket, filePath, mime);
     if (sign.data) {
       try {
-        const putResult = await FileSystem.uploadAsync(sign.data.uploadUrl, uploadUri, {
+        const putTask = FileSystem.createUploadTask(sign.data.uploadUrl, uploadUri, {
           httpMethod: "PUT",
           headers: { "Content-Type": mime },
           uploadType: FileSystemUploadType.BINARY_CONTENT,
+        }, (event) => {
+          if (event.totalBytesExpectedToSend > 0) {
+            onProgress?.(Math.min(1, event.totalBytesSent / event.totalBytesExpectedToSend));
+          }
         });
+        const putResult = await putTask.uploadAsync();
         if (putResult.status >= 200 && putResult.status < 300) {
           cleanupTemp();
+          onProgress?.(1);
           return { publicUrl: sign.data.publicUrl, error: null };
         }
         console.warn(
@@ -578,7 +590,7 @@ async function uploadToStorageUncached(
     if (!token) { cleanupTemp(); return { publicUrl: null, error: "Not authenticated" }; }
     const qs = new URLSearchParams({ bucket: realBucket, path: filePath }).toString();
     try {
-      const proxyResult = await FileSystem.uploadAsync(
+      const proxyTask = FileSystem.createUploadTask(
         `${uploadsUrl("upload")}?${qs}`,
         uploadUri,
         {
@@ -590,7 +602,13 @@ async function uploadToStorageUncached(
           },
           uploadType: FileSystemUploadType.BINARY_CONTENT,
         },
+        (event) => {
+          if (event.totalBytesExpectedToSend > 0) {
+            onProgress?.(Math.min(1, event.totalBytesSent / event.totalBytesExpectedToSend));
+          }
+        },
       );
+      const proxyResult = await proxyTask.uploadAsync();
       cleanupTemp();
       const text = proxyResult.body ?? "";
       if (!text) return { publicUrl: null, error: `Upload failed (HTTP ${proxyResult.status})` };
@@ -603,6 +621,7 @@ async function uploadToStorageUncached(
         return { publicUrl: null, error: json?.error || `Upload failed (HTTP ${proxyResult.status})` };
       }
       if (!json?.publicUrl) return { publicUrl: null, error: "Upload service returned no URL" };
+      onProgress?.(1);
       return { publicUrl: json.publicUrl, error: null };
     } catch (e: any) {
       console.warn(`[Upload] Native proxy stream failed, trying readable URI fallback: ${e?.message || e}`);
@@ -615,6 +634,7 @@ async function uploadToStorageUncached(
       const body = await fileUriToBlob(uploadUri, mime);
       const fallback = await proxyUpload(realBucket, filePath, body, mime);
       cleanupTemp();
+      if (fallback.publicUrl) onProgress?.(1);
       return fallback;
     } catch {
       cleanupTemp();
@@ -639,14 +659,16 @@ export async function uploadToStorage(
   filePath: string,
   fileUri: string,
   contentType?: string,
+  onProgress?: (progress: number) => void,
 ): Promise<UploadResult> {
   const requiresExactPath = EXACT_PATH_BUCKETS.has(resolveBucket(bucket));
   if (!requiresExactPath && isAlreadyStoredMediaUrl(fileUri)) {
+    onProgress?.(1);
     return { publicUrl: fileUri, error: null };
   }
 
   if (requiresExactPath) {
-    return uploadToStorageUncached(bucket, filePath, fileUri, contentType);
+    return uploadToStorageUncached(bucket, filePath, fileUri, contentType, onProgress);
   }
 
   let identity: UploadReuseIdentity | null = null;
@@ -657,18 +679,25 @@ export async function uploadToStorage(
   } catch {}
 
   if (!identity) {
-    return uploadToStorageUncached(bucket, filePath, fileUri, contentType);
+    return uploadToStorageUncached(bucket, filePath, fileUri, contentType, onProgress);
   }
 
   const inFlightKey = identity.key;
   const pending = inFlightUploads.get(inFlightKey);
-  if (pending) return pending;
+  if (pending) {
+    const result = await pending;
+    if (result.publicUrl) onProgress?.(1);
+    return result;
+  }
 
   const uploadPromise = (async () => {
     const cached = await readReusableUpload(identity);
-    if (cached) return { publicUrl: cached.publicUrl, error: null };
+    if (cached) {
+      onProgress?.(1);
+      return { publicUrl: cached.publicUrl, error: null };
+    }
 
-    const result = await uploadToStorageUncached(bucket, filePath, fileUri, contentType);
+    const result = await uploadToStorageUncached(bucket, filePath, fileUri, contentType, onProgress);
     if (result.publicUrl && !result.error) {
       await saveReusableUpload(identity!, bucket, filePath, result.publicUrl);
     }
@@ -748,6 +777,7 @@ export async function uploadChatMedia(
   fileUri: string,
   originalName?: string,
   contentType?: string,
+  onProgress?: (progress: number) => void,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const isBlobOrData = fileUri.startsWith("blob:") || fileUri.startsWith("data:");
   const nameExt = originalName?.split(".").pop()?.toLowerCase();
@@ -764,7 +794,7 @@ export async function uploadChatMedia(
   const fileName = `${readableName}_${Date.now()}_${uniqueSuffix}.${ext}`;
   const filePath =
     bucket === "voice-messages" ? `${userId}/${fileName}` : `${userId}/${chatId}/${fileName}`;
-  return uploadToStorage(bucket, filePath, fileUri, contentType || getMime(ext));
+  return uploadToStorage(bucket, filePath, fileUri, contentType || getMime(ext), onProgress);
 }
 
 /** Format a byte count like 1234567 → "1.18 MB" with sensible units. */

@@ -16,8 +16,16 @@
 // table using media_type values: chat_image, chat_gif, chat_audio, chat_file.
 
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 import { getDB } from "./db";
 import { storage } from "./mmkv";
+import {
+  getChatAttachmentExtension,
+  getChatAttachmentName,
+  normalizeChatAttachmentMimeType,
+  normalizeChatAttachmentSize,
+  type ChatAttachmentMetadata,
+} from "../chatAttachmentMetadata";
 
 const BASE = ((FileSystem as any).documentDirectory ?? "") + "afuchat_media/chat/";
 const LEGACY_BASE = ((FileSystem as any).documentDirectory ?? "") + "afuchat_attachments/";
@@ -92,13 +100,17 @@ export async function getCachedChatAttachmentUri(url: string): Promise<string | 
 export async function ensureChatAttachmentDownloaded(
   url: string,
   type: string,
-  _hint?: string,
+  metadata?: ChatAttachmentMetadata,
+  onProgress?: (progress: number) => void,
 ): Promise<string | null> {
   if (!url?.startsWith("http")) return null;
-  if (_mem.has(url)) return _mem.get(url)!;
+  if (_mem.has(url)) {
+    onProgress?.(1);
+    return _mem.get(url)!;
+  }
   if (_inFlight.has(url)) return _inFlight.get(url)!;
 
-  const p = _download(url, type);
+  const p = _download(url, type, false, metadata, onProgress);
   _inFlight.set(url, p);
   p.finally(() => _inFlight.delete(url));
   return p;
@@ -200,14 +212,52 @@ export async function requestGalleryPermissionOnce(): Promise<boolean> {
 /**
  * Open a locally-cached file with the device's native file viewer / share sheet.
  */
-export async function openChatFile(localPath: string): Promise<void> {
+export async function openChatFile(
+  localPath: string,
+  options: { fileName?: string | null; mimeType?: string | null; dialogTitle?: string } = {},
+): Promise<boolean> {
+  if (!localPath) return false;
+  if (Platform.OS === "web") {
+    if (typeof window === "undefined") return false;
+    window.open(localPath, "_blank", "noopener,noreferrer");
+    return true;
+  }
+  const Sharing = await import("expo-sharing");
+  const available = await Sharing.isAvailableAsync();
+  if (!available) return false;
+  await Sharing.shareAsync(localPath, {
+    dialogTitle: options.dialogTitle ?? "Open or share file",
+    mimeType: normalizeChatAttachmentMimeType(options.mimeType, options.fileName),
+  });
+  return true;
+}
+
+export function downloadChatAttachmentInBrowser(url: string, fileName: string): boolean {
+  if (Platform.OS !== "web" || typeof document === "undefined") return false;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = getChatAttachmentName(fileName);
+  link.rel = "noopener noreferrer";
+  link.target = "_blank";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return true;
+}
+
+export async function saveChatAttachmentToDevice(
+  localPath: string,
+  options: { fileName?: string | null; mimeType?: string | null } = {},
+): Promise<boolean> {
   try {
-    const Sharing = await import("expo-sharing");
-    const available = await Sharing.isAvailableAsync();
-    if (available) {
-      await Sharing.shareAsync(localPath, { dialogTitle: "Open file" });
-    }
-  } catch {}
+    return await openChatFile(localPath, {
+      ...options,
+      dialogTitle: "Save or share file",
+    });
+  } catch (error) {
+    console.warn("[ChatAttachment] Could not open the system file actions:", error);
+    return false;
+  }
 }
 
 /**
@@ -272,22 +322,15 @@ function _urlHash(url: string): string {
   return h.toString(16);
 }
 
-function _guessExt(url: string, type: string): string {
-  // Try to pull the extension from the URL path
-  const path = url.split("?")[0];
-  const parts = path.split(".");
-  const raw = parts[parts.length - 1]?.toLowerCase() ?? "";
-  const allowed: Record<string, string[]> = {
-    image:       ["jpg", "jpeg", "png", "webp", "heic", "avif"],
-    gif:         ["gif"],
-    audio:       ["m4a", "mp3", "aac", "wav", "ogg", "opus"],
-    file:        ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "zip", "csv",
-                   "apk", "ipa", "exe", "msi", "dmg", "deb", "rpm",
-                   "7z", "rar", "tar", "gz", "bz2", "xz"],
-    story_reply: ["jpg", "jpeg", "png", "webp"],
-  };
-  const allowed_for_type = allowed[type] ?? [];
-  if (raw && allowed_for_type.includes(raw)) return raw;
+function _guessExt(url: string, type: string, metadata?: ChatAttachmentMetadata): string {
+  const fileName = getChatAttachmentName(metadata?.attachment_name, url);
+  const nameExt = getChatAttachmentExtension(fileName, metadata?.attachment_mime_type);
+  if (nameExt) return nameExt;
+  try {
+    const path = new URL(url).pathname;
+    const raw = path.split("/").pop()?.split(".").pop()?.toLowerCase() ?? "";
+    if (/^[a-z0-9]{1,16}$/.test(raw) && raw !== "invalid") return raw;
+  } catch {}
   // Fallback defaults per type
   const defaults: Record<string, string> = {
     image: "jpg", gif: "gif", audio: "m4a", file: "bin", story_reply: "jpg",
@@ -308,14 +351,26 @@ async function _registerDB(
   localPath: string,
   type: string,
   fileSize: number,
+  metadata?: ChatAttachmentMetadata,
 ): Promise<void> {
   try {
+    const fileName = getChatAttachmentName(metadata?.attachment_name, url);
+    const mimeType = normalizeChatAttachmentMimeType(metadata?.attachment_mime_type, fileName);
     const db = await getDB();
     await db.runAsync(
       `INSERT OR REPLACE INTO media_cache
-       (url_hash, url, local_path, media_type, file_size, stored_at, saved_to_device)
-       VALUES (?, ?, ?, ?, ?, ?, 0)`,
-      [hash, url, localPath, `chat_${type}`, fileSize, Date.now()],
+       (url_hash, url, local_path, media_type, file_size, file_name, mime_type, stored_at, saved_to_device)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [
+        hash,
+        url,
+        localPath,
+        `chat_${type}`,
+        normalizeChatAttachmentSize(fileSize) ?? fileSize,
+        fileName,
+        mimeType,
+        Date.now(),
+      ],
     );
   } catch {}
 }
@@ -395,23 +450,32 @@ async function _downloadWithOpts(
   type: string,
   saveToGallery: boolean,
   _hint?: string,
+  metadata?: ChatAttachmentMetadata,
 ): Promise<string | null> {
   if (_mem.has(url)) return _mem.get(url)!;
   if (_inFlight.has(url)) return _inFlight.get(url)!;
-  const p = _download(url, type, saveToGallery);
+  const p = _download(url, type, saveToGallery, metadata);
   _inFlight.set(url, p);
   p.finally(() => _inFlight.delete(url));
   return p;
 }
 
-async function _download(url: string, type: string, saveToGallery = false): Promise<string | null> {
+async function _download(
+  url: string,
+  type: string,
+  saveToGallery = false,
+  metadata?: ChatAttachmentMetadata,
+  onProgress?: (progress: number) => void,
+): Promise<string | null> {
   try {
     const dir = DIRS[type] ?? DIRS.file;
     await _ensureDir(dir);
 
     const hash = _urlHash(url);
-    const ext  = _guessExt(url, type);
-    const localPath = dir + `att_${hash}.${ext}`;
+    const ext = _guessExt(url, type, metadata);
+    const fileName = getChatAttachmentName(metadata?.attachment_name, url);
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-96) || `file.${ext}`;
+    const localPath = dir + `att_${hash}_${safeName}`;
 
     // 1. Check SQLite registry (survived app restarts)
     const db = await getDB();
@@ -419,27 +483,41 @@ async function _download(url: string, type: string, saveToGallery = false): Prom
       local_path: string;
       media_type: string | null;
       saved_to_device: number | null;
+      file_size: number | null;
+      file_name: string | null;
+      mime_type: string | null;
     }>(
-      "SELECT local_path, media_type, saved_to_device FROM media_cache WHERE url_hash = ?",
+      "SELECT local_path, media_type, saved_to_device, file_size, file_name, mime_type FROM media_cache WHERE url_hash = ?",
       [hash],
     );
     if (row) {
       const check = await FileSystem.getInfoAsync(row.local_path);
       if (check.exists && (check as any).size > 0) {
-        // Older builds stored chat media under afuchat_attachments/. Move
-        // that existing copy to the one canonical chat-media directory.
-        if (row.local_path.startsWith(LEGACY_BASE) && row.local_path !== localPath) {
+        // Migrate old hashed .bin paths so the OS sees the original extension
+        // and name when the user opens or saves an unfamiliar document format.
+        if (row.local_path !== localPath) {
           try {
             await FileSystem.copyAsync({ from: row.local_path, to: localPath });
             const migrated = await FileSystem.getInfoAsync(localPath);
             if (migrated.exists && (migrated as any).size > 0) {
               await db.runAsync(
                 `UPDATE media_cache
-                 SET local_path = ?, media_type = ?, saved_to_device = 0, last_accessed = ?
+                 SET local_path = ?, media_type = ?, file_name = ?, mime_type = ?,
+                     file_size = ?, saved_to_device = 0, last_accessed = ?
                  WHERE url_hash = ?`,
-                [localPath, `chat_${type}`, Date.now(), hash],
+                [
+                  localPath,
+                  `chat_${type}`,
+                  metadata?.attachment_name ?? row.file_name ?? fileName,
+                  metadata?.attachment_mime_type ?? row.mime_type ?? "application/octet-stream",
+                  metadata?.attachment_size ?? row.file_size ?? (migrated as any).size,
+                  Date.now(),
+                  hash,
+                ],
               );
-              await FileSystem.deleteAsync(row.local_path, { idempotent: true });
+              if (row.local_path.startsWith(BASE) || row.local_path.startsWith(LEGACY_BASE)) {
+                await FileSystem.deleteAsync(row.local_path, { idempotent: true });
+              }
               _mem.set(url, localPath);
               return localPath;
             }
@@ -448,6 +526,12 @@ async function _download(url: string, type: string, saveToGallery = false): Prom
           }
         }
         _mem.set(url, row.local_path);
+        await _registerDB(url, hash, row.local_path, type, (check as any).size, {
+          attachment_name: metadata?.attachment_name ?? row.file_name,
+          attachment_mime_type: metadata?.attachment_mime_type ?? row.mime_type,
+          attachment_size: metadata?.attachment_size ?? row.file_size,
+        });
+        onProgress?.(1);
         return row.local_path;
       }
       // File was deleted from device — fall through and re-download
@@ -457,20 +541,28 @@ async function _download(url: string, type: string, saveToGallery = false): Prom
     const existing = await FileSystem.getInfoAsync(localPath);
     if (existing.exists && (existing as any).size > 0) {
       _mem.set(url, localPath);
-      await _registerDB(url, hash, localPath, type, (existing as any).size);
+      await _registerDB(url, hash, localPath, type, (existing as any).size, metadata);
       _saveToDeviceLibrary(localPath, type, hash, saveToGallery).catch(() => {});
+      onProgress?.(1);
       return localPath;
     }
 
     // 3. First time — download permanently to documentDirectory (user data)
-    const result = await FileSystem.downloadAsync(url, localPath);
+    const task = FileSystem.createDownloadResumable(url, localPath, {}, (event) => {
+      if (event.totalBytesExpectedToWrite > 0) {
+        onProgress?.(Math.min(1, event.totalBytesWritten / event.totalBytesExpectedToWrite));
+      }
+    });
+    const result = await task.downloadAsync();
+    if (!result) return null;
     const verify = await FileSystem.getInfoAsync(result.uri);
     if (!verify.exists || (verify as any).size === 0) return null;
 
     _mem.set(url, result.uri);
-    await _registerDB(url, hash, result.uri, type, (verify as any).size);
+    await _registerDB(url, hash, result.uri, type, (verify as any).size, metadata);
     // Mirror to gallery only if user has save_to_gallery enabled and permission is granted
     _saveToDeviceLibrary(result.uri, type, hash, saveToGallery).catch(() => {});
+    onProgress?.(1);
     return result.uri;
   } catch {
     return null;

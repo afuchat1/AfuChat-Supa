@@ -30,6 +30,9 @@ export type LocalMessage = {
   content: string | null;
   attachment_url: string | null;
   attachment_type: string | null;
+  attachment_name: string | null;
+  attachment_mime_type: string | null;
+  attachment_size: number | null;
   reply_to_id: string | null;
   status: string;
   sent_at: string;
@@ -66,6 +69,9 @@ export function mapToLocal(msg: any, conversationId: string): LocalMessage {
     content: msg.encrypted_content ?? msg.content ?? null,
     attachment_url: msg.attachment_url ?? null,
     attachment_type: msg.attachment_type ?? null,
+    attachment_name: msg.attachment_name ?? null,
+    attachment_mime_type: msg.attachment_mime_type ?? null,
+    attachment_size: typeof msg.attachment_size === "number" ? msg.attachment_size : null,
     reply_to_id: msg.reply_to_message_id ?? msg.reply_to_id ?? null,
     status: msg.status ?? "sent",
     sent_at: resolveMessageTimestamp(msg),
@@ -97,6 +103,9 @@ function mergeLocalMessage(previous: LocalMessage | undefined, next: LocalMessag
     content: nextEditIsNewer ? next.content : previous.content ?? next.content,
     attachment_url: nextEditIsNewer ? next.attachment_url : previous.attachment_url ?? next.attachment_url,
     attachment_type: nextEditIsNewer ? next.attachment_type : previous.attachment_type ?? next.attachment_type,
+    attachment_name: nextEditIsNewer ? next.attachment_name : previous.attachment_name ?? next.attachment_name,
+    attachment_mime_type: nextEditIsNewer ? next.attachment_mime_type : previous.attachment_mime_type ?? next.attachment_mime_type,
+    attachment_size: nextEditIsNewer ? next.attachment_size : previous.attachment_size ?? next.attachment_size,
     reply_to_id: previous.reply_to_id ?? next.reply_to_id,
     status,
     sent_at:
@@ -402,10 +411,11 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
       await db.runAsync(
         `INSERT OR IGNORE INTO messages
          (id, conversation_id, sender_id, content, attachment_url, attachment_type,
+          attachment_name, attachment_mime_type, attachment_size,
           reply_to_id, status, sent_at, edited_at, delivered_at, read_at,
           is_pending, synced, stored_at,
           sender_display_name, sender_avatar_url, sender_handle)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           local.id,
           local.conversation_id,
@@ -413,6 +423,9 @@ export async function saveMessages(conversationId: string, messages: any[]): Pro
           local.content,
           local.attachment_url,
           local.attachment_type,
+          local.attachment_name,
+          local.attachment_mime_type,
+          local.attachment_size,
           local.reply_to_id,
           local.status,
           local.sent_at,
@@ -508,6 +521,9 @@ export async function savePendingMessage(msg: {
   sent_at: string;
   attachment_url?: string | null;
   attachment_type?: string | null;
+  attachment_name?: string | null;
+  attachment_mime_type?: string | null;
+  attachment_size?: number | null;
   reply_to_id?: string | null;
   sender_display_name?: string | null;
   sender_avatar_url?: string | null;
@@ -533,9 +549,10 @@ export async function savePendingMessage(msg: {
   await db.runAsync(
     `INSERT OR REPLACE INTO messages
      (id, conversation_id, sender_id, content, attachment_url, attachment_type,
+      attachment_name, attachment_mime_type, attachment_size,
       reply_to_id, status, sent_at, edited_at, is_pending, synced, stored_at,
       sender_display_name, sender_avatar_url, sender_handle)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'sending', ?, NULL, 1, 0, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'sending', ?, NULL, 1, 0, ?, ?, ?, ?)`,
     [
       msg.id,
       msg.conversation_id,
@@ -543,6 +560,9 @@ export async function savePendingMessage(msg: {
       msg.content,
       msg.attachment_url ?? null,
       msg.attachment_type ?? null,
+      msg.attachment_name ?? null,
+      msg.attachment_mime_type ?? null,
+      msg.attachment_size ?? null,
       msg.reply_to_id ?? null,
       msg.sent_at,
       Date.now(),
@@ -724,6 +744,9 @@ export async function deleteAllLocalMessages(conversationId: string): Promise<vo
 function rowToMsg(r: any): LocalMessage {
   return {
     ...r,
+    attachment_name: r.attachment_name ?? null,
+    attachment_mime_type: r.attachment_mime_type ?? null,
+    attachment_size: typeof r.attachment_size === "number" ? r.attachment_size : null,
     sender_display_name: r.sender_display_name ?? null,
     sender_avatar_url: r.sender_avatar_url ?? null,
     sender_handle: r.sender_handle ?? null,

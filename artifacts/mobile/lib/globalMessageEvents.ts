@@ -25,6 +25,9 @@ export type IncomingMessage = {
   encrypted_content: string | null;
   attachment_url?: string | null;
   attachment_type?: string | null;
+  attachment_name?: string | null;
+  attachment_mime_type?: string | null;
+  attachment_size?: number | null;
   sent_at: string;
   reply_to_message_id?: string | null;
   sender_display_name?: string;
