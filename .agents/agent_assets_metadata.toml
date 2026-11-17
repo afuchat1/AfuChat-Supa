@@ -150,14 +150,14 @@ content_type = "image/png"
 id = "2gLzWKfPUAUHRyYxNKyQ5"
 uri = "file://generated-artifacts/afuchat-expo-go-qr.png"
 type = "image"
-title = "AfuChat Expo Go QR code"
-description = "Scan this with Expo Go to open the currently running Android development build."
+title = "AfuChat Expo Go QR"
+description = "Scan this QR in Expo Go to open the currently running AfuChat development app."
 logical_id = "94ba286e-9e04-4698-b32e-eeca3b54ff07"
-content_hash = "sha256:866c1c10baa70fc08f9a5c1a5d91c7809753a10b7d56a6a5d9f1adfa63866907"
-size = 4902
-mtime_ms = 1794593434672
-storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7cfd270b-f31b-47dc-828b-2eebf5defd50/94ba286e-9e04-4698-b32e-eeca3b54ff07/26f866fd-7e42-498e-b86c-d5023a940388"
-storage_version_token = "1794593441745932"
+content_hash = "sha256:97df9df70beb9d7503c648931055652a200c984aec2f03fc992f8bca714831e2"
+size = 5966
+mtime_ms = 1794909451789
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:16d1ebde-8aaf-4151-b239-c3dd055abb2f/94ba286e-9e04-4698-b32e-eeca3b54ff07/14a608eb-1758-453d-b90b-d3b66a4d92a4"
+storage_version_token = "1794909478372333"
 content_type = "image/png"
 
 [[outputs]]

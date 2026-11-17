@@ -1458,7 +1458,7 @@ export function VideoCommentsSheet({
       <View style={{ height: 0.5, backgroundColor: separatorClr }} />
 
       {/* Scrollable comment list — flex:1 fills all remaining vertical space */}
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, minHeight: 0 }}>
         {loading ? (
           <CommentSkeleton isDark={isDark} />
         ) : sortedTree.length === 0 ? (
@@ -1472,9 +1472,11 @@ export function VideoCommentsSheet({
             ref={listRef}
             data={sortedTree}
             keyExtractor={(r) => r.id}
-            style={{ flex: 1 }}
+            style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: inputDynH + Math.max(kbHeight, insets.bottom) }}
             showsVerticalScrollIndicator={false}
+            scrollEnabled={sortedTree.length > 0}
+            nestedScrollEnabled
             scrollEventThrottle={16}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -1551,9 +1553,9 @@ export function VideoCommentsSheet({
               },
             ]}
           >
-            <Pressable onPress={() => {}} style={{ flex: 1 }}>
+            <View style={{ flex: 1, minHeight: 0 }}>
               {innerSheet}
-            </Pressable>
+            </View>
           </View>
         </Animated.View>
       </View>
