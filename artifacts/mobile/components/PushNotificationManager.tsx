@@ -51,11 +51,9 @@ export default function PushNotificationManager() {
     ) {
       return;
     }
-    try {
-      configurePushNotifications();
-    } catch (error) {
+    void configurePushNotifications().catch((error) => {
       if (__DEV__) console.warn("[push] notification setup failed", error);
-    }
+    });
     let active = true;
     const handleResponse = async (response: any) => {
       if (!active) return;

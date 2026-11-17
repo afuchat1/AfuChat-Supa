@@ -20,6 +20,7 @@ type PushResponse = {
 
 export const PUSH_ACTION_REPLY = "reply";
 export const PUSH_ACTION_MUTE = "mute";
+export const PUSH_ACTION_MUTE_CATEGORY = "mute_category";
 export const PUSH_ACTION_MARK_READ = "mark_read";
 export const PUSH_ACTION_OPEN = "open";
 export const PUSH_ACTION_ACCEPT_CALL = "accept_call";
@@ -33,6 +34,24 @@ export const PUSH_CATEGORY_SOCIAL_FOLLOW = "social_follow";
 export const PUSH_CATEGORY_COMMERCE = "commerce";
 export const PUSH_BACKGROUND_TASK = "AFUCHAT_NOTIFICATION_ACTION_TASK";
 
+export const PUSH_ANDROID_CHANNEL_GROUPS = {
+  conversations: {
+    id: "afuchat-conversations",
+    name: "Conversations",
+    description: "Messages and calls",
+  },
+  social: {
+    id: "afuchat-social",
+    name: "Social activity",
+    description: "Follows and post activity",
+  },
+  commerce: {
+    id: "afuchat-commerce",
+    name: "Payments and orders",
+    description: "Wallet, shop, and creator payments",
+  },
+} as const;
+
 // Android channel sound settings are immutable after a channel is created.
 // Versioned IDs let us correct an old channel without inheriting its stored
 // ringtone-style sound setting.
@@ -41,21 +60,25 @@ export const PUSH_ANDROID_CHANNELS = {
     id: "messages_notifications_v1",
     name: "Message notifications",
     importance: "MAX",
+    groupId: PUSH_ANDROID_CHANNEL_GROUPS.conversations.id,
   },
   calls: {
     id: "calls_notifications_v1",
     name: "Call notifications",
     importance: "MAX",
+    groupId: PUSH_ANDROID_CHANNEL_GROUPS.conversations.id,
   },
   social: {
     id: "social_notifications_v1",
     name: "Social activity",
     importance: "DEFAULT",
+    groupId: PUSH_ANDROID_CHANNEL_GROUPS.social.id,
   },
   commerce: {
     id: "commerce_notifications_v1",
     name: "Payments and orders",
     importance: "DEFAULT",
+    groupId: PUSH_ANDROID_CHANNEL_GROUPS.commerce.id,
   },
 } as const;
 
@@ -63,6 +86,7 @@ export const PUSH_ANDROID_CHANNEL_ID = PUSH_ANDROID_CHANNELS.messages.id;
 
 let moduleCache: NotificationsModule | null | undefined;
 let backgroundTaskRegistration: Promise<void> | null = null;
+let notificationConfiguration: Promise<void> | null = null;
 function getNotifications(): NotificationsModule | null {
   if (moduleCache !== undefined) return moduleCache;
   if (Platform.OS === "web") return (moduleCache = null);
@@ -254,6 +278,29 @@ async function muteChat(response: PushResponse, userId: string) {
   );
 }
 
+async function muteNotificationCategory(response: PushResponse, userId: string) {
+  const { categoryId } = getTarget(response);
+  const preferenceField = categoryId === PUSH_CATEGORY_MESSAGE
+    ? "message_notifications"
+    : categoryId === PUSH_CATEGORY_CALL
+      ? "call_notifications"
+      : categoryId === PUSH_CATEGORY_SOCIAL || categoryId === PUSH_CATEGORY_SOCIAL_FOLLOW
+        ? "social_notifications"
+        : categoryId === PUSH_CATEGORY_COMMERCE
+          ? "commerce_notifications"
+          : null;
+  if (!preferenceField) return;
+
+  const { error } = await (supabase as any)
+    .from("user_notification_preferences")
+    .upsert({
+      user_id: userId,
+      [preferenceField]: false,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
 async function followBackFromNotification(response: PushResponse, userId: string) {
   const { followerId, notificationId } = getTarget(response);
   if (!followerId || followerId === userId) return;
@@ -313,6 +360,10 @@ export async function handleNotificationResponse(
     await muteChat(response, userId);
     return;
   }
+  if (response.actionIdentifier === PUSH_ACTION_MUTE_CATEGORY) {
+    await muteNotificationCategory(response, userId);
+    return;
+  }
   if (response.actionIdentifier === PUSH_ACTION_FOLLOW_BACK) {
     await followBackFromNotification(response, userId);
     return;
@@ -339,6 +390,7 @@ function defineBackgroundTask() {
         if (
           data.actionIdentifier === PUSH_ACTION_REPLY ||
           data.actionIdentifier === PUSH_ACTION_MUTE ||
+          data.actionIdentifier === PUSH_ACTION_MUTE_CATEGORY ||
           data.actionIdentifier === PUSH_ACTION_MARK_READ ||
           data.actionIdentifier === PUSH_ACTION_FOLLOW_BACK ||
           data.actionIdentifier === PUSH_ACTION_DECLINE_CALL
@@ -368,75 +420,91 @@ function defineBackgroundTask() {
 }
 defineBackgroundTask();
 
-export function configurePushNotifications() {
+export function configurePushNotifications(): Promise<void> {
   const notifications = getNotifications();
-  if (!notifications) return;
-  // Retry registration if the native notifications module was not ready during
-  // module evaluation (common during a cold start on Android).
-  if (!backgroundTaskRegistration && notifications.registerTaskAsync) {
-    backgroundTaskRegistration = notifications.registerTaskAsync(PUSH_BACKGROUND_TASK)
-      .then(() => undefined)
-      .catch((error) => {
-        if (__DEV__) console.warn("[push] background action task registration failed", error);
-      });
-  }
-  notifications.setNotificationHandler({
-    handleNotification: async (notification) => {
-      const data = notification.request.content.data ?? {};
-      const categoryId = data.categoryId ?? data.category_id;
-      const chatId = data.chatId ?? data.chat_id;
-      const isOpenMessageChat = AppState.currentState === "active" &&
-        typeof chatId === "string" &&
-        chatId === getActiveChatId() &&
-        (categoryId == null || categoryId === PUSH_CATEGORY_MESSAGE);
-      return {
-        shouldShowBanner: !isOpenMessageChat,
-        shouldShowList: !isOpenMessageChat,
-        shouldPlaySound: !isOpenMessageChat,
-        shouldSetBadge: !isOpenMessageChat,
-      };
-    },
-  });
-  const categories = [
-    notifications.setNotificationCategoryAsync(PUSH_CATEGORY_MESSAGE, [
-      { identifier: PUSH_ACTION_REPLY, buttonTitle: "Reply", textInput: { submitButtonTitle: "Send", placeholder: "Reply..." }, options: { opensAppToForeground: false } },
-      { identifier: PUSH_ACTION_MUTE, buttonTitle: "Mute", options: { opensAppToForeground: false } },
-      { identifier: PUSH_ACTION_MARK_READ, buttonTitle: "Mark as read", options: { opensAppToForeground: false } },
-    ]),
-    notifications.setNotificationCategoryAsync(PUSH_CATEGORY_CALL, [
-      { identifier: PUSH_ACTION_ACCEPT_CALL, buttonTitle: "Answer", options: { opensAppToForeground: true } },
-      { identifier: PUSH_ACTION_DECLINE_CALL, buttonTitle: "Decline", options: { opensAppToForeground: false, isDestructive: true } },
-      { identifier: PUSH_ACTION_OPEN, buttonTitle: "Open", options: { opensAppToForeground: true } },
-    ]),
-    notifications.setNotificationCategoryAsync(PUSH_CATEGORY_SOCIAL, [
-      { identifier: PUSH_ACTION_MARK_READ, buttonTitle: "Mark as read", options: { opensAppToForeground: false } },
-      { identifier: PUSH_ACTION_OPEN, buttonTitle: "View", options: { opensAppToForeground: true } },
-    ]),
-    notifications.setNotificationCategoryAsync(PUSH_CATEGORY_SOCIAL_FOLLOW, [
-      { identifier: PUSH_ACTION_FOLLOW_BACK, buttonTitle: "Follow back", options: { opensAppToForeground: false } },
-      { identifier: PUSH_ACTION_OPEN, buttonTitle: "View profile", options: { opensAppToForeground: true } },
-    ]),
-    notifications.setNotificationCategoryAsync(PUSH_CATEGORY_COMMERCE, [
-      { identifier: PUSH_ACTION_MARK_READ, buttonTitle: "Mark as read", options: { opensAppToForeground: false } },
-      { identifier: PUSH_ACTION_OPEN, buttonTitle: "View", options: { opensAppToForeground: true } },
-    ]),
-  ];
-  void Promise.all(categories).catch(() => {});
-  if (Platform.OS === "android") {
-    const importance = {
-      MAX: notifications.AndroidImportance.MAX,
-      DEFAULT: notifications.AndroidImportance.DEFAULT,
-    } as const;
-    for (const channel of Object.values(PUSH_ANDROID_CHANNELS)) {
-      notifications.setNotificationChannelAsync(channel.id, {
-        name: channel.name,
-        importance: importance[channel.importance],
-        vibrationPattern: [0, 250, 250, 250],
-        // "default" resolves to the device notification sound, not its ringtone.
-        sound: "default",
-      }).catch(() => {});
+  if (!notifications) return Promise.resolve();
+  if (notificationConfiguration) return notificationConfiguration;
+
+  notificationConfiguration = (async () => {
+    if (!backgroundTaskRegistration && notifications.registerTaskAsync) {
+      backgroundTaskRegistration = notifications.registerTaskAsync(PUSH_BACKGROUND_TASK)
+        .then(() => undefined)
+        .catch((error) => {
+          if (__DEV__) console.warn("[push] background action task registration failed", error);
+        });
     }
-  }
+    await backgroundTaskRegistration;
+    notifications.setNotificationHandler({
+      handleNotification: async (notification) => {
+        const data = notification.request.content.data ?? {};
+        const categoryId = data.categoryId ?? data.category_id;
+        const chatId = data.chatId ?? data.chat_id;
+        const isOpenMessageChat = AppState.currentState === "active" &&
+          typeof chatId === "string" &&
+          chatId === getActiveChatId() &&
+          (categoryId == null || categoryId === PUSH_CATEGORY_MESSAGE);
+        return {
+          shouldShowBanner: !isOpenMessageChat,
+          shouldShowList: !isOpenMessageChat,
+          shouldPlaySound: !isOpenMessageChat,
+          shouldSetBadge: !isOpenMessageChat,
+        };
+      },
+    });
+
+    await Promise.all([
+      notifications.setNotificationCategoryAsync(PUSH_CATEGORY_MESSAGE, [
+        { identifier: PUSH_ACTION_REPLY, buttonTitle: "Reply", textInput: { submitButtonTitle: "Send", placeholder: "Reply..." }, options: { opensAppToForeground: false } },
+        { identifier: PUSH_ACTION_MUTE, buttonTitle: "Mute chat", options: { opensAppToForeground: false } },
+        { identifier: PUSH_ACTION_MARK_READ, buttonTitle: "Mark as read", options: { opensAppToForeground: false } },
+      ]),
+      notifications.setNotificationCategoryAsync(PUSH_CATEGORY_CALL, [
+        { identifier: PUSH_ACTION_ACCEPT_CALL, buttonTitle: "Answer", options: { opensAppToForeground: true } },
+        { identifier: PUSH_ACTION_DECLINE_CALL, buttonTitle: "Decline", options: { opensAppToForeground: false, isDestructive: true } },
+        { identifier: PUSH_ACTION_MUTE_CATEGORY, buttonTitle: "Mute calls", options: { opensAppToForeground: false } },
+      ]),
+      notifications.setNotificationCategoryAsync(PUSH_CATEGORY_SOCIAL, [
+        { identifier: PUSH_ACTION_MUTE_CATEGORY, buttonTitle: "Mute social", options: { opensAppToForeground: false } },
+        { identifier: PUSH_ACTION_OPEN, buttonTitle: "View", options: { opensAppToForeground: true } },
+      ]),
+      notifications.setNotificationCategoryAsync(PUSH_CATEGORY_SOCIAL_FOLLOW, [
+        { identifier: PUSH_ACTION_FOLLOW_BACK, buttonTitle: "Follow back", options: { opensAppToForeground: false } },
+        { identifier: PUSH_ACTION_MUTE_CATEGORY, buttonTitle: "Mute social", options: { opensAppToForeground: false } },
+      ]),
+      notifications.setNotificationCategoryAsync(PUSH_CATEGORY_COMMERCE, [
+        { identifier: PUSH_ACTION_MUTE_CATEGORY, buttonTitle: "Mute payments", options: { opensAppToForeground: false } },
+        { identifier: PUSH_ACTION_OPEN, buttonTitle: "View", options: { opensAppToForeground: true } },
+      ]),
+    ]);
+
+    if (Platform.OS === "android") {
+      const importance = {
+        MAX: notifications.AndroidImportance.MAX,
+        DEFAULT: notifications.AndroidImportance.DEFAULT,
+      } as const;
+      if (notifications.setNotificationChannelGroupAsync) {
+        await Promise.all(Object.values(PUSH_ANDROID_CHANNEL_GROUPS).map((group) =>
+          notifications.setNotificationChannelGroupAsync?.(group.id, {
+            name: group.name,
+            description: group.description,
+          })
+        ));
+      }
+      await Promise.all(Object.values(PUSH_ANDROID_CHANNELS).map((channel) =>
+        notifications.setNotificationChannelAsync(channel.id, {
+          name: channel.name,
+          importance: importance[channel.importance],
+          groupId: channel.groupId,
+          vibrationPattern: [0, 250, 250, 250],
+          sound: "default",
+        })
+      ));
+    }
+  })().catch((error) => {
+    notificationConfiguration = null;
+    throw error;
+  });
+  return notificationConfiguration;
 }
 
 export async function registerPushToken(): Promise<string | null> {
@@ -444,7 +512,7 @@ export async function registerPushToken(): Promise<string | null> {
   if (isExpoGo()) return null;
   const notifications = getNotifications();
   if (!notifications || Platform.OS === "web" || !Device.isDevice) return null;
-  configurePushNotifications();
+  await configurePushNotifications();
   const current = await notifications.getPermissionsAsync();
   const permission = (current as any).status === "granted" ? current : await notifications.requestPermissionsAsync();
   if ((permission as any).status !== "granted") return null;

@@ -100,12 +100,14 @@ function isNotificationEnabled(
   userPreference: UserNotificationPreference | null,
   devicePreference: Record<string, unknown> | null,
 ) {
+  let userEnabled = true;
   if (userPreference) {
-    if (userPreference.push_enabled === false) return false;
     const mutedUntil = userPreference.muted_until ? Date.parse(userPreference.muted_until) : NaN;
-    if (Number.isFinite(mutedUntil) && mutedUntil > Date.now()) return false;
     const preferenceColumn = PREFERENCE_COLUMN_BY_CATEGORY[categoryId];
-    return !preferenceColumn || userPreference[preferenceColumn] !== false;
+    userEnabled =
+      userPreference.push_enabled !== false &&
+      !(Number.isFinite(mutedUntil) && mutedUntil > Date.now()) &&
+      (!preferenceColumn || userPreference[preferenceColumn] !== false);
   }
 
   const preferences = devicePreference ?? {};
@@ -116,7 +118,7 @@ function isNotificationEnabled(
       : categoryId === "call"
         ? ["calls", "call_notifications", "calls_notifications"]
         : ["messages", "message_notifications", "messages_notifications"];
-  return legacyKeys.every((key) => preferences[key] !== false);
+  return userEnabled && legacyKeys.every((key) => preferences[key] !== false);
 }
 
 function getNotificationThreadId(
