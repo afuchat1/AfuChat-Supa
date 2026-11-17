@@ -257,3 +257,17 @@ mtime_ms = 1794468775342
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:40f7aca6-ea0c-4cf0-a429-197b088872fb/2355a4b1-a6ee-4a0a-b1db-6b5328fd5f4f/89c7a8a6-0397-4ef9-bf92-ccd530294507"
 storage_version_token = "1794468788631002"
 content_type = "image/png"
+
+[[outputs]]
+id = "tZqw1-iY6yX7v3w4OE35x"
+uri = "file://generated-artifacts/afu-chat-expo-go.png"
+type = "image"
+title = "AfuChat Expo Go QR code"
+description = "Scan this with Expo Go on Android. The QR opens the active development tunnel."
+logical_id = "10dd8a4a-026b-4ff0-a0f3-7d0d8b170387"
+content_hash = "sha256:abb9894eb39632636fd604c0528ad7c9529bb9a8cb17cf4090b7f098ba603fd4"
+size = 6840
+mtime_ms = 1794902408346
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:101f8fa5-cc91-4ccd-a763-d96cb30fdd8e/10dd8a4a-026b-4ff0-a0f3-7d0d8b170387/2e087d1e-f362-401b-95f6-c442f59ef31e"
+storage_version_token = "1794902427810824"
+content_type = "image/png"
