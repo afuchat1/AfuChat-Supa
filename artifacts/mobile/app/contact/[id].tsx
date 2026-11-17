@@ -467,11 +467,34 @@ export default function ContactScreen() {
               {ls.online && <View style={[s.onlineDot, { borderColor: colors.background }]} />}
             </TouchableOpacity>
 
-            {/* Name + verified badge */}
-            <View style={s.nameRow}>
-              <UserName userId={profile.id} name={profile.display_name} style={[s.displayName, { color: colors.text }]} numberOfLines={1} />
-              <VerifiedBadge isVerified={profile.is_verified}
-                isOrganizationVerified={profile.is_organization_verified} size={16} />
+            {/* Keep the primary profile action beside the name, leaving the
+                badge and shortcut row below with its full available width. */}
+            <View style={s.nameActionsRow}>
+              <View style={s.nameRow}>
+                <UserName userId={profile.id} name={profile.display_name} style={[s.displayName, { color: colors.text }]} numberOfLines={1} />
+                <VerifiedBadge isVerified={profile.is_verified}
+                  isOrganizationVerified={profile.is_organization_verified} size={16} />
+              </View>
+              <View style={s.identityRight}>
+                {!isSelf && user && (
+                  <TouchableOpacity
+                    style={[s.primaryBtn, { backgroundColor: followBg, borderColor: followBrd }]}
+                    onPress={handleFollow} activeOpacity={0.85} disabled={followLoading}>
+                    {followLoading
+                      ? <ActivityIndicator size="small" color={followTxt} />
+                      : <><Ionicons name={followIcon} size={13} color={followTxt} />
+                          <Text style={[s.primaryBtnText, { color: followTxt }]}>{followLabel}</Text></>}
+                  </TouchableOpacity>
+                )}
+                {isSelf && (
+                  <TouchableOpacity
+                    style={[s.primaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
+                    onPress={() => router.push("/profile/edit")} activeOpacity={0.85}>
+                    <Ionicons name="create" size={13} color={colors.text} />
+                    <Text style={[s.primaryBtnText, { color: colors.text }]}>Edit</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             <RoyaltyBadge userId={profile.id} />
@@ -491,7 +514,7 @@ export default function ContactScreen() {
             <View style={s.pillActionRow}>
               <View style={[s.prestigePill, { backgroundColor: prestige.color + "1A", borderColor: prestige.color + "44" }]}>
                 <Text style={s.prestigeEmoji}>{prestige.emoji}</Text>
-                <Text style={[s.prestigeText, { color: prestige.color }]}>{prestige.label}</Text>
+                <Text numberOfLines={1} style={[s.prestigeText, { color: prestige.color }]}>{prestige.label}</Text>
               </View>
 
               {!isSelf && user && (
@@ -547,29 +570,6 @@ export default function ContactScreen() {
             </View>
           </View>
 
-          {/* ── Right: action buttons ─────────────────────────────────── */}
-          <View style={s.identityRight}>
-            {/* Follow / Edit */}
-            {!isSelf && user && (
-              <TouchableOpacity
-                style={[s.primaryBtn, { backgroundColor: followBg, borderColor: followBrd }]}
-                onPress={handleFollow} activeOpacity={0.85} disabled={followLoading}>
-                {followLoading
-                  ? <ActivityIndicator size="small" color={followTxt} />
-                  : <><Ionicons name={followIcon} size={13} color={followTxt} />
-                      <Text style={[s.primaryBtnText, { color: followTxt }]}>{followLabel}</Text></>}
-              </TouchableOpacity>
-            )}
-            {isSelf && (
-              <TouchableOpacity
-                style={[s.primaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
-                onPress={() => router.push("/profile/edit")} activeOpacity={0.85}>
-                <Ionicons name="create" size={13} color={colors.text} />
-                <Text style={[s.primaryBtnText, { color: colors.text }]}>Edit</Text>
-              </TouchableOpacity>
-            )}
-
-          </View>
         </View>
 
         {/* ══════════════════════════════════════════════════════════════ */}
@@ -1006,26 +1006,23 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
   },
 
-  // Identity band — left avatar col + right action col
+  // Identity band — full-width identity and shortcut rows
   // NOTE: no marginTop here — only the avatarShell gets the negative margin
   identityBand: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+    flexDirection: "column",
+    alignItems: "stretch",
     paddingHorizontal: 14,
     paddingBottom: 12,
-    gap: 10,
   },
   identityLeft: {
-    flex: 1,
+    width: "100%",
     minWidth: 0,
     gap: 4,
   },
   identityRight: {
     alignItems: "flex-end",
-    justifyContent: "flex-end",
-    // push buttons down so they sit below the cover boundary
-    paddingTop: (AVATAR_SIZE / 2 + 4) + 6,
-    gap: 8,
+    justifyContent: "center",
+    flexShrink: 0,
   },
   avatarShell: {
     width: AVATAR_SIZE + 6,
@@ -1041,11 +1038,18 @@ const s = StyleSheet.create({
     backgroundColor: "#34C759", borderWidth: 2,
   },
   nameRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     marginTop: 2,
     minWidth: 0,
+  },
+  nameActionsRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   displayName: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2, flexShrink: 1, minWidth: 0, textAlign: "left" },
   prestigePill: {
@@ -1054,7 +1058,7 @@ const s = StyleSheet.create({
     borderRadius: 20, borderWidth: 1,
   },
   prestigeEmoji: { fontSize: 11 },
-  prestigeText: { fontSize: 10.5, fontFamily: "Inter_600SemiBold" },
+  prestigeText: { fontSize: 10.5, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
 
   primaryBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -1258,12 +1262,13 @@ const s = StyleSheet.create({
   // Prestige pill + inline action icons (same row, fills full width of identityLeft)
   pillActionRow: {
     flexDirection: "row", alignItems: "center",
-    flexWrap: "wrap",
-    gap: 7,
+    flexWrap: "nowrap",
+    gap: 4,
   },
   pillIconBtn: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
   },
 
   // Tab bar
