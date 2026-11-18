@@ -115,6 +115,7 @@ export default function ChatFileAttachmentCard({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Save or share ${title}`}
+          testID="chat-file-save"
           disabled={busy}
           onPress={onSaveOrShare}
           style={({ pressed }) => [
@@ -126,8 +127,7 @@ export default function ChatFileAttachmentCard({
             },
           ]}
         >
-          <Ionicons name="share-outline" size={15} color={foreground} />
-          <Text style={[styles.actionText, { color: foreground }]}>Save or share</Text>
+          <Ionicons name="share-outline" size={16} color={foreground} />
         </Pressable>
       </View>
     </View>
@@ -136,42 +136,42 @@ export default function ChatFileAttachmentCard({
 
 const styles = StyleSheet.create({
   card: {
-    width: 272,
+    width: 256,
     maxWidth: "100%",
-    padding: 10,
+    padding: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    gap: 10,
+    borderRadius: 12,
+    gap: 7,
   },
-  header: { flexDirection: "row", alignItems: "center", gap: 10 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   fileBadge: {
-    width: 42,
-    height: 48,
-    borderRadius: 11,
+    width: 38,
+    height: 42,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     gap: 1,
   },
   extension: { maxWidth: 36, fontSize: 8, fontFamily: "Inter_700Bold" },
   details: { flex: 1, minWidth: 0 },
-  fileName: { fontSize: 13, lineHeight: 17, fontFamily: "Inter_600SemiBold" },
-  fileMeta: { marginTop: 4, fontSize: 10, fontFamily: "Inter_400Regular" },
+  fileName: { fontSize: 12, lineHeight: 16, fontFamily: "Inter_600SemiBold" },
+  fileMeta: { marginTop: 3, fontSize: 10, fontFamily: "Inter_400Regular" },
   progressArea: { gap: 5 },
   progressTrack: { height: 4, overflow: "hidden", borderRadius: 99 },
   progressFill: { height: "100%", borderRadius: 99 },
   progressText: { fontSize: 10, fontFamily: "Inter_500Medium" },
-  caption: { fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular" },
-  actions: { flexDirection: "row", gap: 7 },
+  caption: { fontSize: 12, lineHeight: 17, fontFamily: "Inter_400Regular" },
+  actions: { flexDirection: "row", gap: 6 },
   action: {
-    minHeight: 34,
-    paddingHorizontal: 9,
-    borderRadius: 9,
+    minHeight: 30,
+    paddingHorizontal: 8,
+    borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
   },
   primaryAction: { flex: 1 },
-  secondaryAction: { flex: 1.35 },
+  secondaryAction: { width: 34, paddingHorizontal: 0 },
   actionText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
 });

@@ -7444,7 +7444,9 @@ STRICT RULES:
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
-        copyToCacheDirectory: true,
+        // Avoid DocumentPicker's extra cache copy; the upload pipeline stages
+        // the provider URI once before streaming it to storage.
+        copyToCacheDirectory: false,
         multiple: true,
       });
       if (!result.canceled && result.assets?.length) {
@@ -9727,7 +9729,9 @@ STRICT RULES:
                         <AfuTextInput
                           appearance="embedded"
                           embeddedPaddingVertical={composerVerticalPadding}
-                          contextMenuHidden
+                          // Keep Android's native Cut/Copy/Paste ActionMode
+                          // hidden; FormatToolbar supplies AfuChat's own menu.
+                          contextMenuHidden={true}
                           ref={chatInputRef}
                           style={[
                             st.input,
@@ -10068,7 +10072,7 @@ STRICT RULES:
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     try {
-                      const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: true });
+                      const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: false, multiple: true });
                       if (!res.canceled && res.assets?.length) {
                         if (res.assets.length > 6) {
                           showAlert("6 files at a time", "Only the first 6 selected audio files were added.");
@@ -10094,7 +10098,7 @@ STRICT RULES:
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     try {
-                      const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true, multiple: true });
+                      const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: false, multiple: true });
                       if (!res.canceled && res.assets?.length) {
                         if (res.assets.length > 6) {
                           showAlert("6 files at a time", "Only the first 6 selected files were added. Send them, then choose more.");

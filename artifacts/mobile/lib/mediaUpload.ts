@@ -66,6 +66,27 @@ const MIME_MAP: Record<string, string> = {
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xlsm: "application/vnd.ms-excel.sheet.macroenabled.12",
+  xlsb: "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  pptm: "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+  ppsx: "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  pages: "application/vnd.apple.pages",
+  numbers: "application/vnd.apple.numbers",
+  key: "application/vnd.apple.keynote",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  odg: "application/vnd.oasis.opendocument.graphics",
+  rtf: "application/rtf",
+  epub: "application/epub+zip",
+  mobi: "application/x-mobipocket-ebook",
+  oxps: "application/oxps",
+  xps: "application/vnd.ms-xpsdocument",
+  vsd: "application/vnd.visio",
   apk: "application/vnd.android.package-archive",
   ipa: "application/octet-stream",
   zip: "application/zip",
@@ -73,7 +94,38 @@ const MIME_MAP: Record<string, string> = {
   rar: "application/x-rar-compressed",
   tar: "application/x-tar",
   gz: "application/gzip",
+  bz2: "application/x-bzip2",
+  xz: "application/x-xz",
   exe: "application/x-msdownload",
+  json: "application/json",
+  xml: "application/xml",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  txt: "text/plain",
+  md: "text/markdown",
+  html: "text/html",
+  yaml: "text/yaml",
+  yml: "text/yaml",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
+  ico: "image/vnd.microsoft.icon",
+  psd: "image/vnd.adobe.photoshop",
+  sqlite: "application/vnd.sqlite3",
+  db: "application/octet-stream",
+  flac: "audio/flac",
+  mkv: "video/x-matroska",
+  vcf: "text/vcard",
+  ics: "text/calendar",
+  kml: "application/vnd.google-earth.kml+xml",
+  kmz: "application/vnd.google-earth.kmz",
+  ttf: "font/ttf",
+  otf: "font/otf",
+  woff: "font/woff",
+  woff2: "font/woff2",
 };
 
 const MIME_TO_EXT: Record<string, string> = {
@@ -94,13 +146,63 @@ const MIME_TO_EXT: Record<string, string> = {
   "application/pdf": "pdf",
   "application/msword": "doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-excel.sheet.macroenabled.12": "xlsm",
+  "application/vnd.ms-excel.sheet.binary.macroenabled.12": "xlsb",
+  "application/vnd.ms-powerpoint": "ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+  "application/vnd.ms-powerpoint.presentation.macroenabled.12": "pptm",
+  "application/vnd.openxmlformats-officedocument.presentationml.slideshow": "ppsx",
+  "application/vnd.apple.pages": "pages",
+  "application/vnd.apple.numbers": "numbers",
+  "application/vnd.apple.keynote": "key",
+  "application/vnd.oasis.opendocument.text": "odt",
+  "application/vnd.oasis.opendocument.spreadsheet": "ods",
+  "application/vnd.oasis.opendocument.presentation": "odp",
+  "application/vnd.oasis.opendocument.graphics": "odg",
+  "application/rtf": "rtf",
+  "application/epub+zip": "epub",
+  "application/x-mobipocket-ebook": "mobi",
+  "application/oxps": "oxps",
+  "application/vnd.ms-xpsdocument": "xps",
+  "application/vnd.visio": "vsd",
   "application/vnd.android.package-archive": "apk",
   "application/zip": "zip",
   "application/x-7z-compressed": "7z",
   "application/x-rar-compressed": "rar",
   "application/x-tar": "tar",
   "application/gzip": "gz",
+  "application/x-bzip2": "bz2",
+  "application/x-xz": "xz",
   "application/x-msdownload": "exe",
+  "application/json": "json",
+  "application/xml": "xml",
+  "text/csv": "csv",
+  "text/tab-separated-values": "tsv",
+  "text/plain": "txt",
+  "text/markdown": "md",
+  "text/html": "html",
+  "text/yaml": "yaml",
+  "image/svg+xml": "svg",
+  "image/bmp": "bmp",
+  "image/tiff": "tiff",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "image/vnd.microsoft.icon": "ico",
+  "image/vnd.adobe.photoshop": "psd",
+  "application/vnd.sqlite3": "sqlite",
+  "audio/flac": "flac",
+  "video/x-matroska": "mkv",
+  "video/x-msvideo": "avi",
+  "text/vcard": "vcf",
+  "text/calendar": "ics",
+  "application/vnd.google-earth.kml+xml": "kml",
+  "application/vnd.google-earth.kmz": "kmz",
+  "font/ttf": "ttf",
+  "font/otf": "otf",
+  "font/woff": "woff",
+  "font/woff2": "woff2",
 };
 
 const UPLOAD_REUSE_CACHE_PREFIX = "@afuchat:uploaded_media:v1:";
@@ -781,9 +883,19 @@ export async function uploadChatMedia(
   onProgress?: (progress: number) => void,
 ): Promise<{ publicUrl: string | null; error: string | null }> {
   const isBlobOrData = fileUri.startsWith("blob:") || fileUri.startsWith("data:");
-  const nameExt = originalName?.split(".").pop()?.toLowerCase();
-  const uriExt = isBlobOrData ? undefined : fileUri.split(".").pop()?.split("?")[0]?.toLowerCase();
-  const mimeExt = contentType ? MIME_TO_EXT[contentType.toLowerCase()] : undefined;
+  const nameExt = originalName
+    ?.split(/[\\/]/)
+    .pop()
+    ?.match(/\.([a-z0-9]{1,12})$/i)?.[1]
+    ?.toLowerCase();
+  const uriExt = isBlobOrData
+    ? undefined
+    : fileUri
+        .split(/[?#]/)[0]
+        .match(/\.([a-z0-9]{1,12})$/i)?.[1]
+        ?.toLowerCase();
+  const normalizedMime = contentType?.split(";")[0]?.trim().toLowerCase();
+  const mimeExt = normalizedMime ? MIME_TO_EXT[normalizedMime] : undefined;
   const ext = nameExt || uriExt || mimeExt || "file";
   // Multiple chat images upload concurrently. A timestamp alone is not unique
   // when Promise.all starts them in the same millisecond, which caused several
@@ -795,7 +907,11 @@ export async function uploadChatMedia(
   const fileName = `${readableName}_${Date.now()}_${uniqueSuffix}.${ext}`;
   const filePath =
     bucket === "voice-messages" ? `${userId}/${fileName}` : `${userId}/${chatId}/${fileName}`;
-  return uploadToStorage(bucket, filePath, fileUri, contentType || getMime(ext), onProgress);
+  const resolvedMime =
+    !normalizedMime || normalizedMime === "application/octet-stream"
+      ? getMime(ext)
+      : normalizedMime;
+  return uploadToStorage(bucket, filePath, fileUri, resolvedMime, onProgress);
 }
 
 /** Format a byte count like 1234567 → "1.18 MB" with sensible units. */
