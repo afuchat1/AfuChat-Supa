@@ -657,22 +657,7 @@ function NativeAttachmentIcon({
   name: React.ComponentProps<typeof Ionicons>["name"];
   color: string;
 }) {
-  return (
-    <View
-      style={{
-        width: 56,
-        height: 56,
-        borderRadius: 19,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: `${color}18`,
-        borderWidth: 1,
-        borderColor: `${color}32`,
-      }}
-    >
-      <Ionicons name={name} size={27} color={color} />
-    </View>
-  );
+  return <Ionicons name={name} size={29} color={color} />;
 }
 
 // Enable LayoutAnimation on Android — guarded for New Architecture (SDK 55+).
@@ -2767,6 +2752,7 @@ function ChatScreen() {
   const composerInputHeight = 44 + (composerInputLines - 1) * composerLineHeight;
   // Show skeleton immediately on open; setLoading(false) is called once messages are ready.
   const [loading, setLoading] = useState(true);
+  const [messageLoadError, setMessageLoadError] = useState(false);
   const [sending, setSending] = useState(false);
   const imgViewer = useImageViewer();
   const openChatImageViewer = useCallback((images: string[], index: number) => {
@@ -3789,6 +3775,15 @@ function ChatScreen() {
     const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
     if (!isCurrentLoad()) return;
     const messageSelect = `id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, attachment_name, attachment_mime_type, attachment_size, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`;
+    const reportMessageLoadError = (stage: string, error: { code?: string; message?: string }) => {
+      if (!isCurrentLoad()) return;
+      console.error(`[Chat] ${stage} failed`, {
+        chatId,
+        code: error.code,
+        message: error.message,
+      });
+      setMessageLoadError(true);
+    };
     let serverMessages: any[] = [];
 
     if (!newestStored) {
@@ -3800,7 +3795,12 @@ function ChatScreen() {
         .order("id", { ascending: false })
         .limit(100);
       if (clearedAtServer) firstPageQuery = firstPageQuery.gt("sent_at", clearedAtServer);
-      const { data: firstPage } = await firstPageQuery;
+      const { data: firstPage, error: firstPageError } = await firstPageQuery;
+      if (firstPageError) {
+        reportMessageLoadError("Initial message history load", firstPageError);
+      } else {
+        setMessageLoadError(false);
+      }
       serverMessages = firstPage ?? [];
     } else {
       let recentIndexQuery = supabase
@@ -3823,11 +3823,17 @@ function ChatScreen() {
         deltaQuery = deltaQuery.gt("sent_at", clearedAtServer);
       }
 
-      const [{ data: recentIndex }, { data: deltaRows }] = await Promise.all([
+      const [
+        { data: recentIndex, error: recentIndexError },
+        { data: deltaRows, error: deltaRowsError },
+      ] = await Promise.all([
         recentIndexQuery,
         deltaQuery,
       ]);
       if (!isCurrentLoad()) return;
+      if (recentIndexError) reportMessageLoadError("Recent message index load", recentIndexError);
+      if (deltaRowsError) reportMessageLoadError("New message load", deltaRowsError);
+      if (!recentIndexError && !deltaRowsError) setMessageLoadError(false);
 
       const recentIds = (recentIndex ?? []).map((row: any) => row.id as string);
       const localEditedAt = await getLocalMessageEditTimestamps(chatId, recentIds);
@@ -3850,7 +3856,8 @@ function ChatScreen() {
           .eq("chat_id", chatId)
           .in("id", missedIds);
         if (clearedAtServer) missedQuery = missedQuery.gt("sent_at", clearedAtServer);
-        const { data: fetchedMissed } = await missedQuery;
+        const { data: fetchedMissed, error: missedError } = await missedQuery;
+        if (missedError) reportMessageLoadError("Missed message recovery", missedError);
         missedRows = fetchedMissed ?? [];
       }
       if (!isCurrentLoad()) return;
@@ -9270,10 +9277,29 @@ STRICT RULES:
                 <View style={[st.emptyIconWrap, { backgroundColor: BRAND + "14" }]}>
                   <Ionicons name="chatbubbles" size={48} color={BRAND} />
                 </View>
-                <Text style={[st.emptyTitle, { color: colors.text }]}>No messages yet</Text>
-                <Text style={[st.emptySub, { color: colors.textMuted }]}>
-                  Say hello to start the conversation
+                <Text style={[st.emptyTitle, { color: colors.text }]}>
+                  {messageLoadError ? "Couldn't load messages" : "No messages yet"}
                 </Text>
+                <Text style={[st.emptySub, { color: colors.textMuted }]}>
+                  {messageLoadError
+                    ? "Check your connection and try again."
+                    : "Say hello to start the conversation"}
+                </Text>
+                {messageLoadError && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry loading messages"
+                    onPress={() => {
+                      setLoading(true);
+                      void loadMessages();
+                    }}
+                    style={{ marginTop: 14, paddingHorizontal: 16, paddingVertical: 9 }}
+                  >
+                    <Text style={{ color: colors.accent, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
+                      Try again
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
@@ -10032,9 +10058,7 @@ STRICT RULES:
               const NATIVE_PICKS = [
                 {
                   label: "Photos (up to 6)",
-                  title: "Photos",
                   icon: "images" as const,
-                  color: Colors.attachmentActions.photos,
                   testID: "chat-attachment-photos",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
@@ -10057,17 +10081,13 @@ STRICT RULES:
                 },
                 {
                   label: "Camera",
-                  title: "Camera",
                   icon: "camera" as const,
-                  color: Colors.attachmentActions.camera,
                   testID: "chat-attachment-camera",
                   onPress: () => { closeAttachmentPickerPanel(); pickFromCamera(); },
                 },
                 {
                   label: "Audio File",
-                  title: "Audio",
                   icon: "musical-notes" as const,
-                  color: Colors.attachmentActions.audio,
                   testID: "chat-attachment-audio",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
@@ -10091,9 +10111,7 @@ STRICT RULES:
                 },
                 {
                   label: "Files",
-                  title: "Files",
                   icon: "document-text" as const,
-                  color: Colors.attachmentActions.document,
                   testID: "chat-attachment-document",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
@@ -10117,9 +10135,7 @@ STRICT RULES:
                 },
                 {
                   label: "Wallet",
-                  title: "Wallet",
                   icon: "wallet" as const,
-                  color: Colors.attachmentActions.wallet,
                   testID: "chat-attachment-wallet",
                   onPress: () => {
                     if (!chatInfo?.other_id || chatInfo.is_group || chatInfo.is_channel) {
@@ -10158,20 +10174,13 @@ STRICT RULES:
                           accessibilityLabel={pick.label}
                           testID={pick.testID}
                           style={{
-                             width: "33.3333%",
-                             minHeight: 82,
-                             maxHeight: 100,
-                            aspectRatio: 1.2,
+                            width: "33.3333%",
+                            height: 88,
                             alignItems: "center",
                             justifyContent: "center",
-                             borderRadius: 16,
-                             backgroundColor: colors.backgroundTertiary,
                           }}
                         >
-                          <NativeAttachmentIcon name={pick.icon} color={pick.color} />
-                          <Text style={{ color: colors.text, fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 }}>
-                            {pick.title}
-                          </Text>
+                          <NativeAttachmentIcon name={pick.icon} color={colors.accent} />
                         </TouchableOpacity>
                       ))}
                     </View>

@@ -29,7 +29,7 @@
 - [AfuChat production feature policy](afuchat-production-feature-policy.md) — Keep real features production-ready; do not direct users to install another environment to access them.
 - [Supabase production function capacity](supabase-production-function-capacity.md) — Check the live function inventory before deployment; never remove an active endpoint without user approval.
 - [ACoin transfer safety](acoin-transfer-safety.md) — Keep wallet transfers atomic and use the live money-request status values.
-- [AfuChat app scope](afuchat-database-scope.md) — Treat this workspace as AfuChat only; follow the current remote baseline, not historical assumptions.
+- [AfuChat app scope](afuchat-database-scope.md) — Follow the live Supabase schema; a migration in source may not yet be applied remotely.
 - [Username ownership security](username-ownership-security.md) — Free primary handles are not purchases; only trusted marketplace flows may create durable aliases.
 - [Selective verification policy](manual-verification-policy.md) — Keep personal verification selective, based on sustained authentic participation, with concise, actionable qualification guidance.
 - [Achievement reward integrity](achievement-reward-integrity.md) — Verify eligibility and enforce one-time XP claims on the server; clients only request synchronization.
