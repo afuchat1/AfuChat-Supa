@@ -219,8 +219,7 @@ export async function openChatFile(
   if (!localPath) return false;
   if (Platform.OS === "web") {
     if (typeof window === "undefined") return false;
-    window.open(localPath, "_blank", "noopener,noreferrer");
-    return true;
+    return window.open(localPath, "_blank", "noopener,noreferrer") !== null;
   }
   const Sharing = await import("expo-sharing");
   const available = await Sharing.isAvailableAsync();

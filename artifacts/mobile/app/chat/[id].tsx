@@ -60,6 +60,7 @@ import {
 import type { AudioRecorder } from "expo-audio";
 import VideoPreview from "@/components/ui/VideoPreview";
 import VideoTrimmerModal from "@/components/chat/VideoTrimmerModal";
+import ChatFileAttachmentCard from "@/components/chat/ChatFileAttachmentCard";
 import * as Speech from "expo-speech";
 import * as Clipboard from "expo-clipboard";
 import AudioPlayer from "@/components/AudioPlayer";
@@ -114,8 +115,13 @@ import {
 import { LinkPreview } from "@/components/ui/LinkPreview";
 import { getPhonebookName } from "@/lib/storage/localContacts";
 import { clearUnread, getLocalConversation } from "@/lib/storage/localConversations";
-import { getLocalAttachmentUri, getCachedChatAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
-import { uploadChatMedia } from "@/lib/mediaUpload";
+import { getLocalAttachmentUri, getCachedChatAttachmentUri, ensureChatAttachmentDownloaded, autoDownloadChatAttachments, openChatFile, saveChatAttachmentToDevice, downloadChatAttachmentInBrowser, saveAttachmentToGallery } from "@/lib/storage/chatAttachmentCache";
+import { formatBytes, uploadChatMedia } from "@/lib/mediaUpload";
+import {
+  getChatAttachmentName,
+  normalizeChatAttachmentMimeType,
+  normalizeChatAttachmentSize,
+} from "@/lib/chatAttachmentMetadata";
 import { syncPendingMessages } from "@/lib/offlineSync";
 import { translateUserContent, detectMessageLanguage } from "@/lib/translate";
 import { BUNDLED_UI_LANGUAGES, LANG_LABELS } from "@/lib/i18n";
@@ -319,8 +325,12 @@ type Message = {
   read_at?: string | null;
   attachment_url?: string | null;
   attachment_type?: string | null;
+  attachment_name?: string | null;
+  attachment_mime_type?: string | null;
+  attachment_size?: number | null;
   edited_at?: string | null;
   _pending?: boolean;
+  _uploadProgress?: number | null;
   _isAi?: boolean;
   _aiActions?: AiActionButton[];
   _aiSuggestions?: string[];
@@ -390,6 +400,9 @@ function confirmedOutgoingMessage(row: any, optimistic: Message): Message {
     reply_to_message_id: row.reply_to_message_id ?? optimistic.reply_to_message_id,
     attachment_url: row.attachment_url || optimistic.attachment_url,
     attachment_type: row.attachment_type || optimistic.attachment_type,
+    attachment_name: row.attachment_name ?? optimistic.attachment_name,
+    attachment_mime_type: row.attachment_mime_type ?? optimistic.attachment_mime_type,
+    attachment_size: row.attachment_size ?? optimistic.attachment_size,
     edited_at: row.edited_at ?? optimistic.edited_at,
     delivered_at: latestMessageTimestamp(optimistic.delivered_at, row.delivered_at),
     read_at: latestMessageTimestamp(optimistic.read_at, row.read_at),
@@ -1521,7 +1534,7 @@ function MediaUploadIndicator({ kind, isMe }: { kind: "image" | "video"; isMe: b
   );
 }
 
-function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, onConfirmExec, onCancelExec, onSuggestionTap, onSenderPress, onReactionPress, onStatusPress, onNotificationAction, brandColor, flatSurface, hideTimestamp, isTextSelectionEnabled }: {
+function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, onReply, replyPreview, onTapReply, isHighlighted, onTapEnvelope, onTapGift, onImageTap, onConfirmExec, onCancelExec, onSuggestionTap, onSenderPress, onReactionPress, onStatusPress, onNotificationAction, onFileAlert, brandColor, flatSurface, hideTimestamp, isTextSelectionEnabled }: {
   msg: Message;
   isMe: boolean;
   isChannel?: boolean;
@@ -1542,6 +1555,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   onReactionPress?: (msg: Message, emoji: string) => void;
   onStatusPress?: (msg: Message) => void;
   onNotificationAction?: (notification: NotificationMessageData) => void;
+  onFileAlert?: (title: string, message: string) => void;
   brandColor?: string;
   /** When true, renders a flat borderless surface — no bubble bg, no tail, no radius */
   flatSurface?: boolean;
@@ -1562,6 +1576,8 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   const [transcribing, setTranscribing] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [fileDownloadProgress, setFileDownloadProgress] = useState<number | null>(null);
+  const [webAttachmentDownloaded, setWebAttachmentDownloaded] = useState(false);
   const groupedImageUrls = parseGroupedImageUrls(msg);
 
   // ── Local attachment URI (from device cache) ──────────────────────────────
@@ -1577,7 +1593,7 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
   useEffect(() => {
     const url  = msg.attachment_url;
     const type = msg.attachment_type;
-    if (!url || !type || type === "image_group" || type === "video" || type === "file") return;
+    if (!url || !type || type === "image_group" || type === "video") return;
     let active = true;
     setAttachUri(getLocalAttachmentUri(url) ?? url);
     void (async () => {
@@ -1587,12 +1603,25 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
         setAttachUri(cached);
         return;
       }
+      if (type === "file") return;
       if (!chatPrefsLocal.auto_download) return;
-      const downloaded = await ensureChatAttachmentDownloaded(url, type);
+      const downloaded = await ensureChatAttachmentDownloaded(url, type, {
+        attachment_name: msg.attachment_name,
+        attachment_mime_type: msg.attachment_mime_type,
+        attachment_size: msg.attachment_size,
+      });
       if (active && downloaded) setAttachUri(downloaded);
     })();
     return () => { active = false; };
-  }, [msg.id, msg.attachment_url, msg.attachment_type, chatPrefsLocal.auto_download]);
+  }, [
+    msg.id,
+    msg.attachment_url,
+    msg.attachment_type,
+    msg.attachment_name,
+    msg.attachment_mime_type,
+    msg.attachment_size,
+    chatPrefsLocal.auto_download,
+  ]);
 
   useEffect(() => {
     if (groupedImageUrls.length === 0) {
@@ -1613,22 +1642,57 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
     return () => { active = false; };
   }, [msg.id, groupedImageUrls.join("\u001f"), chatPrefsLocal.auto_download]);
 
-  async function handleFileTap() {
+  async function handleFileAction(action: "download" | "open" | "save") {
     if (!msg.attachment_url) return;
     const url = msg.attachment_url;
-    async function _openOrInstall(localPath: string) {
-      openChatFile(localPath);
+    const fileName = getChatAttachmentName(msg.attachment_name, url);
+    const mimeType = normalizeChatAttachmentMimeType(msg.attachment_mime_type, fileName);
+    const shareOptions = { fileName, mimeType };
+
+    if (Platform.OS === "web") {
+      if (action === "open") {
+        const opened = await openChatFile(url, { ...shareOptions, dialogTitle: "Open file" });
+        if (!opened) onFileAlert?.("Could not open file", "The browser could not open this file.");
+        return;
+      }
+      const downloaded = downloadChatAttachmentInBrowser(url, fileName);
+      if (downloaded) {
+        setWebAttachmentDownloaded(true);
+      } else {
+        onFileAlert?.("Download unavailable", "The browser could not download this file.");
+      }
+      return;
     }
 
-    const local = getLocalAttachmentUri(url);
-    if (local) { await _openOrInstall(local); return; }
-
     setFileDownloading(true);
+    setFileDownloadProgress(0);
     try {
-      const downloaded = await ensureChatAttachmentDownloaded(url, "file");
-      if (downloaded) { setAttachUri(downloaded); await _openOrInstall(downloaded); }
+      const local = getLocalAttachmentUri(url) ??
+        await getCachedChatAttachmentUri(url) ??
+        await ensureChatAttachmentDownloaded(url, "file", {
+          attachment_name: fileName,
+          attachment_mime_type: mimeType,
+          attachment_size: msg.attachment_size,
+        }, setFileDownloadProgress);
+      if (!local) {
+        onFileAlert?.("Download failed", "Could not download this file. Check your connection and try again.");
+        return;
+      }
+      setAttachUri(local);
+      if (action === "download") return;
+
+      const succeeded = action === "save"
+        ? await saveChatAttachmentToDevice(local, shareOptions)
+        : await openChatFile(local, { ...shareOptions, dialogTitle: "Open file" });
+      if (!succeeded) {
+        onFileAlert?.("File actions unavailable", "A compatible app or save location is not available on this device.");
+      }
+    } catch (error) {
+      console.warn("[ChatAttachment] File action failed:", error);
+      onFileAlert?.("File action failed", "Could not open or save this file. Please try again.");
     } finally {
       setFileDownloading(false);
+      setFileDownloadProgress(null);
     }
   }
 
@@ -1975,38 +2039,29 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
               )}
             </TouchableOpacity>
           ) : hasFile ? (
-            <TouchableOpacity
-              onPress={handleFileTap}
-              onLongPress={messageLongPress}
-              delayLongPress={300}
-              activeOpacity={0.9}
-              style={st.fileRow}
-            >
-              <View style={[st.fileIconBg, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)" }]}>
-                {fileDownloading
-                  ? <ActivityIndicator size={18} color={textColor} />
-                  : <Ionicons
-                      name={
-                        attachUri && !attachUri.startsWith("http")
-                          ? "document-text"
-                          : "download"
-                      }
-                      size={22}
-                      color={textColor}
-                    />
-                }
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[st.fileName, { color: textColor }]} numberOfLines={2}>{displayText}</Text>
-                <Text style={[st.fileMeta, { color: isMe ? "rgba(255,255,255,0.6)" : colors.textMuted }]}>
-                  {fileDownloading
-                    ? "Downloading…"
-                    : attachUri && !attachUri.startsWith("http")
-                      ? "Tap to open"
-                      : "Tap to download"}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <ChatFileAttachmentCard
+              fileName={msg.attachment_name ?? getChatAttachmentName(null, msg.attachment_url)}
+              mimeType={msg.attachment_mime_type}
+              fileSize={msg.attachment_size}
+              caption={
+                msg.encrypted_content &&
+                !msg.encrypted_content.startsWith("File · ")
+                  ? displayText
+                  : null
+              }
+              isMe={isMe}
+              isDownloaded={
+                Platform.OS === "web"
+                  ? webAttachmentDownloaded
+                  : !!attachUri && !attachUri.startsWith("http")
+              }
+              isDownloading={fileDownloading}
+              downloadProgress={fileDownloadProgress}
+              uploadProgress={isPending ? msg._uploadProgress : null}
+              onDownload={() => void handleFileAction("download")}
+              onOpen={() => void handleFileAction("open")}
+              onSaveOrShare={() => void handleFileAction("save")}
+            />
           ) : hasStoryReply ? (
             (() => {
               // Parse encoded storyUserId prefix: "storyUserId:{uid}|{display text}"
@@ -2645,6 +2700,9 @@ function ChatScreen() {
         reply_to_message_id: message.reply_to_id,
         attachment_url: message.attachment_url,
         attachment_type: message.attachment_type,
+        attachment_name: message.attachment_name,
+        attachment_mime_type: message.attachment_mime_type,
+        attachment_size: message.attachment_size,
         edited_at: message.edited_at,
         delivered_at: message.delivered_at,
         read_at: message.read_at,
@@ -3345,7 +3403,7 @@ function ChatScreen() {
     })();
   }, [showAttachPanel, attachTab]);
 
-  type AttachmentPreview = { uri: string; type: string; name?: string; mimeType?: string; trimStart?: number; trimEnd?: number };
+  type AttachmentPreview = { uri: string; type: string; name?: string; mimeType?: string; size?: number; trimStart?: number; trimEnd?: number };
   const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
   const [selectedImages, setSelectedImages] = useState<AttachmentPreview[]>([]);
   const sharedImageInjectedRef = useRef(false);
@@ -3654,6 +3712,9 @@ function ChatScreen() {
               reply_to_message_id: m.reply_to_id,
               attachment_url: m.attachment_url,
               attachment_type: m.attachment_type,
+              attachment_name: m.attachment_name,
+              attachment_mime_type: m.attachment_mime_type,
+              attachment_size: m.attachment_size,
               edited_at: m.edited_at,
               delivered_at: m.delivered_at,
               read_at: m.read_at,
@@ -3727,7 +3788,7 @@ function ChatScreen() {
     const newestStored = await getNewestMessageDate(chatId);
     const clearedAtServer = await AsyncStorage.getItem(`chat_cleared_${user.id}_${chatId}`).catch(() => null);
     if (!isCurrentLoad()) return;
-    const messageSelect = `id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`;
+    const messageSelect = `id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, attachment_name, attachment_mime_type, attachment_size, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`;
     let serverMessages: any[] = [];
 
     if (!newestStored) {
@@ -3834,6 +3895,9 @@ function ChatScreen() {
           reply_to_message_id: m.reply_to_message_id,
           attachment_url: m.attachment_url,
           attachment_type: m.attachment_type,
+          attachment_name: m.attachment_name,
+          attachment_mime_type: m.attachment_mime_type,
+          attachment_size: m.attachment_size,
           edited_at: m.edited_at,
           sender,
           reactions: [],
@@ -4019,6 +4083,9 @@ function ChatScreen() {
               reply_to_message_id: message.reply_to_id,
               attachment_url: message.attachment_url,
               attachment_type: message.attachment_type,
+              attachment_name: message.attachment_name,
+              attachment_mime_type: message.attachment_mime_type,
+              attachment_size: message.attachment_size,
               edited_at: message.edited_at,
               delivered_at: message.delivered_at,
               read_at: message.read_at,
@@ -4120,7 +4187,7 @@ function ChatScreen() {
       }
       let olderMessagesQuery = supabase
         .from("messages")
-        .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+        .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, attachment_name, attachment_mime_type, attachment_size, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
         .eq("chat_id", chatId)
         .lt("sent_at", cursor)
         .order("sent_at", { ascending: false })
@@ -4169,7 +4236,12 @@ function ChatScreen() {
             id: m.id, chat_id: m.chat_id, sender_id: m.sender_id,
             encrypted_content: aiParsed ? (aiParsed.text || m.encrypted_content) : m.encrypted_content,
             sent_at: resolveMessageTimestamp(m), reply_to_message_id: m.reply_to_message_id,
-            attachment_url: m.attachment_url, attachment_type: m.attachment_type, edited_at: m.edited_at,
+            attachment_url: m.attachment_url,
+            attachment_type: m.attachment_type,
+            attachment_name: m.attachment_name,
+            attachment_mime_type: m.attachment_mime_type,
+            attachment_size: m.attachment_size,
+            edited_at: m.edited_at,
             sender, reactions: reactionMap[m.id] || [],
             status: m.sender_id === user.id
               ? (statusMap2.get(m.id)?.read_at ? "read" : statusMap2.get(m.id)?.delivered_at ? "delivered" : "sent")
@@ -6275,9 +6347,28 @@ STRICT RULES:
     const type = msg.attachment_type;
     if (!url || !type) return;
     if (type === "file") {
-      // Documents: open share sheet so the user can save to Files / Drive
-      const local = getLocalAttachmentUri(url) ?? await ensureChatAttachmentDownloaded(url, type);
-      if (local) openChatFile(local);
+      const fileName = getChatAttachmentName(msg.attachment_name, url);
+      const mimeType = normalizeChatAttachmentMimeType(msg.attachment_mime_type, fileName);
+      if (Platform.OS === "web") {
+        if (!downloadChatAttachmentInBrowser(url, fileName)) {
+          showAlert("Download unavailable", "The browser could not download this file.");
+        }
+        return;
+      }
+      const local = getLocalAttachmentUri(url) ??
+        await ensureChatAttachmentDownloaded(url, type, {
+          attachment_name: fileName,
+          attachment_mime_type: mimeType,
+          attachment_size: msg.attachment_size,
+        });
+      if (!local) {
+        showAlert("Download failed", "Could not download this file. Check your connection and try again.");
+        return;
+      }
+      const saved = await saveChatAttachmentToDevice(local, { fileName, mimeType });
+      if (!saved) {
+        showAlert("Save unavailable", "Choose a compatible app or file location to save this document.");
+      }
       return;
     }
     const saved = await saveAttachmentToGallery(url);
@@ -6564,7 +6655,10 @@ STRICT RULES:
         encrypted_content: content,
         attachment_url: forwardMsg.attachment_url || null,
         attachment_type: forwardMsg.attachment_type || null,
-      }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
+        attachment_name: forwardMsg.attachment_name || null,
+        attachment_mime_type: forwardMsg.attachment_mime_type || null,
+        attachment_size: forwardMsg.attachment_size ?? null,
+      }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, attachment_name, attachment_mime_type, attachment_size, edited_at").single();
       if (error) throw error;
       await cacheConfirmedOutgoingMessage(inserted, {
         display_name: profile?.display_name || "You",
@@ -7338,7 +7432,9 @@ STRICT RULES:
       setSelectedImages(result.assets.slice(0, 6).map((asset) => ({
         uri: asset.uri,
         type: "image",
+        name: asset.fileName ?? undefined,
         mimeType: asset.mimeType || "image/jpeg",
+        size: asset.fileSize ?? undefined,
       })));
     }
   }
@@ -7349,12 +7445,20 @@ STRICT RULES:
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
         copyToCacheDirectory: true,
-        multiple: false,
+        multiple: true,
       });
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const doc = result.assets[0];
-        setSelectedImages([]);
-        setAttachmentPreview({ uri: doc.uri, type: "file", name: doc.name, mimeType: doc.mimeType });
+      if (!result.canceled && result.assets?.length) {
+        if (result.assets.length > 6) {
+          showAlert("6 files at a time", "Only the first 6 selected files were added. Send them, then choose more.");
+        }
+        setAttachmentPreview(null);
+        setSelectedImages(result.assets.slice(0, 6).map((doc) => ({
+          uri: doc.uri,
+          type: "file",
+          name: doc.name,
+          mimeType: doc.mimeType ?? "application/octet-stream",
+          size: doc.size ?? undefined,
+        })));
       }
     } catch {
       showAlert("Error", "Could not open file picker.");
@@ -7464,166 +7568,239 @@ STRICT RULES:
       return;
     }
 
-    // Shares can contain a mix of images, videos, audio, and documents. Keep
-    // every selected item instead of silently reducing the selection to one
-    // non-image attachment.
-    if (selectedImages.length > 0) {
-      const attachments = selectedImages.slice(0, 6);
-      const caption = input.trim();
-      const pendingIds = attachments.map((_, index) => `pending-${Date.now()}-${index}`);
-      setMessages((prev) => [
-        ...attachments.map((attachment, index) => ({
-          id: pendingIds[index],
-          chat_id: activeChatId,
-          sender_id: user.id,
-          encrypted_content: caption || (
-            attachment.type === "video"
-              ? "Video"
-              : attachment.type === "file"
-                ? `File · ${attachment.name || "Shared file"}`
-                : "Shared media"
-          ),
-          sent_at: new Date().toISOString(),
-          sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
-          attachment_url: attachment.uri,
-          attachment_type: attachment.type,
-          _pending: true,
-          reactions: [],
-        })),
-        ...prev,
-      ]);
-      setSelectedImages([]);
-      setInput("");
-      saveDraft("");
-
-      try {
-        const uploaded = await Promise.all(attachments.map(async (attachment) => {
-          const result = await uploadChatMedia(
-            "chat-attachments",
-            activeChatId,
-            user.id,
-            attachment.uri,
-            attachment.name || undefined,
-            attachment.mimeType,
-          );
-          if (result.error || !result.publicUrl) {
-            throw new Error(result.error || "Could not upload one of the shared files.");
-          }
-          return result.publicUrl;
-        }));
-        await Promise.all(uploaded.map(async (publicUrl, index) => {
-          const attachment = attachments[index];
-          const label = caption || (
-            attachment.type === "video"
-              ? "Video"
-              : attachment.type === "file"
-                ? `File · ${attachment.name || "Shared file"}`
-                : "Shared media"
-          );
-          const { data: inserted, error: insertError } = await supabase.from("messages").insert({
-            chat_id: activeChatId,
-            sender_id: user.id,
-            encrypted_content: label,
-            attachment_url: publicUrl,
-            attachment_type: attachment.type,
-          }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
-          if (insertError) throw insertError;
-          if (inserted) {
-            await cacheConfirmedOutgoingMessage(inserted, {
-              display_name: profile?.display_name || "You",
-              avatar_url: profile?.avatar_url ?? null,
-              handle: profile?.handle || "",
-            });
-          }
-          setMessages((prev) => prev.map((message) =>
-            message.id === pendingIds[index]
-              ? { ...message, id: inserted?.id || pendingIds[index], attachment_url: publicUrl, _pending: false }
-              : message
-          ));
-        }));
-      } catch (error: any) {
-        setMessages((prev) => prev.filter((message) => !pendingIds.includes(message.id)));
-        showAlert("Upload failed", error?.message || "Could not upload the shared files.");
-      }
+    // Send a single document or a mixed selection through the same durable
+    // path. Keep the existing six-file batch limit visible to the user.
+    const fromMultiPicker = selectedImages.length > 0;
+    const attachments = fromMultiPicker
+      ? selectedImages
+      : attachmentPreview
+        ? [attachmentPreview]
+        : [];
+    if (attachments.length === 0) return;
+    if (attachments.length > 6) {
+      showAlert("Choose fewer files", "AfuChat sends up to 6 files at a time.");
       return;
     }
-
-    // Capture all values before clearing preview state
-    if (!attachmentPreview) return;
-    const { uri, type, name, mimeType } = attachmentPreview;
     const caption = input.trim();
-    const label = caption || (type === "image" ? "📷 Photo" : type === "video" ? "🎥 Video" : `📎 ${name || "File"}`);
-
-    // Show optimistic message immediately with local URI — user sees their content right away
-    const tempId = `pending-${Date.now()}`;
-    setMessages((prev) => [{
-      id: tempId,
-      chat_id: activeChatId,
-      sender_id: user.id,
-      encrypted_content: label,
-      sent_at: new Date().toISOString(),
-      sender: { display_name: profile?.display_name || "You", avatar_url: profile?.avatar_url || null, handle: profile?.handle || "" },
-      attachment_url: uri,
-      attachment_type: type,
-      _pending: true,
-      reactions: [],
-    }, ...prev]);
-
-    // Close preview and clear input immediately
-    setAttachmentPreview(null);
-    setInput("");
-    saveDraft("");
-
-    // Upload and insert in the background
-    try {
-      const { publicUrl, error: uploadErr } = await uploadChatMedia(
-        "chat-attachments",
-        activeChatId,
-        user.id,
-        uri,
-        name || undefined,
-        mimeType,
+    const sentAt = new Date().toISOString();
+    const pendingIds = attachments.map(() => createLocalMessageId());
+    const senderSnapshot = {
+      display_name: profile?.display_name || "You",
+      avatar_url: profile?.avatar_url || null,
+      handle: profile?.handle || "",
+    };
+    const optimisticMessages = attachments.map((attachment, index) => {
+      const fileName = getChatAttachmentName(attachment.name, attachment.uri);
+      const label = caption || (
+        attachment.type === "image"
+          ? "📷 Photo"
+          : attachment.type === "video"
+            ? "🎥 Video"
+            : attachment.type === "file"
+              ? `File · ${fileName}`
+              : "Shared media"
       );
-
-      if (uploadErr || !publicUrl) {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        showAlert("Upload failed", uploadErr || "Could not upload file. Please try again.");
-        return;
-      }
-
-      const { data: inserted } = await supabase.from("messages").insert({
+      return {
+        id: pendingIds[index],
         chat_id: activeChatId,
         sender_id: user.id,
         encrypted_content: label,
-        attachment_url: publicUrl,
-        attachment_type: type,
-      }).select("id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at").single();
-      if (inserted) {
-        await cacheConfirmedOutgoingMessage(inserted, {
-          display_name: profile?.display_name || "You",
-          avatar_url: profile?.avatar_url ?? null,
-          handle: profile?.handle || "",
-        });
-      }
+        sent_at: sentAt,
+        sender: senderSnapshot,
+        attachment_url: attachment.uri,
+        attachment_type: attachment.type,
+        attachment_name: fileName,
+        attachment_mime_type: normalizeChatAttachmentMimeType(attachment.mimeType, fileName),
+        attachment_size: normalizeChatAttachmentSize(attachment.size),
+        _pending: true,
+        _uploadProgress: attachment.type === "file" ? 0 : null,
+        reactions: [],
+      };
+    });
+    setMessages((prev) => [...optimisticMessages, ...prev]);
+    setAttachmentPreview(null);
+    setSelectedImages([]);
+    setInput("");
+    saveDraft("");
 
-      // Replace optimistic bubble with real message (real URL + real DB id)
-      setMessages((prev) => prev.map((m) =>
-        m.id === tempId
-          ? { ...m, id: inserted?.id || tempId, attachment_url: publicUrl, _pending: false }
-          : m
-      ));
-
-      // Delete the DocumentPicker temp copy from cacheDirectory now that upload is done
-      if (uri) {
-        const cacheDir = (FileSystem as any).cacheDirectory ?? "";
-        if (cacheDir && uri.startsWith(cacheDir)) {
-          FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+    const results = await Promise.all(attachments.map(async (attachment, index) => {
+      const localId = pendingIds[index];
+      const fileName = getChatAttachmentName(attachment.name, attachment.uri);
+      const mimeType = normalizeChatAttachmentMimeType(attachment.mimeType, fileName);
+      try {
+        let fileSize = normalizeChatAttachmentSize(attachment.size);
+        if (fileSize == null) {
+          try {
+            const info = await FileSystem.getInfoAsync(attachment.uri);
+            if (info.exists) fileSize = normalizeChatAttachmentSize((info as any).size);
+          } catch {}
         }
-      }
+        const label = caption || (
+          attachment.type === "image"
+            ? "📷 Photo"
+            : attachment.type === "video"
+              ? "🎥 Video"
+              : attachment.type === "file"
+                ? `File · ${fileName}`
+                : "Shared media"
+        );
+        const upload = await uploadChatMedia(
+          "chat-attachments",
+          activeChatId,
+          user.id,
+          attachment.uri,
+          fileName,
+          mimeType,
+          (progress) => {
+            if (attachment.type !== "file") return;
+            setMessages((previous) => previous.map((message) =>
+              message.id === localId ? { ...message, _uploadProgress: progress } : message
+            ));
+          },
+        );
+        if (upload.error || !upload.publicUrl) {
+          throw new Error(upload.error || "Could not upload this file.");
+        }
 
-    } catch (e: any) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      showAlert("Upload failed", e?.message || "Could not upload file");
+        const localMessage = {
+          id: localId,
+          conversation_id: activeChatId,
+          sender_id: user.id,
+          content: label,
+          attachment_url: upload.publicUrl,
+          attachment_type: attachment.type,
+          attachment_name: fileName,
+          attachment_mime_type: mimeType,
+          attachment_size: fileSize,
+          reply_to_id: replyTo?.id ?? null,
+          sent_at: sentAt,
+          sender_display_name: senderSnapshot.display_name,
+          sender_avatar_url: senderSnapshot.avatar_url,
+          sender_handle: senderSnapshot.handle,
+        };
+        await savePendingMessage(localMessage);
+        setMessages((previous) => previous.map((message) =>
+          message.id === localId
+            ? {
+                ...message,
+                attachment_url: upload.publicUrl,
+                attachment_name: fileName,
+                attachment_mime_type: mimeType,
+                attachment_size: fileSize,
+                _uploadProgress: null,
+              }
+            : message
+        ));
+
+        let confirmed: any = null;
+        if (isOnline()) {
+          const insertPayload: Record<string, unknown> = {
+            id: localId,
+            chat_id: activeChatId,
+            sender_id: user.id,
+            encrypted_content: label,
+            attachment_url: upload.publicUrl,
+            attachment_type: attachment.type,
+            attachment_name: fileName,
+            attachment_mime_type: mimeType,
+            attachment_size: fileSize,
+          };
+          if (sentAt) insertPayload.sent_at = sentAt;
+          if (replyTo?.id) insertPayload.reply_to_message_id = replyTo.id;
+
+          const selection = "id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, attachment_name, attachment_mime_type, attachment_size, edited_at";
+          const { data: inserted, error: insertError } = await supabase
+            .from("messages")
+            .insert(insertPayload)
+            .select(selection)
+            .single();
+          confirmed = inserted;
+          if (insertError || !confirmed) {
+            const { data: committed, error: confirmError } = await supabase
+              .from("messages")
+              .select(selection)
+              .eq("id", localId)
+              .eq("chat_id", activeChatId)
+              .eq("sender_id", user.id)
+              .maybeSingle();
+            if (!confirmError && committed?.encrypted_content === label) confirmed = committed;
+          }
+        }
+
+        if (confirmed) {
+          await markMessageSynced(localId, confirmed.id).catch(() => {});
+          await cacheConfirmedOutgoingMessage(confirmed, senderSnapshot).catch(() => {});
+          setMessages((previous) => previous.map((message) =>
+            message.id === localId
+              ? {
+                  ...message,
+                  id: confirmed.id,
+                  sent_at: normalizeMessageTimestamp(confirmed.sent_at) ?? message.sent_at,
+                  attachment_url: upload.publicUrl,
+                  attachment_name: confirmed.attachment_name ?? fileName,
+                  attachment_mime_type: confirmed.attachment_mime_type ?? mimeType,
+                  attachment_size: confirmed.attachment_size ?? fileSize,
+                  status: "sent",
+                  _pending: false,
+                  _uploadProgress: null,
+                }
+              : message
+          ));
+          const recipientIds = (
+            chatInfo?.member_ids?.length ? chatInfo.member_ids : chatInfo?.other_id ? [chatInfo.other_id] : []
+          ).filter((recipientId: string) => recipientId !== user.id);
+          const broadcastPayload = {
+            id: confirmed.id,
+            chat_id: activeChatId,
+            sender_id: user.id,
+            encrypted_content: label,
+            attachment_url: upload.publicUrl,
+            attachment_type: attachment.type,
+            attachment_name: fileName,
+            attachment_mime_type: mimeType,
+            attachment_size: fileSize,
+            sent_at: normalizeMessageTimestamp(confirmed.sent_at) ?? sentAt,
+            reply_to_message_id: replyTo?.id ?? null,
+            sender_display_name: senderSnapshot.display_name,
+            sender_avatar_url: senderSnapshot.avatar_url,
+            sender_handle: senderSnapshot.handle,
+          };
+          recipientIds.forEach((recipientId: string) => broadcastToUserInbox(recipientId, broadcastPayload));
+          notifyInsertedChatMessage({
+            chatId: activeChatId,
+            messageId: confirmed.id,
+            body: caption || fileName,
+          });
+        }
+
+        const cacheDirectory = (FileSystem as any).cacheDirectory ?? "";
+        if (cacheDirectory && attachment.uri.startsWith(cacheDirectory)) {
+          FileSystem.deleteAsync(attachment.uri, { idempotent: true }).catch(() => {});
+        }
+        return { ok: true as const, index };
+      } catch (error: any) {
+        return { ok: false as const, index, error };
+      }
+    }));
+
+    const failed = results.filter((result) => !result.ok);
+    if (failed.length > 0) {
+      const failedIds = new Set(failed.map((result) => pendingIds[result.index]));
+      const failedAttachments = failed.map((result) => attachments[result.index]);
+      setMessages((previous) => previous.filter((message) => !failedIds.has(message.id)));
+      if (fromMultiPicker) {
+        setSelectedImages((previous) => [...failedAttachments, ...previous].slice(0, 6));
+      } else if (failedAttachments[0]) {
+        setAttachmentPreview((previous) => previous ?? failedAttachments[0]);
+      }
+      setInput((previous) => previous || caption);
+      if (caption) saveDraft(caption);
+      showAlert(
+        "Some files need another try",
+        failed.length === 1
+          ? (failed[0] as any).error?.message || "The file was kept in the composer so you can try again."
+          : `${failed.length} files were kept in the composer so you can try again.`,
+      );
     }
     } finally {
       if (isSendingImage) broadcastChatActivity(null, activeChatId);
@@ -8488,7 +8665,7 @@ STRICT RULES:
     let cancelled = false;
     supabase
       .from("messages")
-      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
+      .select(`id, chat_id, sender_id, encrypted_content, sent_at, reply_to_message_id, attachment_url, attachment_type, attachment_name, attachment_mime_type, attachment_size, edited_at, profiles!messages_sender_id_fkey(display_name, avatar_url, handle)`)
       .eq("id", messageId)
       .eq("chat_id", chatId)
       .maybeSingle()
@@ -8506,6 +8683,9 @@ STRICT RULES:
           reply_to_message_id: row.reply_to_message_id,
           attachment_url: row.attachment_url,
           attachment_type: row.attachment_type,
+          attachment_name: row.attachment_name,
+          attachment_mime_type: row.attachment_mime_type,
+          attachment_size: row.attachment_size,
           edited_at: row.edited_at,
           sender: row.profiles,
           reactions: [],
@@ -8759,6 +8939,7 @@ STRICT RULES:
             onReactionPress={addReaction}
             onStatusPress={isMe ? (m) => setMsgInfoTarget(m) : undefined}
              onNotificationAction={isNotificationsChat ? handleNotificationAction : undefined}
+             onFileAlert={(title, message) => showAlert(title, message)}
             brandColor={colors.accent}
             hideTimestamp={isAfuAiDirectChat}
             isTextSelectionEnabled={item.id === textSelectionMessageId}
@@ -9242,6 +9423,11 @@ STRICT RULES:
                         <Text style={[st.attachPreviewName, { color: isDark ? "#fff" : "#000" }]} numberOfLines={2}>
                           {image.name || (image.type === "video" ? "Video" : "Shared file")}
                         </Text>
+                        {image.size ? (
+                          <Text style={{ color: isDark ? "rgba(255,255,255,0.66)" : colors.textMuted, fontSize: 9, marginTop: 2 }}>
+                            {formatBytes(image.size)}
+                          </Text>
+                        ) : null}
                       </View>
                     )}
                     <TouchableOpacity
@@ -9280,6 +9466,11 @@ STRICT RULES:
                   : attachmentPreview?.type === "video" ? (attachmentPreview.trimStart != null ? "Trimmed clip" : "Video")
                   : attachmentPreview?.name || "File"}
               </Text>
+               {attachmentPreview?.size ? (
+                 <Text style={{ color: isDark ? "rgba(255,255,255,0.64)" : colors.textMuted, fontSize: 10, marginTop: 2 }}>
+                   {formatBytes(attachmentPreview.size)}
+                 </Text>
+               ) : null}
             </View>}
             {attachmentPreview?.type === "video" && (
               <TouchableOpacity
@@ -9536,6 +9727,7 @@ STRICT RULES:
                         <AfuTextInput
                           appearance="embedded"
                           embeddedPaddingVertical={composerVerticalPadding}
+                          contextMenuHidden
                           ref={chatInputRef}
                           style={[
                             st.input,
@@ -9836,6 +10028,7 @@ STRICT RULES:
               const NATIVE_PICKS = [
                 {
                   label: "Photos (up to 6)",
+                  title: "Photos",
                   icon: "images" as const,
                   color: Colors.attachmentActions.photos,
                   testID: "chat-attachment-photos",
@@ -9860,6 +10053,7 @@ STRICT RULES:
                 },
                 {
                   label: "Camera",
+                  title: "Camera",
                   icon: "camera" as const,
                   color: Colors.attachmentActions.camera,
                   testID: "chat-attachment-camera",
@@ -9867,38 +10061,59 @@ STRICT RULES:
                 },
                 {
                   label: "Audio File",
+                  title: "Audio",
                   icon: "musical-notes" as const,
                   color: Colors.attachmentActions.audio,
                   testID: "chat-attachment-audio",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     try {
-                      const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
-                      if (!res.canceled && res.assets?.[0]) {
-                        const d = res.assets[0];
-                        setAttachmentPreview({ uri: d.uri, type: "file", name: d.name, mimeType: d.mimeType ?? "audio/mpeg" });
+                      const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true, multiple: true });
+                      if (!res.canceled && res.assets?.length) {
+                        if (res.assets.length > 6) {
+                          showAlert("6 files at a time", "Only the first 6 selected audio files were added.");
+                        }
+                        setAttachmentPreview(null);
+                        setSelectedImages(res.assets.slice(0, 6).map((asset) => ({
+                          uri: asset.uri,
+                          type: "file",
+                          name: asset.name,
+                          mimeType: asset.mimeType ?? "audio/mpeg",
+                          size: asset.size ?? undefined,
+                        })));
                       }
                     } catch { /* ignore */ }
                   },
                 },
                 {
-                  label: "Document",
+                  label: "Files",
+                  title: "Files",
                   icon: "document-text" as const,
                   color: Colors.attachmentActions.document,
                   testID: "chat-attachment-document",
                   onPress: async () => {
                     closeAttachmentPickerPanel();
                     try {
-                      const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
-                      if (!res.canceled && res.assets?.[0]) {
-                        const d = res.assets[0];
-                        setAttachmentPreview({ uri: d.uri, type: "file", name: d.name, mimeType: d.mimeType ?? "application/octet-stream" });
+                      const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true, multiple: true });
+                      if (!res.canceled && res.assets?.length) {
+                        if (res.assets.length > 6) {
+                          showAlert("6 files at a time", "Only the first 6 selected files were added. Send them, then choose more.");
+                        }
+                        setAttachmentPreview(null);
+                        setSelectedImages(res.assets.slice(0, 6).map((asset) => ({
+                          uri: asset.uri,
+                          type: "file",
+                          name: asset.name,
+                          mimeType: asset.mimeType ?? "application/octet-stream",
+                          size: asset.size ?? undefined,
+                        })));
                       }
                     } catch { /* ignore */ }
                   },
                 },
                 {
                   label: "Wallet",
+                  title: "Wallet",
                   icon: "wallet" as const,
                   color: Colors.attachmentActions.wallet,
                   testID: "chat-attachment-wallet",
@@ -9939,15 +10154,20 @@ STRICT RULES:
                           accessibilityLabel={pick.label}
                           testID={pick.testID}
                           style={{
-                            width: "33.3333%",
-                            minHeight: 72,
-                            maxHeight: 96,
+                             width: "33.3333%",
+                             minHeight: 82,
+                             maxHeight: 100,
                             aspectRatio: 1.2,
                             alignItems: "center",
                             justifyContent: "center",
+                             borderRadius: 16,
+                             backgroundColor: colors.backgroundTertiary,
                           }}
                         >
                           <NativeAttachmentIcon name={pick.icon} color={pick.color} />
+                          <Text style={{ color: colors.text, fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 }}>
+                            {pick.title}
+                          </Text>
                         </TouchableOpacity>
                       ))}
                     </View>

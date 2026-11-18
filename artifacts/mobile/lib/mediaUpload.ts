@@ -569,14 +569,12 @@ async function uploadToStorageUncached(
           }
         });
         const putResult = await putTask.uploadAsync();
-        if (putResult.status >= 200 && putResult.status < 300) {
+        if (putResult && putResult.status >= 200 && putResult.status < 300) {
           cleanupTemp();
           onProgress?.(1);
           return { publicUrl: sign.data.publicUrl, error: null };
         }
-        console.warn(
-          `[Upload] Presigned PUT failed (${putResult.status}), falling back to proxy`,
-        );
+        console.warn(`[Upload] Presigned PUT ${putResult ? `failed (${putResult.status})` : "returned no response"}, falling back to proxy`);
       } catch (e: any) {
         console.warn(`[Upload] Presigned PUT threw, falling back to proxy: ${e?.message || e}`);
       }
@@ -610,6 +608,9 @@ async function uploadToStorageUncached(
       );
       const proxyResult = await proxyTask.uploadAsync();
       cleanupTemp();
+      if (!proxyResult) {
+        return { publicUrl: null, error: "Upload did not complete. Please try again." };
+      }
       const text = proxyResult.body ?? "";
       if (!text) return { publicUrl: null, error: `Upload failed (HTTP ${proxyResult.status})` };
       if (text.trimStart().startsWith("<")) return { publicUrl: null, error: "Upload service unreachable" };

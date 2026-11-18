@@ -2,8 +2,8 @@
  * FormatToolbar
  * Appears above the chat input whenever the user has text selected.
  *
- * Level 1 — formatting: Bold · Italic · Mono · Strike · Underline · ⋮
- * Level 2 — extras (⋮):  Cut · Copy · Quote · Spoiler · ← Back
+ * Level 1 — compact formatting: Bold · Italic · Mono · ⋮
+ * Level 2 — extras (⋮): Cut · Copy · Paste · Quote · Spoiler · Strike · Underline
  *
  * The parent must pass:
  *   visible   — whether to show (true when selection.start < selection.end)
@@ -65,8 +65,8 @@ export default function FormatToolbar({
   const btnStyle = [
     s.btn,
     {
-      backgroundColor: colors.surface as string,
-      borderColor: ((colors.border as string) ?? "#ccc") + "70",
+      backgroundColor: colors.backgroundTertiary as string,
+      borderColor: colors.backgroundTertiary as string,
     },
   ];
 
@@ -75,10 +75,8 @@ export default function FormatToolbar({
       style={[
         s.container,
         {
-          backgroundColor:
-            (colors.backgroundSecondary as string) ??
-            (colors.background as string),
-          borderColor: ((colors.border as string) ?? "#ccc") + "50",
+          backgroundColor: colors.surface as string,
+          borderColor: colors.backgroundTertiary as string,
         },
       ]}
     >
@@ -141,42 +139,6 @@ export default function FormatToolbar({
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={btnStyle}
-            onPress={() => wrap("~~", "~~")}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                s.label,
-                {
-                  color: colors.text as string,
-                  textDecorationLine: "line-through",
-                },
-              ]}
-            >
-              Strikethrough
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={btnStyle}
-            onPress={() => wrap("__", "__")}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                s.label,
-                {
-                  color: colors.text as string,
-                  textDecorationLine: "underline",
-                },
-              ]}
-            >
-              Underline
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[btnStyle, s.moreBtn, { borderColor: accent + "60", backgroundColor: accent + "15" }]}
             onPress={() => setLevel("more")}
             activeOpacity={0.7}
@@ -218,6 +180,19 @@ export default function FormatToolbar({
 
           <TouchableOpacity
             style={btnStyle}
+            onPress={async () => {
+              const pasted = await Clipboard.getStringAsync();
+              if (!pasted) return;
+              onFormat(before + pasted + after);
+              onClose();
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.label, { color: colors.text as string }]}>Paste</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={btnStyle}
             onPress={() => {
               const lines = selected
                 .split("\n")
@@ -240,6 +215,26 @@ export default function FormatToolbar({
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={btnStyle}
+            onPress={() => wrap("~~", "~~")}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.label, { color: colors.text as string, textDecorationLine: "line-through" }]}>
+              Strike
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={btnStyle}
+            onPress={() => wrap("__", "__")}
+            activeOpacity={0.7}
+          >
+            <Text style={[s.label, { color: colors.text as string, textDecorationLine: "underline" }]}>
+              Underline
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[btnStyle, s.moreBtn, { borderColor: accent + "60", backgroundColor: accent + "15" }]}
             onPress={() => setLevel("format")}
             activeOpacity={0.7}
@@ -256,28 +251,36 @@ export default function FormatToolbar({
 
 const s = StyleSheet.create({
   container: {
-    borderTopWidth: 0.5,
-    borderBottomWidth: 0.5,
-    paddingVertical: 7,
-    marginBottom: 4,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 13,
+    paddingVertical: 2,
+    marginHorizontal: 8,
+    marginBottom: 5,
+    overflow: "hidden",
   },
   row: {
     flexDirection: "row",
-    paddingHorizontal: 12,
-    gap: 8,
+    paddingHorizontal: 4,
+    gap: 3,
     alignItems: "center",
   },
   btn: {
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 18,
-    borderWidth: 1.2,
+    minHeight: 30,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
   },
   moreBtn: {
-    paddingHorizontal: 14,
+    minWidth: 30,
+    paddingHorizontal: 6,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
 });
