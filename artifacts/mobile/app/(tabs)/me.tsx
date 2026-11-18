@@ -223,7 +223,7 @@ export default function MeScreen() {
   const [postCount, setPostCount] = useState(0);
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
-  const profileCoverHeight = Math.max(PROFILE_COVER_DISPLAY_HEIGHT, topInset + 48);
+  const profileCoverHeight = Math.max(PROFILE_COVER_DISPLAY_HEIGHT + 56, topInset + 48);
 
   // MMKV is the instant path, but SQLite is the durable fallback used by
   // Discover-style offline hydration. Do not show a reconnect warning while
@@ -432,6 +432,44 @@ export default function MeScreen() {
     </TouchableOpacity>
   );
 
+  const renderProfileIdentity = (onCover: boolean) => (
+    <View style={onCover ? s.coverIdentity : { flex: 1, gap: 3 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+        <Text
+          style={[s.heroName, { color: equippedGoods.has("sg4") ? Colors.gold : colors.text }]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {profile?.display_name || t("common.user")}
+        </Text>
+        <VerifiedBadge
+          isVerified={isVerifiedCreator || !!profile?.is_verified}
+          isOrganizationVerified={profile?.is_organization_verified}
+          size={17}
+        />
+      </View>
+
+      <TouchableOpacity
+        onPress={() => profile?.handle && showHandlePurchase(profile.handle)}
+        activeOpacity={0.7}
+        style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+      >
+        {purchaseLoading && <ActivityIndicator size="small" color={colors.textMuted} style={{ marginRight: 4 }} />}
+        <Text style={[s.heroHandle, { color: colors.textMuted }]}>
+          @{profile?.handle || t("common.handle")}
+        </Text>
+        <Ionicons name="information-circle" size={13} color={colors.textMuted} style={{ opacity: 0.6 }} />
+      </TouchableOpacity>
+
+      {profile?.is_organization_verified && (
+        <View style={[s.businessChip, { backgroundColor: Colors.gold + "20" }]}>
+          <Ionicons name="briefcase" size={10} color={Colors.gold} />
+          <Text style={[s.businessChipText, { color: Colors.gold }]}>{t("common.business")}</Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <StatusBar style={profile?.banner_url || isDark ? "light" : "dark"} />
@@ -465,38 +503,16 @@ export default function MeScreen() {
                 <Ionicons name="camera" size={16} color="#fff" />
               </TouchableOpacity>
               {renderProfileAvatar("cover")}
+              {renderProfileIdentity(true)}
             </ProfileCover>
           ) : null}
 
-          <View style={[s.heroTop, !profile?.banner_url && s.heroTopNoCover]}>
-            {profile?.banner_url ? <View style={s.heroAvatarSpacer} /> : renderProfileAvatar("inline")}
-
-            <View style={{ flex: 1, gap: 3 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <Text style={[s.heroName, { color: equippedGoods.has('sg4') ? Colors.gold : colors.text }]} numberOfLines={1} ellipsizeMode="tail">
-                  {profile?.display_name || t("common.user")}
-                </Text>
-                <VerifiedBadge isVerified={isVerifiedCreator || !!profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={17} />
-              </View>
-
-              <TouchableOpacity
-                onPress={() => profile?.handle && showHandlePurchase(profile.handle)}
-                activeOpacity={0.7}
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-              >
-                {purchaseLoading && <ActivityIndicator size="small" color={colors.textMuted} style={{ marginRight: 4 }} />}
-                <Text style={[s.heroHandle, { color: colors.textMuted }]}>@{profile?.handle || t("common.handle")}</Text>
-                <Ionicons name="information-circle" size={13} color={colors.textMuted} style={{ opacity: 0.6 }} />
-              </TouchableOpacity>
-
-              {profile?.is_organization_verified && (
-                <View style={[s.businessChip, { backgroundColor: Colors.gold + "20" }]}>
-                  <Ionicons name="briefcase" size={10} color={Colors.gold} />
-                <Text style={[s.businessChipText, { color: Colors.gold }]}>{t("common.business")}</Text>
-                </View>
-              )}
+          {!profile?.banner_url && (
+            <View style={[s.heroTop, s.heroTopNoCover]}>
+              {renderProfileAvatar("inline")}
+              {renderProfileIdentity(false)}
             </View>
-          </View>
+          )}
 
           {/* Bio */}
           {!!profile?.bio && (
@@ -786,7 +802,7 @@ const s = StyleSheet.create({
   heroAvatar: {
     position: "absolute",
     left: 18,
-    bottom: -40,
+    bottom: -6,
     zIndex: 2,
     width: 80,
     height: 80,
@@ -801,12 +817,12 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroAvatarSpacer: { width: 80, height: 1 },
+  coverIdentity: { position: "absolute", left: 112, right: 16, bottom: 13, gap: 3 },
   heroTop: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14, gap: 14 },
   heroTopNoCover: { alignItems: "center", paddingTop: 18 },
   heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },
   heroHandle: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  heroBio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 20, paddingBottom: 14, paddingTop: 12 },
+  heroBio: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19, paddingHorizontal: 20, paddingBottom: 14, paddingTop: 8 },
   premiumDot: { position: "absolute", bottom: -2, right: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFD60A", alignItems: "center", justifyContent: "center" },
   businessChip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, alignSelf: "flex-start", marginTop: 3 },
   businessChipText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },

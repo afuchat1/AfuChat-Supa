@@ -4,5 +4,7 @@ export const modules: ModuleMap = {
   "./components/mockups/chat-attachment-picker/Current.tsx": () => import("../components/mockups/chat-attachment-picker/Current.tsx"),
   "./components/mockups/chat-attachment-picker/IconOnly.tsx": () => import("../components/mockups/chat-attachment-picker/IconOnly.tsx"),
   "./components/mockups/chat-file-sharing/Current.tsx": () => import("../components/mockups/chat-file-sharing/Current.tsx"),
-  "./components/mockups/chat-file-sharing/Refined.tsx": () => import("../components/mockups/chat-file-sharing/Refined.tsx")
+  "./components/mockups/chat-file-sharing/Refined.tsx": () => import("../components/mockups/chat-file-sharing/Refined.tsx"),
+  "./components/mockups/me-profile-header/AvatarAligned.tsx": () => import("../components/mockups/me-profile-header/AvatarAligned.tsx"),
+  "./components/mockups/me-profile-header/Current.tsx": () => import("../components/mockups/me-profile-header/Current.tsx")
 };
