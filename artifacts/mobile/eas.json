@@ -19,8 +19,7 @@
     "production": {
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_REVENUECAT_TEST_API_KEY": ""
+        "EXPO_PUBLIC_APP_ENV": "production"
       },
       "android": {
         "buildType": "app-bundle",
