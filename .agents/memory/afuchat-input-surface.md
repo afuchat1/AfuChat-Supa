@@ -14,3 +14,9 @@ For selected text in the chat composer, hide the operating-system action menu an
 **Why:** the user wants compact chat controls and Telegram-like in-app text-selection actions without Android's floating menu, while reply fields must remain readable on variable dark media.
 
 **How to apply:** reuse shared surfaces for new fields and floating controls, preserve each control’s behavior and keyboard/safe-area handling, avoid a second glass shell inside compound bars, and give full-screen image/story reply fields a dark surface with explicit light text and legible placeholders. For chat-composer changes, preserve the three-line cap, fixed bottom controls, shared reply shell, keyboard-to-picker alignment, caption-preserving attachment flow, the inline AI icon’s position above Send, and the app-owned selection action menu.
+
+Keep the native chat input in control of live text selection. Do not feed the selection range mirrored for the custom toolbar back through the input's `selection` prop on every render; after app-owned text edits, restore the intended range with `setSelection` once the new value is committed.
+
+**Why:** Reapplying a stale controlled range during React renders can reset the native selection, making its highlight and drag handles jump or disappear.
+
+**How to apply:** Treat the selection state as toolbar data only. Call the native input's `setSelection(start, end)` after Cut, Paste, Quote, or formatting changes the composer text.

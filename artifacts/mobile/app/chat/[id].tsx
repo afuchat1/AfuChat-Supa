@@ -9687,6 +9687,9 @@ STRICT RULES:
                   inputValueRef.current = newText;
                   setInput(newText);
                   saveDraft(newText);
+                  requestAnimationFrame(() => {
+                    chatInputRef.current?.setSelection(nextSelection.start, nextSelection.end);
+                  });
                   if (nextSelection.start < nextSelection.end) {
                     keepComposerSelectionForToolbar();
                     setComposerSelection(nextSelection);
@@ -9815,11 +9818,6 @@ STRICT RULES:
                           placeholder="Message"
                           placeholderTextColor={colors.textMuted}
                           value={input}
-                          selection={
-                            inputSelection.start < inputSelection.end
-                              ? inputSelection
-                              : undefined
-                          }
                           onChangeText={(t) => {
                             if (t !== inputValueRef.current) {
                               inputValueRef.current = t;
