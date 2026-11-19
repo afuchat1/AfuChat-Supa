@@ -165,13 +165,13 @@ id = "YOposftFvF8pnZz8a0iFi"
 uri = "file://generated-artifacts/expo-go-qr.png"
 type = "image"
 title = "Current AfuChat Expo Go QR"
-description = "This QR targets the running Expo Go tunnel. Keep the Expo Go workflow running while scanning."
+description = "The current tunnel is verified. Scan while the Expo Go workflow is running."
 logical_id = "7268245b-4119-435c-8e4b-8bf24ffbe01a"
 content_hash = "sha256:a185d2ae7942460d7c1d8dadb9a42013191390bc039c34b90a13ddb44cf1a396"
 size = 4781
 mtime_ms = 1795081459945
-storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:9539cd87-7930-415a-a335-af6112b62039/7268245b-4119-435c-8e4b-8bf24ffbe01a/e203d3f2-63b7-4899-b1c2-bcc8e368f7b1"
-storage_version_token = "1795082202488181"
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:9539cd87-7930-415a-a335-af6112b62039/7268245b-4119-435c-8e4b-8bf24ffbe01a/bdb63957-4808-40d3-9b56-148615e60582"
+storage_version_token = "1795083429775412"
 content_type = "image/png"
 
 [[outputs]]
