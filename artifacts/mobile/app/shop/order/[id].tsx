@@ -43,6 +43,7 @@ import {
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 
 const BRAND = Colors.brand;
 const GOLD = "#D4A853";
@@ -434,9 +435,11 @@ export default function OrderDetailScreen() {
                 name={otherParty?.display_name || "?"}
               />
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={[{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14 }]}>
-                  {otherParty?.display_name || "Unknown"}
-                </Text>
+                <UserName
+                  userId={isBuyer ? order.seller_id : order.buyer_id}
+                  name={otherParty?.display_name || "Unknown"}
+                  style={[{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 14 }]}
+                />
                 <Text style={[{ color: colors.textMuted, fontSize: 12 }]}>@{otherParty?.handle || ""}</Text>
               </View>
               <TouchableOpacity

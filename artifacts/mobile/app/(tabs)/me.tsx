@@ -24,6 +24,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { formatCompactNumber, formatDate } from "@/lib/i18n";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { AvatarViewer } from "@/components/ui/AvatarViewer";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
@@ -445,16 +446,15 @@ export default function MeScreen() {
     return (
       <View style={onCover ? s.coverIdentity : { flex: 1, gap: 3 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-          <Text
+          <UserName
+            userId={profile?.id}
+            name={profile?.display_name || t("common.user")}
             style={[
               s.heroName,
               { color: onCover ? identityColor : equippedGoods.has("sg4") ? Colors.gold : identityColor },
             ]}
             numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {profile?.display_name || t("common.user")}
-          </Text>
+          />
           <VerifiedBadge
             isVerified={isVerifiedCreator || !!profile?.is_verified}
             isOrganizationVerified={profile?.is_organization_verified}
@@ -721,6 +721,7 @@ export default function MeScreen() {
       <QRPosterSheet
         visible={qrPosterOpen}
         onClose={() => setQrPosterOpen(false)}
+        userId={profile?.id}
         displayName={profile?.display_name || t("common.afuchat_user")}
         handle={profile?.handle || t("common.user")}
         avatarUrl={profile?.avatar_url || null}

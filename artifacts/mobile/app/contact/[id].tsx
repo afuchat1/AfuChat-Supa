@@ -788,7 +788,7 @@ export default function ContactScreen() {
                       <Avatar uri={eu.avatar_url} name={eu.display_name} size={44} square={!!eu.is_organization_verified} />
                       <View style={s.expandCardInfo}>
                         <View style={s.expandCardNameRow}>
-                          <Text style={[s.expandCardName, { color: colors.text }]} numberOfLines={1}>{eu.display_name}</Text>
+                          <UserName userId={eu.id} name={eu.display_name} style={[s.expandCardName, { color: colors.text }]} numberOfLines={1} />
                           {eu.is_verified && <Ionicons name="checkmark-circle" size={11} color={accent} />}
                         </View>
                         <Text style={[s.expandCardHandle, { color: colors.textMuted }]} numberOfLines={1}>@{eu.handle}</Text>
@@ -939,9 +939,7 @@ export default function ContactScreen() {
                     activeOpacity={0.7}>
                     <Avatar uri={m.avatar_url} name={m.handle} size={34} />
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={[s.mutualRowName, { color: colors.text }]} numberOfLines={1}>
-                        {(m as any).display_name || `@${m.handle}`}
-                      </Text>
+                      <UserName userId={m.id} name={(m as any).display_name || `@${m.handle}`} style={[s.mutualRowName, { color: colors.text }]} numberOfLines={1} />
                       <Text style={[s.mutualRowHandle, { color: colors.textMuted }]}>@{m.handle}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={13} color={colors.textMuted} />

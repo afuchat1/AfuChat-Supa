@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCall } from "@/context/CallContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
 import * as Haptics from "@/lib/haptics";
@@ -172,7 +173,7 @@ function MemberRow({ member, accent, colors, isMe }: { member: Member; accent: s
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Text style={[s.memberName, { color: colors.text }]} numberOfLines={1}>{member.display_name}</Text>
+          <UserName userId={member.user_id} name={member.display_name} style={[s.memberName, { color: colors.text }]} numberOfLines={1} />
           {(member.is_verified || member.is_organization_verified) && (
             <VerifiedBadge isVerified={member.is_verified} isOrganizationVerified={member.is_organization_verified} size={13} />
           )}
@@ -598,7 +599,7 @@ export default function ChatInfoScreen() {
           )}
         </View>
         <View style={s.heroNameRow}>
-          <Text style={[s.heroName, { color: colors.text }]}>{displayName}</Text>
+          <UserName userId={meta?.other_id} name={displayName} style={[s.heroName, { color: colors.text }]} />
           {(meta?.other_is_verified || meta?.other_is_organization_verified) && (
             <VerifiedBadge
               isVerified={!!meta?.other_is_verified}

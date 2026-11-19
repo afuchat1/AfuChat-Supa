@@ -21,6 +21,7 @@ import { showAlert } from "@/lib/alert";
 import { shareRedEnvelope } from "@/lib/share";
 import { isUuid, isEncodedId, decodeId } from "@/lib/shortId";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import UserName from "@/components/ui/UserName";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
 type Envelope = {
@@ -33,14 +34,14 @@ type Envelope = {
   envelope_type: string;
   created_at: string;
   is_expired: boolean;
-  sender: { display_name: string; avatar_url: string | null; is_verified?: boolean; is_organization_verified?: boolean };
+  sender: { id: string; display_name: string; avatar_url: string | null; is_verified?: boolean; is_organization_verified?: boolean };
 };
 
 type Claim = {
   id: string;
   amount: number;
   claimed_at: string;
-  claimer: { display_name: string; avatar_url: string | null; is_verified?: boolean; is_organization_verified?: boolean };
+  claimer: { id: string; display_name: string; avatar_url: string | null; is_verified?: boolean; is_organization_verified?: boolean };
 };
 
 export default function RedEnvelopeScreen() {
@@ -64,7 +65,7 @@ export default function RedEnvelopeScreen() {
     if (!id || !user) return;
     const { data } = await supabase
       .from("red_envelopes")
-      .select("id, sender_id, total_amount, recipient_count, claimed_count, message, envelope_type, created_at, is_expired, profiles!red_envelopes_sender_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
+      .select("id, sender_id, total_amount, recipient_count, claimed_count, message, envelope_type, created_at, is_expired, profiles!red_envelopes_sender_id_fkey(id, display_name, avatar_url, is_verified, is_organization_verified)")
       .eq("id", id)
       .single();
 
@@ -74,7 +75,7 @@ export default function RedEnvelopeScreen() {
 
     const { data: claimData } = await supabase
       .from("red_envelope_claims")
-      .select("id, amount, claimed_at, profiles!red_envelope_claims_claimer_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
+      .select("id, amount, claimed_at, profiles!red_envelope_claims_claimer_id_fkey(id, display_name, avatar_url, is_verified, is_organization_verified)")
       .eq("red_envelope_id", id)
       .order("claimed_at", { ascending: true });
 
@@ -147,7 +148,7 @@ export default function RedEnvelopeScreen() {
       <View style={styles.envelopeCard}>
         <Avatar uri={envelope.sender.avatar_url} name={envelope.sender.display_name} size={56} />
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={styles.senderName}>{envelope.sender.display_name}</Text>
+          <UserName userId={envelope.sender.id} name={envelope.sender.display_name} style={styles.senderName} />
           <VerifiedBadge isVerified={envelope.sender.is_verified} isOrganizationVerified={envelope.sender.is_organization_verified} size={16} />
         </View>
         <Text style={styles.envelopeMsg}>{envelope.message}</Text>
@@ -179,7 +180,7 @@ export default function RedEnvelopeScreen() {
             <Avatar uri={item.claimer.avatar_url} name={item.claimer.display_name} size={40} />
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={[styles.claimName, { color: colors.text }]}>{item.claimer.display_name}</Text>
+                <UserName userId={item.claimer.id} name={item.claimer.display_name} style={[styles.claimName, { color: colors.text }]} />
                 <VerifiedBadge isVerified={item.claimer.is_verified} isOrganizationVerified={item.claimer.is_organization_verified} size={13} />
               </View>
               <Text style={[styles.claimTime, { color: colors.textMuted }]}>{new Date(item.claimed_at).toLocaleTimeString()}</Text>

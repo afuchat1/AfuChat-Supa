@@ -26,6 +26,7 @@ import { Shop, ShopProduct, ShopReview, PRODUCT_CATEGORIES, addToCart, getOrCrea
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 
 const CATS = ["All", "Fashion", "Electronics", "Beauty", "Home", "Food", "Digital", "Sports", "Art", "Books", "Services", "Other"];
 
@@ -292,7 +293,7 @@ export default function StoreStorefront() {
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                       <Avatar uri={r.reviewer?.avatar_url} size={34} name={r.reviewer?.display_name || "?"} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }]}>{r.reviewer?.display_name || "Customer"}</Text>
+                        <UserName userId={r.reviewer?.id} name={r.reviewer?.display_name || "Customer"} style={[{ color: colors.text, fontFamily: "Inter_600SemiBold", fontSize: 13 }]} />
                         <Text style={[{ color: colors.textMuted, fontSize: 11 }]}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</Text>
                       </View>
                       <View style={{ flexDirection: "row", gap: 2 }}>

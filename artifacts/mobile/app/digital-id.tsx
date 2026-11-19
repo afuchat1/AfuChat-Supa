@@ -26,6 +26,7 @@ import Colors from "@/constants/colors";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import AfuLogo from "@/components/ui/AfuLogo";
+import UserName from "@/components/ui/UserName";
 
 let ViewShot: any = ({ children, style, ...rest }: any) => <View style={style} {...rest}>{children}</View>;
 try { ViewShot = require("react-native-view-shot").default; } catch (_) {}
@@ -364,12 +365,15 @@ type CP = {
   issued: string; expires: string; mrzLine1: string; mrzLine2: string; qrValue: string;
 };
 
-function Field({ label, value, mono, accent, large }: { label: string; value: string; mono?: boolean; accent?: string; large?: boolean }) {
+function Field({ label, value, mono, accent, large, userId }: { label: string; value: string; mono?: boolean; accent?: string; large?: boolean; userId?: string | null }) {
   const { colors } = useTheme();
+  const valueStyle = [large ? s.fValLg : s.fVal, mono && s.fMono, { color: accent ?? colors.text }];
   return (
     <View style={{ gap: 2 }}>
       <Text style={[s.fLbl, { color: colors.textMuted }]}>{label}</Text>
-      <Text style={[large ? s.fValLg : s.fVal, mono && s.fMono, { color: accent ?? colors.text }]} numberOfLines={1}>{value}</Text>
+      {userId
+        ? <UserName userId={userId} name={value} style={valueStyle} numberOfLines={1} />
+        : <Text style={valueStyle} numberOfLines={1}>{value}</Text>}
     </View>
   );
 }
@@ -416,7 +420,7 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
 
         {/* RIGHT: info fields */}
         <View style={{ flex: 1, minWidth: 0, gap: 7 }}>
-          <Field label="FULL NAME" value={profile?.display_name ?? "N/A"} large />
+          <Field label="FULL NAME" value={profile?.display_name ?? "N/A"} userId={profile?.id} large />
           <Field label="MEMBER NO." value={`AFU-${padMember(memberNumber ?? 1)}`} mono accent={theme.primary} large />
           <Field label="NATIONALITY" value={profile?.country ?? "DIGITAL CITIZEN"} />
           <View style={{ flexDirection: "row", gap: 10 }}>
@@ -425,7 +429,7 @@ function CardFront({ cardWidth: cw, cardHeight: ch, theme, profile, roleConf, me
           </View>
           <View style={{ marginTop: 2 }}>
             <Text style={[s.sigLbl, { color: colors.textMuted }]}>{"HOLDER'S SIGNATURE"}</Text>
-            <Text style={[s.sigValFront, { color: colors.text }]} numberOfLines={1}>{profile?.display_name ?? ""}</Text>
+            <UserName userId={profile?.id} name={profile?.display_name ?? ""} style={[s.sigValFront, { color: colors.text }]} numberOfLines={1} />
           </View>
         </View>
       </View>
@@ -497,7 +501,7 @@ function CardBack({ cardWidth: cw, cardHeight: ch, theme, profile, memberNumber,
             <View style={{ flex: 1 }}><Field label="EXPIRES" value={expires} /></View>
           </View>
           <View style={[s.hdivider, { backgroundColor: colors.separator }]} />
-          <Text style={[s.sigValBack, { color: colors.text }]} numberOfLines={1}>{profile?.display_name ?? ""}</Text>
+          <UserName userId={profile?.id} name={profile?.display_name ?? ""} style={[s.sigValBack, { color: colors.text }]} numberOfLines={1} />
         </View>
       </View>
 

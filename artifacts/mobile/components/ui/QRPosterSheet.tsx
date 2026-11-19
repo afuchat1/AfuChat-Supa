@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Sharing from "expo-sharing";
 import { showToast } from "@/lib/toast";
 import QRCode from "@/components/ui/QRCode";
+import UserName from "@/components/ui/UserName";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import AfuLogo from "@/components/ui/AfuLogo";
 import { useTheme } from "@/hooks/useTheme";
@@ -31,6 +32,7 @@ const BRAND = Colors.brand;
 type Props = {
   visible: boolean;
   onClose: () => void;
+  userId: string | null | undefined;
   displayName: string;
   handle: string;
   avatarUrl: string | null;
@@ -41,7 +43,7 @@ type Props = {
 
 export default function QRPosterSheet({
   visible, onClose,
-  displayName, handle, avatarUrl,
+  userId, displayName, handle, avatarUrl,
   afuId, isVerified, isOrgVerified,
 }: Props) {
   const { colors, isDark, accent } = useTheme();
@@ -153,7 +155,7 @@ export default function QRPosterSheet({
                 )}
               </View>
 
-              <Text style={s.posterName} numberOfLines={1}>{displayName}</Text>
+              <UserName userId={userId} name={displayName} style={[s.posterName, { color: "#FFF" }]} numberOfLines={1} />
               <Text style={s.posterHandle}>@{handle}</Text>
 
               <View style={s.qrWrap}>

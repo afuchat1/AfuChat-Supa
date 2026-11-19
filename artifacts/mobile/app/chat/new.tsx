@@ -30,6 +30,7 @@ import { showAlert } from "@/lib/alert";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { AnimatedSearchSurface } from "@/components/chat/AnimatedSearchSurface";
 import { AfuInputSurface } from "@/components/ui/AfuInputSurface";
 import { Separator } from "@/components/ui/Separator";
@@ -429,9 +430,7 @@ export default function NewChatScreen() {
                   activeOpacity={0.75}
                 >
                   <Avatar uri={item.avatar_url} name={item.display_name} size={18} />
-                  <Text style={[styles.chipText, { color: accent }]} numberOfLines={1}>
-                    {item.display_name}
-                  </Text>
+                  <UserName userId={item.id} name={item.display_name} style={[styles.chipText, { color: accent }]} numberOfLines={1} />
                   <Ionicons name="close-circle" size={13} color={accent} />
                 </TouchableOpacity>
               )}
@@ -746,9 +745,7 @@ function ListHeader({
                 </View>
                 <View style={styles.contactContent}>
                   <View style={styles.nameRow}>
-                    <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>
-                      {c.display_name}
-                    </Text>
+                    <UserName userId={c.id} name={c.display_name} style={[styles.contactName, { color: colors.text }]} numberOfLines={1} />
                     {c.is_verified && <VerifiedBadge isVerified size={13} />}
                   </View>
                   <Text style={[styles.contactHandle, { color: colors.textMuted }]} numberOfLines={1}>
@@ -933,12 +930,9 @@ function ContactRow({
 
       <View style={styles.contactContent}>
         <View style={styles.nameRow}>
-          <Text
-            style={[styles.contactName, { color: colors.text }]}
-            numberOfLines={1}
-          >
-            {savedAs || item.display_name}
-          </Text>
+          {savedAs
+            ? <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{savedAs}</Text>
+            : <UserName userId={item.id} name={item.display_name} style={[styles.contactName, { color: colors.text }]} numberOfLines={1} />}
           <VerifiedBadge
             isVerified={item.is_verified}
             isOrganizationVerified={item.is_organization_verified}
@@ -946,12 +940,10 @@ function ContactRow({
           />
         </View>
         {savedAs ? (
-          <Text
-            style={[styles.contactHandle, { color: colors.textMuted }]}
-            numberOfLines={1}
-          >
-            {item.display_name} · @{item.handle}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", minWidth: 0 }}>
+            <UserName userId={item.id} name={item.display_name} style={[styles.contactHandle, { color: colors.textMuted, flexShrink: 1 }]} numberOfLines={1} />
+            <Text style={[styles.contactHandle, { color: colors.textMuted }]}> · @{item.handle}</Text>
+          </View>
         ) : (
           <Text
             style={[styles.contactHandle, { color: colors.textMuted }]}

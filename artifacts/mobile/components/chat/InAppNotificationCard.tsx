@@ -2,6 +2,7 @@ import React from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { useTheme } from "@/hooks/useTheme";
 
 export type NotificationActorProfile = {
@@ -123,10 +124,10 @@ export default function InAppNotificationCard({
             disabled={!actorId}
             onPress={() => actorId && onPressActor(actorId, notification)}
           >
-            <Text style={[styles.actorLine, { color: colors.text }]} numberOfLines={2}>
-              <Text style={[styles.actorName, { color: colors.text }]}>{actorName}</Text>
-              <Text> {getNotificationVerb(notification)}</Text>
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+              <UserName userId={actorId} name={actorName} style={[styles.actorName, { color: colors.text }]} />
+              <Text style={styles.actorLine}> {getNotificationVerb(notification)}</Text>
+            </View>
           </Pressable>
           {!!notification.body?.trim() && (
             <Text style={[styles.body, { color: colors.textSecondary }]} numberOfLines={2}>

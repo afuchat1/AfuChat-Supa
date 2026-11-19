@@ -19,6 +19,7 @@ import * as Haptics from "@/lib/haptics";
 import Colors from "@/constants/colors";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 
 function fmtAmt(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -229,7 +230,7 @@ export default function MoneyRequestScreen() {
           <View style={[s.card, { backgroundColor: colors.cardSurface, borderColor: colors.border }]}>
             <Avatar uri={target.avatar_url} name={target.display_name} size={54} />
             <View style={{ flex: 1 }}>
-              <Text style={[s.name, { color: colors.text }]}>{target.display_name}</Text>
+              <UserName userId={target.id} name={target.display_name} style={[s.name, { color: colors.text }]} />
               <Text style={[s.handle, { color: colors.textMuted }]}>@{target.handle}</Text>
             </View>
             <TouchableOpacity onPress={clearTarget} hitSlop={8} accessibilityRole="button" accessibilityLabel="Change recipient">

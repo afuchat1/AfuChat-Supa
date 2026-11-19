@@ -32,6 +32,7 @@ import {
 } from "@/lib/storage/localDiscoverPeople";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Skeleton } from "@/components/ui/Skeleton";
+import UserName from "@/components/ui/UserName";
 import * as Haptics from "@/lib/haptics";
 import {
   nextProfilePageOffset,
@@ -755,9 +756,7 @@ export default function FindPeopleTab() {
                         )}
                       </View>
                       <View style={styles.cardNameRow}>
-                        <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
-                          {person.display_name}
-                        </Text>
+                        <UserName userId={person.id} name={person.display_name} style={[styles.cardName, { color: colors.text }]} numberOfLines={1} />
                         {(person.is_verified || person.is_organization_verified) && (
                           <Ionicons name="checkmark-circle" size={15} color={accent} />
                         )}

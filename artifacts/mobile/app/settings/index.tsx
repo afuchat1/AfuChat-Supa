@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { AfuLogo } from "@/components/ui/AfuLogo";
 import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import Colors from "@/constants/colors";
@@ -167,9 +168,7 @@ export default function SettingsScreen() {
           />
           <View style={s.profileInfo}>
             <View style={s.profileNameRow}>
-              <Text style={[s.profileName, { color: colors.text }]} numberOfLines={1}>
-                {profile?.display_name ?? "Your Name"}
-              </Text>
+              <UserName userId={profile?.id} name={profile?.display_name ?? "Your Name"} style={[s.profileName, { color: colors.text }]} numberOfLines={1} />
               {isPremium && (
                 <View style={[s.premiumPill, { backgroundColor: BRAND + "20" }]}>
                   <Ionicons name="star" size={10} color={BRAND} />

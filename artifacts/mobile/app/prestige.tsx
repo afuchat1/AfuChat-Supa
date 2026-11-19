@@ -24,6 +24,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { PRESTIGE_TIERS, getPrestigeTier, getNextPrestigeTier, prestigeProgress } from "@/lib/prestige";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { invalidateUserEffects } from "@/hooks/useUserEffects";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 
@@ -269,7 +270,7 @@ export default function PrestigeScreen() {
           </View>
 
           {/* Name + tier */}
-          <Text style={s.heroName}>{profile?.display_name || "You"}</Text>
+          <UserName userId={user?.id} name={profile?.display_name || "You"} style={s.heroName} />
           <View style={[s.tierLabelRow, { backgroundColor: tier.color + "28", borderColor: tier.color + "55" }]}>
             <Text style={[s.tierLabelText, { color: tier.color }]}>{tier.label}</Text>
             <Text style={[s.tierTagline, { color: "rgba(255,255,255,0.7)" }]}> · {tier.tagline}</Text>
@@ -617,7 +618,7 @@ export default function PrestigeScreen() {
                 </View>
                 <Avatar uri={profile?.avatar_url} name={profile?.display_name || ""} size={40} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[s.myRankName, { color: equippedGoods.has('sg4') ? Colors.gold : colors.text }]}>{profile?.display_name}</Text>
+                  <UserName userId={user?.id} name={profile?.display_name || "You"} style={[s.myRankName, { color: equippedGoods.has('sg4') ? Colors.gold : colors.text }]} />
                   <Text style={[s.myRankAcoin, { color: Colors.gold }]}>{fmtAcoin(acoin)} 🪙</Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 2 }}>
@@ -663,7 +664,7 @@ export default function PrestigeScreen() {
                           <Avatar uri={u.avatar_url} name={u.display_name} size={40} />
                               <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                              <Text style={[s.richName, { color: isMe ? tier.color : colors.text }]} numberOfLines={1}>{u.display_name}</Text>
+                              <UserName userId={u.id} name={u.display_name} style={[s.richName, { color: isMe ? tier.color : colors.text }]} numberOfLines={1} />
                               {isMe && <View style={[s.youPill, { backgroundColor: tier.color + "22", borderColor: tier.color + "44" }]}><Text style={[s.youText, { color: tier.color }]}>You</Text></View>}
                             </View>
                             <Text style={[s.richHandle, { color: colors.textMuted }]}>@{u.handle}</Text>
@@ -698,7 +699,7 @@ export default function PrestigeScreen() {
                               <Text style={[s.richRank, { color: colors.textMuted }]}>#{uRank}</Text>
                               <Avatar uri={u.avatar_url} name={u.display_name} size={38} />
                               <View style={{ flex: 1, minWidth: 0 }}>
-                                <Text style={[s.richName, { color: colors.text }]} numberOfLines={1}>{u.display_name}</Text>
+                                <UserName userId={u.id} name={u.display_name} style={[s.richName, { color: colors.text }]} numberOfLines={1} />
                                 <Text style={[s.richHandle, { color: colors.textMuted }]}>@{u.handle}</Text>
                               </View>
                               <View style={{ alignItems: "flex-end", gap: 2 }}>
@@ -792,7 +793,7 @@ function PodiumCard({ user, rank, isMe, myTier, colors, onPress }: { user: RichU
         <Avatar uri={user.avatar_url} name={user.display_name} size={big ? 54 : 42} />
         <Text style={[s.podiumTierBadge, { fontSize: big ? 16 : 13 }]}>{uTier.emoji}</Text>
       </View>
-      <Text style={[s.podiumName, { color: isMe ? myTier.color : colors.text, fontSize: big ? 13 : 11 }]} numberOfLines={1}>{user.display_name}</Text>
+      <UserName userId={user.id} name={user.display_name} style={[s.podiumName, { color: isMe ? myTier.color : colors.text, fontSize: big ? 13 : 11 }]} numberOfLines={1} />
       <Text style={[s.podiumAcoin, { color, fontSize: big ? 12 : 10 }]}>
         {fmtAcoin(user.acoin || 0)} 🪙
       </Text>

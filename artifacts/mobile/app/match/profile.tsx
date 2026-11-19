@@ -25,6 +25,7 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
+import UserName from "@/components/ui/UserName";
 import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import SchoolPickerInput from "@/components/SchoolPickerInput";
@@ -421,7 +422,7 @@ export default function MatchProfileEditScreen() {
                             <Ionicons name="eye-off" size={8} color="#8E8E93" />
                           </View>
                         )}
-                        <Text style={[styles.giftCellName, { color: colors.textMuted }]} numberOfLines={1}>{g.sender_name}</Text>
+                        <UserName userId={g.sender_id} name={g.sender_name} style={[styles.giftCellName, { color: colors.textMuted }]} numberOfLines={1} />
                       </Pressable>
                     );
                   })}
@@ -492,9 +493,10 @@ export default function MatchProfileEditScreen() {
                 <Text style={[styles.giftSheetName, { color: colors.text }]}>
                   {managingGift ? getGiftItem(managingGift.gift_emoji).name : ""}
                 </Text>
-                <Text style={[styles.giftSheetFrom, { color: colors.textMuted }]}>
-                  from {managingGift?.sender_name}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={[styles.giftSheetFrom, { color: colors.textMuted }]}>from </Text>
+                  <UserName userId={managingGift?.sender_id} name={managingGift?.sender_name || ""} style={[styles.giftSheetFrom, { color: colors.textMuted }]} numberOfLines={1} />
+                </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Ionicons name="diamond" size={11} color="#FFD60A" />
                   <Text style={[styles.giftSheetPrice, { color: "#FFD60A" }]}>

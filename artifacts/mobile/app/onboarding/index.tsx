@@ -39,6 +39,7 @@ import {
   type CountryCode,
 } from "libphonenumber-js";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { ensureAfuAiChat } from "@/lib/afuAiBot";
 import { checkUsernameAvailability, usernamePurchasePrompt } from "@/lib/usernameAvailability";
 import OnboardingBackdrop from "@/components/onboarding/OnboardingBackdrop";
@@ -130,7 +131,7 @@ export default function OnboardingScreen() {
   const [phoneAvailStatus, setPhoneAvailStatus] = useState<"idle"|"checking"|"available"|"taken"|"error">("idle");
   const phoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [takenHandleProfile, setTakenHandleProfile] = useState<{ display_name: string; avatar_url: string | null; handle: string } | null>(null);
-  const [takenPhoneProfile, setTakenPhoneProfile] = useState<{ display_name: string; avatar_url: string | null; handle: string } | null>(null);
+  const [takenPhoneProfile, setTakenPhoneProfile] = useState<{ id: string; display_name: string; avatar_url: string | null; handle: string } | null>(null);
 
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -366,7 +367,7 @@ export default function OnboardingScreen() {
         if (error) throw error;
         if (data) {
           setPhoneAvailStatus("taken");
-          setTakenPhoneProfile({ display_name: data.display_name, avatar_url: data.avatar_url, handle: data.handle });
+          setTakenPhoneProfile({ id: data.id, display_name: data.display_name, avatar_url: data.avatar_url, handle: data.handle });
         } else {
           setPhoneAvailStatus("available");
           setTakenPhoneProfile(null);
@@ -794,7 +795,7 @@ export default function OnboardingScreen() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                     <Avatar uri={takenPhoneProfile.avatar_url} name={takenPhoneProfile.display_name} size={36} />
                     <View style={{ flex: 1 }}>
-                      <Text style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", minWidth: 0, flexShrink: 1 }, { color: colors.text }]}>{takenPhoneProfile.display_name}</Text>
+                      <UserName userId={takenPhoneProfile.id} name={takenPhoneProfile.display_name} style={[{ fontSize: 14, fontFamily: "Inter_600SemiBold", minWidth: 0, flexShrink: 1 }, { color: colors.text }]} />
                       <Text numberOfLines={1} style={[{ fontSize: 12, fontFamily: "Inter_400Regular", minWidth: 0, flexShrink: 1 }, { color: colors.textMuted }]}>@{takenPhoneProfile.handle}</Text>
                     </View>
                   </View>

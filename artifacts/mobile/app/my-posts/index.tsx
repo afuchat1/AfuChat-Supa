@@ -19,6 +19,7 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { RichText } from "@/components/ui/RichText";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import Colors from "@/constants/colors";
@@ -64,7 +65,7 @@ function MyPostCard({ item, profile, onDelete }: { item: PostItem; profile: any;
         <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={40} userId={profile?.id} />
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={[styles.cardName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
+            <UserName userId={profile?.id} name={profile?.display_name || "You"} style={[styles.cardName, { color: colors.text }]} />
             <VerifiedBadge isVerified={profile?.is_verified} isOrganizationVerified={profile?.is_organization_verified} size={14} />
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

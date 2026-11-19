@@ -31,6 +31,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useOpenLink } from "@/lib/useOpenLink";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
+import UserName from "@/components/ui/UserName";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import {
   aiGenerateOrgUpdate,
@@ -881,9 +882,7 @@ export default function CompanyPageScreen() {
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Text style={[styles.followerName, { color: colors.text }]} numberOfLines={1}>
-                      {p.display_name || p.handle || "User"}
-                    </Text>
+                    <UserName userId={p.id} name={p.display_name || p.handle || "User"} style={[styles.followerName, { color: colors.text }]} numberOfLines={1} />
                     {p.is_verified && <Ionicons name="checkmark-circle" size={13} color={colors.accent} />}
                   </View>
                   {p.handle ? (

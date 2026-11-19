@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { setProfileCache } from "@/lib/profileCache";
@@ -208,9 +209,7 @@ export default function MiniProfilePopup({ userId, visible, onClose, currentChat
             {/* Name + handle */}
             <View style={st.nameBlock}>
               <View style={st.nameRow}>
-                <Text style={[st.displayName, { color: colors.text }]} numberOfLines={1}>
-                  {profile.display_name}
-                </Text>
+                <UserName userId={profile.id} name={profile.display_name} style={[st.displayName, { color: colors.text }]} numberOfLines={1} />
                 <VerifiedBadge
                   isVerified={profile.is_verified}
                   isOrganizationVerified={profile.is_organization_verified}

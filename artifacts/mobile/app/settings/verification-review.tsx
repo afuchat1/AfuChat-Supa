@@ -19,6 +19,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/lib/alert";
 import { openExternalLink } from "@/lib/openExternalLink";
+import UserName from "@/components/ui/UserName";
 
 type RequestRow = {
   request_id: string;
@@ -107,7 +108,7 @@ export default function VerificationReviewScreen() {
             <GlassCard key={item.request_id} style={styles.card} variant="medium">
               <View style={styles.headerRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.name, { color: colors.text }]}>{item.display_name || item.handle || t("AfuChat user")}</Text>
+                  <UserName userId={item.user_id} name={item.display_name || item.handle || t("AfuChat user")} style={[styles.name, { color: colors.text }]} />
                   {!!item.handle && <Text style={[styles.handle, { color: colors.textMuted }]}>@{item.handle}</Text>}
                 </View>
                 <Text style={[styles.date, { color: colors.textMuted }]}>{new Date(item.submitted_at).toLocaleDateString()}</Text>

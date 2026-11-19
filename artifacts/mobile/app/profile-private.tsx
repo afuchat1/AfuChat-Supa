@@ -25,6 +25,7 @@ import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";
 import { StatusBar } from "expo-status-bar";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import { useTheme } from "@/hooks/useTheme";
+import UserName from "@/components/ui/UserName";
 import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
@@ -148,13 +149,16 @@ export function ProfilePrivateView({
 
       <View style={[styles.body, { paddingBottom: insets.bottom + 24, paddingTop: bannerUrl ? 58 : 12 }]}>
         {!bannerUrl ? renderAvatar(false) : null}
-        <Text style={[styles.title, { color: colors.text }]}>
-          {displayName
-            ? `${displayName}'s account is private`
-            : handle
-            ? `@${handle}'s account is private`
-            : "This account is private"}
-        </Text>
+        {displayName && profileId ? (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center" }}>
+            <UserName userId={profileId} name={displayName} style={[styles.title, { color: colors.text }]} />
+            <Text style={[styles.title, { color: colors.text }]}>'s account is private</Text>
+          </View>
+        ) : (
+          <Text style={[styles.title, { color: colors.text }]}>
+            {handle ? `@${handle}'s account is private` : "This account is private"}
+          </Text>
+        )}
 
         {handle && (
           <Text style={[styles.handleText, { color: colors.textMuted }]}>@{handle}</Text>

@@ -30,6 +30,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
 import { aiEnhancePost, aiGenerateHashtags, aiGenerateCaption } from "@/lib/aiHelper";
@@ -313,9 +314,7 @@ export default function CreatePostScreen() {
           {/* Right: name + audience + text input */}
           <View style={ss.composeRight}>
             <View style={ss.nameRow}>
-              <Text style={[ss.authorName, { color: colors.text }]} numberOfLines={1}>
-                {profile?.display_name || "You"}
-              </Text>
+              <UserName userId={profile?.id} name={profile?.display_name || "You"} style={[ss.authorName, { color: colors.text }]} numberOfLines={1} />
               <TouchableOpacity
                 style={[ss.audiencePill, { backgroundColor: colors.accent + "14", borderColor: colors.accent + "28" }]}
                 onPress={() => setShowAudience(true)}

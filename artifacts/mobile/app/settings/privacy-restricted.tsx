@@ -15,6 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { showAlert } from "@/lib/alert";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -134,7 +135,7 @@ export default function PrivacyRestrictedScreen() {
                 <View style={s.row}>
                   <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={44} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{item.profile.display_name}</Text>
+                    <UserName userId={item.profile.id} name={item.profile.display_name} style={[s.name, { color: colors.text }]} numberOfLines={1} />
                     <Text style={[s.handle, { color: colors.textMuted }]}>@{item.profile.handle}</Text>
                   </View>
                   <TouchableOpacity

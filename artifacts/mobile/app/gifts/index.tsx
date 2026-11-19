@@ -26,6 +26,7 @@ import { showAlert } from "@/lib/alert";
 import { GiftCardSkeleton } from "@/components/ui/Skeleton";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
+import UserName from "@/components/ui/UserName";
 
 type Gift = {
   id: string;
@@ -46,6 +47,7 @@ type OwnedGift = {
   acquired_at: string;
   transaction_id: string | null;
   sender_name?: string;
+  sender_id?: string;
 };
 
 const HIDDEN_FEE_PERCENT = 5.99;
@@ -132,17 +134,20 @@ export default function GiftsScreen() {
       const available = data.filter((g: any) => !listedGiftIds.has(g.id));
 
       const txIds = available.map((g: any) => g.transaction_id).filter(Boolean);
-      let senderMap: Record<string, string> = {};
+      let senderMap: Record<string, { id: string; name: string }> = {};
 
       if (txIds.length > 0) {
         const { data: txData } = await supabase
           .from("gift_transactions")
-          .select("id, sender_id, profiles!gift_transactions_sender_id_fkey(display_name)")
+          .select("id, sender_id, profiles!gift_transactions_sender_id_fkey(id, display_name)")
           .in("id", txIds);
 
         if (txData) {
           txData.forEach((tx: any) => {
-            senderMap[tx.id] = tx.profiles?.display_name || "Someone";
+            senderMap[tx.id] = {
+              id: tx.profiles?.id || tx.sender_id,
+              name: tx.profiles?.display_name || "Someone",
+            };
           });
         }
       }
@@ -150,7 +155,8 @@ export default function GiftsScreen() {
       setOwned(available.map((g: any) => ({
         ...g,
         gift: { ...g.gifts },
-        sender_name: g.transaction_id ? senderMap[g.transaction_id] : undefined,
+        sender_name: g.transaction_id ? senderMap[g.transaction_id]?.name : undefined,
+        sender_id: g.transaction_id ? senderMap[g.transaction_id]?.id : undefined,
       })));
     }
     setLoading(false);
@@ -507,7 +513,10 @@ export default function GiftsScreen() {
             {selectedGift?.sender_name && (
               <View style={[styles.senderRow, { backgroundColor: colors.inputBg }]}>
                 <Ionicons name="person" size={14} color={colors.textMuted} />
-                <Text style={[styles.senderText, { color: colors.textSecondary }]}>From <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{selectedGift.sender_name}</Text></Text>
+                <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" }}>
+                  <Text style={[styles.senderText, { color: colors.textSecondary }]}>From </Text>
+                  <UserName userId={selectedGift.sender_id} name={selectedGift.sender_name} style={[styles.senderText, { color: colors.text, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1} />
+                </View>
                 <Text style={[styles.dateText, { color: colors.textMuted }]}>{selectedGift ? formatDate(selectedGift.acquired_at) : ""}</Text>
               </View>
             )}

@@ -699,6 +699,7 @@ const PostCard = React.memo(function PostCard({ item, onToggleLike, onToggleBook
     setMenuVisible(false);
     setShareablePost({
       id: item.id,
+      author_id: item.author_id,
       author_name: item.profile.display_name,
       author_handle: item.profile.handle,
       avatar_url: item.profile.avatar_url,

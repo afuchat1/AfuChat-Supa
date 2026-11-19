@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import UserName from "@/components/ui/UserName";
 import { shareStory } from "@/lib/share";
 import { hydrateViewedUsers, markStoriesViewed } from "@/lib/storyViewedStore";
 import { safePause, safePlay } from "@/lib/safeMedia";
@@ -733,7 +734,7 @@ export default function ViewStoryScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text style={styles.storyName}>{story.profile.display_name}</Text>
+            <UserName userId={story.user_id} name={story.profile.display_name} style={styles.storyName} />
             <VerifiedBadge
               isVerified={story.profile.is_verified}
               isOrganizationVerified={story.profile.is_organization_verified}
@@ -803,9 +804,10 @@ export default function ViewStoryScreen() {
           {replyExpanded && !isOwner ? (
             <View style={styles.expandedReplyComposer}>
               <View style={styles.expandedReplyHeader}>
-                <Text style={[styles.expandedReplyTitle, { color: isDark ? "rgba(255,255,255,0.78)" : colors.textMuted }]} numberOfLines={1}>
-                  Replying to {story.profile.display_name}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                  <Text style={[styles.expandedReplyTitle, { color: isDark ? "rgba(255,255,255,0.78)" : colors.textMuted }]}>Replying to </Text>
+                  <UserName userId={story.user_id} name={story.profile.display_name} style={[styles.expandedReplyTitle, { color: isDark ? "rgba(255,255,255,0.78)" : colors.textMuted }]} numberOfLines={1} />
+                </View>
                 <TouchableOpacity
                   onPress={() => {
                     Keyboard.dismiss();
@@ -1074,7 +1076,7 @@ export default function ViewStoryScreen() {
                       <Avatar uri={item.avatar_url} name={item.display_name} size={40} />
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                          <Text style={styles.viewerName}>{item.display_name}</Text>
+                          <UserName userId={item.id} name={item.display_name} style={styles.viewerName} />
                           <VerifiedBadge
                             isVerified={item.is_verified}
                             isOrganizationVerified={item.is_organization_verified}

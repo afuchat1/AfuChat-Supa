@@ -867,9 +867,7 @@ export default function GroupManageScreen() {
                 size={44}
               />
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }}>
-                  {selectedMember.profile.display_name}
-                </Text>
+                <UserName userId={selectedMember.user_id} name={selectedMember.profile.display_name} style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }} />
                 <Text style={{ fontSize: 13, color: colors.textMuted }}>@{selectedMember.profile.handle}</Text>
               </View>
             </View>
@@ -987,9 +985,7 @@ export default function GroupManageScreen() {
                   <Avatar uri={item.avatar_url} name={item.display_name} size={44} />
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1}>
-                        {item.display_name}
-                      </Text>
+                      <UserName userId={item.id} name={item.display_name} style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text }} numberOfLines={1} />
                       <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
                     </View>
                     <Text style={{ fontSize: 13, color: colors.textMuted }}>@{item.handle}</Text>

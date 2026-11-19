@@ -1893,7 +1893,7 @@ export function SearchScreen({
                   {p.author_avatar
                     ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 24, height: 24, borderRadius: 12 }} contentFit="cover" cachePolicy="memory-disk" />
                     : <AvatarPlaceholder name={p.author_name} size={24} color={BRAND} />}
-                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1}>{p.author_name || p.author_handle}</Text>
+                  <UserName userId={p.author_id} name={p.author_name || p.author_handle} style={{ color: colors.textSecondary, fontSize: 11, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1} />
                   <Text style={{ color: colors.textMuted, fontSize: 10 }}>{timeAgo(p.created_at)}</Text>
                 </View>
                 {p.article_title && <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 4 }} numberOfLines={2}>{p.article_title}</Text>}
@@ -1907,7 +1907,7 @@ export function SearchScreen({
                 {p.author_avatar
                   ? <ExpoImage source={{ uri: p.author_avatar }} style={{ width: 28, height: 28, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
                   : <AvatarPlaceholder name={p.author_name} size={28} color={BRAND} />}
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }}>{p.author_name || p.author_handle}</Text>
+                <UserName userId={p.author_id} name={p.author_name || p.author_handle} style={{ color: colors.textSecondary, fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 }} numberOfLines={1} />
                 <Text style={{ color: colors.textMuted, fontSize: 11 }}>{timeAgo(p.created_at)}</Text>
               </View>
               {p.article_title && <Text style={{ fontSize: 15, fontFamily: "Inter_700Bold", color: colors.text, marginBottom: 5 }} numberOfLines={2}>{p.article_title}</Text>}
@@ -1974,9 +1974,10 @@ export function SearchScreen({
             {video.author_avatar
               ? <ExpoImage source={{ uri: video.author_avatar }} style={{ width: 18, height: 18, borderRadius: 9 }} contentFit="cover" cachePolicy="memory-disk" />
               : <AvatarPlaceholder name={video.author_name || video.author_handle} size={18} color={RED} />}
-            <Text style={{ flex: 1, color: colors.textMuted, fontSize: 11 }} numberOfLines={1}>
-              {video.author_name || video.author_handle} · {fmtNum(video.view_count)} views
-            </Text>
+            <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center" }}>
+              <UserName userId={video.author_id} name={video.author_name || video.author_handle} style={{ flexShrink: 1, color: colors.textMuted, fontSize: 11 }} numberOfLines={1} />
+              <Text style={{ color: colors.textMuted, fontSize: 11 }}> · {fmtNum(video.view_count)} views</Text>
+            </View>
           </View>
         </View>
         <View style={{ width: 92, height: 78, borderRadius: 10, overflow: "hidden", backgroundColor: colors.inputBg }}>
@@ -2066,14 +2067,14 @@ export function SearchScreen({
           </View>
         )}
         <LinearGradient colors={["transparent", "#00000099"]} style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 8, paddingBottom: 10 }}>
-          <Text style={{ color: "#fff", fontSize: 11, fontFamily: "Inter_500Medium", lineHeight: 15 }} numberOfLines={2}>{v.content || v.author_name}</Text>
+          <Text style={{ color: "#fff", fontSize: 11, fontFamily: "Inter_500Medium", lineHeight: 15 }} numberOfLines={2}>{v.content || "Video"}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
             <Ionicons name="eye" size={10} color="#ffffffaa" />
             <Text style={{ color: "#ffffffaa", fontSize: 10 }}>{fmtNum(v.view_count)}</Text>
             {v.author_name ? (
               <>
                 <Text style={{ color: "#ffffff55", fontSize: 10 }}>·</Text>
-                <Text style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1}>{v.author_name || v.author_handle}</Text>
+                <UserName userId={v.author_id} name={v.author_name || v.author_handle} style={{ color: "#ffffffaa", fontSize: 10 }} numberOfLines={1} />
               </>
             ) : null}
           </View>
@@ -3174,7 +3175,7 @@ export function SearchScreen({
 
                   {/* Card body */}
                   <View style={{ paddingHorizontal: 12, paddingTop: 36, paddingBottom: 14, alignItems: "center", gap: 4 }}>
-                    <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }} numberOfLines={1}>{p.display_name || p.handle}</Text>
+                    <UserName userId={p.id} name={p.display_name || p.handle} style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center" }} numberOfLines={1} />
                     <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>@{p.handle}</Text>
                     {p.bio && (
                       <Text style={{ fontSize: 11, color: colors.textSecondary, textAlign: "center", lineHeight: 15, marginTop: 2 }} numberOfLines={2}>{p.bio}</Text>
@@ -3250,7 +3251,7 @@ export function SearchScreen({
                             ? <ExpoImage source={{ uri: v.author_avatar }} style={{ width: 18, height: 18, borderRadius: 9 }} contentFit="cover" cachePolicy="memory-disk" />
                             : <AvatarPlaceholder name={v.author_name || v.author_handle} size={18} color={RED} />
                           }
-                <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_500Medium" }} numberOfLines={1}>{v.author_name || v.author_handle}</Text>
+                <UserName userId={v.author_id} name={v.author_name || v.author_handle} style={{ fontSize: 12, color: colors.textMuted, fontFamily: "Inter_500Medium" }} numberOfLines={1} />
                         </View>
                       </View>
                     </TouchableOpacity>

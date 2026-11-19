@@ -29,6 +29,7 @@ import * as Haptics from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
+import UserName from "@/components/ui/UserName";
 import { showAlert } from "@/lib/alert";
 import { chargeMatchSuperLike, chargeProfileBoost, getAcoinBalance, MATCH_PRICES } from "@/lib/matchTransactions";
 
@@ -129,7 +130,7 @@ function CardDetailModal({
             </Pressable>
             {/* Name overlay */}
             <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={[detailStyles.nameOverlay, { pointerEvents: "none" } as any]}>
-              <Text style={detailStyles.profileName}>{candidate.name}{candidate.show_age && age ? `, ${age}` : ""}</Text>
+              <UserName userId={candidate.user_id} name={`${candidate.name}${candidate.show_age && age ? `, ${age}` : ""}`} style={detailStyles.profileName} numberOfLines={1} />
               {candidate.job_title && (
                 <View style={detailStyles.metaRow}>
                   <Ionicons name="briefcase" size={12} color="rgba(255,255,255,0.8)" />
@@ -340,7 +341,7 @@ function SwipeCard({
       <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={[styles.cardOverlay, { pointerEvents: "none" } as any]}>
         <View style={styles.cardInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.cardName} numberOfLines={1}>{candidate.name}{candidate.show_age && age ? `, ${age}` : ""}</Text>
+            <UserName userId={candidate.user_id} name={`${candidate.name}${candidate.show_age && age ? `, ${age}` : ""}`} style={styles.cardName} numberOfLines={1} />
           </View>
           {candidate.job_title && (
             <View style={styles.metaRow}>
@@ -537,7 +538,7 @@ function MatchesTab() {
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={[styles.matchName, { color: colors.text }]}>{m.other.name}{age ? `, ${age}` : ""}</Text>
+                <UserName userId={m.other.user_id} name={`${m.other.name}${age ? `, ${age}` : ""}`} style={[styles.matchName, { color: colors.text }]} numberOfLines={1} />
                 {m.is_super_match && <Ionicons name="star" size={12} color="#FFD60A" />}
               </View>
               {lastMsg ? (

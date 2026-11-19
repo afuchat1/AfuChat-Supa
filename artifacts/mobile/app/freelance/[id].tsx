@@ -36,6 +36,7 @@ import { transferAcoin } from "@/lib/monetize";
 import { showAlert } from "@/lib/alert";
 import { safeRouter } from "@/lib/navUtils";
 import Colors from "@/constants/colors";
+import UserName from "@/components/ui/UserName";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -346,9 +347,7 @@ export default function FreelanceListingScreen() {
               )}
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <Text style={[st.sellerName, { color: colors.text }]}>
-                    {gig.seller.display_name ?? `@${gig.seller.handle}`}
-                  </Text>
+                  <UserName userId={gig.seller_id} name={gig.seller.display_name ?? `@${gig.seller.handle}`} style={[st.sellerName, { color: colors.text }]} numberOfLines={1} />
                   {gig.seller.is_verified && (
                     <Ionicons name="checkmark-circle" size={14} color={accent} />
                   )}

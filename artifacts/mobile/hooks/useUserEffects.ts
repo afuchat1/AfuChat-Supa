@@ -88,13 +88,17 @@ export function useUserEffects(userId: string | null | undefined): UserEffects {
   );
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setEffects({ ...EMPTY });
+      return;
+    }
 
     if (cache.has(userId)) {
       setEffects(cache.get(userId)!);
       return;
     }
 
+    setEffects({ ...EMPTY });
     let mounted = true;
     const listener = () => {
       if (mounted) setEffects(cache.get(userId) ?? { ...EMPTY });
@@ -115,6 +119,7 @@ export function useUserEffects(userId: string | null | undefined): UserEffects {
 
 export function invalidateUserEffects(userId: string) {
   cache.delete(userId);
+  if (listeners.has(userId)) void fetchEffects(userId);
 }
 
 export type { UserEffects as UserEffectsType };

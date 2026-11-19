@@ -22,6 +22,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { safeRouter } from "@/lib/navUtils";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import UserName from "@/components/ui/UserName";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
@@ -316,7 +317,10 @@ export default function GiftMarketplaceScreen() {
           </View>
         )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2, justifyContent: "center" }}>
-          <Text style={[styles.sellerText, { color: colors.textMuted }]} numberOfLines={1}>by {item.seller_name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
+            <Text style={[styles.sellerText, { color: colors.textMuted }]}>by </Text>
+            <UserName userId={item.seller_id} name={item.seller_name} style={[styles.sellerText, { color: colors.textMuted }]} numberOfLines={1} />
+          </View>
           <VerifiedBadge isVerified={item.seller_is_verified} isOrganizationVerified={item.seller_is_organization_verified} size={12} />
         </View>
       </TouchableOpacity>
@@ -418,7 +422,7 @@ export default function GiftMarketplaceScreen() {
               <Ionicons name="person-circle" size={18} color={colors.textMuted} />
               <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flex: 1 }}>
                 <Text style={[styles.sellerInfoText, { color: colors.textSecondary }]}>Listed by </Text>
-                <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.text }}>{selectedListing?.seller_name}</Text>
+                <UserName userId={selectedListing?.seller_id} name={selectedListing?.seller_name || "Anonymous"} style={{ fontFamily: "Inter_600SemiBold", color: colors.text }} />
                 {selectedListing && <VerifiedBadge isVerified={selectedListing.seller_is_verified} isOrganizationVerified={selectedListing.seller_is_organization_verified} size={14} />}
               </View>
               <Text style={[styles.listedDate, { color: colors.textMuted }]}>

@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
@@ -155,7 +156,7 @@ export default function BlockedUsersScreen() {
                     <Avatar uri={item.profile.avatar_url} name={item.profile.display_name} size={46} />
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <Text style={[s.name, { color: colors.text }]} numberOfLines={1}>{item.profile.display_name}</Text>
+                        <UserName userId={item.profile.id} name={item.profile.display_name} style={[s.name, { color: colors.text }]} numberOfLines={1} />
                         <VerifiedBadge isVerified={item.profile.is_verified} isOrganizationVerified={item.profile.is_organization_verified} size={13} />
                       </View>
                       <Text style={[s.handle, { color: colors.textMuted }]}>@{item.profile.handle}</Text>

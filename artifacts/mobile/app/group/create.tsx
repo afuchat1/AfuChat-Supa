@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { showAlert } from "@/lib/alert";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
@@ -252,7 +253,7 @@ export default function CreateGroupScreen() {
                 <Avatar uri={item.avatar_url} name={item.display_name} size={44} />
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text style={[styles.contactName, { color: colors.text }]}>{item.display_name}</Text>
+                    <UserName userId={item.id} name={item.display_name} style={[styles.contactName, { color: colors.text }]} />
                     <VerifiedBadge isVerified={item.is_verified} isOrganizationVerified={item.is_organization_verified} size={13} />
                   </View>
                   <Text style={[styles.contactHandle, { color: colors.textMuted }]}>@{item.handle}</Text>

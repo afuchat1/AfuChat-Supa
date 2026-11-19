@@ -20,6 +20,7 @@ import * as Haptics from "@/lib/haptics";
 import Colors from "@/constants/colors";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 
 function fmtAmt(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -165,7 +166,7 @@ export default function WalletScanPage() {
           <View style={[s.recipientCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Avatar uri={recipient.avatar_url} name={recipient.display_name} size={54} />
             <View style={s.recipientInfo}>
-              <Text style={[s.recipientName, { color: colors.text }]}>{recipient.display_name}</Text>
+              <UserName userId={recipient.id} name={recipient.display_name} style={[s.recipientName, { color: colors.text }]} />
               <Text style={[s.recipientHandle, { color: colors.textMuted }]}>@{recipient.handle}</Text>
             </View>
             <View style={[s.verifiedBadge, { backgroundColor: colors.accent + "18" }]}>

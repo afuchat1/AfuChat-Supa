@@ -14,6 +14,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { safeRouter } from "@/lib/navUtils";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import AfuChatWordmark from "@/components/ui/AfuChatWordmark";
 import { ChatsListPanel } from "@/app/(tabs)/index";
 
@@ -203,9 +204,7 @@ export default function DesktopShell({ children }: { children: React.ReactNode }
             {isNavExpanded && (
               <>
                 <View style={styles.profileCopy}>
-                  <Text style={[styles.profileName, { color: colors.text }]} numberOfLines={1}>
-                    {profile?.display_name || "Your profile"}
-                  </Text>
+                  <UserName userId={user?.id} name={profile?.display_name || "Your profile"} style={[styles.profileName, { color: colors.text }]} numberOfLines={1} />
                   <Text style={[styles.profileStatus, { color: colors.textMuted }]} numberOfLines={1}>
                     @{profile?.handle || "you"}
                   </Text>

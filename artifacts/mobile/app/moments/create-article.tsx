@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
 import { showAlert } from "@/lib/alert";
 import { uploadToStorage } from "@/lib/mediaUpload";
@@ -201,7 +202,7 @@ export default function CreateArticleScreen() {
           <View style={styles.authorRow}>
             <Avatar uri={profile?.avatar_url} name={profile?.display_name} size={38} />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[styles.authorName, { color: colors.text }]}>{profile?.display_name || "You"}</Text>
+              <UserName userId={profile?.id} name={profile?.display_name || "You"} style={[styles.authorName, { color: colors.text }]} />
               <TouchableOpacity
                 style={[styles.audienceBtn, { backgroundColor: colors.backgroundTertiary }]}
                 onPress={() => setShowAudienceModal(true)}

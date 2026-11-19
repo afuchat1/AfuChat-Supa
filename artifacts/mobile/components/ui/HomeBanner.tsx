@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { getLocalContacts, type LocalContact } from "@/lib/storage/localContacts";
 import { isOnline } from "@/lib/offlineStore";
 
@@ -356,7 +357,7 @@ function ContactPickerSheet({ visible, gradient, eventName, onClose, onSelect }:
               >
                 <Avatar uri={item.avatar_url} name={item.display_name} size={44} square={!!item.is_organization_verified} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[sh.rowName, { color: colors.text }]} numberOfLines={1}>{item.display_name}</Text>
+                  <UserName userId={item.id} name={item.display_name} style={[sh.rowName, { color: colors.text }]} numberOfLines={1} />
                   <Text style={[sh.rowHandle, { color: colors.textMuted }]} numberOfLines={1}>@{item.handle}</Text>
                 </View>
                 <View style={[sh.giftChip, { backgroundColor: colors.inputBg }]}>

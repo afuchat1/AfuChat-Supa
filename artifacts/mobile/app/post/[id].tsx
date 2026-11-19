@@ -1111,9 +1111,10 @@ export default function PostDetailScreen() {
               {/* Reply-to banner */}
               {replyingTo && (
                 <View style={[st.replyBanner, { borderBottomColor: separatorClr }]}>
-                  <Text style={[st.replyBannerText, { color: replyToTxt }]}>
-                    Replying to <Text style={{ color: accent }}>{replyingTo.profile.display_name || replyingTo.profile.handle}</Text>
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                    <Text style={[st.replyBannerText, { color: replyToTxt }]}>Replying to </Text>
+                    <UserName userId={replyingTo.author_id} name={replyingTo.profile.display_name || replyingTo.profile.handle} style={[st.replyBannerText, { color: accent }]} />
+                  </View>
                   <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={8}>
                     <Ionicons name="close-circle" size={16} color={replyToTxt} />
                   </TouchableOpacity>

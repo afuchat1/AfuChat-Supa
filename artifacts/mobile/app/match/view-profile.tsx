@@ -21,6 +21,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { ProfileSkeleton } from "@/components/ui/Skeleton";
 import { showAlert } from "@/lib/alert";
 import { getPublicProfileGifts, getGiftItem } from "@/lib/matchTransactions";
+import UserName from "@/components/ui/UserName";
 
 const BRAND = "#FF2D55";
 const GOLD = "#FFD60A";
@@ -49,7 +50,7 @@ export default function ViewProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [showReport, setShowReport] = useState(false);
-  const [gifts, setGifts] = useState<{ id: string; gift_emoji: string; sender_name: string; sent_at: string }[]>([]);
+  const [gifts, setGifts] = useState<{ id: string; sender_id: string; gift_emoji: string; sender_name: string; sent_at: string }[]>([]);
 
   useEffect(() => {
     if (!userId || !user) return;
@@ -129,7 +130,7 @@ export default function ViewProfileScreen() {
             <View style={styles.backBtnInner}><Ionicons name="flag" size={18} color="#fff" /></View>
           </TouchableOpacity>
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={[styles.nameOverlay, { pointerEvents: "none" } as any]}>
-            <Text style={styles.profileName}>{profile.name}{profile.show_age && age ? `, ${age}` : ""}</Text>
+            <UserName userId={userId} name={`${profile.name}${profile.show_age && age ? `, ${age}` : ""}`} style={styles.profileName} numberOfLines={1} />
             {(profile.job_title || profile.company) && (
               <View style={styles.metaRow}>
                 <Ionicons name="briefcase" size={13} color="rgba(255,255,255,0.8)" />
@@ -175,7 +176,10 @@ export default function ViewProfileScreen() {
                         <Ionicons name="diamond" size={8} color={GOLD} />
                         <Text style={styles.giftTilePriceText}>{item.price}</Text>
                       </View>
-                      <Text style={[styles.giftTileSender, { color: colors.textMuted }]} numberOfLines={1}>from {g.sender_name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", minWidth: 0 }}>
+                        <Text style={[styles.giftTileSender, { color: colors.textMuted }]}>from </Text>
+                        <UserName userId={g.sender_id} name={g.sender_name} style={[styles.giftTileSender, { color: colors.textMuted, flexShrink: 1 }]} numberOfLines={1} />
+                      </View>
                     </View>
                   );
                 })}
@@ -186,7 +190,10 @@ export default function ViewProfileScreen() {
           {/* Bio */}
           {profile.bio && (
         <View style={[styles.card, { backgroundColor: colors.cardSurface }]}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>About {profile.name}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>About </Text>
+                <UserName userId={userId} name={profile.name} style={[styles.cardTitle, { color: colors.text }]} />
+              </View>
               <Text style={[styles.cardBody, { color: colors.textSecondary }]}>{profile.bio}</Text>
             </View>
           )}
@@ -236,7 +243,11 @@ export default function ViewProfileScreen() {
           <View style={[styles.reportSheet, { backgroundColor: colors.surface }]}>
             <View style={styles.sheetHandle} />
             <Text style={[styles.reportTitle, { color: colors.text }]}>Report Profile</Text>
-            <Text style={[styles.reportSub, { color: colors.textMuted }]}>Why are you reporting {profile.name}?</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+              <Text style={[styles.reportSub, { color: colors.textMuted }]}>Why are you reporting </Text>
+              <UserName userId={userId} name={profile.name} style={[styles.reportSub, { color: colors.textMuted }]} />
+              <Text style={[styles.reportSub, { color: colors.textMuted }]}>?</Text>
+            </View>
             {[
               { v: "fake_profile", l: "Fake or Spam Profile" },
               { v: "inappropriate_photos", l: "Inappropriate Photos" },

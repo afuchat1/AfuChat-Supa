@@ -179,7 +179,7 @@ export async function getReceivedMatchGifts(userId: string): Promise<ReceivedMat
 export async function getPublicProfileGifts(
   viewerId: string,
   ownerId: string
-): Promise<{ id: string; gift_emoji: string; sender_name: string; sent_at: string }[]> {
+): Promise<{ id: string; sender_id: string; gift_emoji: string; sender_name: string; sent_at: string }[]> {
   const { data: match } = await supabase
     .from("match_matches")
     .select("id")
@@ -211,6 +211,7 @@ export async function getPublicProfileGifts(
 
   return gifts.map((g: any) => ({
     id: g.id,
+    sender_id: g.sender_id,
     gift_emoji: g.gift_emoji ?? "🎁",
     sender_name: nameMap[g.sender_id] ?? "Someone",
     sent_at: g.sent_at,

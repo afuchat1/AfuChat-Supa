@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { supabase } from "@/lib/supabase";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { PrestigeBadge } from "@/components/ui/PrestigeBadge";
 import { usePhoneContacts } from "@/lib/usePhoneContacts";
 import { callPhoneNumber, isValidInternationalPhoneNumber, sendPhoneInvite } from "@/lib/phoneContacts";
@@ -195,7 +196,7 @@ export default function PhoneContactsScreen() {
                         <Avatar uri={item.avatar_url} name={item.display_name} size={48} />
                         <View style={{ flex: 1 }}>
                           <View style={styles.nameRow}>
-                            <Text style={[styles.displayName, { color: colors.text }]} numberOfLines={1}>{item.display_name}</Text>
+                            <UserName userId={item.id} name={item.display_name} style={[styles.displayName, { color: colors.text }]} numberOfLines={1} />
                             <PrestigeBadge acoin={item.acoin} size="sm" />
                           </View>
                           <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>@{item.handle}</Text>

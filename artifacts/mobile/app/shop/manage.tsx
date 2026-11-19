@@ -29,6 +29,7 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 import { Shop, ShopProduct, ShopOrder, SHOP_CATEGORIES, PRODUCT_CATEGORIES, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, formatShopAcoin, formatShopUSD, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import UserName from "@/components/ui/UserName";
 
 type ManageTab = "overview" | "products" | "orders";
 
@@ -458,9 +459,10 @@ export default function ShopManage() {
               <View style={styles.orderHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.orderId, { color: colors.textMuted }]}>#{order.id.slice(-8).toUpperCase()}</Text>
-                  <Text style={[styles.orderBuyer, { color: colors.text }]}>
-                    {buyer?.display_name || "Customer"} · @{buyer?.handle || "?"}
-                  </Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                    <UserName userId={order.buyer_id} name={buyer?.display_name || "Customer"} style={[styles.orderBuyer, { color: colors.text }]} />
+                    <Text style={[styles.orderBuyer, { color: colors.textMuted }]}> · @{buyer?.handle || "?"}</Text>
+                  </View>
                 </View>
                 <View style={[styles.statusPill, { backgroundColor: status.color + "20" }]}>
                   <Ionicons name={status.icon as any} size={12} color={status.color} />

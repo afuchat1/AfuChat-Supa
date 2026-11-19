@@ -15,9 +15,11 @@ import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";
 import { timeAgo as fmtRel } from "@/lib/timeAgo";
 import Colors from "@/constants/colors";
+import UserName from "@/components/ui/UserName";
 
 export type ShareablePost = {
   id: string;
+  author_id?: string;
   author_name: string;
   author_handle: string;
   avatar_url: string | null;
@@ -91,9 +93,7 @@ export const ShareCard = React.forwardRef<ViewInstance, ShareCardProps>(function
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <Text style={s.authorName} numberOfLines={1}>
-              {post.author_name}
-            </Text>
+            <UserName userId={post.author_id} name={post.author_name} style={s.authorName} numberOfLines={1} />
             {isVerif && <Ionicons name="checkmark-circle" size={15} color={badgeColor} />}
           </View>
           <Text style={s.authorSub} numberOfLines={1}>

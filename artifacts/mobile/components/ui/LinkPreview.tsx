@@ -25,6 +25,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useOpenLink } from "@/lib/useOpenLink";
+import UserName from "@/components/ui/UserName";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -166,12 +167,7 @@ function ProfilePreviewCard({
         )}
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Text
-              style={[st.profileName, { color: isMe ? "#fff" : colors.text }]}
-              numberOfLines={1}
-            >
-              {card.display_name}
-            </Text>
+            <UserName userId={card.id} name={card.display_name} style={[st.profileName, { color: isMe ? "#fff" : colors.text }]} numberOfLines={1} />
             {(card.is_verified || card.is_organization_verified) && (
               <Ionicons name="checkmark-circle" size={13} color={accent} />
             )}

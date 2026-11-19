@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { safeRouter } from "@/lib/navUtils";
 import { showAlert } from "@/lib/alert";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { isOnline } from "@/lib/offlineStore";
 import Colors from "@/constants/colors";
 import { getLocalConversations, type LocalConversation } from "@/lib/storage/localConversations";
@@ -59,7 +60,7 @@ function ContactRow({
     >
       <Avatar uri={contact.avatar_url} name={contact.display_name} size={42} />
       <View style={styles.contactInfo}>
-        <Text style={[styles.contactName, { color: colors.text }]} numberOfLines={1}>{contact.display_name}</Text>
+        <UserName userId={contact.id} name={contact.display_name} style={[styles.contactName, { color: colors.text }]} numberOfLines={1} />
         <Text style={[styles.contactHandle, { color: colors.textMuted }]} numberOfLines={1}>
           {contact.subtitle || (contact.handle ? `@${contact.handle}` : "AfuChat conversation")}
         </Text>

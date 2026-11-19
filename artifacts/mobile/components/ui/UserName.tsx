@@ -1,8 +1,28 @@
-import React from "react";
-import { Text, StyleProp, TextStyle } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Easing,
+  LayoutChangeEvent,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextStyle,
+  ViewStyle,
+} from "react-native";
+import MaskedView from "@react-native-masked-view/masked-view";
+import { LinearGradient } from "expo-linear-gradient";
 import { useUserEffects } from "@/hooks/useUserEffects";
 
-const GOLD = "#D4A853";
+const METALLIC_GOLD = [
+  "#80500D",
+  "#C38A22",
+  "#FFF0A3",
+  "#D9A637",
+  "#FFF9D8",
+  "#A96B12",
+] as const;
+
+const CompatibleMaskedView = MaskedView as unknown as React.ComponentType<any>;
 
 type Props = {
   userId: string | null | undefined;
@@ -12,6 +32,22 @@ type Props = {
   suppressStar?: boolean;
 };
 
+const styles = StyleSheet.create({
+  maskedView: {
+    alignSelf: "flex-start",
+    overflow: "hidden",
+  },
+  shine: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 26,
+  },
+  shineGradient: {
+    flex: 1,
+  },
+});
+
 export default function UserName({
   userId,
   name,
@@ -20,14 +56,85 @@ export default function UserName({
   suppressStar = false,
 }: Props) {
   const { goldNameplate, verifiedStar } = useUserEffects(userId);
+  const shimmer = useRef(new Animated.Value(0)).current;
+  const [textWidth, setTextWidth] = useState(0);
+  const shownName = `${name}${!suppressStar && verifiedStar ? " ⭐" : ""}`;
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    setTextWidth((current) => Math.abs(current - nextWidth) > 1 ? nextWidth : current);
+  }, []);
+
+  useEffect(() => {
+    if (!goldNameplate) return;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(650),
+        Animated.timing(shimmer, {
+          toValue: 1,
+          duration: 1350,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+        Animated.delay(1750),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [goldNameplate, shimmer]);
+
+  if (goldNameplate) {
+    const translateX = shimmer.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-34, Math.max(textWidth, 44) + 34],
+    });
+    const viewStyle = style as StyleProp<ViewStyle>;
+
+    return (
+      <CompatibleMaskedView
+        onLayout={handleLayout}
+        style={[viewStyle, styles.maskedView]}
+        maskElement={
+          <Text style={[style, { color: "#FFFFFF", backgroundColor: "transparent" }]} numberOfLines={numberOfLines}>
+            {shownName}
+          </Text>
+        }
+      >
+        <LinearGradient
+          colors={METALLIC_GOLD}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+        >
+          <Text style={[style, { color: "transparent" }]} numberOfLines={numberOfLines}>
+            {shownName}
+          </Text>
+        </LinearGradient>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.shine, { transform: [{ translateX }] }]}
+        >
+          <LinearGradient
+            colors={["transparent", "rgba(255, 249, 216, 0.28)", "#FFFFFF", "rgba(255, 231, 139, 0.62)", "transparent"]}
+            locations={[0, 0.2, 0.5, 0.78, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.shineGradient}
+          />
+        </Animated.View>
+      </CompatibleMaskedView>
+    );
+  }
 
   return (
     <Text
-      style={goldNameplate ? [style, { color: GOLD }] : style}
+      style={style}
       numberOfLines={numberOfLines}
     >
-      {name}
-      {!suppressStar && verifiedStar ? " ⭐" : ""}
+      {shownName}
     </Text>
   );
 }

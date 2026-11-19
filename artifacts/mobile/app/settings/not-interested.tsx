@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { Avatar } from "@/components/ui/Avatar";
+import UserName from "@/components/ui/UserName";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { showAlert } from "@/lib/alert";
 import {
@@ -206,9 +207,7 @@ export default function NotInterestedScreen() {
                         size={42}
                       />
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-                          {author.display_name}
-                        </Text>
+                        <UserName userId={author.id} name={author.display_name} style={[styles.name, { color: colors.text }]} numberOfLines={1} />
                         <Text style={[styles.handle, { color: colors.textMuted }]} numberOfLines={1}>
                           @{author.handle}
                         </Text>

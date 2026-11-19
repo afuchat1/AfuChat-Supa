@@ -9721,12 +9721,10 @@ STRICT RULES:
                       <Ionicons name="arrow-undo" size={20} color={colors.accent} />
                     </View>
                     <View style={st.replyComposerText}>
-                      <Text
-                        style={[st.replyComposerTitle, { color: colors.accent }]}
-                        numberOfLines={1}
-                      >
-                        Reply to {replyTo.sender?.display_name || "Message"}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                        <Text style={[st.replyComposerTitle, { color: colors.accent }]}>Reply to </Text>
+                        <UserName userId={replyTo.sender_id} name={replyTo.sender?.display_name || "Message"} style={[st.replyComposerTitle, { color: colors.accent }]} numberOfLines={1} />
+                      </View>
                       <Text
                         style={[st.replyComposerSnippet, { color: colors.textSecondary }]}
                         numberOfLines={1}
@@ -11313,7 +11311,7 @@ STRICT RULES:
                     activeOpacity={0.7}
                   >
                     <Avatar uri={u.avatar_url} name={u.display_name} size={20} />
-                    <Text style={[st.addMembersChipText, { color: BRAND }]} numberOfLines={1}>{u.display_name}</Text>
+                    <UserName userId={u.id} name={u.display_name} style={[st.addMembersChipText, { color: BRAND }]} numberOfLines={1} />
                     <Ionicons name="close" size={12} color={BRAND} />
                   </TouchableOpacity>
                 ))}
@@ -11365,7 +11363,7 @@ STRICT RULES:
                     </View>
                     <View style={{ flex: 1, gap: 1 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <Text style={[st.addMembersRowName, { color: colors.text }]} numberOfLines={1}>{u.display_name}</Text>
+                        <UserName userId={u.id} name={u.display_name} style={[st.addMembersRowName, { color: colors.text }]} numberOfLines={1} />
                         {u.is_verified && <VerifiedBadge size={13} />}
                       </View>
                       {u.handle ? <Text style={[st.addMembersRowHandle, { color: colors.textMuted }]}>@{u.handle}</Text> : null}

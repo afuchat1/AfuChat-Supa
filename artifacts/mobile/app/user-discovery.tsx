@@ -31,6 +31,7 @@ import { useNearbyLocation } from "@/hooks/useNearbyLocation";
 import { supabase } from "@/lib/supabase";
 import { ContactRowSkeleton } from "@/components/ui/Skeleton";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import UserName from "@/components/ui/UserName";
 
 type DiscoverUser = {
   id: string;
@@ -1083,13 +1084,7 @@ const UserRow = React.memo(function UserRow({
         <View style={styles.rowInfo}>
           {/* Name + verified badge — always inline */}
           <View style={styles.nameRow}>
-            <Text
-              style={[styles.displayName, { color: colors.text }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {item.display_name}
-            </Text>
+            <UserName userId={item.id} name={item.display_name} style={[styles.displayName, { color: colors.text }]} numberOfLines={1} />
             {(item.is_verified || item.is_organization_verified) && (
               <VerifiedBadge
                 isVerified={item.is_verified}

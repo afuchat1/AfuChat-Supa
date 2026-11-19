@@ -105,7 +105,7 @@ export type ShopReview = {
   review_text?: string;
   images?: string[];
   created_at: string;
-  reviewer?: { display_name: string; handle: string; avatar_url?: string };
+  reviewer?: { id?: string; display_name: string; handle: string; avatar_url?: string };
 };
 
 export const PRODUCT_CATEGORIES = [
@@ -491,7 +491,7 @@ export async function submitReview(params: {
 export async function getShopReviews(shopId: string, limit = 20): Promise<ShopReview[]> {
   const { data } = await supabase
     .from("shop_reviews")
-    .select("*, reviewer:profiles!shop_reviews_reviewer_id_fkey(display_name, handle, avatar_url)")
+    .select("*, reviewer:profiles!shop_reviews_reviewer_id_fkey(id, display_name, handle, avatar_url)")
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -501,7 +501,7 @@ export async function getShopReviews(shopId: string, limit = 20): Promise<ShopRe
 export async function getProductReviews(productId: string, limit = 20): Promise<ShopReview[]> {
   const { data } = await supabase
     .from("shop_reviews")
-    .select("*, reviewer:profiles!shop_reviews_reviewer_id_fkey(display_name, handle, avatar_url)")
+    .select("*, reviewer:profiles!shop_reviews_reviewer_id_fkey(id, display_name, handle, avatar_url)")
     .eq("product_id", productId)
     .order("created_at", { ascending: false })
     .limit(limit);
