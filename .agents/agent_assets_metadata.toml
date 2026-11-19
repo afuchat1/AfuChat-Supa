@@ -150,14 +150,14 @@ content_type = "image/png"
 id = "2gLzWKfPUAUHRyYxNKyQ5"
 uri = "file://generated-artifacts/afuchat-expo-go-qr.png"
 type = "image"
-title = "AfuChat Expo Go QR code"
-description = "Scan this with Expo Go on Android. The live tunnel is active; its address expires when the Expo Go workflow stops."
+title = "Expo Go QR — restart after fix"
+description = "Scan again to load the fixed bundle. The tunnel address is unchanged."
 logical_id = "94ba286e-9e04-4698-b32e-eeca3b54ff07"
 content_hash = "sha256:a20a01d88c26c420bea6b2080c01b044b58818e7b7abbc7c24417cd8ee0c09de"
 size = 8440
 mtime_ms = 1795079460082
-storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:d4b57ba3-69ae-4a96-b946-0e7eaf600d9a/94ba286e-9e04-4698-b32e-eeca3b54ff07/b911e0fd-61a1-4d5a-b9c2-9eb21ff6bd02"
-storage_version_token = "1795079466193840"
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:d4b57ba3-69ae-4a96-b946-0e7eaf600d9a/94ba286e-9e04-4698-b32e-eeca3b54ff07/039725a7-c1f0-4c16-8508-af358c6b3012"
+storage_version_token = "1795079818214953"
 content_type = "image/png"
 
 [[outputs]]

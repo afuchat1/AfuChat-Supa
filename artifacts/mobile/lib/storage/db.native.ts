@@ -1,4 +1,4 @@
-import { openDatabaseAsync } from "expo-sqlite";
+import { isExpoGo } from "../expoEnvironment";
 
 export type DB = {
   execAsync(sql: string): Promise<void>;
@@ -10,7 +10,18 @@ export type DB = {
 let _db: DB | null = null;
 let _initPromise: Promise<DB> | null = null;
 
+// Expo Go may not have the native SQLite module used by the installed app.
+// Keep its preview usable with the same non-persistent DB behavior as web;
+// regular Android/iOS builds still use durable SQLite below.
+const expoGoDB: DB = {
+  execAsync: async () => {},
+  runAsync: async () => ({ lastInsertRowId: 0, changes: 0 }),
+  getAllAsync: async () => [],
+  getFirstAsync: async () => null,
+};
+
 async function openDB(): Promise<DB> {
+  const { openDatabaseAsync } = await import("expo-sqlite");
   const db = await openDatabaseAsync("afuchat_local.db", { enableChangeListener: false });
   return {
     execAsync: (sql) => db.execAsync(sql),
@@ -39,6 +50,10 @@ async function execSchemaChange(db: DB, sql: string): Promise<void> {
 export async function getDB(): Promise<DB> {
   if (_db) return _db;
   if (_initPromise) return _initPromise;
+  if (isExpoGo()) {
+    _db = expoGoDB;
+    return _db;
+  }
   _initPromise = openDB().then(async (db) => {
     await runMigrations(db);
     _db = db;

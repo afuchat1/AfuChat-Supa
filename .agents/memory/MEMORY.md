@@ -3,7 +3,7 @@
 - [Expo web image fitting](expo-web-image-fitting.md) — Use Expo Image with explicit dimensions for content-bearing hero art when ImageBackground crops unpredictably on web.
 - [AfuSearch results policy](afusearch-results-policy.md) — Use a flat mixed-content feed and one history/trending overlay; keep image search scoped to public AfuChat posts.
 - [pnpm bootstrap behavior](pnpm-bootstrap-behavior.md) — A global pnpm mismatch can recurse; use installed preview binaries and Corepack’s pinned shim for dependency changes.
-- [Expo Go QR verification](expo-go-qr-verification.md) — If the managed tunnel is unavailable, use the installed ngrok provider and verify the Android bundle before sharing its QR.
+- [Expo Go QR and native modules](expo-go-qr-verification.md) — Verify ngrok bundles; defer SQLite loading and disable its local DB only in Expo Go.
 - [Expo Media Library legacy API](expo-media-library-legacy-api.md) — Use `/legacy` for `getAssetsAsync`, `MediaType`, and `SortBy`; the package root targets the newer API.
 - [AfuChat brand colors](afuchat-brand-colors.md) — Use #258FE5 by default; app color and theme-mode changes are Premium-only.
 - [AfuChat brand name](afuchat-brand-name.md) — Keep the exact product name unchanged in every UI, Google, and AI translation path.
