@@ -28,6 +28,7 @@ type TextRange = { start: number; end: number };
 
 type Props = {
   visible: boolean;
+  showClipboardActions?: boolean;
   selection: TextRange;
   value: string;
   onFormat: (newText: string, nextSelection: TextRange) => void;
@@ -36,6 +37,7 @@ type Props = {
 
 export default function FormatToolbar({
   visible,
+  showClipboardActions = true,
   selection,
   value,
   onFormat,
@@ -86,6 +88,8 @@ export default function FormatToolbar({
         directionalLockEnabled
         nestedScrollEnabled
       >
+        {showClipboardActions && (
+          <>
           <TouchableOpacity
             style={btnStyle}
             accessibilityRole="button"
@@ -133,6 +137,8 @@ export default function FormatToolbar({
           >
             <Text style={[s.label, { color: colors.text as string }]}>Paste</Text>
           </TouchableOpacity>
+          </>
+        )}
 
           <TouchableOpacity
             style={btnStyle}

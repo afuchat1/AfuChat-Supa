@@ -9680,6 +9680,7 @@ STRICT RULES:
             <View style={[st.inputFloatOuter, { paddingBottom: Math.max(insets.bottom, 8) }]}>
               <FormatToolbar
                 visible={inputSelection.start < inputSelection.end && input.length > 0}
+                showClipboardActions={Platform.OS !== "android"}
                 selection={inputSelection}
                 value={input}
                 onFormat={(newText, nextSelection) => {
@@ -9800,9 +9801,10 @@ STRICT RULES:
                         <AfuTextInput
                           appearance="embedded"
                           embeddedPaddingVertical={composerVerticalPadding}
-                          // Hide Android's native action items but retain selection
-                          // handles; FormatToolbar supplies AfuChat's own controls.
-                          contextMenuHidden={true}
+                          // Android cancels its native selection action mode when
+                          // contextMenuHidden is true. Let Android own selection and
+                          // clipboard actions; AfuChat keeps its formatting controls.
+                          contextMenuHidden={Platform.OS !== "android"}
                           ref={chatInputRef}
                           style={[
                             st.input,
