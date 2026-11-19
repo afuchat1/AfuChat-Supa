@@ -45,6 +45,23 @@ AS $$
     ) = 2;
 $$;
 
+-- Older app builds stored the direct chat UUID in room_id and relied on the
+-- table default status. Normalize those inserts before RLS checks them.
+CREATE OR REPLACE FUNCTION public.set_call_chat_id_from_room_id()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF NEW.chat_id IS NULL
+     AND NEW.room_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  THEN
+    NEW.chat_id := NEW.room_id::uuid;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.can_access_current_call_topic(p_topic text)
 RETURNS boolean
 LANGUAGE sql
@@ -82,11 +99,15 @@ REVOKE ALL ON FUNCTION public.can_access_current_call_inbox(text) FROM PUBLIC, a
 GRANT EXECUTE ON FUNCTION public.is_current_user_direct_call_member(uuid, uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_access_current_call_topic(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_access_current_call_inbox(text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_current_user_direct_call_member(uuid, uuid, uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.can_access_current_call_topic(text) TO anon;
-GRANT EXECUTE ON FUNCTION public.can_access_current_call_inbox(text) TO anon;
 
 ALTER TABLE public.calls ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.calls ALTER COLUMN status SET DEFAULT 'initiated';
+
+DROP TRIGGER IF EXISTS calls_set_chat_id_from_room_id ON public.calls;
+CREATE TRIGGER calls_set_chat_id_from_room_id
+BEFORE INSERT ON public.calls
+FOR EACH ROW
+EXECUTE FUNCTION public.set_call_chat_id_from_room_id();
 
 DROP POLICY IF EXISTS "calls_select" ON public.calls;
 DROP POLICY IF EXISTS "calls_insert" ON public.calls;
@@ -107,7 +128,7 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
   caller_id = (SELECT auth.uid())
-  AND status = 'initiated'
+  AND status IN ('initiated', 'ringing')
   AND public.is_current_user_direct_call_member(chat_id, caller_id, callee_id)
 );
 

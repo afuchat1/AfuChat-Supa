@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
+import Colors from "@/constants/colors";
 
 let _svgMod: any = null;
 function getSvgMod() {
@@ -37,7 +38,15 @@ const Svg = (props: any) => {
 const Circle = SvgComp("Circle");
 const Path = SvgComp("Path");
 
-function BadgeShape({ size, color }: { size: number; color: string }) {
+function BadgeShape({
+  size,
+  color,
+  checkColor = Colors.dark.text,
+}: {
+  size: number;
+  color: string;
+  checkColor?: string;
+}) {
   const M = getSvgMod();
   const hasSvg = !!(M.default ?? M.Svg);
   if (!hasSvg) {
@@ -46,7 +55,7 @@ function BadgeShape({ size, color }: { size: number; color: string }) {
         width: size, height: size, borderRadius: size / 2,
         backgroundColor: color, alignItems: "center", justifyContent: "center",
       }}>
-        <Text style={{ color: "#fff", fontSize: size * 0.55, fontWeight: "700" }}>✓</Text>
+        <Text style={{ color: checkColor, fontSize: size * 0.55, fontWeight: "700" }}>✓</Text>
       </View>
     );
   }
@@ -57,7 +66,7 @@ function BadgeShape({ size, color }: { size: number; color: string }) {
       <Circle cx="10" cy="10" r="9.2" fill={color} />
       <Path
         d="M5.8,10.2 L8.6,13 L14.2,7"
-        stroke="#fff"
+        stroke={checkColor}
         strokeWidth={sw}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -71,12 +80,14 @@ type Props = {
   isVerified?: boolean;
   isOrganizationVerified?: boolean;
   size?: number;
+  coverTone?: "light" | "dark";
 };
 
 export default function VerifiedBadge({
   isVerified,
   isOrganizationVerified,
   size = 14,
+  coverTone,
 }: Props) {
   const { accent } = useAppAccent();
   const { colors } = useTheme();
@@ -89,6 +100,12 @@ export default function VerifiedBadge({
   if (!isVerif) return null;
 
   const badgeColor = isOrg ? "#F5A623" : accent;
+  const coverBadgeColor = coverTone
+    ? coverTone === "light" ? Colors.light.text : Colors.dark.text
+    : badgeColor;
+  const coverCheckColor = coverTone
+    ? coverTone === "light" ? Colors.dark.text : Colors.light.text
+    : Colors.dark.text;
 
   const REASONS: { icon: string; label: string }[] = isOrg
     ? [
@@ -110,7 +127,7 @@ export default function VerifiedBadge({
         hitSlop={10}
         style={{ marginLeft: 2 }}
       >
-        <BadgeShape size={size} color={badgeColor} />
+        <BadgeShape size={size} color={coverBadgeColor} checkColor={coverCheckColor} />
       </TouchableOpacity>
 
       <Modal

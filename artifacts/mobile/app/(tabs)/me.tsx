@@ -27,6 +27,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { AvatarViewer } from "@/components/ui/AvatarViewer";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
+import { useProfileCoverTone } from "@/hooks/useProfileCoverTone";
 import QRPosterSheet from "@/components/ui/QRPosterSheet";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
@@ -211,6 +212,9 @@ export default function MeScreen() {
   }, [user?.id]);
   const [localProfile, setLocalProfile] = useState<any>(null);
   const profile = authProfile ?? cachedProfile ?? localProfile;
+  const profileCoverTone = useProfileCoverTone(profile?.banner_url);
+  const profileCoverForeground =
+    profileCoverTone === "light" ? Colors.light.text : Colors.dark.text;
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [qrPosterOpen, setQrPosterOpen] = useState(false);
 
@@ -434,9 +438,24 @@ export default function MeScreen() {
 
   const renderProfileIdentity = (onCover: boolean) => (
     <View style={onCover ? s.coverIdentity : { flex: 1, gap: 3 }}>
+      {(() => {
+        const identityColor = onCover ? profileCoverForeground : colors.text;
+        const secondaryColor = onCover ? profileCoverForeground : colors.textMuted;
+        const textShadow = onCover
+          ? {
+              textShadowColor: profileCoverTone === "light" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)",
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }
+          : undefined;
+        return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
         <Text
-          style={[s.heroName, { color: equippedGoods.has("sg4") ? Colors.gold : colors.text }]}
+          style={[
+            s.heroName,
+            { color: onCover ? identityColor : equippedGoods.has("sg4") ? Colors.gold : identityColor },
+            textShadow,
+          ]}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
@@ -446,6 +465,7 @@ export default function MeScreen() {
           isVerified={isVerifiedCreator || !!profile?.is_verified}
           isOrganizationVerified={profile?.is_organization_verified}
           size={17}
+          coverTone={onCover ? profileCoverTone : undefined}
         />
       </View>
 
@@ -454,25 +474,33 @@ export default function MeScreen() {
         activeOpacity={0.7}
         style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
       >
-        {purchaseLoading && <ActivityIndicator size="small" color={colors.textMuted} style={{ marginRight: 4 }} />}
-        <Text style={[s.heroHandle, { color: colors.textMuted }]}>
+        {purchaseLoading && <ActivityIndicator size="small" color={secondaryColor} style={{ marginRight: 4 }} />}
+        <Text style={[s.heroHandle, { color: secondaryColor }, textShadow]}>
           @{profile?.handle || t("common.handle")}
         </Text>
-        <Ionicons name="information-circle" size={13} color={colors.textMuted} style={{ opacity: 0.6 }} />
+        <Ionicons name="information-circle" size={13} color={secondaryColor} style={{ opacity: 0.8 }} />
       </TouchableOpacity>
 
       {profile?.is_organization_verified && (
-        <View style={[s.businessChip, { backgroundColor: Colors.gold + "20" }]}>
-          <Ionicons name="briefcase" size={10} color={Colors.gold} />
-          <Text style={[s.businessChipText, { color: Colors.gold }]}>{t("common.business")}</Text>
+        <View style={[s.businessChip, { backgroundColor: (onCover ? identityColor : Colors.gold) + "20" }]}>
+          <Ionicons name="briefcase" size={10} color={onCover ? identityColor : Colors.gold} />
+          <Text style={[s.businessChipText, { color: onCover ? identityColor : Colors.gold }]}>{t("common.business")}</Text>
         </View>
       )}
+        );
+      })()}
     </View>
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={profile?.banner_url || isDark ? "light" : "dark"} />
+      <StatusBar
+        style={
+          profile?.banner_url
+            ? profileCoverTone === "light" ? "dark" : "light"
+            : isDark ? "light" : "dark"
+        }
+      />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[s.content, {
@@ -491,6 +519,7 @@ export default function MeScreen() {
             <ProfileCover
               uri={profile.banner_url}
               fadeToColor={colors.cardSurface}
+              showTopFade={profileCoverTone === "dark"}
               style={[s.heroCover, { height: profileCoverHeight }]}
             >
               <TouchableOpacity
