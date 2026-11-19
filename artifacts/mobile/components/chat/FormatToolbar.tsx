@@ -86,6 +86,8 @@ export default function FormatToolbar({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
           keyboardShouldPersistTaps="always"
+          directionalLockEnabled
+          nestedScrollEnabled
         >
           <TouchableOpacity
             style={btnStyle}
@@ -169,6 +171,8 @@ export default function FormatToolbar({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.row}
           keyboardShouldPersistTaps="always"
+          directionalLockEnabled
+          nestedScrollEnabled
         >
           <TouchableOpacity
             style={btnStyle}
@@ -258,7 +262,7 @@ export default function FormatToolbar({
 
 const s = StyleSheet.create({
   container: {
-    alignSelf: "flex-start",
+    alignSelf: "stretch",
     maxWidth: "100%",
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,

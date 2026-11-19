@@ -2905,6 +2905,9 @@ function ChatScreen() {
   const [showRedEnvelope, setShowRedEnvelope] = useState(false);
   const [showAiEditor, setShowAiEditor] = useState(false);
   const [inputSelection, setInputSelection] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const inputSelectionRef = useRef(inputSelection);
+  const inputValueRef = useRef(input);
+  inputValueRef.current = input;
   const [envelopeAmount, setEnvelopeAmount] = useState("");
   const [envelopeMsg, setEnvelopeMsg] = useState("");
   const [envelopeCount, setEnvelopeCount] = useState("1");
@@ -3497,6 +3500,28 @@ function ChatScreen() {
   const typingTimeout = useRef<any>(null);
   const draftSaveTimer = useRef<any>(null);
   const selectionClearTimer = useRef<any>(null);
+  const selectionCommitTimer = useRef<any>(null);
+  const selectionCandidateRef = useRef<{
+    selection: { start: number; end: number };
+    value: string;
+    revision: number;
+  } | null>(null);
+  const inputRevisionRef = useRef(0);
+  const lastNonEmptySelectionAtRef = useRef(0);
+  const setComposerSelection = (selection: { start: number; end: number }) => {
+    inputSelectionRef.current = selection;
+    setInputSelection(selection);
+  };
+  const clearComposerSelection = () => {
+    if (selectionClearTimer.current) clearTimeout(selectionClearTimer.current);
+    if (selectionCommitTimer.current) clearTimeout(selectionCommitTimer.current);
+    selectionCandidateRef.current = null;
+    setComposerSelection({ start: 0, end: 0 });
+  };
+  useEffect(() => () => {
+    if (selectionClearTimer.current) clearTimeout(selectionClearTimer.current);
+    if (selectionCommitTimer.current) clearTimeout(selectionCommitTimer.current);
+  }, []);
   const chatLoadGenerationRef = useRef(0);
   const messageGateCheckRef = useRef(0);
   const messageGateContextRef = useRef(messageGateContextKey);
@@ -9651,8 +9676,14 @@ STRICT RULES:
                 visible={inputSelection.start < inputSelection.end && input.length > 0}
                 selection={inputSelection}
                 value={input}
-                onFormat={(newText) => { setInput(newText); saveDraft(newText); setInputSelection({ start: 0, end: 0 }); }}
-                onClose={() => setInputSelection({ start: 0, end: 0 })}
+                onFormat={(newText) => {
+                  inputRevisionRef.current += 1;
+                  inputValueRef.current = newText;
+                  setInput(newText);
+                  saveDraft(newText);
+                  clearComposerSelection();
+                }}
+                onClose={clearComposerSelection}
               />
               {/* One shared glass bar contains the message field and its primary action. */}
               <View style={st.inputComposerWrap}>
@@ -9755,8 +9786,8 @@ STRICT RULES:
                         <AfuTextInput
                           appearance="embedded"
                           embeddedPaddingVertical={composerVerticalPadding}
-                          // Keep Android's native Cut/Copy/Paste ActionMode
-                          // hidden; FormatToolbar supplies AfuChat's own menu.
+                          // Hide Android's native action items but retain selection
+                          // handles; FormatToolbar supplies AfuChat's own controls.
                           contextMenuHidden={true}
                           ref={chatInputRef}
                           style={[
@@ -9774,6 +9805,11 @@ STRICT RULES:
                           placeholderTextColor={colors.textMuted}
                           value={input}
                           onChangeText={(t) => {
+                            if (t !== inputValueRef.current) {
+                              inputValueRef.current = t;
+                              inputRevisionRef.current += 1;
+                              clearComposerSelection();
+                            }
                             setInput(t);
                             if (!t) setComposerInputLines(1);
                             handleTyping(!!t.trim());
@@ -9833,13 +9869,44 @@ STRICT RULES:
                           }}
                           onSelectionChange={(e) => {
                             const sel = e.nativeEvent.selection;
-                            // Always debounce — never fire setInputSelection synchronously.
-                            // Keyboard autocomplete on Android selects the word it will
-                            // replace BEFORE firing onChangeText. An immediate setState here
-                            // causes a re-render that forces value={input} back onto the
-                            // native text mid-replacement, cutting the autocomplete suggestion.
+                            const hasRange = sel.start < sel.end;
+
+                            if (hasRange) {
+                              if (selectionClearTimer.current) clearTimeout(selectionClearTimer.current);
+                              lastNonEmptySelectionAtRef.current = Date.now();
+                              const candidate = {
+                                selection: sel,
+                                value: inputValueRef.current,
+                                revision: inputRevisionRef.current,
+                              };
+                              selectionCandidateRef.current = candidate;
+                              if (selectionCommitTimer.current) clearTimeout(selectionCommitTimer.current);
+                              selectionCommitTimer.current = setTimeout(() => {
+                                const pending = selectionCandidateRef.current;
+                                if (
+                                  !pending ||
+                                  pending.revision !== inputRevisionRef.current ||
+                                  pending.value !== inputValueRef.current
+                                ) return;
+                                selectionCandidateRef.current = null;
+                                setComposerSelection(pending.selection);
+                              }, 150);
+                              return;
+                            }
+
+                            // Android can emit a collapsed range immediately after
+                            // creating its hidden selection action mode. Keep the last
+                            // selected range long enough for AfuChat's toolbar to appear.
+                            if (
+                              inputSelectionRef.current.start < inputSelectionRef.current.end &&
+                              (!chatInputFocusedRef.current ||
+                                Date.now() - lastNonEmptySelectionAtRef.current < 500)
+                            ) return;
+                            if (selectionCandidateRef.current) return;
                             if (selectionClearTimer.current) clearTimeout(selectionClearTimer.current);
-                            selectionClearTimer.current = setTimeout(() => setInputSelection(sel), 150);
+                            selectionClearTimer.current = setTimeout(() => {
+                              setComposerSelection(sel);
+                            }, 150);
                           }}
                           multiline
                           scrollEnabled={composerInputLines === 3}

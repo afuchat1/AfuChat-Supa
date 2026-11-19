@@ -141,6 +141,7 @@
         }
       ],
       "./plugins/withFlexibleMlKitScanner",
+      "./plugins/withChatTextSelection",
       "./plugins/withAppShortcuts",
       [
         "expo-media-library",
