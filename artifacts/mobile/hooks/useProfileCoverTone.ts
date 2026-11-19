@@ -154,7 +154,7 @@ async function sampleNativeImage(uri: string): Promise<ProfileCoverTone | null> 
       downloadedUri = download.uri;
     }
 
-    let crop: ImageManipulator.ActionCrop | null = null;
+    let crop: ImageManipulator.ActionCrop["crop"] | null = null;
     try {
       const { width, height } = await getImageSize(sourceUri);
       if (width > 1 && height > 1) {

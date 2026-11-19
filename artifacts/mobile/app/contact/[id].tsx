@@ -37,6 +37,8 @@ import { getPrestigeTier } from "@/lib/prestige";
 import { openExternalLink } from "@/lib/openExternalLink";
 import { ProfileCover } from "@/components/profile/ProfileCover";
 import { PROFILE_COVER_DISPLAY_HEIGHT } from "@/lib/profileCoverCrop";
+import Colors from "@/constants/colors";
+import { useProfileCoverTone } from "@/hooks/useProfileCoverTone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,6 +164,14 @@ export default function ContactScreen() {
   const [expandedLoading,   setExpandedLoading]   = useState(false);
   const [expandedFollowIds, setExpandedFollowIds] = useState<Set<string>>(new Set());
   const [expandedToggling,  setExpandedToggling]  = useState<string | null>(null);
+  const profileCoverTone = useProfileCoverTone(profile?.banner_url);
+  const profileCoverTextColor =
+    profileCoverTone === "light" ? Colors.light.text : Colors.dark.text;
+  const profileCoverTextShadow = {
+    textShadowColor: profileCoverTone === "light" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  };
 
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -430,9 +440,84 @@ export default function ContactScreen() {
     </>
   );
 
+  const renderProfileAvatar = () => (
+    <TouchableOpacity
+      onPress={() => setAvatarModalVisible(true)}
+      activeOpacity={0.88}
+      style={[
+        s.avatarShell,
+        {
+          borderColor: colors.background,
+          borderRadius: isOrg ? AVATAR_SIZE * 0.22 + 3 : AVATAR_SIZE / 2 + 3,
+        },
+      ]}
+    >
+      <Avatar
+        uri={profile.avatar_url}
+        name={profile.display_name}
+        size={AVATAR_SIZE}
+        square={isOrg}
+        premium={false}
+        userId={profile.id}
+      />
+      {ls.online && <View style={[s.onlineDot, { borderColor: colors.background }]} />}
+    </TouchableOpacity>
+  );
+
+  const renderProfileIdentity = (onCover: boolean) => {
+    const primaryColor = onCover ? profileCoverTextColor : colors.text;
+    const secondaryColor = onCover ? profileCoverTextColor : colors.textMuted;
+    const textShadow = onCover ? profileCoverTextShadow : undefined;
+
+    return (
+      <View style={s.profileIdentity}>
+        <View style={s.nameRow}>
+          {onCover ? (
+            <Text
+              style={[s.displayName, { color: primaryColor }, textShadow]}
+              numberOfLines={1}
+            >
+              {profile.display_name}
+            </Text>
+          ) : (
+            <UserName
+              userId={profile.id}
+              name={profile.display_name}
+              style={[s.displayName, { color: primaryColor }]}
+              numberOfLines={1}
+            />
+          )}
+          <VerifiedBadge
+            isVerified={profile.is_verified}
+            isOrganizationVerified={profile.is_organization_verified}
+            size={16}
+            coverTone={onCover ? profileCoverTone : undefined}
+          />
+        </View>
+        <View style={s.handleRow}>
+          <Text style={[s.handle, { color: secondaryColor }, textShadow]} numberOfLines={1}>
+            @{profile.handle}
+          </Text>
+          {ls.online && (
+            <>
+              <View style={[s.statusDot, { backgroundColor: "#34C759" }]} />
+              <Text style={[s.statusText, onCover ? textShadow : null, { color: "#34C759" }]}>Online</Text>
+            </>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
-      <StatusBar style={profile.banner_url || isDark ? "light" : "dark"} />
+      <StatusBar
+        style={
+          profile.banner_url
+            ? profileCoverTone === "light" ? "dark" : "light"
+            : isDark ? "light" : "dark"
+        }
+      />
       <ScrollView showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
@@ -441,77 +526,53 @@ export default function ContactScreen() {
           <ProfileCover
             uri={profile.banner_url}
             fadeToColor={colors.background}
+            showTopFade={profileCoverTone === "dark"}
             style={[s.coverWrap, { height: coverHeight }]}
           >
             <View style={[s.navRow, { top: topInset + 6 }]}>{profileNavControls}</View>
+            <View style={s.coverIdentityRow}>
+              {renderProfileAvatar()}
+              {renderProfileIdentity(true)}
+            </View>
           </ProfileCover>
         ) : (
           <View style={[s.noCoverNavRow, { paddingTop: topInset + 6 }]}>{profileNavControls}</View>
         )}
 
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* IDENTITY BAND                                                  */}
-        {/* Left col: avatar (overlaps banner) + name/handle below        */}
-        {/* Right col: action buttons aligned to the right                */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        <View style={s.identityBand}>
-
-          {/* ── Left: avatar + name stack ─────────────────────────────── */}
-          <View style={s.identityLeft}>
-            <TouchableOpacity
-              onPress={() => setAvatarModalVisible(true)}
-              activeOpacity={0.88}
-              style={[s.avatarShell, { borderColor: colors.background, marginTop: profile.banner_url ? -(AVATAR_SIZE / 2 + 4) : 12, borderRadius: isOrg ? AVATAR_SIZE * 0.22 + 3 : AVATAR_SIZE / 2 + 3 }]}>
-              <Avatar uri={profile.avatar_url} name={profile.display_name}
-                size={AVATAR_SIZE} square={isOrg} premium={false} userId={profile.id} />
-              {ls.online && <View style={[s.onlineDot, { borderColor: colors.background }]} />}
-            </TouchableOpacity>
-
-            {/* Keep the primary profile action beside the name, leaving the
-                badge and shortcut row below with its full available width. */}
-            <View style={s.nameActionsRow}>
-              <View style={s.nameRow}>
-                <UserName userId={profile.id} name={profile.display_name} style={[s.displayName, { color: colors.text }]} numberOfLines={1} />
-                <VerifiedBadge isVerified={profile.is_verified}
-                  isOrganizationVerified={profile.is_organization_verified} size={16} />
-              </View>
-              <View style={s.identityRight}>
-                {!isSelf && user && (
-                  <TouchableOpacity
-                    style={[s.primaryBtn, { backgroundColor: followBg, borderColor: followBrd }]}
-                    onPress={handleFollow} activeOpacity={0.85} disabled={followLoading}>
-                    {followLoading
-                      ? <ActivityIndicator size="small" color={followTxt} />
-                      : <><Ionicons name={followIcon} size={13} color={followTxt} />
-                          <Text style={[s.primaryBtnText, { color: followTxt }]}>{followLabel}</Text></>}
-                  </TouchableOpacity>
-                )}
-                {isSelf && (
-                  <TouchableOpacity
-                    style={[s.primaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
-                    onPress={() => router.push("/profile/edit")} activeOpacity={0.85}>
-                    <Ionicons name="create" size={13} color={colors.text} />
-                    <Text style={[s.primaryBtnText, { color: colors.text }]}>Edit</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+        {/* Identity remains grouped; actions sit beneath the name/avatar row. */}
+        <View style={[s.identityBand, profile.banner_url && s.identityBandWithCover]}>
+          {!profile.banner_url && (
+            <View style={s.identityTopRow}>
+              {renderProfileAvatar()}
+              {renderProfileIdentity(false)}
             </View>
+          )}
 
+          <View style={s.profileActionRow}>
             <RoyaltyBadge userId={profile.id} />
-
-            {/* Handle + online status (only show dot+label when actively online) */}
-            <View style={s.handleRow}>
-              <Text style={[s.handle, { color: colors.textMuted }]}>@{profile.handle}</Text>
-              {ls.online && (
-                <>
-                  <View style={[s.statusDot, { backgroundColor: "#34C759" }]} />
-                  <Text style={[s.statusText, { color: "#34C759" }]}>Online</Text>
-                </>
+            <View style={s.identityRight}>
+              {!isSelf && user && (
+                <TouchableOpacity
+                  style={[s.primaryBtn, { backgroundColor: followBg, borderColor: followBrd }]}
+                  onPress={handleFollow} activeOpacity={0.85} disabled={followLoading}>
+                  {followLoading
+                    ? <ActivityIndicator size="small" color={followTxt} />
+                    : <><Ionicons name={followIcon} size={13} color={followTxt} />
+                        <Text style={[s.primaryBtnText, { color: followTxt }]}>{followLabel}</Text></>}
+                </TouchableOpacity>
+              )}
+              {isSelf && (
+                <TouchableOpacity
+                  style={[s.primaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
+                  onPress={() => router.push("/profile/edit")} activeOpacity={0.85}>
+                  <Ionicons name="create" size={13} color={colors.text} />
+                  <Text style={[s.primaryBtnText, { color: colors.text }]}>Edit</Text>
+                </TouchableOpacity>
               )}
             </View>
+          </View>
 
-            {/* Prestige pill + inline action icons */}
-            <View style={s.pillActionRow}>
+          <View style={s.pillActionRow}>
               <View style={[s.prestigePill, { backgroundColor: prestige.color + "1A", borderColor: prestige.color + "44" }]}>
                 <Text style={s.prestigeEmoji}>{prestige.emoji}</Text>
                 <Text numberOfLines={1} style={[s.prestigeText, { color: prestige.color }]}>{prestige.label}</Text>
@@ -567,9 +628,7 @@ export default function ContactScreen() {
                   </TouchableOpacity>
                 </>
               )}
-            </View>
           </View>
-
         </View>
 
         {/* ══════════════════════════════════════════════════════════════ */}
@@ -992,7 +1051,7 @@ const s = StyleSheet.create({
   root: { flex: 1 },
 
   // Cover photo (short + rectangular)
-  coverWrap: { width: "100%", overflow: "hidden" },
+  coverWrap: { width: "100%", overflow: "visible", zIndex: 2, elevation: 2 },
   // Floating back button inside cover
   navRow: {
     position: "absolute", left: 12, right: 12,
@@ -1012,18 +1071,39 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
   },
 
-  // Identity band — full-width identity and shortcut rows
-  // NOTE: no marginTop here — only the avatarShell gets the negative margin
+  // Identity and actions follow the same hierarchy with or without a cover.
   identityBand: {
     flexDirection: "column",
     alignItems: "stretch",
     paddingHorizontal: 14,
     paddingBottom: 12,
+    gap: 8,
   },
-  identityLeft: {
-    width: "100%",
-    minWidth: 0,
-    gap: 4,
+  identityBandWithCover: { paddingTop: AVATAR_SIZE / 2 + 12 },
+  identityTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: AVATAR_SIZE + 6,
+  },
+  coverIdentityRow: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: -(AVATAR_SIZE / 2 + 4),
+    zIndex: 3,
+    elevation: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  profileIdentity: { flex: 1, minWidth: 0, justifyContent: "center", gap: 4 },
+  profileActionRow: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
   identityRight: {
     alignItems: "flex-end",
@@ -1044,18 +1124,10 @@ const s = StyleSheet.create({
     backgroundColor: "#34C759", borderWidth: 2,
   },
   nameRow: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    marginTop: 2,
     minWidth: 0,
-  },
-  nameActionsRow: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
   },
   displayName: { fontSize: 17, fontFamily: "Inter_700Bold", letterSpacing: -0.2, flexShrink: 1, minWidth: 0, textAlign: "left" },
   prestigePill: {

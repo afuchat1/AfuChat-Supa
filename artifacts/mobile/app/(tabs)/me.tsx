@@ -436,61 +436,60 @@ export default function MeScreen() {
     </TouchableOpacity>
   );
 
-  const renderProfileIdentity = (onCover: boolean) => (
-    <View style={onCover ? s.coverIdentity : { flex: 1, gap: 3 }}>
-      {(() => {
-        const identityColor = onCover ? profileCoverForeground : colors.text;
-        const secondaryColor = onCover ? profileCoverForeground : colors.textMuted;
-        const textShadow = onCover
-          ? {
-              textShadowColor: profileCoverTone === "light" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)",
-              textShadowOffset: { width: 0, height: 1 },
-              textShadowRadius: 2,
-            }
-          : undefined;
-        return (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-        <Text
-          style={[
-            s.heroName,
-            { color: onCover ? identityColor : equippedGoods.has("sg4") ? Colors.gold : identityColor },
-            textShadow,
-          ]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {profile?.display_name || t("common.user")}
-        </Text>
-        <VerifiedBadge
-          isVerified={isVerifiedCreator || !!profile?.is_verified}
-          isOrganizationVerified={profile?.is_organization_verified}
-          size={17}
-          coverTone={onCover ? profileCoverTone : undefined}
-        />
-      </View>
+  const renderProfileIdentity = (onCover: boolean) => {
+    const identityColor = onCover ? profileCoverForeground : colors.text;
+    const secondaryColor = onCover ? profileCoverForeground : colors.textMuted;
+    const textShadow = onCover
+      ? {
+          textShadowColor: profileCoverTone === "light" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)",
+          textShadowOffset: { width: 0, height: 1 },
+          textShadowRadius: 2,
+        }
+      : undefined;
 
-      <TouchableOpacity
-        onPress={() => profile?.handle && showHandlePurchase(profile.handle)}
-        activeOpacity={0.7}
-        style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-      >
-        {purchaseLoading && <ActivityIndicator size="small" color={secondaryColor} style={{ marginRight: 4 }} />}
-        <Text style={[s.heroHandle, { color: secondaryColor }, textShadow]}>
-          @{profile?.handle || t("common.handle")}
-        </Text>
-        <Ionicons name="information-circle" size={13} color={secondaryColor} style={{ opacity: 0.8 }} />
-      </TouchableOpacity>
-
-      {profile?.is_organization_verified && (
-        <View style={[s.businessChip, { backgroundColor: (onCover ? identityColor : Colors.gold) + "20" }]}>
-          <Ionicons name="briefcase" size={10} color={onCover ? identityColor : Colors.gold} />
-          <Text style={[s.businessChipText, { color: onCover ? identityColor : Colors.gold }]}>{t("common.business")}</Text>
+    return (
+      <View style={onCover ? s.coverIdentity : { flex: 1, gap: 3 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+          <Text
+            style={[
+              s.heroName,
+              { color: onCover ? identityColor : equippedGoods.has("sg4") ? Colors.gold : identityColor },
+              textShadow,
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {profile?.display_name || t("common.user")}
+          </Text>
+          <VerifiedBadge
+            isVerified={isVerifiedCreator || !!profile?.is_verified}
+            isOrganizationVerified={profile?.is_organization_verified}
+            size={17}
+            coverTone={onCover ? profileCoverTone : undefined}
+          />
         </View>
-      )}
-        );
-      })()}
-    </View>
-  );
+
+        <TouchableOpacity
+          onPress={() => profile?.handle && showHandlePurchase(profile.handle)}
+          activeOpacity={0.7}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+        >
+          {purchaseLoading && <ActivityIndicator size="small" color={secondaryColor} style={{ marginRight: 4 }} />}
+          <Text style={[s.heroHandle, { color: secondaryColor }, textShadow]}>
+            @{profile?.handle || t("common.handle")}
+          </Text>
+          <Ionicons name="information-circle" size={13} color={secondaryColor} style={{ opacity: 0.8 }} />
+        </TouchableOpacity>
+
+        {profile?.is_organization_verified && (
+          <View style={[s.businessChip, { backgroundColor: (onCover ? identityColor : Colors.gold) + "20" }]}>
+            <Ionicons name="briefcase" size={10} color={onCover ? identityColor : Colors.gold} />
+            <Text style={[s.businessChipText, { color: onCover ? identityColor : Colors.gold }]}>{t("common.business")}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
