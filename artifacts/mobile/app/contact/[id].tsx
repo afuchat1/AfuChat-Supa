@@ -165,13 +165,6 @@ export default function ContactScreen() {
   const [expandedFollowIds, setExpandedFollowIds] = useState<Set<string>>(new Set());
   const [expandedToggling,  setExpandedToggling]  = useState<string | null>(null);
   const profileCoverTone = useProfileCoverTone(profile?.banner_url);
-  const profileCoverTextColor =
-    profileCoverTone === "light" ? Colors.light.text : Colors.dark.text;
-  const profileCoverTextShadow = {
-    textShadowColor: profileCoverTone === "light" ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  };
 
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -465,9 +458,8 @@ export default function ContactScreen() {
   );
 
   const renderProfileIdentity = (onCover: boolean) => {
-    const primaryColor = onCover ? profileCoverTextColor : colors.text;
-    const secondaryColor = onCover ? profileCoverTextColor : colors.textMuted;
-    const textShadow = onCover ? profileCoverTextShadow : undefined;
+    const primaryColor = colors.text;
+    const secondaryColor = colors.textMuted;
     const inlineFollowText = isFollowFilled ? "#fff" : onCover ? primaryColor : followTxt;
     const inlineFollowBackground = isFollowFilled
       ? followBg
@@ -478,28 +470,30 @@ export default function ContactScreen() {
 
     return (
       <View style={s.profileIdentity}>
-        <View style={s.nameRow}>
-          {onCover ? (
-            <Text
-              style={[s.displayName, { color: primaryColor }, textShadow]}
-              numberOfLines={1}
-            >
-              {profile.display_name}
-            </Text>
-          ) : (
-            <UserName
-              userId={profile.id}
-              name={profile.display_name}
-              style={[s.displayName, { color: primaryColor }]}
-              numberOfLines={1}
+        <View style={s.nameLine}>
+          <View style={s.nameRow}>
+            {onCover ? (
+              <Text
+                style={[s.displayName, { color: primaryColor }]}
+                numberOfLines={1}
+              >
+                {profile.display_name}
+              </Text>
+            ) : (
+              <UserName
+                userId={profile.id}
+                name={profile.display_name}
+                style={[s.displayName, { color: primaryColor }]}
+                numberOfLines={1}
+              />
+            )}
+            <VerifiedBadge
+              isVerified={profile.is_verified}
+              isOrganizationVerified={profile.is_organization_verified}
+              size={16}
+              coverTone={onCover ? profileCoverTone : undefined}
             />
-          )}
-          <VerifiedBadge
-            isVerified={profile.is_verified}
-            isOrganizationVerified={profile.is_organization_verified}
-            size={16}
-            coverTone={onCover ? profileCoverTone : undefined}
-          />
+          </View>
           {!isSelf && user && (
             <TouchableOpacity
               style={[
@@ -526,13 +520,13 @@ export default function ContactScreen() {
           )}
         </View>
         <View style={s.handleRow}>
-          <Text style={[s.handle, { color: secondaryColor }, textShadow]} numberOfLines={1}>
+          <Text style={[s.handle, { color: secondaryColor }]} numberOfLines={1}>
             @{profile.handle}
           </Text>
           {ls.online && (
             <>
               <View style={[s.statusDot, { backgroundColor: "#34C759" }]} />
-              <Text style={[s.statusText, onCover ? textShadow : null, { color: "#34C759" }]}>Online</Text>
+              <Text style={[s.statusText, { color: "#34C759" }]}>Online</Text>
             </>
           )}
         </View>
@@ -1119,6 +1113,13 @@ const s = StyleSheet.create({
     gap: 12,
   },
   profileIdentity: { flex: 1, minWidth: 0, justifyContent: "center", gap: 4 },
+  nameLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    minWidth: 0,
+  },
   profileActionRow: {
     minHeight: 40,
     flexDirection: "row",
@@ -1145,6 +1146,7 @@ const s = StyleSheet.create({
     backgroundColor: "#34C759", borderWidth: 2,
   },
   nameRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
