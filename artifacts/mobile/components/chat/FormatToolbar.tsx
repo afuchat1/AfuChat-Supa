@@ -12,43 +12,37 @@
  *   onFormat  — called with the new string after applying a format
  *   onClose   — called when the toolbar should hide (selection cleared)
  */
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Platform,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 
+type TextRange = { start: number; end: number };
+
 type Props = {
   visible: boolean;
-  selection: { start: number; end: number };
+  selection: TextRange;
   value: string;
-  onFormat: (newText: string) => void;
-  onClose: () => void;
+  onFormat: (newText: string, nextSelection: TextRange) => void;
+  onKeepSelection: () => void;
 };
-
-type Level = "actions" | "format";
 
 export default function FormatToolbar({
   visible,
   selection,
   value,
   onFormat,
-  onClose,
+  onKeepSelection,
 }: Props) {
   const { colors } = useTheme();
   const { accent } = useAppAccent();
-  const [level, setLevel] = useState<Level>("actions");
-
-  useEffect(() => {
-    if (!visible) setLevel("actions");
-  }, [visible]);
 
   if (!visible || selection.start >= selection.end) return null;
 
@@ -58,8 +52,11 @@ export default function FormatToolbar({
   const after = value.slice(end);
 
   function wrap(open: string, close: string) {
-    onFormat(before + open + selected + close + after);
-    onClose();
+    const selectedStart = start + open.length;
+    onFormat(before + open + selected + close + after, {
+      start: selectedStart,
+      end: selectedStart + selected.length,
+    });
   }
 
   const btnStyle = [
@@ -72,6 +69,7 @@ export default function FormatToolbar({
 
   return (
     <View
+      onTouchStart={onKeepSelection}
       style={[
         s.container,
         {
@@ -80,24 +78,23 @@ export default function FormatToolbar({
         },
       ]}
     >
-      {level === "actions" ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          keyboardShouldPersistTaps="always"
-          directionalLockEnabled
-          nestedScrollEnabled
-        >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.row}
+        keyboardShouldPersistTaps="always"
+        directionalLockEnabled
+        nestedScrollEnabled
+      >
           <TouchableOpacity
             style={btnStyle}
             accessibilityRole="button"
             accessibilityLabel="Cut selected text"
             testID="chat-format-cut"
+            onPressIn={onKeepSelection}
             onPress={async () => {
               await Clipboard.setStringAsync(selected);
-              onFormat(before + after);
-              onClose();
+              onFormat(before + after, { start, end: start });
             }}
             activeOpacity={0.7}
           >
@@ -109,9 +106,9 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Copy selected text"
             testID="chat-format-copy"
+            onPressIn={onKeepSelection}
             onPress={async () => {
               await Clipboard.setStringAsync(selected);
-              onClose();
             }}
             activeOpacity={0.7}
           >
@@ -123,11 +120,14 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Paste text"
             testID="chat-format-paste"
+            onPressIn={onKeepSelection}
             onPress={async () => {
               const pasted = await Clipboard.getStringAsync();
               if (!pasted) return;
-              onFormat(before + pasted + after);
-              onClose();
+              onFormat(before + pasted + after, {
+                start,
+                end: start + pasted.length,
+              });
             }}
             activeOpacity={0.7}
           >
@@ -139,46 +139,32 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Quote selected text"
             testID="chat-format-quote"
+            onPressIn={onKeepSelection}
             onPress={() => {
               const lines = selected
                 .split("\n")
                 .map((line) => `> ${line}`)
                 .join("\n");
-              onFormat(before + lines + after);
-              onClose();
+              onFormat(before + lines + after, {
+                start,
+                end: start + lines.length,
+              });
             }}
             activeOpacity={0.7}
           >
             <Text style={[s.label, { color: colors.text as string }]}>Quote</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[btnStyle, s.moreBtn, { borderColor: accent + "60", backgroundColor: accent + "15" }]}
-            accessibilityRole="button"
-            accessibilityLabel="More text formatting"
-            testID="chat-format-more"
-            onPress={() => setLevel("format")}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.label, { color: accent, fontFamily: "Inter_700Bold" }]}>
-              ⋮
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.row}
-          keyboardShouldPersistTaps="always"
-          directionalLockEnabled
-          nestedScrollEnabled
-        >
+          <View
+            accessibilityElementsHidden
+            style={[s.divider, { backgroundColor: colors.border as string }]}
+          />
           <TouchableOpacity
             style={btnStyle}
             accessibilityRole="button"
             accessibilityLabel="Bold"
             testID="chat-format-bold"
+            onPressIn={onKeepSelection}
             onPress={() => wrap("**", "**")}
             activeOpacity={0.7}
           >
@@ -190,6 +176,7 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Italic"
             testID="chat-format-italic"
+            onPressIn={onKeepSelection}
             onPress={() => wrap("_", "_")}
             activeOpacity={0.7}
           >
@@ -201,10 +188,11 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Monospace"
             testID="chat-format-monospace"
+            onPressIn={onKeepSelection}
             onPress={() => wrap("`", "`")}
             activeOpacity={0.7}
           >
-            <Text style={[s.label, { color: accent, fontFamily: Platform.select({ web: "monospace", default: "Inter_400Regular" }) }]}>Mono</Text>
+            <Text style={[s.label, { color: accent, fontFamily: "Inter_600SemiBold" }]}>Mono</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -212,6 +200,7 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Strikethrough"
             testID="chat-format-strike"
+            onPressIn={onKeepSelection}
             onPress={() => wrap("~~", "~~")}
             activeOpacity={0.7}
           >
@@ -223,6 +212,7 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Spoiler"
             testID="chat-format-spoiler"
+            onPressIn={onKeepSelection}
             onPress={() => wrap("||", "||")}
             activeOpacity={0.7}
           >
@@ -234,6 +224,7 @@ export default function FormatToolbar({
             accessibilityRole="button"
             accessibilityLabel="Underline"
             testID="chat-format-underline"
+            onPressIn={onKeepSelection}
             onPress={() => wrap("__", "__")}
             activeOpacity={0.7}
           >
@@ -242,20 +233,7 @@ export default function FormatToolbar({
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[btnStyle, s.moreBtn, { borderColor: accent + "60", backgroundColor: accent + "15" }]}
-            accessibilityRole="button"
-            accessibilityLabel="Back to text actions"
-            testID="chat-format-back"
-            onPress={() => setLevel("actions")}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.label, { color: accent, fontFamily: "Inter_600SemiBold" }]}>
-              ←
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      )}
+      </ScrollView>
     </View>
   );
 }
@@ -265,33 +243,35 @@ const s = StyleSheet.create({
     alignSelf: "stretch",
     maxWidth: "100%",
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingVertical: 2,
+    borderRadius: 16,
+    paddingVertical: 5,
     marginHorizontal: 8,
-    marginBottom: 4,
+    marginBottom: 6,
     overflow: "hidden",
   },
   row: {
     flexDirection: "row",
-    paddingHorizontal: 3,
-    gap: 2,
+    paddingHorizontal: 6,
+    gap: 7,
     alignItems: "center",
   },
   btn: {
-    minHeight: 29,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 8,
+    minHeight: 46,
+    minWidth: 54,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
   },
-  moreBtn: {
-    minWidth: 28,
-    paddingHorizontal: 5,
+  divider: {
+    width: StyleSheet.hairlineWidth,
+    height: 26,
+    marginHorizontal: 2,
   },
   label: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
   },
 });

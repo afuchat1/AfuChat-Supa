@@ -3508,9 +3508,15 @@ function ChatScreen() {
   } | null>(null);
   const inputRevisionRef = useRef(0);
   const lastNonEmptySelectionAtRef = useRef(0);
+  const selectionActionHoldUntilRef = useRef(0);
   const setComposerSelection = (selection: { start: number; end: number }) => {
     inputSelectionRef.current = selection;
     setInputSelection(selection);
+  };
+  const keepComposerSelectionForToolbar = () => {
+    const now = Date.now();
+    lastNonEmptySelectionAtRef.current = now;
+    selectionActionHoldUntilRef.current = now + 1200;
   };
   const clearComposerSelection = () => {
     if (selectionClearTimer.current) clearTimeout(selectionClearTimer.current);
@@ -9676,14 +9682,19 @@ STRICT RULES:
                 visible={inputSelection.start < inputSelection.end && input.length > 0}
                 selection={inputSelection}
                 value={input}
-                onFormat={(newText) => {
+                onFormat={(newText, nextSelection) => {
                   inputRevisionRef.current += 1;
                   inputValueRef.current = newText;
                   setInput(newText);
                   saveDraft(newText);
-                  clearComposerSelection();
+                  if (nextSelection.start < nextSelection.end) {
+                    keepComposerSelectionForToolbar();
+                    setComposerSelection(nextSelection);
+                  } else {
+                    clearComposerSelection();
+                  }
                 }}
-                onClose={clearComposerSelection}
+                onKeepSelection={keepComposerSelectionForToolbar}
               />
               {/* One shared glass bar contains the message field and its primary action. */}
               <View style={st.inputComposerWrap}>
@@ -9804,6 +9815,11 @@ STRICT RULES:
                           placeholder="Message"
                           placeholderTextColor={colors.textMuted}
                           value={input}
+                          selection={
+                            inputSelection.start < inputSelection.end
+                              ? inputSelection
+                              : undefined
+                          }
                           onChangeText={(t) => {
                             if (t !== inputValueRef.current) {
                               inputValueRef.current = t;
@@ -9866,6 +9882,9 @@ STRICT RULES:
                           onBlur={() => {
                             chatInputFocusedRef.current = false;
                             setChatInputFocused(false);
+                            if (selectionActionHoldUntilRef.current <= Date.now()) {
+                              clearComposerSelection();
+                            }
                           }}
                           onSelectionChange={(e) => {
                             const sel = e.nativeEvent.selection;
@@ -9899,7 +9918,7 @@ STRICT RULES:
                             // selected range long enough for AfuChat's toolbar to appear.
                             if (
                               inputSelectionRef.current.start < inputSelectionRef.current.end &&
-                              (!chatInputFocusedRef.current ||
+                              (selectionActionHoldUntilRef.current > Date.now() ||
                                 Date.now() - lastNonEmptySelectionAtRef.current < 500)
                             ) return;
                             if (selectionCandidateRef.current) return;
