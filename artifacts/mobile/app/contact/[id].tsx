@@ -468,6 +468,13 @@ export default function ContactScreen() {
     const primaryColor = onCover ? profileCoverTextColor : colors.text;
     const secondaryColor = onCover ? profileCoverTextColor : colors.textMuted;
     const textShadow = onCover ? profileCoverTextShadow : undefined;
+    const inlineFollowText = isFollowFilled ? "#fff" : onCover ? primaryColor : followTxt;
+    const inlineFollowBackground = isFollowFilled
+      ? followBg
+      : onCover ? `${primaryColor}18` : followBg;
+    const inlineFollowBorder = isFollowFilled
+      ? followBrd
+      : onCover ? `${primaryColor}66` : followBrd;
 
     return (
       <View style={s.profileIdentity}>
@@ -493,6 +500,30 @@ export default function ContactScreen() {
             size={16}
             coverTone={onCover ? profileCoverTone : undefined}
           />
+          {!isSelf && user && (
+            <TouchableOpacity
+              style={[
+                s.primaryBtn,
+                s.inlineFollowButton,
+                {
+                  backgroundColor: inlineFollowBackground,
+                  borderColor: inlineFollowBorder,
+                },
+              ]}
+              onPress={handleFollow}
+              activeOpacity={0.85}
+              disabled={followLoading}
+            >
+              {followLoading ? (
+                <ActivityIndicator size="small" color={inlineFollowText} />
+              ) : (
+                <>
+                  <Ionicons name={followIcon} size={13} color={inlineFollowText} />
+                  <Text style={[s.primaryBtnText, { color: inlineFollowText }]}>{followLabel}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
         <View style={s.handleRow}>
           <Text style={[s.handle, { color: secondaryColor }, textShadow]} numberOfLines={1}>
@@ -551,16 +582,6 @@ export default function ContactScreen() {
           <View style={s.profileActionRow}>
             <RoyaltyBadge userId={profile.id} />
             <View style={s.identityRight}>
-              {!isSelf && user && (
-                <TouchableOpacity
-                  style={[s.primaryBtn, { backgroundColor: followBg, borderColor: followBrd }]}
-                  onPress={handleFollow} activeOpacity={0.85} disabled={followLoading}>
-                  {followLoading
-                    ? <ActivityIndicator size="small" color={followTxt} />
-                    : <><Ionicons name={followIcon} size={13} color={followTxt} />
-                        <Text style={[s.primaryBtnText, { color: followTxt }]}>{followLabel}</Text></>}
-                </TouchableOpacity>
-              )}
               {isSelf && (
                 <TouchableOpacity
                   style={[s.primaryBtn, { backgroundColor: "transparent", borderColor: colors.border }]}
@@ -1143,6 +1164,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 7,
     borderRadius: 20, borderWidth: 1.5,
   },
+  inlineFollowButton: { paddingHorizontal: 9, paddingVertical: 6, flexShrink: 0 },
   primaryBtnText: { fontSize: 12.5, fontFamily: "Inter_600SemiBold" },
 
   handleRow: {
