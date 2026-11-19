@@ -213,6 +213,7 @@ export default function MeScreen() {
   const [localProfile, setLocalProfile] = useState<any>(null);
   const profile = authProfile ?? cachedProfile ?? localProfile;
   const profileCoverTone = useProfileCoverTone(profile?.banner_url);
+  const profileStatusTone = useProfileCoverTone(profile?.banner_url, "status");
   const profileCoverForeground =
     profileCoverTone === "light" ? Colors.light.text : Colors.dark.text;
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -489,7 +490,7 @@ export default function MeScreen() {
       <StatusBar
         style={
           profile?.banner_url
-            ? profileCoverTone === "light" ? "dark" : "light"
+            ? profileStatusTone === "light" ? "dark" : "light"
             : isDark ? "light" : "dark"
         }
       />
@@ -511,7 +512,7 @@ export default function MeScreen() {
             <ProfileCover
               uri={profile.banner_url}
               fadeToColor={colors.cardSurface}
-              showTopFade={profileCoverTone === "dark"}
+              showTopFade={profileStatusTone === "dark"}
               style={[s.heroCover, { height: profileCoverHeight }]}
             >
               <TouchableOpacity

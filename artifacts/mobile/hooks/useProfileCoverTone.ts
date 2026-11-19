@@ -4,8 +4,10 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
 
 export type ProfileCoverTone = "light" | "dark";
+export type ProfileCoverRegion = "identity" | "status";
 
 const SAMPLE_SIZE = 24;
+const STATUS_SAMPLE_HEIGHT = 0.14;
 const LIGHT_BACKGROUND_THRESHOLD = 0.179;
 const toneCache = new Map<string, ProfileCoverTone>();
 const pendingSamples = new Map<string, Promise<ProfileCoverTone>>();
@@ -51,6 +53,32 @@ export function classifyProfileCoverPixels(rgba: ArrayLike<number>): ProfileCove
   return totalLuminance / totalAlpha >= LIGHT_BACKGROUND_THRESHOLD ? "light" : "dark";
 }
 
+function classifyProfileCoverSample(
+  rgba: ArrayLike<number>,
+  width: number,
+  height: number,
+  region: ProfileCoverRegion,
+): ProfileCoverTone | null {
+  if (region === "identity") return classifyProfileCoverPixels(rgba);
+
+  // Status icons are placed at the left and right edges, not over the center
+  // of the image where a bright logo can distort the contrast decision.
+  const statusPixels: number[] = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (x >= width * 0.25 && x < width * 0.68) continue;
+      const index = (y * width + x) * 4;
+      statusPixels.push(
+        rgba[index],
+        rgba[index + 1],
+        rgba[index + 2],
+        rgba[index + 3],
+      );
+    }
+  }
+  return classifyProfileCoverPixels(statusPixels);
+}
+
 function decodeBase64(base64: string): Uint8Array {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const bytes = new Uint8Array(Math.floor((base64.length * 3) / 4));
@@ -75,7 +103,10 @@ function decodeBase64(base64: string): Uint8Array {
   return bytes.subarray(0, outputIndex);
 }
 
-function sampleBrowserImage(uri: string): Promise<ProfileCoverTone | null> {
+function sampleBrowserImage(
+  uri: string,
+  region: ProfileCoverRegion,
+): Promise<ProfileCoverTone | null> {
   const browser = globalThis as any;
   if (!browser.Image || !browser.document?.createElement) return Promise.resolve(null);
 
@@ -93,21 +124,37 @@ function sampleBrowserImage(uri: string): Promise<ProfileCoverTone | null> {
           return;
         }
 
-        // The profile name sits in the lower-right area of the cover.
-        const sourceX = image.naturalWidth * 0.28;
-        const sourceY = image.naturalHeight * 0.52;
+        // Identity text sits near the cover's lower-right area. Status icons
+        // sit over the top strip across the full width of the cover.
+        const sourceX = region === "status" ? 0 : image.naturalWidth * 0.28;
+        const sourceY = region === "status" ? 0 : image.naturalHeight * 0.52;
+        const sourceWidth =
+          region === "status"
+            ? image.naturalWidth
+            : Math.max(1, image.naturalWidth - sourceX);
+        const sourceHeight =
+          region === "status"
+            ? Math.max(1, image.naturalHeight * STATUS_SAMPLE_HEIGHT)
+            : Math.max(1, image.naturalHeight - sourceY);
         context.drawImage(
           image,
           sourceX,
           sourceY,
-          Math.max(1, image.naturalWidth - sourceX),
-          Math.max(1, image.naturalHeight - sourceY),
+          sourceWidth,
+          sourceHeight,
           0,
           0,
           SAMPLE_SIZE,
           SAMPLE_SIZE,
         );
-        resolve(classifyProfileCoverPixels(context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data));
+        resolve(
+          classifyProfileCoverSample(
+            context.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE).data,
+            SAMPLE_SIZE,
+            SAMPLE_SIZE,
+            region,
+          ),
+        );
       } catch {
         // Cross-origin images without CORS headers cannot be sampled in canvas.
         resolve(null);
@@ -132,7 +179,10 @@ function hashUri(uri: string) {
   return (hash >>> 0).toString(16);
 }
 
-async function sampleNativeImage(uri: string): Promise<ProfileCoverTone | null> {
+async function sampleNativeImage(
+  uri: string,
+  region: ProfileCoverRegion,
+): Promise<ProfileCoverTone | null> {
   let sourceUri = uri;
   let downloadedUri: string | null = null;
   let sampledUri: string | null = null;
@@ -158,13 +208,17 @@ async function sampleNativeImage(uri: string): Promise<ProfileCoverTone | null> 
     try {
       const { width, height } = await getImageSize(sourceUri);
       if (width > 1 && height > 1) {
-        const originX = Math.floor(width * 0.28);
-        const originY = Math.floor(height * 0.52);
+        const originX = region === "status" ? 0 : Math.floor(width * 0.28);
+        const originY =
+          region === "status" ? 0 : Math.floor(height * 0.52);
         crop = {
           originX,
           originY,
           width: Math.max(1, width - originX),
-          height: Math.max(1, height - originY),
+          height:
+            region === "status"
+              ? Math.max(1, Math.floor(height * STATUS_SAMPLE_HEIGHT))
+              : Math.max(1, height - originY),
         };
       }
     } catch {
@@ -184,7 +238,12 @@ async function sampleNativeImage(uri: string): Promise<ProfileCoverTone | null> 
     if (!result.base64) return null;
 
     const decoded = jpeg.decode(decodeBase64(result.base64), { useTArray: true });
-    return classifyProfileCoverPixels(decoded.data);
+    return classifyProfileCoverSample(
+      decoded.data,
+      decoded.width,
+      decoded.height,
+      region,
+    );
   } catch {
     return null;
   } finally {
@@ -197,18 +256,22 @@ async function sampleNativeImage(uri: string): Promise<ProfileCoverTone | null> 
   }
 }
 
-export function getProfileCoverTone(uri: string): Promise<ProfileCoverTone> {
-  const cached = toneCache.get(uri);
+export function getProfileCoverTone(
+  uri: string,
+  region: ProfileCoverRegion = "identity",
+): Promise<ProfileCoverTone> {
+  const cacheKey = `${region}:${uri}`;
+  const cached = toneCache.get(cacheKey);
   if (cached) return Promise.resolve(cached);
 
-  const pending = pendingSamples.get(uri);
+  const pending = pendingSamples.get(cacheKey);
   if (pending) return pending;
 
   const request = (async () => {
     const tone =
       Platform.OS === "web"
-        ? await sampleBrowserImage(uri)
-        : await sampleNativeImage(uri);
+        ? await sampleBrowserImage(uri, region)
+        : await sampleNativeImage(uri, region);
     const resolvedTone = tone ?? "dark";
 
     if (tone) {
@@ -216,39 +279,45 @@ export function getProfileCoverTone(uri: string): Promise<ProfileCoverTone> {
         const oldestUri = toneCache.keys().next().value;
         if (oldestUri) toneCache.delete(oldestUri);
       }
-      toneCache.set(uri, tone);
+      toneCache.set(cacheKey, tone);
     }
 
     return resolvedTone;
   })().finally(() => {
-    pendingSamples.delete(uri);
+    pendingSamples.delete(cacheKey);
   });
 
-  pendingSamples.set(uri, request);
+  pendingSamples.set(cacheKey, request);
   return request;
 }
 
-export function useProfileCoverTone(uri?: string | null): ProfileCoverTone {
-  const [result, setResult] = useState<{ uri: string | null; tone: ProfileCoverTone }>({
-    uri: null,
-    tone: "dark",
-  });
+export function useProfileCoverTone(
+  uri?: string | null,
+  region: ProfileCoverRegion = "identity",
+): ProfileCoverTone {
+  const [result, setResult] = useState<{
+    uri: string | null;
+    region: ProfileCoverRegion;
+    tone: ProfileCoverTone;
+  }>({ uri: null, region, tone: "dark" });
 
   useEffect(() => {
     if (!uri) {
-      setResult({ uri: null, tone: "dark" });
+      setResult({ uri: null, region, tone: "dark" });
       return;
     }
 
     let active = true;
-    void getProfileCoverTone(uri).then((tone) => {
-      if (active) setResult({ uri, tone });
+    void getProfileCoverTone(uri, region).then((tone) => {
+      if (active) setResult({ uri, region, tone });
     });
 
     return () => {
       active = false;
     };
-  }, [uri]);
+  }, [uri, region]);
 
-  return result.uri === (uri ?? null) ? result.tone : "dark";
+  return result.uri === (uri ?? null) && result.region === region
+    ? result.tone
+    : "dark";
 }

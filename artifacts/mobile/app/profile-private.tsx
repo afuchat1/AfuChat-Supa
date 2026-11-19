@@ -29,6 +29,7 @@ import { useAuth } from "@/context/AuthContext";
 import Colors from "@/constants/colors";
 import { supabase } from "@/lib/supabase";
 import { PROFILE_COVER_DISPLAY_HEIGHT } from "@/lib/profileCoverCrop";
+import { useProfileCoverTone } from "@/hooks/useProfileCoverTone";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,7 @@ export function ProfilePrivateView({
 }: PrivateViewProps) {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
+  const profileStatusTone = useProfileCoverTone(bannerUrl, "status");
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === "web" ? Math.max(insets.top, 67) : insets.top;
   const [followed, setFollowed] = useState(false);
@@ -113,11 +115,18 @@ export function ProfilePrivateView({
 
   return (
     <View style={[styles.page, { backgroundColor: colors.background }]}>
-      <StatusBar style={bannerUrl || isDark ? "light" : "dark"} />
+      <StatusBar
+        style={
+          bannerUrl
+            ? profileStatusTone === "light" ? "dark" : "light"
+            : isDark ? "light" : "dark"
+        }
+      />
       {bannerUrl ? (
         <ProfileCover
           uri={bannerUrl}
           fadeToColor={colors.background}
+          showTopFade={profileStatusTone === "dark"}
           style={[styles.cover, { height: coverHeight }]}
         >
           <GlassBackButton

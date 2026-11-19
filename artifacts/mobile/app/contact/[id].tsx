@@ -165,6 +165,7 @@ export default function ContactScreen() {
   const [expandedFollowIds, setExpandedFollowIds] = useState<Set<string>>(new Set());
   const [expandedToggling,  setExpandedToggling]  = useState<string | null>(null);
   const profileCoverTone = useProfileCoverTone(profile?.banner_url);
+  const profileStatusTone = useProfileCoverTone(profile?.banner_url, "status");
 
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -539,7 +540,7 @@ export default function ContactScreen() {
       <StatusBar
         style={
           profile.banner_url
-            ? profileCoverTone === "light" ? "dark" : "light"
+            ? profileStatusTone === "light" ? "dark" : "light"
             : isDark ? "light" : "dark"
         }
       />
@@ -551,7 +552,7 @@ export default function ContactScreen() {
           <ProfileCover
             uri={profile.banner_url}
             fadeToColor={colors.background}
-            showTopFade={profileCoverTone === "dark"}
+            showTopFade={profileStatusTone === "dark"}
             style={[s.coverWrap, { height: coverHeight }]}
           >
             <View style={[s.navRow, { top: topInset + 6 }]}>{profileNavControls}</View>
@@ -571,6 +572,12 @@ export default function ContactScreen() {
               {renderProfileAvatar()}
               {renderProfileIdentity(false)}
             </View>
+          )}
+
+          {!!profile.bio && (
+            <Text style={[s.bio, { color: colors.text }]} numberOfLines={6}>
+              {profile.bio}
+            </Text>
           )}
 
           <View style={s.profileActionRow}>
@@ -812,13 +819,6 @@ export default function ContactScreen() {
               </View>
             )}
           </View>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {/* BIO                                                            */}
-        {/* ══════════════════════════════════════════════════════════════ */}
-        {!!profile.bio && (
-          <Text style={[s.bio, { color: colors.text }]} numberOfLines={6}>{profile.bio}</Text>
         )}
 
         {/* ══════════════════════════════════════════════════════════════ */}
@@ -1296,8 +1296,8 @@ const s = StyleSheet.create({
 
   // Bio + meta
   bio: {
-    fontSize: 14, fontFamily: "Inter_400Regular",
-    lineHeight: 21, marginHorizontal: 16, marginBottom: 8,
+    fontSize: 13, fontFamily: "Inter_400Regular",
+    lineHeight: 19, paddingHorizontal: 6, paddingTop: 8, paddingBottom: 14,
     minWidth: 0, textAlign: "left",
   },
   metaStrip: {

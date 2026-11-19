@@ -276,17 +276,23 @@ function ThemedStatusBar() {
   const { isDark } = useTheme();
   const pathname = usePathname();
   const statusBarStyle = isDark ? "light" : "dark";
+  const isProfileRoute =
+    pathname === "/me" ||
+    pathname === "/(tabs)/me" ||
+    pathname === "/profile-private" ||
+    pathname.startsWith("/contact/");
   // The camera composer is intentionally immersive. Every other route owns a
-  // visible status bar, so theme changes cannot leave it hidden after a
-  // screen-level status bar override.
+  // visible status bar. Profile screens set their own bar style because their
+  // cover image, rather than the app theme, determines the readable contrast.
   const isImmersiveRoute = pathname === "/moments/create-video";
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    setStatusBarStyle(statusBarStyle, false);
+    if (!isProfileRoute) setStatusBarStyle(statusBarStyle, false);
     setStatusBarHidden(isImmersiveRoute, "none");
-  }, [isImmersiveRoute, statusBarStyle]);
+  }, [isImmersiveRoute, isProfileRoute, statusBarStyle]);
 
+  if (isProfileRoute) return null;
   return (
     <StatusBar
       style={statusBarStyle}
