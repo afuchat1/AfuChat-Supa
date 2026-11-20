@@ -363,13 +363,28 @@ export default function SignInScreen() {
   const nativeAutoSignInRef = useRef(false);
 
   async function finishGoogleIdTokenSignIn(idToken: string) {
-    const { error } = await supabase.auth.signInWithIdToken({
+    const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
       provider: "google",
       token: idToken,
     });
-    if (error) throw error;
+    if (authError) throw authError;
+
+    const userId = authData.user?.id;
+    if (!userId) throw new Error("Google sign-in did not return an authenticated user.");
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("onboarding_completed")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileError) throw profileError;
+
     setOauthLoading(null);
-    router.replace("/(tabs)/chats");
+    if (!profile?.onboarding_completed) {
+      router.replace({ pathname: "/onboarding", params: { userId } } as any);
+    } else {
+      router.replace("/(tabs)/chats");
+    }
   }
 
   // A returning Android user should not have to press the Google button again.
