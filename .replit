@@ -90,7 +90,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd artifacts/mobile && set -o pipefail && unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN REPLIT_EXPO_SESSION_SECRET CI; EXPO_PUBLIC_APP_ENV=development EXPO_PUBLIC_IS_EXPO_GO=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --tunnel ngrok --port 8000 </dev/null 2>&1 | cat"
+args = "cd artifacts/mobile && set -o pipefail && unset EXPO_OFFLINE EXPO_TOKEN EXPO_ACCESS_TOKEN REPLIT_EXPO_SESSION_SECRET CI; EXPO_PUBLIC_APP_ENV=development EXPO_PUBLIC_IS_EXPO_GO=1 NODE_OPTIONS=--max-old-space-size=4096 ./node_modules/.bin/expo start --go --port 8000 --tunnel=ngrok </dev/null 2>&1 | cat"
 waitForPort = 8000
 
 [[ports]]
