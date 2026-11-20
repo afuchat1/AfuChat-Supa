@@ -33,7 +33,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
-import { signInWithGoogleOAuth } from "@/lib/googleOAuth";
 import AfuLogo from "@/components/ui/AfuLogo";
 import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
@@ -434,36 +433,26 @@ export default function SignUpScreen() {
   async function handleGoogle() {
     try {
       setOauthLoading("google");
-      let uid: string | null = null;
-      let nativeIdToken: string | null = null;
-
-      if (Platform.OS === "android") {
-        try {
-          const nativeResult = await signInWithNativeGoogle();
-          if (nativeResult.kind === "cancelled") return;
-          if (nativeResult.kind === "success") {
-            nativeIdToken = nativeResult.idToken;
-          }
-        } catch {
-          // Native Google setup or device errors must not block the PKCE OAuth fallback.
-        }
+      if (Platform.OS !== "android") {
+        showAlert("Google sign-up unavailable", "Google sign-up is available in the Android app.");
+        return;
       }
 
-      if (nativeIdToken) {
-        // Once Supabase token exchange begins, surface its error instead of starting
-        // a second authentication flow and potentially replacing a partially-created session.
-        const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
-          provider: "google",
-          token: nativeIdToken,
-        });
-        if (authError) throw authError;
-        uid = authData.user?.id ?? null;
-        if (!uid) throw new Error("Google sign-up did not return an authenticated user.");
-      } else {
-        uid = await signInWithGoogleOAuth("afuchat://(auth)/register");
+      const nativeResult = await signInWithNativeGoogle();
+      if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
+      if (nativeResult.kind === "unavailable") {
+        showAlert("Google sign-up unavailable", "Install the Android app to use native Google sign-up.");
+        return;
       }
-      if (!uid) return;
 
+      const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: nativeResult.idToken,
+      });
+      if (authError) throw authError;
+
+      const uid = authData.user?.id;
+      if (!uid) throw new Error("Google sign-up did not create a user session.");
       const { data: profile } = await supabase
         .from("profiles")
         .select("onboarding_completed")
