@@ -13,13 +13,13 @@ const path = require("path");
 const MARKER =
   "// AfuChat keeps selection handles while hiding Android's native action menu.";
 
-const CONTEXT_MENU_BLOCK =
-  /^(?<indent>[ \t]*)if \(contextMenuHidden\) \{\r?\n[ \t]*return false\r?\n[ \t]*\}\r?\n[ \t]*menu\.removeItem\(android\.R\.id\.pasteAsPlainText\)/m;
+const CONTEXT_MENU_GUARD =
+  /^(?<indent>[ \t]*)if \(contextMenuHidden\) \{\r?\n[ \t]*return false\r?\n[ \t]*\}/m;
 
 function patchReactEditTextSource(source) {
   if (source.includes(MARKER)) return source;
 
-  const patched = source.replace(CONTEXT_MENU_BLOCK, (_match, indent) => [
+  const patched = source.replace(CONTEXT_MENU_GUARD, (_match, indent) => [
     `${indent}if (contextMenuHidden) {`,
     `${indent}  ${MARKER}`,
     `${indent}  menu.clear()`,
@@ -30,8 +30,8 @@ function patchReactEditTextSource(source) {
 
   if (patched === source) {
     throw new Error(
-      "[withChatTextSelection] Could not find React Native's Android selection callback. " +
-        "Review ReactEditText.kt before upgrading React Native.",
+      "[withChatTextSelection] Could not find React Native's contextMenuHidden selection guard. " +
+        "Review ReactEditText.kt when updating React Native.",
     );
   }
   return patched;
