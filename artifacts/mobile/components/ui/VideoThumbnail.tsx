@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import CachedImage from "./CachedImage";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -122,7 +123,13 @@ function VideoThumbnailNative({
           contentFit="cover"
         />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.backgroundSecondary }]} />
+        <View style={[
+          StyleSheet.absoluteFill,
+          styles.fallback,
+          { backgroundColor: colors.backgroundSecondary },
+        ]}>
+          <Ionicons name="videocam-outline" size={30} color={colors.textMuted} />
+        </View>
       )}
       {hasFraction && <WatchProgressBar fraction={watchedFraction!} />}
       {!!durationLabel && (
@@ -139,3 +146,10 @@ export function VideoThumbnail(props: Props) {
 }
 
 export { formatDuration };
+
+const styles = StyleSheet.create({
+  fallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

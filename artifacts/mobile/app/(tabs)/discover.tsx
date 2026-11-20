@@ -514,11 +514,9 @@ function BookmarkButton({ bookmarked, onPress }: { bookmarked: boolean; onPress:
   );
 }
 
-// ─── PostImages: swipeable carousel with stable feed geometry ────────────────
-// Keep one predictable aspect ratio for every feed carousel. Changing a row's
-// height after the image loads makes VirtualizedList recalculate offsets while
-// the user is scrolling, which presents as a shaking/jumping feed.
-const IMG_RATIO_MIN = 9 / 16;   // ~0.5625  (landscape cap)
+// ─── PostImages: swipeable carousel matching post-detail sizing ───────────────
+const IMG_RATIO_MIN = 9 / 16;
+const IMG_RATIO_MAX = 5 / 4;
 
 function PostImages({
   images,
@@ -533,13 +531,15 @@ function PostImages({
 }) {
   const { isDark } = useTheme();
   const [currentIdx, setCurrentIdx] = React.useState(0);
-  // ratio = height/width of the first detected image; null = not yet loaded
+  const [imgRatio, setImgRatio] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    setImgRatio(null);
+  }, [images[0]]);
 
   const L_PAD  = 66;
   const R_PAD  = 16;
   const imgW   = effectiveW - L_PAD - R_PAD;
-  // Keep row geometry stable while images load; late resizing makes the feed jump.
-  const ratio  = IMG_RATIO_MIN;
+  const ratio  = imgRatio ?? IMG_RATIO_MIN;
   const imgH   = Math.round(imgW * ratio);
   const CORNER = 12;
   const { colors: imgColors } = useTheme();
@@ -603,6 +603,12 @@ function PostImages({
                 style={{ width: imgW, height: imgH }}
                 contentFit="cover"
                 priority={i === 0 ? "high" : "normal"}
+                onLoad={i === 0 ? (event) => {
+                  const { width, height } = (event as any).source ?? {};
+                  if (width > 0 && height > 0) {
+                    setImgRatio(Math.min(Math.max(height / width, IMG_RATIO_MIN), IMG_RATIO_MAX));
+                  }
+                } : undefined}
               />
             </TouchableOpacity>
           ))}

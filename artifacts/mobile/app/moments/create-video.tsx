@@ -185,6 +185,70 @@ async function genNativeThumb(uri: string, ms: number): Promise<string | null> {
   } catch { return null; }
 }
 
+async function genVideoThumb(uri: string, ms: number): Promise<string | null> {
+  const doc = (globalThis as any).document;
+  if (Platform.OS !== "web" || !doc?.createElement) {
+    return genNativeThumb(uri, ms);
+  }
+
+  return new Promise((resolve) => {
+    const video = doc.createElement("video");
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    const finish = (result: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      video.onloadedmetadata = null;
+      video.onloadeddata = null;
+      video.onseeked = null;
+      video.onerror = null;
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      resolve(result);
+    };
+    const capture = () => {
+      try {
+        if (!video.videoWidth || !video.videoHeight) return finish(null);
+        const width = Math.min(video.videoWidth, 720);
+        const canvas = doc.createElement("canvas");
+        canvas.width = width;
+        canvas.height = Math.max(1, Math.round(video.videoHeight * width / video.videoWidth));
+        const context = canvas.getContext("2d");
+        if (!context) return finish(null);
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        finish(canvas.toDataURL("image/jpeg", 0.75) || null);
+      } catch {
+        finish(null);
+      }
+    };
+
+    timeout = setTimeout(() => finish(null), 12000);
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const target = Math.max(0, Math.min(ms / 1000, duration > 0.1 ? duration - 0.05 : 0));
+      if (target <= 0.01) {
+        if (video.readyState >= 2) capture();
+        else video.onloadeddata = capture;
+        return;
+      }
+      video.onseeked = capture;
+      try {
+        video.currentTime = target;
+      } catch {
+        video.onloadeddata = capture;
+      }
+    };
+    video.onerror = () => finish(null);
+    video.src = uri;
+    video.load();
+  });
+}
+
 // ─── DraggableOverlay ─────────────────────────────────────────────────────────
 
 function DraggableItem({
@@ -1939,11 +2003,27 @@ export default function CreateVideoScreen() {
     (async () => {
       try {
         updatePostProgress(0.05);
+        updatePostStatus(0.05, "Preparing video preview…");
         const rawExt = _uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
         const ext = ["mp4", "mov", "avi", "webm", "mkv", "m4v"].includes(rawExt) ? rawExt : "mp4";
         const uniqueSuffix = Math.random().toString(36).slice(2, 10);
         const filePath = `${user.id}/${Date.now()}_${uniqueSuffix}.${ext}`;
         const resolvedMime = _mime || (ext === "mov" ? "video/quicktime" : `video/${ext}`);
+
+        let localThumb = _thumb;
+        if (!localThumb) {
+          localThumb = await genVideoThumb(_uri, _ttime * 1000);
+          if (!localThumb && _ttime > 0) localThumb = await genVideoThumb(_uri, 0);
+        }
+        if (!localThumb) {
+          throw new Error("Could not create a video preview. Please choose another video and try again.");
+        }
+        const thumbPath = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}_thumb.jpg`;
+        const thumbUpload = await uploadToStorage("videos", thumbPath, localThumb, "image/jpeg");
+        if (thumbUpload.error || !thumbUpload.publicUrl) {
+          throw new Error(thumbUpload.error || "Could not upload the video preview. Please try again.");
+        }
+        const thumbUrl = thumbUpload.publicUrl;
 
         const compressionMeta = await compressVideoBeforeUpload(
           _uri,
@@ -1963,19 +2043,6 @@ export default function CreateVideoScreen() {
         if (upErr || !publicUrl) throw new Error(upErr || "Upload failed");
 
         updatePostProgress(0.65);
-        let thumbUrl: string | null = null;
-        try {
-          let localThumb = _thumb;
-          if (!localThumb) {
-            if (!_uri.startsWith("blob:")) localThumb = await genNativeThumb(_uri, _ttime * 1000);
-          }
-          if (localThumb) {
-            const tp = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}_thumb.jpg`;
-            const tu = await uploadToStorage("videos", tp, localThumb, "image/jpeg");
-            if (tu.publicUrl) thumbUrl = tu.publicUrl;
-          }
-        } catch {}
-
         updatePostProgress(0.85);
         const overlayMeta = JSON.stringify({
           texts: _texts.length > 0 ? _texts : undefined,
