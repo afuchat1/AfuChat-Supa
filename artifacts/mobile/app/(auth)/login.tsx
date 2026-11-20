@@ -37,7 +37,6 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { showAlert } from "@/lib/alert";
-import { signInWithGoogleOAuth } from "@/lib/googleOAuth";
 import AfuLogo from "@/components/ui/AfuLogo";
 import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
@@ -363,28 +362,13 @@ export default function SignInScreen() {
   const nativeAutoSignInRef = useRef(false);
 
   async function finishGoogleIdTokenSignIn(idToken: string) {
-    const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
+    const { error } = await supabase.auth.signInWithIdToken({
       provider: "google",
       token: idToken,
     });
-    if (authError) throw authError;
-
-    const userId = authData.user?.id;
-    if (!userId) throw new Error("Google sign-in did not return an authenticated user.");
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("onboarding_completed")
-      .eq("id", userId)
-      .maybeSingle();
-    if (profileError) throw profileError;
-
+    if (error) throw error;
     setOauthLoading(null);
-    if (!profile?.onboarding_completed) {
-      router.replace({ pathname: "/onboarding", params: { userId } } as any);
-    } else {
-      router.replace("/(tabs)/chats");
-    }
+    router.replace("/(tabs)/chats");
   }
 
   // A returning Android user should not have to press the Google button again.
@@ -640,38 +624,18 @@ export default function SignInScreen() {
   async function handleGoogle() {
     try {
       setOauthLoading("google");
-      if (Platform.OS === "android") {
-        let nativeIdToken: string | null = null;
-        try {
-          const nativeResult = await signInWithNativeGoogle();
-          if (nativeResult.kind === "cancelled") return;
-          if (nativeResult.kind === "success") {
-            nativeIdToken = nativeResult.idToken;
-          }
-        } catch {
-          // Native Google setup or device errors must not block the PKCE OAuth fallback.
-        }
-
-        if (nativeIdToken) {
-          // Do not fall back after token exchange starts: that is a Supabase/auth error,
-          // not a native Google picker failure.
-          await finishGoogleIdTokenSignIn(nativeIdToken);
-          return;
-        }
+      if (Platform.OS !== "android") {
+        showAlert("Google sign-in unavailable", "Google sign-in is available in the Android app.");
+        return;
       }
 
-      const userId = await signInWithGoogleOAuth("afuchat://(auth)/login");
-      if (!userId) return;
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("onboarding_completed")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!prof?.onboarding_completed) {
-        router.replace({ pathname: "/onboarding", params: { userId } } as any);
-      } else {
-        router.replace("/(tabs)/chats");
+      const nativeResult = await signInWithNativeGoogle();
+      if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
+      if (nativeResult.kind === "unavailable") {
+        showAlert("Google sign-in unavailable", "Install the Android app to use native Google sign-in.");
+        return;
       }
+      await finishGoogleIdTokenSignIn(nativeResult.idToken);
     } catch (error: any) {
       showAlert("Google sign-in failed", error?.message || "Could not complete Google sign-in.");
     } finally {
