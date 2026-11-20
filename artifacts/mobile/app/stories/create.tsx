@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -27,6 +27,8 @@ import VideoPreview from "@/components/ui/VideoPreview";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
+import StoryMusicPickerModal, { type StoryMusicSelection } from "@/components/stories/StoryMusicPickerModal";
+import type { AfuMusicTrack } from "@/modules/afumusic";
 
 import Colors from "@/constants/colors";
 import { useAppAccent } from "@/context/AppAccentContext";
@@ -37,6 +39,7 @@ import {
   uploadToStorage,
 } from "@/lib/mediaUpload";
 import { consumeStoryMediaDraft } from "@/lib/storyMediaDraft";
+import { IMAGE_STORY_DURATION_SECONDS } from "@/lib/storyTiming";
 import { useTheme } from "@/hooks/useTheme";
 import * as FileSystem from "expo-file-system/legacy";
 import { isOnline } from "@/lib/offlineStore";
@@ -63,7 +66,7 @@ export default function CreateStoryScreen() {
   const { user, profile, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const params = useLocalSearchParams<{ mediaUri?: string; mediaType?: string }>();
+  const params = useLocalSearchParams<{ mediaUri?: string; mediaType?: string; mediaDuration?: string }>();
   const mediaDraft = consumeStoryMediaDraft();
   const [mediaUri, setMediaUri] = useState<string | null>(params.mediaUri ?? mediaDraft?.uri ?? null);
   useEffect(() => {
@@ -74,12 +77,20 @@ export default function CreateStoryScreen() {
   const [mediaType, setMediaType] = useState<"image" | "video">(
     params.mediaType === "video" ? "video" : mediaDraft?.mediaType === "video" ? "video" : "image"
   );
+  const routeDuration = Number(params.mediaDuration);
+  const [mediaDurationSeconds, setMediaDurationSeconds] = useState(
+    mediaDraft?.durationSeconds ??
+      (Number.isFinite(routeDuration) && routeDuration > 0 ? routeDuration : 0),
+  );
   const [caption, setCaption] = useState("");
   const [mediaMimeType, setMediaMimeType] = useState<string | null>(mediaDraft?.mimeType ?? null);
   const [starting, setStarting] = useState(false);
   const [privacy, setPrivacy] = useState<Privacy>("everyone");
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [selectedMusic, setSelectedMusic] = useState<AfuMusicTrack | null>(null);
+  const [musicStartSeconds, setMusicStartSeconds] = useState(0);
   const [showEmojis, setShowEmojis] = useState(false);
   const [showColors, setShowColors] = useState(false);
   const [tintColor, setTintColor] = useState<string | null>(null);
@@ -91,6 +102,12 @@ export default function CreateStoryScreen() {
   const previewW = screenW - previewMargin * 2;
   const previewH = Math.min(screenH * 0.65, previewW * 1.6);
 
+  const handleVideoDuration = useCallback((durationSeconds: number) => {
+    setMediaDurationSeconds((current) =>
+      Math.abs(current - durationSeconds) > 0.05 ? durationSeconds : current,
+    );
+  }, []);
+
   function pickMedia() {
     setShowMediaPicker(true);
   }
@@ -100,6 +117,9 @@ export default function CreateStoryScreen() {
     if (!asset) return;
     const isVideo = asset.mediaType === "video";
     setMediaType(isVideo ? "video" : "image");
+    setMediaDurationSeconds(isVideo ? asset.duration : 0);
+    setSelectedMusic(null);
+    setMusicStartSeconds(0);
     setMediaMimeType(isVideo ? "video/mp4" : "image/jpeg");
     // MediaLibrary can return a content:// URI or an Expo host-cache URI.
     // Resolve it while the picker is still active, before publishing.
@@ -113,6 +133,18 @@ export default function CreateStoryScreen() {
 
   async function publish() {
     if (starting || !mediaUri || !user) return;
+
+    if (selectedMusic) {
+      const storyDuration = mediaType === "video" ? mediaDurationSeconds : IMAGE_STORY_DURATION_SECONDS;
+      if (
+        !storyDuration ||
+        !selectedMusic.durationSeconds ||
+        musicStartSeconds + storyDuration > selectedMusic.durationSeconds + 0.05
+      ) {
+        showAlert("Soundtrack needs an update", "Choose a longer excerpt or wait for the video duration to finish loading.");
+        return;
+      }
+    }
 
     if (!isOnline()) {
       showAlert("No internet", "Publishing a story requires an internet connection.");
@@ -144,6 +176,12 @@ export default function CreateStoryScreen() {
     const _caption = caption.trim();
     const _privacy = privacy;
     const _userId = user.id;
+    const _musicTrackId = selectedMusic?.id ?? null;
+    const _musicStartSeconds = musicStartSeconds;
+    const storyClipDurationSeconds = mediaType === "video"
+      ? mediaDurationSeconds
+      : IMAGE_STORY_DURATION_SECONDS;
+    const _musicEndSeconds = musicStartSeconds + storyClipDurationSeconds;
 
     // ── Stable file copy (native) ──────────────────────────────────────────
     // Picker URIs can point to volatile temp locations. Copy user media into
@@ -248,6 +286,9 @@ export default function CreateStoryScreen() {
         caption: _caption || null,
         expires_at: expiresAt,
         privacy: _privacy,
+        music_track_id: _musicTrackId,
+        music_start_seconds: _musicTrackId ? _musicStartSeconds : null,
+        music_end_seconds: _musicTrackId ? _musicEndSeconds : null,
       });
 
       if (error) {
@@ -287,6 +328,9 @@ export default function CreateStoryScreen() {
   const privacyOption = PRIVACY_OPTIONS.find((p) => p.id === privacy) || PRIVACY_OPTIONS[0];
   const charPct = caption.length / CAPTION_MAX;
   const charColor = charPct > 0.9 ? "#FF3B30" : charPct > 0.75 ? "#FF9500" : "rgba(255,255,255,0.5)";
+  const storyClipDurationSeconds = mediaType === "video"
+    ? mediaDurationSeconds
+    : IMAGE_STORY_DURATION_SECONDS;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -344,7 +388,8 @@ export default function CreateStoryScreen() {
                   contentFit="contain"
                   shouldPlay
                   isLooping
-                  isMuted={false}
+                  isMuted={!!selectedMusic}
+                  onDurationChange={handleVideoDuration}
                 />
               ) : (
                 <Image
@@ -381,12 +426,37 @@ export default function CreateStoryScreen() {
                   onPress={() => { setShowEmojis(false); setShowColors((v) => !v); }}>
                   <Ionicons name="brush" size={22} color={tintColor ? "#fff" : "#fff"} />
                 </TouchableOpacity>
-                {/* Music → coming soon */}
-                <TouchableOpacity style={styles.sideBtn} activeOpacity={0.75}
-                  onPress={() => showAlert("Music", "Adding music to stories is coming soon! 🎵")}>
+                <TouchableOpacity
+                  style={[styles.sideBtn, selectedMusic && { backgroundColor: accent }]}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    if (mediaType === "video" && mediaDurationSeconds <= 0) {
+                      showAlert("Video still loading", "Wait for the video duration to load before adding music.");
+                      return;
+                    }
+                    setShowMusicPicker(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={selectedMusic ? "Edit story soundtrack" : "Add story soundtrack"}
+                >
                   <Ionicons name="musical-notes" size={22} color="#fff" />
                 </TouchableOpacity>
               </View>
+
+              {selectedMusic && (
+                <View style={[styles.musicBadge, { top: mediaType === "video" ? 48 : 16 }]}>
+                  <Ionicons name="musical-notes" size={13} color="#fff" />
+                  <Text numberOfLines={1} style={styles.musicBadgeText}>{selectedMusic.title}</Text>
+                  <TouchableOpacity
+                    onPress={() => { setSelectedMusic(null); setMusicStartSeconds(0); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove story soundtrack"
+                    hitSlop={8}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Emoji quick-pick panel */}
               {showEmojis && (
@@ -586,6 +656,19 @@ export default function CreateStoryScreen() {
         maxSelection={1}
         onSelect={handleGallerySelect}
       />
+      {showMusicPicker && (
+        <StoryMusicPickerModal
+          visible
+          clipDurationSeconds={storyClipDurationSeconds}
+          initialTrack={selectedMusic}
+          initialStartSeconds={musicStartSeconds}
+          onClose={() => setShowMusicPicker(false)}
+          onConfirm={(selection: StoryMusicSelection) => {
+            setSelectedMusic(selection.track);
+            setMusicStartSeconds(selection.startSeconds);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -714,6 +797,25 @@ const styles = StyleSheet.create({
   mediaTypeBadgeText: {
     color: "#fff",
     fontSize: 11,
+    fontFamily: "Inter_500Medium",
+  },
+  musicBadge: {
+    position: "absolute",
+    left: 16,
+    maxWidth: "68%",
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.58)",
+  },
+  musicBadgeText: {
+    flexShrink: 1,
+    color: "#fff",
+    fontSize: 12,
     fontFamily: "Inter_500Medium",
   },
   emojiPanel: {

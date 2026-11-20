@@ -32,8 +32,12 @@ import { safePause, safePlay } from "@/lib/safeMedia";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getCachedStoryMedia } from "@/lib/storyMediaCache";
 import { useTheme } from "@/hooks/useTheme";
+import StorySoundtrackAudio from "@/components/stories/StorySoundtrackAudio";
+import { getMusicPlaybackUri, listOfflineMusicTracks, searchMusicTracksByIds } from "@/lib/afuMusic";
+import { IMAGE_STORY_DURATION_SECONDS } from "@/lib/storyTiming";
+import type { AfuMusicTrack } from "@/modules/afumusic";
 
-const STORY_DURATION = 5000;
+const STORY_DURATION = IMAGE_STORY_DURATION_SECONDS * 1000;
 const STORY_LIST_CACHE_PREFIX = "@afuchat:story_list:";
 const DISCOVER_STORY_CACHE_KEY = "@afuchat:discover_story_list";
 
@@ -46,6 +50,9 @@ type Story = {
   view_count: number;
   like_count: number;
   user_id: string;
+  music_track_id?: string | null;
+  music_start_seconds?: number | null;
+  music_end_seconds?: number | null;
   profile: {
     display_name: string;
     avatar_url: string | null;
@@ -77,10 +84,12 @@ export default function ViewStoryScreen() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [resolvedStoryId, setResolvedStoryId] = useState<string | null>(null);
   const [mediaReady, setMediaReady] = useState(false);
   const [mediaDownloading, setMediaDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [mediaError, setMediaError] = useState(false);
+  const [storyMusicUri, setStoryMusicUri] = useState<string | null>(null);
   // expo-video's web replace() calls HTMLMediaElement.play() without
   // handling its promise. Give web a new player with the resolved source
   // instead of replacing a currently loading source; native keeps the
@@ -183,7 +192,7 @@ export default function ViewStoryScreen() {
       try {
         const { data } = await supabase
           .from("stories")
-          .select("id, media_url, media_type, caption, privacy, created_at, expires_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
+          .select("id, media_url, media_type, caption, privacy, created_at, expires_at, view_count, user_id, music_track_id, music_start_seconds, music_end_seconds, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
           .eq("user_id", userId)
           .gt("expires_at", new Date().toISOString())
           .order("created_at", { ascending: true });
@@ -317,12 +326,40 @@ export default function ViewStoryScreen() {
   const story = stories[index];
   const isVideoStory = story?.media_type === "video";
 
+  useEffect(() => {
+    setStoryMusicUri(null);
+    if (!story?.music_track_id) return;
+    let cancelled = false;
+    (async () => {
+      let track: AfuMusicTrack | null = null;
+      try {
+        const tracks = await searchMusicTracksByIds([story.music_track_id!]);
+        track = tracks.find((item) => item.id === story.music_track_id) ?? null;
+      } catch {
+        // A downloaded copy can still play when the catalog is offline.
+      }
+      if (!track) {
+        try {
+          const offlineTracks = await listOfflineMusicTracks();
+          track = offlineTracks.find((item) => item.id === story.music_track_id) ?? null;
+        } catch {}
+      }
+      if (!track) return;
+      const uri = await getMusicPlaybackUri(track);
+      if (!cancelled) setStoryMusicUri(uri);
+    })().catch((error) => {
+      console.warn("[Story music] Could not resolve soundtrack:", error?.message || error);
+    });
+    return () => { cancelled = true; };
+  }, [story?.id, story?.music_track_id]);
+
   // Resolve every story to permanent local storage before starting playback.
   // A cached file is reused immediately, including when the device is offline.
   useEffect(() => {
     if (!story?.id || !story.media_url) return;
     let cancelled = false;
     setMediaUri(null);
+    setResolvedStoryId(null);
     setMediaReady(false);
       setMediaError(false);
     setMediaDownloading(true);
@@ -333,6 +370,7 @@ export default function ViewStoryScreen() {
       .then((uri) => {
         if (!cancelled) {
           setMediaUri(uri);
+          setResolvedStoryId(story.id);
           setMediaDownloading(false);
         }
       })
@@ -340,6 +378,7 @@ export default function ViewStoryScreen() {
         // A remote fallback still allows already-cached platform media to play.
         if (!cancelled) {
           setMediaUri(story.media_url);
+          setResolvedStoryId(story.id);
           setMediaDownloading(false);
         }
       });
@@ -361,8 +400,13 @@ export default function ViewStoryScreen() {
 
   // ── Video player: update source + play/pause when story changes ──────────────
   useEffect(() => {
+    storyVideoPlayer.muted = Boolean(isVideoStory && story?.music_track_id);
+  }, [storyVideoPlayer, isVideoStory, story?.music_track_id]);
+
+  useEffect(() => {
     videoFinishedRef.current = false;
     if (!isVideoStory || !mediaUri) { safePause(storyVideoPlayer); return; }
+    storyVideoPlayer.muted = Boolean(story?.music_track_id);
 
     if (Platform.OS === "web") {
       setMediaReady(true);
@@ -376,7 +420,7 @@ export default function ViewStoryScreen() {
       .catch(() => {});
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediaUri, isVideoStory]);
+  }, [mediaUri, isVideoStory, story?.music_track_id]);
 
   useEffect(() => {
     if (!isVideoStory || !mediaReady) return;
@@ -646,6 +690,12 @@ export default function ViewStoryScreen() {
   const elapsed = Math.floor((Date.now() - new Date(story.created_at).getTime()) / 3600000);
   const timeLabel = elapsed < 1 ? "just now" : `${elapsed}h ago`;
 
+  const soundtrackStartSeconds = typeof story.music_start_seconds === "number"
+    ? Math.max(0, story.music_start_seconds)
+    : 0;
+  const soundtrackEndSeconds = typeof story.music_end_seconds === "number"
+    ? story.music_end_seconds
+    : soundtrackStartSeconds;
   const storyLike = likeState[story.id] ?? { liked: false, count: 0 };
 
   return (
@@ -653,6 +703,20 @@ export default function ViewStoryScreen() {
       behavior="padding"
       style={[styles.root, { backgroundColor: colors.background }]}
     >
+      {story.music_track_id && storyMusicUri && soundtrackEndSeconds > soundtrackStartSeconds && (
+        <StorySoundtrackAudio
+          uri={storyMusicUri}
+          startSeconds={soundtrackStartSeconds}
+          endSeconds={soundtrackEndSeconds}
+          active={
+            resolvedStoryId === story.id &&
+            mediaReady &&
+            !mediaDownloading &&
+            !paused &&
+            !showViewers
+          }
+        />
+      )}
       {/* ── Media ─────────────────────────────────────────────────────────── */}
       {isVideoStory ? (
         <VideoView

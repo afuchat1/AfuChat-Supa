@@ -15,6 +15,7 @@ interface VideoPreviewProps {
   nativeControls?: boolean;
   /** Playback speed multiplier: 0.5 = slow-mo, 1 = normal, 2 = fast-forward */
   playbackRate?: number;
+  onDurationChange?: (durationSeconds: number) => void;
 }
 
 export default function VideoPreview({
@@ -26,6 +27,7 @@ export default function VideoPreview({
   isMuted = false,
   nativeControls = false,
   playbackRate = 1,
+  onDurationChange,
 }: VideoPreviewProps) {
   const player = useVideoPlayer(uri ? { uri } : null, (p) => {
     p.loop = isLooping;
@@ -56,6 +58,22 @@ export default function VideoPreview({
   useEffect(() => {
     try { player.playbackRate = playbackRate; } catch {}
   }, [playbackRate]);
+
+  useEffect(() => {
+    if (!uri || !onDurationChange) return;
+    const reportDuration = (duration: number) => {
+      if (Number.isFinite(duration) && duration > 0) onDurationChange(duration);
+    };
+    const sourceSub = player.addListener("sourceLoad", ({ duration }) => reportDuration(duration));
+    const statusSub = player.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay") reportDuration(player.duration);
+    });
+    if (player.status === "readyToPlay") reportDuration(player.duration);
+    return () => {
+      sourceSub.remove();
+      statusSub.remove();
+    };
+  }, [uri, onDurationChange, player]);
 
   return (
     <VideoView

@@ -2,6 +2,7 @@ export type StoryMediaDraft = {
   uri: string;
   mediaType: "image" | "video";
   mimeType: string | null;
+  durationSeconds?: number;
 };
 
 let draft: StoryMediaDraft | null = null;

@@ -39,6 +39,7 @@ function NativeCameraScreen() {
   const [processing, setProcessing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [filter, setFilter] = useState<FilterId>("normal");
+  const recordingStartedAtRef = useRef<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -95,16 +96,25 @@ function NativeCameraScreen() {
       }
     }
     setRecording(true);
+    recordingStartedAtRef.current = Date.now();
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 30 });
+      const durationSeconds = recordingStartedAtRef.current
+        ? Math.max(0.1, (Date.now() - recordingStartedAtRef.current) / 1000)
+        : undefined;
+      recordingStartedAtRef.current = null;
       setRecording(false);
       if (video?.uri) {
         const stableUri = await prepareMediaForUpload(video.uri, "mp4");
-        router.push({ pathname: "/stories/create", params: { mediaUri: stableUri, mediaType: "video" } });
+        router.push({
+          pathname: "/stories/create",
+          params: { mediaUri: stableUri, mediaType: "video", mediaDuration: String(durationSeconds ?? "") },
+        });
       } else {
         showAlert("Error", "Could not record video. Please try again.");
       }
     } catch (e: any) {
+      recordingStartedAtRef.current = null;
       setRecording(false);
       showAlert("Error", e?.message || "Failed to record video.");
     }
@@ -124,6 +134,9 @@ function NativeCameraScreen() {
           uri: stableUri,
           mediaType: isVideo ? "video" : "image",
           mimeType: asset.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
+          durationSeconds: isVideo && typeof asset.duration === "number" && asset.duration > 0
+            ? asset.duration / 1000
+            : undefined,
         });
         router.push("/stories/create");
       }

@@ -36,6 +36,7 @@ export type AfuMusicTrack = {
   accentColor?: string;
   genre: string;
   duration?: string;
+  durationSeconds?: number;
   plays?: number;
   price: number;
   isOwned?: boolean;

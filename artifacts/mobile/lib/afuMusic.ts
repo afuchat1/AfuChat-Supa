@@ -74,6 +74,7 @@ function rowToTrack(
     handle,
     genre: row.genre,
     duration: formatDuration(row.duration_seconds),
+    durationSeconds: row.duration_seconds ?? undefined,
     plays: row.play_count ?? row.usage_count ?? 0,
     price: Math.max(0, row.price_acoin ?? 0),
     isOwned: ownedIds.has(row.id) || row.creator_id === currentUserId,

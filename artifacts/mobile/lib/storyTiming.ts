@@ -1,0 +1,1 @@
+export const IMAGE_STORY_DURATION_SECONDS = 5;

@@ -353,7 +353,7 @@ const DISCOVER_STORY_CACHE_KEY = "@afuchat:discover_story_list";
     try {
       const { data } = await supabase
         .from("stories")
-        .select("id, user_id, media_url, media_type, caption, created_at, expires_at, view_count, privacy, profiles!stories_user_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
+        .select("id, user_id, media_url, media_type, caption, created_at, expires_at, view_count, privacy, music_track_id, music_start_seconds, music_end_seconds, profiles!stories_user_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
           .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
         .limit(100);
