@@ -8,7 +8,8 @@
     "preview": {
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "preview"
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_REVENUECAT_TEST_API_KEY": "test_KrskeFbKmUyiTLKchDkcsBuVytu"
       },
       "android": {
         "buildType": "apk"
@@ -19,7 +20,9 @@
     "production": {
       "environment": "production",
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_DUpgNrJCSdGosaBtvqxZCHUuNgH",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_vYATQvQRBURSsEDqlJMpjpGbHIX"
       },
       "android": {
         "buildType": "app-bundle",
