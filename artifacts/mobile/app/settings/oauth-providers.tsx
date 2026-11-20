@@ -11,7 +11,6 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
 import type { UserIdentity } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useTheme } from "@/hooks/useTheme";
@@ -24,6 +23,7 @@ import { GlassMenuSeparator } from "@/components/ui/GlassMenuItem";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useLanguage } from "@/context/LanguageContext";
 import { registerUiTexts } from "@/lib/i18n";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 
 // ─── Provider config ──────────────────────────────────────────────────────────
 type Provider = {
@@ -77,7 +77,7 @@ export default function OAuthProvidersScreen() {
       }
       return;
     }
-    const redirectUrl = makeRedirectUri({ native: "afuchat://settings/oauth-providers" });
+    const redirectUrl = getAuthRedirectUrl("afuchat://settings/oauth-providers");
     const { data, error } = await (supabase.auth as any).linkIdentity({
       provider: providerId,
       options: { redirectTo: redirectUrl, skipBrowserRedirect: true },

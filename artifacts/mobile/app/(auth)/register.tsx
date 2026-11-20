@@ -24,7 +24,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import AuthContent from "@/components/ui/AuthContent";
-import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +36,7 @@ import AfuLogo from "@/components/ui/AfuLogo";
 import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
 import { signInWithNativeGoogle } from "@/lib/nativeGoogleAuth";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 
 // ─── Soft orb ─────────────────────────────────────────────────────────────────
 function SoftOrb({ cx, cy, size, color }: { cx: number; cy: number; size: number; color: string }) {
@@ -394,7 +394,7 @@ export default function SignUpScreen() {
         return;
       }
 
-      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/register" });
+      const redirectUrl = getAuthRedirectUrl("afuchat://(auth)/register");
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo: redirectUrl, skipBrowserRedirect: true },

@@ -23,7 +23,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import AuthContent from "@/components/ui/AuthContent";
-import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
@@ -33,6 +32,7 @@ import { supabase } from "@/lib/supabase";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/env";
 import { useAuth } from "@/context/AuthContext";
 import { isExpoGo } from "@/lib/expoEnvironment";
+import { getAuthRedirectUrl } from "@/lib/authRedirect";
 import { useTheme } from "@/hooks/useTheme";
 import { useAppAccent } from "@/context/AppAccentContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -374,7 +374,7 @@ export default function SignInScreen() {
 
   async function handleGoogleOAuthFallback() {
     try {
-      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/login" });
+      const redirectUrl = getAuthRedirectUrl("afuchat://(auth)/login");
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -640,7 +640,7 @@ export default function SignInScreen() {
         return;
       }
 
-      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/login" });
+      const redirectUrl = getAuthRedirectUrl("afuchat://(auth)/login");
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "github",
         options: { redirectTo: redirectUrl, skipBrowserRedirect: true },

@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import * as Notifications from "expo-notifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassHeader } from "@/components/ui/GlassHeader";
@@ -18,6 +17,21 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
 import { supabase } from "@/lib/supabase";
+import { isExpoGo } from "@/lib/expoEnvironment";
+
+type NotificationsModule = typeof import("expo-notifications");
+
+let notificationsModule: NotificationsModule | null | undefined;
+function getNotifications(): NotificationsModule | null {
+  if (notificationsModule !== undefined) return notificationsModule;
+  if (Platform.OS === "web" || isExpoGo()) return (notificationsModule = null);
+  try {
+    notificationsModule = require("expo-notifications") as NotificationsModule;
+  } catch {
+    notificationsModule = null;
+  }
+  return notificationsModule;
+}
 
 type NotificationPreferences = {
   push_enabled: boolean;
@@ -89,7 +103,8 @@ export default function NotificationSettingsScreen() {
   const [canAskAgain, setCanAskAgain] = useState(true);
 
   const refreshPermission = useCallback(async () => {
-    if (Platform.OS === "web") return;
+    const Notifications = getNotifications();
+    if (!Notifications) return;
     try {
       const result = await Notifications.getPermissionsAsync();
       setPermission(result.status);
@@ -161,6 +176,8 @@ export default function NotificationSettingsScreen() {
 
   const requestPermission = async () => {
     try {
+      const Notifications = getNotifications();
+      if (!Notifications) return;
       if (!canAskAgain && permission === "denied") {
         await Linking.openSettings();
       } else {
@@ -298,7 +315,7 @@ export default function NotificationSettingsScreen() {
               ) : null}
             </View>
 
-            {Platform.OS !== "web" ? (
+            {Platform.OS !== "web" && !isExpoGo() ? (
               <>
                 <Text style={[styles.sectionTitle, { color: mutedText }]}>DEVICE PERMISSION</Text>
                 <View style={[cardStyle, styles.permissionCard]}>

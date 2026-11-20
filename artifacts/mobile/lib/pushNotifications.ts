@@ -89,7 +89,7 @@ let backgroundTaskRegistration: Promise<void> | null = null;
 let notificationConfiguration: Promise<void> | null = null;
 function getNotifications(): NotificationsModule | null {
   if (moduleCache !== undefined) return moduleCache;
-  if (Platform.OS === "web") return (moduleCache = null);
+  if (Platform.OS === "web" || isExpoGo()) return (moduleCache = null);
   try {
     moduleCache = require("expo-notifications") as NotificationsModule;
   } catch {
@@ -377,7 +377,7 @@ export async function handleNotificationResponse(
 }
 
 function defineBackgroundTask() {
-  if (Platform.OS === "web") return;
+  if (Platform.OS === "web" || isExpoGo()) return;
   try {
     const TaskManager = require("expo-task-manager") as typeof import("expo-task-manager");
     TaskManager.defineTask(PUSH_BACKGROUND_TASK, async ({ data, error }: any) => {
