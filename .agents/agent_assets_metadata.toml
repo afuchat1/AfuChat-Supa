@@ -327,3 +327,17 @@ mtime_ms = 1795189906764
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:ea982968-4a11-49ab-bdb4-1bccadb8f310/1b819b50-d70c-4d7b-b751-7c6883e5cd64/222640ce-48f0-4f5b-84a8-c21bff7643fa"
 storage_version_token = "1795189923968003"
 content_type = "image/png"
+
+[[outputs]]
+id = "MQ1TMyemWtJefh1dnU1mx"
+uri = "file://screenshots/expo-go-live-sdk58.png"
+type = "image"
+title = "Current Expo Go QR code"
+description = "Scan in an Expo Go version compatible with SDK 58. The public Android bundle is prewarmed and responds successfully."
+logical_id = "06435570-150d-4f7a-a702-0063406d3278"
+content_hash = "sha256:4aeab066e9cccc9ae0b652ba81bc5790bcf95e36fc1c25c8644d3fb20adfc2c8"
+size = 6728
+mtime_ms = 1795190656878
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/06435570-150d-4f7a-a702-0063406d3278/b9375157-8593-407c-8f46-01d3fcb6cc4d"
+storage_version_token = "1795190672625212"
+content_type = "image/png"
