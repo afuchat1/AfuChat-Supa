@@ -3,6 +3,22 @@ import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
 import { supabase } from "@/lib/supabase";
 
+const ALLOWED_NATIVE_REDIRECTS = new Set([
+  "afuchat://(auth)/login",
+  "afuchat://(auth)/register",
+]);
+
+function assertExpectedCallback(callback: URL, redirectUrl: string): void {
+  const expected = new URL(redirectUrl);
+  if (
+    callback.protocol !== expected.protocol ||
+    callback.host !== expected.host ||
+    callback.pathname !== expected.pathname
+  ) {
+    throw new Error("Google sign-in returned an unexpected redirect URL.");
+  }
+}
+
 export async function signInWithGoogleOAuth(nativePath: string): Promise<string | null> {
   if (Platform.OS === "web" && typeof window !== "undefined") {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -11,6 +27,12 @@ export async function signInWithGoogleOAuth(nativePath: string): Promise<string 
     });
     if (error) throw error;
     return null;
+  }
+
+  // Only allow the app's known auth callbacks; never accept a caller-provided
+  // arbitrary redirect target.
+  if (!ALLOWED_NATIVE_REDIRECTS.has(nativePath)) {
+    throw new Error("Google sign-in redirect is not allowed.");
   }
 
   const redirectUrl = makeRedirectUri({ native: nativePath });
@@ -27,27 +49,37 @@ export async function signInWithGoogleOAuth(nativePath: string): Promise<string 
   if (result.type !== "success" || !result.url) return null;
 
   const callbackUrl = new URL(result.url);
-  const code = callbackUrl.searchParams.get("code");
-  if (code) {
-    const { data: sessionData, error: exchangeError } =
-      await supabase.auth.exchangeCodeForSession(code);
-    if (exchangeError) throw exchangeError;
-    return sessionData.user?.id ?? null;
-  }
+  assertExpectedCallback(callbackUrl, redirectUrl);
 
-  const callbackParams = callbackUrl.hash
+  const queryParams = callbackUrl.searchParams;
+  const hashParams = callbackUrl.hash
     ? new URLSearchParams(callbackUrl.hash.slice(1))
-    : callbackUrl.searchParams;
-  const accessToken = callbackParams.get("access_token");
-  const refreshToken = callbackParams.get("refresh_token");
-  if (!accessToken || !refreshToken) {
-    throw new Error("Google sign-in did not return a complete session.");
+    : new URLSearchParams();
+
+  const providerError =
+    queryParams.get("error") ??
+    hashParams.get("error");
+  if (providerError) {
+    const description =
+      queryParams.get("error_description") ??
+      hashParams.get("error_description");
+    throw new Error(description || providerError);
   }
 
-  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  });
-  if (sessionError) throw sessionError;
-  return sessionData.user?.id ?? null;
+  // Supabase is configured for PKCE. Accept only the one-time authorization
+  // code and let Supabase validate it against the locally stored verifier.
+  // Never install bearer/refresh tokens copied from an unverified redirect.
+  const code = queryParams.get("code");
+  if (!code) {
+    throw new Error("Google sign-in did not return a valid authorization code.");
+  }
+
+  const { data: sessionData, error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code);
+  if (exchangeError) throw exchangeError;
+  if (!sessionData.user?.id) {
+    throw new Error("Google sign-in completed without an authenticated user.");
+  }
+
+  return sessionData.user.id;
 }
