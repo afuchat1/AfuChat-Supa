@@ -74,6 +74,7 @@ import {
 } from "@/components/ui/VideoCommentsSheet";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+let postCommentsChannelSequence = 0;
 
 function formatNum(n: number): string {
   if (!n || n < 0) return "0";
@@ -567,7 +568,10 @@ export default function PostDetailScreen() {
   useEffect(() => {
     if (!id) return;
     const ch = supabase
-      .channel(`post-detail-comments:${id}`)
+      // Supabase returns an existing channel for a matching topic. React can
+      // reconnect an effect before the previous async removeChannel finishes,
+      // so give each subscription lifecycle its own topic.
+      .channel(`post-detail-comments:${id}:${Date.now().toString(36)}:${++postCommentsChannelSequence}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${id}` }, loadReplies)
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${id}` }, loadReplies)
       .subscribe();

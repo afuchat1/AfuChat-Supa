@@ -65,6 +65,7 @@ import { uploadToStorage } from "@/lib/mediaUpload";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USE_NATIVE = true;
+let videoCommentsChannelSequence = 0;
 const VID_THREAD_COLORS = ["#258FE5", "#5C6BC0", "#26A69A", "#EF6C00", "#8E24AA"];
 export const QUICK_EMOJIS = ["🔥", "❤️", "😂", "😮", "👏", "💯", "🙌", "😍"];
 export const MAX_VOICE_SECS = 60;
@@ -836,7 +837,7 @@ export function VideoCommentsSheet({
   useEffect(() => {
     if (!visible || !postId) return;
     const ch = supabase
-      .channel(`video-comments:${postId}`)
+      .channel(`video-comments:${postId}:${Date.now().toString(36)}:${++videoCommentsChannelSequence}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, scheduleRepliesReload)
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "post_replies", filter: `post_id=eq.${postId}` }, scheduleRepliesReload)
       .subscribe();
