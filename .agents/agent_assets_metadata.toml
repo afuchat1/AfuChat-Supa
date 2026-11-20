@@ -299,3 +299,17 @@ mtime_ms = 1795157991962
 storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:f8608373-b28e-483f-9bb3-2486acbc9e72/2011ea0c-9280-46a4-be2f-7e2622bb0525/e271f6df-bd27-4b69-8fa9-d37b94c30bbc"
 storage_version_token = "1795158004062276"
 content_type = "image/png"
+
+[[outputs]]
+id = "AqxatDJJGUdptaC1AJomD"
+uri = "file://.local/exports/expo-go-qr.png"
+type = "image"
+title = "AfuChat Expo Go QR"
+description = "Scan this QR with Expo Go on Android to open the running development app."
+logical_id = "1c451631-1cee-418a-824f-7c0ca778a31b"
+content_hash = "sha256:e84700395e3d31af394d475c1d51a90feaf2750f2f904dbc69c62a295e76de27"
+size = 4762
+mtime_ms = 1795184004788
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:24450e36-a507-47d1-a09c-df68d0c36210/1c451631-1cee-418a-824f-7c0ca778a31b/2ae6e31a-d468-4b4d-805b-be313d30cdf3"
+storage_version_token = "1795184039204749"
+content_type = "image/png"
