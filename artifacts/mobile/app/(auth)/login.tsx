@@ -626,10 +626,21 @@ export default function SignInScreen() {
     try {
       setOauthLoading("google");
       if (Platform.OS === "android") {
-        const nativeResult = await signInWithNativeGoogle();
-        if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
-        if (nativeResult.kind === "success") {
-          await finishGoogleIdTokenSignIn(nativeResult.idToken);
+        let nativeIdToken: string | null = null;
+        try {
+          const nativeResult = await signInWithNativeGoogle();
+          if (nativeResult.kind === "cancelled") return;
+          if (nativeResult.kind === "success") {
+            nativeIdToken = nativeResult.idToken;
+          }
+        } catch {
+          // Native Google setup or device errors must not block the PKCE OAuth fallback.
+        }
+
+        if (nativeIdToken) {
+          // Do not fall back after token exchange starts: that is a Supabase/auth error,
+          // not a native Google picker failure.
+          await finishGoogleIdTokenSignIn(nativeIdToken);
           return;
         }
       }
