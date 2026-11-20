@@ -80,14 +80,14 @@ logical_id = "5fb638b3-0436-424d-8fe5-295e57a8b1eb"
 id = "ehCC-qaRAHsTacAp4GwjJ"
 uri = "file://screenshots/expo-go-qr.png"
 type = "image"
-title = "AfuChat Expo Go QR code"
-description = "Scan this QR code in Expo Go SDK 57 while the Expo Go workflow is running."
+title = "Scan to open AfuChat in Expo Go"
+description = "Development server is running at exp://lrw8fh0-anonymous-8000.exp.direct. Android manifest and JavaScript bundle verified reachable."
 logical_id = "f343c0c3-47a0-495c-a35d-b0be5d32090a"
-content_hash = "sha256:116d497c8b895ab164f21dbc7806b1ff3b64e221b6d2f872705b6488ea81eef3"
-size = 5323
-mtime_ms = 1789390805005
-storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/f343c0c3-47a0-495c-a35d-b0be5d32090a/d10cc08d-fb87-4d87-8058-0d1b21f3bb1f"
-storage_version_token = "1789390805539857"
+content_hash = "sha256:21e10a81c59698e82079525dbb9d51e5fed3f932713bcf32b41df02c33c0af01"
+size = 5090
+mtime_ms = 1795189218800
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:ea982968-4a11-49ab-bdb4-1bccadb8f310/f343c0c3-47a0-495c-a35d-b0be5d32090a/f62ad8db-3629-40f8-92de-b37db388fca1"
+storage_version_token = "1795189239250164"
 content_type = "image/png"
 
 [[outputs]]
