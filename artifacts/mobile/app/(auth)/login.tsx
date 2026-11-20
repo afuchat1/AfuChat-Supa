@@ -41,6 +41,7 @@ import AfuLogo from "@/components/ui/AfuLogo";
 import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
 import {
+  isNativeGoogleConfigurationError,
   signInSilentlyWithNativeGoogle,
   signInWithNativeGoogle,
 } from "@/lib/nativeGoogleAuth";
@@ -371,6 +372,62 @@ export default function SignInScreen() {
     router.replace("/(tabs)/chats");
   }
 
+  async function handleGoogleOAuthFallback() {
+    try {
+      const redirectUrl = makeRedirectUri({ native: "afuchat://(auth)/login" });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (error || !data?.url) throw error ?? new Error("Google sign-in could not be started.");
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+        showInRecents: false,
+      });
+      if (result.type !== "success" || !result.url) return;
+
+      const callbackUrl = new URL(result.url);
+      const callbackHash = new URLSearchParams(callbackUrl.hash.replace(/^#/, ""));
+      const callbackError =
+        callbackUrl.searchParams.get("error_description") ??
+        callbackHash.get("error_description") ??
+        callbackUrl.searchParams.get("error") ??
+        callbackHash.get("error");
+      if (callbackError) throw new Error(callbackError);
+
+      const code = callbackUrl.searchParams.get("code");
+      if (code) {
+        const { data: authData, error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) throw exchangeError;
+        if (!authData.session) throw new Error("Google did not return an authenticated session.");
+      } else {
+        const accessToken =
+          callbackHash.get("access_token") ?? callbackUrl.searchParams.get("access_token");
+        const refreshToken =
+          callbackHash.get("refresh_token") ?? callbackUrl.searchParams.get("refresh_token");
+        if (!accessToken || !refreshToken) {
+          throw new Error("Google did not return an authenticated session.");
+        }
+
+        const { data: authData, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) throw sessionError;
+        if (!authData.session) throw new Error("Google did not return an authenticated session.");
+      }
+
+      router.replace("/(tabs)/chats");
+    } catch {
+      showAlert("Google sign-in failed", "Could not complete Google sign-in. Please try again.");
+    }
+  }
+
   // A returning Android user should not have to press the Google button again.
   // GoogleSignin restores the previously approved account without showing a
   // browser or account picker. A first-time user still gets the native picker
@@ -386,13 +443,11 @@ export default function SignInScreen() {
         const result = await signInSilentlyWithNativeGoogle();
         if (cancelled || result.kind !== "success") return;
         await finishGoogleIdTokenSignIn(result.idToken);
-      } catch (error: any) {
+      } catch {
         // Silent sign-in must never interrupt the login screen. A missing
         // native module or unregistered signing certificate is handled by the
         // explicit native button flow.
-        if (__DEV__) {
-          console.warn("[Auth] Native Google silent sign-in unavailable", error?.code ?? error?.message ?? error);
-        }
+        // Do not log provider errors here; they may contain credential material.
       } finally {
         if (!cancelled) setOauthLoading(null);
       }
@@ -629,7 +684,15 @@ export default function SignInScreen() {
         return;
       }
 
-      const nativeResult = await signInWithNativeGoogle();
+      let nativeResult: Awaited<ReturnType<typeof signInWithNativeGoogle>>;
+      try {
+        nativeResult = await signInWithNativeGoogle();
+      } catch (error) {
+        if (!isNativeGoogleConfigurationError(error)) throw error;
+        await handleGoogleOAuthFallback();
+        return;
+      }
+
       if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
       if (nativeResult.kind === "unavailable") {
         showAlert("Google sign-in unavailable", "Install the Android app to use native Google sign-in.");

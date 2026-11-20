@@ -60,6 +60,17 @@ function errorCode(error: any): string {
   return String(error?.code ?? "");
 }
 
+export function isNativeGoogleConfigurationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const nativeError = error as { code?: unknown; message?: unknown };
+  const code = String(nativeError.code ?? "").trim().toUpperCase();
+  const message = typeof nativeError.message === "string" ? nativeError.message : "";
+
+  // Google Play Services reports CommonStatusCodes.DEVELOPER_ERROR as 10.
+  return code === "10" || code === "DEVELOPER_ERROR" || /\bDEVELOPER_ERROR\b/i.test(message);
+}
+
 function isCancelled(error: any): boolean {
   const code = errorCode(error);
   return code === "SIGN_IN_CANCELLED" || code === "12501";
