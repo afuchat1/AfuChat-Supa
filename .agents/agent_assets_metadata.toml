@@ -313,3 +313,17 @@ mtime_ms = 1795184004788
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:24450e36-a507-47d1-a09c-df68d0c36210/1c451631-1cee-418a-824f-7c0ca778a31b/2ae6e31a-d468-4b4d-805b-be313d30cdf3"
 storage_version_token = "1795184039204749"
 content_type = "image/png"
+
+[[outputs]]
+id = "s0gEXl6svKJah3NEupG12"
+uri = "file://screenshots/expo-go-qr-latest.png"
+type = "image"
+title = "Scan AfuChat in Expo Go"
+description = "Current Expo Go session: exp://lrw8fh0-anonymous-8000.exp.direct. Android manifest and JavaScript bundle verified with HTTP 200."
+logical_id = "1b819b50-d70c-4d7b-b751-7c6883e5cd64"
+content_hash = "sha256:21e10a81c59698e82079525dbb9d51e5fed3f932713bcf32b41df02c33c0af01"
+size = 5090
+mtime_ms = 1795189906764
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:ea982968-4a11-49ab-bdb4-1bccadb8f310/1b819b50-d70c-4d7b-b751-7c6883e5cd64/222640ce-48f0-4f5b-84a8-c21bff7643fa"
+storage_version_token = "1795189923968003"
+content_type = "image/png"
