@@ -206,7 +206,8 @@
         "@react-native-google-signin/google-signin"
       ],
       "expo-sharing",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withOptionalHardwareFeatures"
     ],
     "updates": {
       "enabled": false
