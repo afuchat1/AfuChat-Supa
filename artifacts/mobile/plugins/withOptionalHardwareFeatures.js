@@ -13,20 +13,25 @@ const OPTIONAL_FEATURES = [
 module.exports = function withOptionalHardwareFeatures(config) {
   return withAndroidManifest(config, (config) => {
     const manifest = config.modResults.manifest;
+    manifest.$["xmlns:tools"] = "http://schemas.android.com/tools";
     const features = manifest["uses-feature"] ?? (manifest["uses-feature"] = []);
 
     for (const name of OPTIONAL_FEATURES) {
-      const existing = features.find(
+      const existing = features.filter(
         (feature) => feature.$?.["android:name"] === name,
       );
 
-      if (existing) {
-        existing.$["android:required"] = "false";
+      if (existing.length) {
+        for (const feature of existing) {
+          feature.$["android:required"] = "false";
+          feature.$["tools:replace"] = "android:required";
+        }
       } else {
         features.push({
           $: {
             "android:name": name,
             "android:required": "false",
+            "tools:replace": "android:required",
           },
         });
       }
