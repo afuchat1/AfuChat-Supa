@@ -473,21 +473,12 @@ export default function ContactScreen() {
       <View style={s.profileIdentity}>
         <View style={s.nameLine}>
           <View style={s.nameRow}>
-            {onCover ? (
-              <Text
-                style={[s.displayName, { color: primaryColor }]}
-                numberOfLines={1}
-              >
-                {profile.display_name}
-              </Text>
-            ) : (
-              <UserName
-                userId={profile.id}
-                name={profile.display_name}
-                style={[s.displayName, { color: primaryColor }]}
-                numberOfLines={1}
-              />
-            )}
+            <UserName
+              userId={profile.id}
+              name={profile.display_name}
+              style={[s.displayName, { color: primaryColor }]}
+              numberOfLines={1}
+            />
             <VerifiedBadge
               isVerified={profile.is_verified}
               isOrganizationVerified={profile.is_organization_verified}

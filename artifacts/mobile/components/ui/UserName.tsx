@@ -11,15 +11,25 @@ import {
 } from "react-native";
 import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTheme } from "@/hooks/useTheme";
 import { useUserEffects } from "@/hooks/useUserEffects";
 
-const METALLIC_GOLD = [
-  "#80500D",
-  "#C38A22",
-  "#FFF0A3",
-  "#D9A637",
-  "#FFF9D8",
-  "#A96B12",
+const LIGHT_METALLIC_GOLD = [
+  "#704607",
+  "#98620C",
+  "#A96F0F",
+  "#80530A",
+  "#AA7519",
+  "#704607",
+] as const;
+
+const DARK_METALLIC_GOLD = [
+  "#E7B73C",
+  "#F7D971",
+  "#FFF4C5",
+  "#D9A726",
+  "#FFF0A8",
+  "#ECC64F",
 ] as const;
 
 const CompatibleMaskedView = MaskedView as unknown as React.ComponentType<any>;
@@ -55,6 +65,7 @@ export default function UserName({
   numberOfLines,
   suppressStar = false,
 }: Props) {
+  const { isDark } = useTheme();
   const { goldNameplate, verifiedStar } = useUserEffects(userId);
   const shimmer = useRef(new Animated.Value(0)).current;
   const [textWidth, setTextWidth] = useState(0);
@@ -105,7 +116,7 @@ export default function UserName({
         }
       >
         <LinearGradient
-          colors={METALLIC_GOLD}
+          colors={isDark ? DARK_METALLIC_GOLD : LIGHT_METALLIC_GOLD}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
         >
