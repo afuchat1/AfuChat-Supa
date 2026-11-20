@@ -25,6 +25,9 @@
 -keep class org.jni_zero.** { *; }
 -keep class J.N { *; }
 -dontwarn org.jni_zero.**
+# WebRTC M155 references this optional AV1 JNI class, which is absent from the
+# Android artifact. Keep the suppression limited to the exact missing class.
+-dontwarn org.webrtc.Dav1dDecoder$Natives
 
 # App-owned Android components referenced by the manifest or React package.
 -keep public class com.afuchat.mobile.AfuChatWidgetProvider { *; }
