@@ -435,20 +435,31 @@ export default function SignUpScreen() {
     try {
       setOauthLoading("google");
       let uid: string | null = null;
+      let nativeIdToken: string | null = null;
+
       if (Platform.OS === "android") {
-        const nativeResult = await signInWithNativeGoogle();
-        if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
-        if (nativeResult.kind === "success") {
-          const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
-            provider: "google",
-            token: nativeResult.idToken,
-          });
-          if (authError) throw authError;
-          uid = authData.user?.id ?? null;
+        try {
+          const nativeResult = await signInWithNativeGoogle();
+          if (nativeResult.kind === "cancelled") return;
+          if (nativeResult.kind === "success") {
+            nativeIdToken = nativeResult.idToken;
+          }
+        } catch {
+          // Native Google setup or device errors must not block the PKCE OAuth fallback.
         }
       }
 
-      if (!uid) {
+      if (nativeIdToken) {
+        // Once Supabase token exchange begins, surface its error instead of starting
+        // a second authentication flow and potentially replacing a partially-created session.
+        const { data: authData, error: authError } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: nativeIdToken,
+        });
+        if (authError) throw authError;
+        uid = authData.user?.id ?? null;
+        if (!uid) throw new Error("Google sign-up did not return an authenticated user.");
+      } else {
         uid = await signInWithGoogleOAuth("afuchat://(auth)/register");
       }
       if (!uid) return;
