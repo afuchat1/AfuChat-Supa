@@ -686,6 +686,7 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
   const [nativeLoading, setNativeLoading] = useState(isNativeStorePurchase);
   const [nativePackages, setNativePackages] = useState<AcoinStorePackage[]>([]);
   const [nativeError, setNativeError] = useState("");
+  const [nativeRetryCount, setNativeRetryCount] = useState(0);
   const [confirmTestPurchase, setConfirmTestPurchase] = useState(false);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
@@ -707,7 +708,10 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
         if (!active) return;
         setNativePackages(packages);
         setSelectedPack(packages.length ? Math.min(2, packages.length - 1) : null);
-        if (!packages.length) setNativeError("Acoin purchases are not available for this store yet.");
+        if (!packages.length) {
+          const storeName = Platform.OS === "android" ? "Google Play" : "App Store";
+          setNativeError(`No Acoin products are currently available from ${storeName}. Check that you're using the store version of AfuChat, then try again or contact support.`);
+        }
       })
       .catch((error) => {
         if (!active) return;
@@ -718,7 +722,7 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
       });
 
     return () => { active = false; };
-  }, [isNativeStorePurchase, userId]);
+  }, [isNativeStorePurchase, nativeRetryCount, userId]);
 
   const selectedNativePackage = isNativeStorePurchase && selectedPack !== null
     ? nativePackages[selectedPack] ?? null
@@ -851,9 +855,23 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
         )}
 
         {isNativeStorePurchase && !nativeLoading && !!nativeError && (
-          <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 14 }]}>
-            <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
-            <Text style={[s.topupStepSub, { color: colors.textMuted, flex: 1 }]}>{nativeError}</Text>
+          <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 14, flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", gap: 10 }]}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+              <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
+              <Text style={[s.topupStepSub, { color: colors.textMuted, flex: 1 }]}>{nativeError}</Text>
+            </View>
+            {userId ? (
+              <TouchableOpacity
+                testID="acoin-purchases-retry"
+                accessibilityRole="button"
+                accessibilityLabel="Try loading Acoin purchases again"
+                activeOpacity={0.75}
+                onPress={() => setNativeRetryCount((count) => count + 1)}
+                style={{ alignSelf: "flex-end", paddingVertical: 4, paddingHorizontal: 8 }}
+              >
+                <Text style={{ color: Colors.brand, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Try again</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
 

@@ -30,7 +30,7 @@ function isDevelopmentStore(): boolean {
 function getApiKey(): string {
   if (isDevelopmentStore()) {
     if (REVENUECAT_TEST_API_KEY) return REVENUECAT_TEST_API_KEY;
-    throw new Error("Acoin test purchases are not configured for this build.");
+    throw new Error("Acoin test purchases are not configured for this development build. Contact support if you expected them to be available.");
   }
 
   const key = Platform.OS === "ios"
@@ -38,7 +38,10 @@ function getApiKey(): string {
     : Platform.OS === "android"
       ? REVENUECAT_ANDROID_API_KEY
       : "";
-  if (!key) throw new Error("In-app purchases are not configured for this device.");
+  if (!key) {
+    const storeName = Platform.OS === "android" ? "Google Play" : "App Store";
+    throw new Error(`${storeName} purchases are not configured for this app build. Update AfuChat from ${storeName} or contact support.`);
+  }
   return key;
 }
 
@@ -79,7 +82,8 @@ export async function getAcoinStorePackages(userId: string): Promise<AcoinStoreP
   const offerings = await Purchases.getOfferings();
   const offering = offerings.all[ACOIN_OFFERING_IDENTIFIER];
   if (!offering) {
-    throw new Error("Acoin purchases are not available for this store yet.");
+    const storeName = Platform.OS === "android" ? "Google Play" : "App Store";
+    throw new Error(`Acoin purchases are not available from ${storeName} for this app yet. Try again later or contact support.`);
   }
 
   return offering.availablePackages
