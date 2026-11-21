@@ -11,6 +11,8 @@ const STATUS_SAMPLE_HEIGHT = 0.14;
 const LIGHT_BACKGROUND_THRESHOLD = 0.179;
 const toneCache = new Map<string, ProfileCoverTone>();
 const pendingSamples = new Map<string, Promise<ProfileCoverTone>>();
+const getTimingNow = () =>
+  typeof performance !== "undefined" ? performance.now() : Date.now();
 
 type JpegDecoder = {
   decode: (
@@ -183,6 +185,13 @@ async function sampleNativeImage(
   uri: string,
   region: ProfileCoverRegion,
 ): Promise<ProfileCoverTone | null> {
+  const totalStartedAt = getTimingNow();
+  let downloadMs = 0;
+  let imageSizeMs = 0;
+  let imageManipulationMs = 0;
+  let base64DecodeMs = 0;
+  let jpegDecodeMs = 0;
+  let pixelClassificationMs = 0;
   let sourceUri = uri;
   let downloadedUri: string | null = null;
   let sampledUri: string | null = null;
@@ -199,14 +208,18 @@ async function sampleNativeImage(
       if (existingFile.exists) {
         await FileSystem.deleteAsync(destination, { idempotent: true });
       }
+      const downloadStartedAt = getTimingNow();
       const download = await FileSystem.downloadAsync(uri, destination);
+      downloadMs = getTimingNow() - downloadStartedAt;
       sourceUri = download.uri;
       downloadedUri = download.uri;
     }
 
     let crop: ImageManipulator.ActionCrop["crop"] | null = null;
     try {
+      const imageSizeStartedAt = getTimingNow();
       const { width, height } = await getImageSize(sourceUri);
+      imageSizeMs = getTimingNow() - imageSizeStartedAt;
       if (width > 1 && height > 1) {
         const originX = region === "status" ? 0 : Math.floor(width * 0.28);
         const originY =
@@ -229,21 +242,33 @@ async function sampleNativeImage(
       ...(crop ? [{ crop }] : []),
       { resize: { width: SAMPLE_SIZE, height: SAMPLE_SIZE } },
     ];
+    const manipulationStartedAt = getTimingNow();
     const result = await ImageManipulator.manipulateAsync(sourceUri, actions, {
       compress: 0.65,
       format: ImageManipulator.SaveFormat.JPEG,
       base64: true,
     });
+    imageManipulationMs = getTimingNow() - manipulationStartedAt;
     sampledUri = result.uri;
     if (!result.base64) return null;
 
-    const decoded = jpeg.decode(decodeBase64(result.base64), { useTArray: true });
-    return classifyProfileCoverSample(
+    const base64StartedAt = getTimingNow();
+    const sampledBytes = decodeBase64(result.base64);
+    base64DecodeMs = getTimingNow() - base64StartedAt;
+
+    const jpegStartedAt = getTimingNow();
+    const decoded = jpeg.decode(sampledBytes, { useTArray: true });
+    jpegDecodeMs = getTimingNow() - jpegStartedAt;
+
+    const classifyStartedAt = getTimingNow();
+    const tone = classifyProfileCoverSample(
       decoded.data,
       decoded.width,
       decoded.height,
       region,
     );
+    pixelClassificationMs = getTimingNow() - classifyStartedAt;
+    return tone;
   } catch {
     return null;
   } finally {
@@ -252,6 +277,19 @@ async function sampleNativeImage(
     }
     if (downloadedUri) {
       await FileSystem.deleteAsync(downloadedUri, { idempotent: true }).catch(() => {});
+    }
+    if (__DEV__) {
+      console.info("[profile-cover-perf]", {
+        region,
+        totalMs: Number((getTimingNow() - totalStartedAt).toFixed(2)),
+        downloadMs: Number(downloadMs.toFixed(2)),
+        imageSizeMs: Number(imageSizeMs.toFixed(2)),
+        imageManipulationMs: Number(imageManipulationMs.toFixed(2)),
+        base64DecodeMs: Number(base64DecodeMs.toFixed(2)),
+        jpegDecodeMs: Number(jpegDecodeMs.toFixed(2)),
+        pixelClassificationMs: Number(pixelClassificationMs.toFixed(2)),
+        sampleSize: `${SAMPLE_SIZE}x${SAMPLE_SIZE}`,
+      });
     }
   }
 }
