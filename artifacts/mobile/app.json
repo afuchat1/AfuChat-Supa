@@ -198,7 +198,7 @@
         {
           "microphonePermission": "AfuChat uses the microphone to record voice messages.",
           "recordAudioAndroid": true,
-          "enableBackgroundPlayback": false,
+        "enableBackgroundPlayback": true,
           "enableBackgroundRecording": false
         }
       ],

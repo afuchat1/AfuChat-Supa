@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, Animated, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
+import { ActivityIndicator, Animated, AppState, PanResponder, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { audioFocus } from "@/lib/audioFocus";
 import { useTheme } from "@/hooks/useTheme";
@@ -10,6 +10,17 @@ import type { AfuMusicTrack } from "@/modules/afumusic";
 import type { AudioStatus } from "expo-audio";
 
 type AudioUriResolver = (track: AfuMusicTrack) => Promise<string | null>;
+const AFUMUSIC_AUDIO_MODE = {
+  allowsRecording: false,
+  playsInSilentMode: true,
+  interruptionMode: "doNotMix",
+  shouldPlayInBackground: true,
+} as const;
+const AFUMUSIC_LOCK_SCREEN_OPTIONS = {
+  showSeekBackward: true,
+  showSeekForward: true,
+} as const;
+
 type ActiveMusic = {
   track: AfuMusicTrack;
   uri: string;
@@ -104,6 +115,7 @@ function SlidingTrackTitle({ title, color }: { title: string; color: string }) {
 }
 
 type MusicTransportProps = {
+  track: AfuMusicTrack;
   uri: string;
   expanded: boolean;
   onNext?: () => void;
@@ -153,6 +165,7 @@ function MusicTransport(props: MusicTransportProps) {
 }
 
 function LoadedMusicTransport({
+  track,
   uri,
   expanded,
   onNext,
@@ -227,19 +240,32 @@ function LoadedMusicTransport({
           return;
         }
 
-        await audioModule.setAudioModeAsync({
-          allowsRecording: false,
-          playsInSilentMode: true,
-          interruptionMode: "duckOthers",
-          shouldPlayInBackground: false,
-        });
+        await audioModule.setAudioModeAsync(AFUMUSIC_AUDIO_MODE);
         if (!mountedRef.current) return;
         nativeSubscription = audioPlayer.addListener("playbackStatusUpdate", onNativeStatus);
         audioPlayer.play();
+        audioPlayer.setActiveForLockScreen(
+          true,
+          {
+            title: track.title,
+            artist: track.artist,
+            albumTitle: "AfuMusic",
+            artworkUrl: track.coverUrl,
+          },
+          AFUMUSIC_LOCK_SCREEN_OPTIONS,
+        );
       } catch {
         if (mountedRef.current) setFailed(true);
       }
     };
+
+    const appStateSubscription = Platform.OS === "web"
+      ? null
+      : AppState.addEventListener("change", (nextState) => {
+          if (nextState === "background") {
+            void audioModule.setAudioModeAsync(AFUMUSIC_AUDIO_MODE).catch(() => {});
+          }
+        });
 
     void load();
     const unsubscribeFocus = audioFocus.subscribe(() => {
@@ -251,6 +277,7 @@ function LoadedMusicTransport({
     return () => {
       mountedRef.current = false;
       unsubscribeFocus();
+      appStateSubscription?.remove();
       if (webAudio) {
         webAudio.pause();
         webAudio.removeAttribute("src");
@@ -258,9 +285,12 @@ function LoadedMusicTransport({
       }
       webAudioRef.current = null;
       nativeSubscription?.remove();
-      if (Platform.OS !== "web") audioPlayer.pause();
+      if (Platform.OS !== "web") {
+        audioPlayer.clearLockScreenControls();
+        audioPlayer.pause();
+      }
     };
-  }, [audioModule, audioPlayer, onNext, uri]);
+  }, [audioModule, audioPlayer, onNext, track.artist, track.coverUrl, track.title, uri]);
 
   const togglePlayback = useCallback(async () => {
     if (!ready) return;
@@ -546,6 +576,7 @@ export function GlobalMusicPlayerProvider({ children }: { children: ReactNode })
                 </View>
                 <MusicTransport
                   key={activeMusic.track.id}
+                  track={activeMusic.track}
                   uri={activeMusic.uri}
                   expanded={expanded}
                   onNext={playNext}
