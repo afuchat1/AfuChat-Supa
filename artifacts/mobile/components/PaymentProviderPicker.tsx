@@ -31,10 +31,12 @@ export function PaymentProviderPicker({
   value,
   onChange,
   colors,
+  storeOption,
 }: {
   value: PaymentProvider;
   onChange: (provider: PaymentProvider) => void;
   colors: { text: string; textMuted: string; border: string; surface?: string; inputBg?: string };
+  storeOption?: { label: string; selected: boolean; onSelect: () => void };
 }) {
   return (
     <View>
@@ -42,11 +44,52 @@ export function PaymentProviderPicker({
         PAYMENT METHOD
       </Text>
       <View style={{ marginTop: 4 }}>
+        {storeOption && (
+          <TouchableOpacity
+            testID="payment-provider-store"
+            accessibilityRole="radio"
+            accessibilityLabel={`${storeOption.label} in-app billing`}
+            accessibilityState={{ selected: storeOption.selected }}
+            onPress={storeOption.onSelect}
+            activeOpacity={0.8}
+            style={{
+              minHeight: 64,
+              paddingHorizontal: 2,
+              paddingVertical: 8,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              borderBottomWidth: 0.5,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <View style={{ width: 84, height: 38, alignItems: "flex-start", justifyContent: "center", flexShrink: 0 }}>
+              <Ionicons
+                name="card-outline"
+                size={26}
+                color={storeOption.selected ? Colors.brand : colors.textMuted}
+              />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: storeOption.selected ? Colors.brand : colors.text, fontSize: 14, fontFamily: "Inter_600SemiBold" }}>
+                {storeOption.label}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                In-app billing
+              </Text>
+            </View>
+            <Ionicons
+              name={storeOption.selected ? "radio-button-on" : "radio-button-off"}
+              size={20}
+              color={storeOption.selected ? Colors.brand : colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
         {([
           ["whop", "Whop"],
           ["pesapal", "Pesapal"],
         ] as const).map(([provider, label], index, providers) => {
-          const selected = value === provider;
+          const selected = !storeOption?.selected && value === provider;
           return (
             <TouchableOpacity
               key={provider}
