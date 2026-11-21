@@ -28,6 +28,7 @@
 - [AfuChat production-branch workflow](afuchat-production-branch-workflow.md) — For urgent AfuChat fixes, work directly on the production branch instead of creating a feature branch.
 - [AfuChat production feature policy](afuchat-production-feature-policy.md) — Keep real features production-ready; do not direct users to install another environment to access them.
 - [Supabase production function capacity](supabase-production-function-capacity.md) — Check the live function inventory before deployment; never remove an active endpoint without user approval.
+- [Supabase Realtime channel lifecycle](supabase-realtime-channel-lifecycle.md) — Channel topics are reused until async removal completes; use distinct topics when effects can restart quickly.
 - [ACoin transfer safety](acoin-transfer-safety.md) — Keep wallet transfers atomic and use the live money-request status values.
 - [AfuChat app scope](afuchat-database-scope.md) — Follow the live Supabase schema; a migration in source may not yet be applied remotely.
 - [Username ownership security](username-ownership-security.md) — Free primary handles are not purchases; only trusted marketplace flows may create durable aliases.

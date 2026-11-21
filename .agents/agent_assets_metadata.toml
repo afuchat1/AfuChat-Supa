@@ -341,3 +341,17 @@ mtime_ms = 1795190656878
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7afb0748-b177-40ba-bb49-471d17a15a7a/06435570-150d-4f7a-a702-0063406d3278/b9375157-8593-407c-8f46-01d3fcb6cc4d"
 storage_version_token = "1795190672625212"
 content_type = "image/png"
+
+[[outputs]]
+id = "k-GlWil07Wc3SqozGhU89"
+uri = "file://artifacts/mobile/expo-go-current-qr.png"
+type = "image"
+title = "Current Expo Go QR"
+description = "Scan with Expo Go to open the running Android development session with the crash fix."
+logical_id = "981938b9-3f02-4202-aa7c-4be6daf4ed32"
+content_hash = "sha256:c610bce4f6773da591d1d67dabbe1ad77ac6e4e7369476bf1363bbd4bb937929"
+size = 5292
+mtime_ms = 1795246015156
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:264d11da-1124-49d1-8cc3-9456fc5aff2a/981938b9-3f02-4202-aa7c-4be6daf4ed32/874c81bf-952a-4ad9-af75-0c0c678dbb5a"
+storage_version_token = "1795246019826245"
+content_type = "image/png"

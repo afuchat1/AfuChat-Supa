@@ -274,8 +274,12 @@ export default function ViewStoryScreen() {
 
     const storyIds = stories.map((s) => s.id);
 
+    // Supabase reuses an existing channel for the same topic. Since removal is
+    // async, an effect can restart before the prior channel has been removed
+    // and receive an already-subscribed instance here.
+    const channelTopic = `story-viewer-rt-${userId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const channel = supabase
-      .channel(`story-viewer-rt-${userId}`)
+      .channel(channelTopic)
       // New story posted by this user while viewer is open → append it
       .on(
         "postgres_changes",
