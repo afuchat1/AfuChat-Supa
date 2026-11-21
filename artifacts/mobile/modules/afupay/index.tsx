@@ -471,10 +471,19 @@ export default function AfuPayApp({
             { icon: "paper-plane" as const, label: "Send", color: colors.accent, view: "send" as AppView },
             { icon: "qr-code" as const, label: "Receive", color: colors.success, view: "receive" as AppView },
             { icon: "swap-horizontal" as const, label: "Convert", color: colors.warning, view: "exchange" as AppView },
+            {
+              icon: "arrow-up-circle-outline" as const,
+              label: "Withdraw",
+              description: "Coming soon",
+              color: colors.textMuted,
+              onPress: () => showAlert(
+                "Withdrawals coming soon",
+                "Your account isn’t eligible for withdrawals yet. Keep using AfuChat and building your activity to gain access when withdrawals launch.",
+              ),
+            },
             { icon: "arrow-down-circle-outline" as const, label: "Request", color: Colors.gold, route: "request" as const },
             { icon: "receipt-outline" as const, label: "Requests", color: colors.accent, view: "requests" as AppView },
             { icon: "time-outline" as const, label: "Activity", color: colors.textSecondary, view: "history" as AppView },
-            { icon: "grid-outline" as const, label: "Services", color: colors.success, view: "services" as AppView },
           ].map((a) => {
             const badge = a.label === "Requests" && pendingRequestCount > 0 ? pendingRequestCount : 0;
             return (
@@ -483,12 +492,17 @@ export default function AfuPayApp({
                 style={[s.actionTile, { backgroundColor: colors.cardSurface }]}
                 onPress={() => {
                   Haptics.selectionAsync();
-                  if ("route" in a) openMoneyRequest();
+                  if ("onPress" in a && typeof a.onPress === "function") a.onPress();
+                  else if ("route" in a) openMoneyRequest();
                   else navigateToView(a.view);
                 }}
                 activeOpacity={0.78}
                 accessibilityRole="button"
-                accessibilityLabel={a.label === "Request" ? "Request money" : a.label}
+                accessibilityLabel={a.label === "Request"
+                  ? "Request money"
+                  : "description" in a
+                    ? `${a.label}, ${a.description}`
+                    : a.label}
               >
                 <View style={{ position: "relative" }}>
                   <View style={[s.actionIcon, { backgroundColor: a.color + "18" }]}>
@@ -500,7 +514,12 @@ export default function AfuPayApp({
                     </View>
                   )}
                 </View>
-                <Text style={[s.actionLabel, { color: colors.text }]}>{a.label}</Text>
+                <View style={{ alignItems: "center" }}>
+                  <Text style={[s.actionLabel, { color: "description" in a ? colors.textMuted : colors.text }]}>{a.label}</Text>
+                  {"description" in a && (
+                    <Text style={[s.actionDescription, { color: colors.textMuted }]}>{a.description}</Text>
+                  )}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -1565,7 +1584,8 @@ const s = StyleSheet.create({
   heroDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.2)", marginTop: 16, marginBottom: 13 },
   heroSub: { color: "rgba(255,255,255,0.72)", fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 5 },
   actionIcon: { width: 44, height: 44, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  actionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  actionLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  actionDescription: { marginTop: 1, fontSize: 8, lineHeight: 10, fontFamily: "Inter_500Medium", textAlign: "center" },
   promoCard: { minHeight: 143, marginHorizontal: 16, marginBottom: 16, borderRadius: 22, overflow: "hidden", flexDirection: "row", alignItems: "center", paddingLeft: 17, paddingRight: 8 },
   promoCopy: { flex: 1, minWidth: 0, zIndex: 1, paddingVertical: 15 },
   promoEyebrow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 7 },

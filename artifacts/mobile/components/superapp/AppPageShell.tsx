@@ -12,7 +12,6 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "history", label: "Activity", icon: "receipt-outline", href: "/app/afupay?section=history" },
     { key: "topup", label: "Top up", icon: "add-circle-outline", href: "/app/afupay?section=topup" },
     { key: "requests", label: "Requests", icon: "arrow-down-circle-outline", href: "/app/afupay?section=requests" },
-    { key: "services", label: "Services", icon: "grid-outline", href: "/app/afupay?section=services" },
   ],
   afumarket: [
     { key: "browse", label: "Browse", icon: "storefront-outline", href: "/app/afumarket" },
@@ -94,9 +93,6 @@ export function normalizeAppNavKey(section?: string) {
   if (section === "apply" || section === "manage" || section === "storefront" || section === "product" || section === "order") return "browse";
   if (section === "post-gig") return "post-gig";
   if (["competitions", "followed"].includes(section ?? "")) return section;
-  if (["airtime", "data-bundles", "bills", "transfer", "hotels", "tickets", "fee-details"].includes(section ?? "")) {
-    return "services";
-  }
   return section;
 }
 
