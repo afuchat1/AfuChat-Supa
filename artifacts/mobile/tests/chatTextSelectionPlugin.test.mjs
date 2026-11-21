@@ -29,6 +29,6 @@ test("native selection patch is idempotent", () => {
 test("fails clearly when React Native changes its Android callback", () => {
   assert.throws(
     () => patchReactEditTextSource("override fun onCreateActionMode() = false"),
-    /Could not find React Native's Android selection callback/,
+    /Could not find React Native's contextMenuHidden selection guard/,
   );
 });

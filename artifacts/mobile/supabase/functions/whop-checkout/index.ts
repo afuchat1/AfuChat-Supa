@@ -112,7 +112,7 @@ async function createCheckout(userId: string | null, body: Record<string, unknow
   try {
     const whop = createWhopClient();
     const accountId = WHOP_COMPANY_ID || (await whop.accounts.me()).id;
-    const redirectUrl = `https://afuchat.com/about?payment-complete=1&session_id=${encodeURIComponent(session.id)}`;
+    const redirectUrl = `https://afuchat.com/payment-return?payment-complete=1&provider=whop&purpose=${purpose}&session_id=${encodeURIComponent(session.id)}`;
     const checkout = await whop.checkoutConfigurations.create({
       variant: {
         title: purpose === "topup" ? `AfuChat ${acoinAmount} ACoins` : "AfuChat Donation",

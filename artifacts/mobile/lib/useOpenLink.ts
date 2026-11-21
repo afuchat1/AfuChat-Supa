@@ -5,8 +5,7 @@ import { openExternalLink } from "@/lib/openExternalLink";
 
 export { isWebUrl } from "@/lib/openExternalLink";
 
-// Default tap: open web URLs in the in-app browser and send non-web schemes
-// (mailto, tel, sms, and app deep links) to their OS handlers.
+// Default tap: route AfuChat links internally and open other links with the OS.
 export function useOpenLink() {
   return useCallback((url: string) => {
     if (!url) return;
@@ -24,7 +23,7 @@ export function useOpenLinkActions() {
     (url: string) => {
       const display = url.length > 52 ? url.slice(0, 52) + "\u2026" : url;
       showAlert("Open Link", display, [
-        { text: "Open in AfuChat Browser", onPress: () => openInBrowser(url) },
+        { text: "Open externally", onPress: () => openInBrowser(url) },
         { text: "Copy Link",             onPress: () => Clipboard.setStringAsync(url).catch(() => {}) },
         { text: "Cancel", style: "cancel" },
       ]);

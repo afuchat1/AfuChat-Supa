@@ -16,6 +16,7 @@
 // table using media_type values: chat_image, chat_gif, chat_audio, chat_file.
 
 import * as FileSystem from "expo-file-system/legacy";
+import { File } from "expo-file-system";
 import { Platform } from "react-native";
 import { getDB } from "./db";
 import { storage } from "./mmkv";
@@ -210,7 +211,7 @@ export async function requestGalleryPermissionOnce(): Promise<boolean> {
 }
 
 /**
- * Open a locally-cached file with the device's native file viewer / share sheet.
+ * Open a locally-cached file in the platform's native file preview.
  */
 export async function openChatFile(
   localPath: string,
@@ -221,14 +222,16 @@ export async function openChatFile(
     if (typeof window === "undefined") return false;
     return window.open(localPath, "_blank", "noopener,noreferrer") !== null;
   }
-  const Sharing = await import("expo-sharing");
-  const available = await Sharing.isAvailableAsync();
-  if (!available) return false;
-  await Sharing.shareAsync(localPath, {
-    dialogTitle: options.dialogTitle ?? "Open or share file",
-    mimeType: normalizeChatAttachmentMimeType(options.mimeType, options.fileName),
-  });
-  return true;
+  try {
+    const file = new File(localPath);
+    const mimeType = normalizeChatAttachmentMimeType(options.mimeType, options.fileName);
+    if (!(await file.canPreview({ mimeType }))) return false;
+    await file.preview({ mimeType, title: options.fileName ?? undefined });
+    return true;
+  } catch (error) {
+    console.warn("[ChatAttachment] Native file preview failed:", error);
+    return false;
+  }
 }
 
 export function downloadChatAttachmentInBrowser(url: string, fileName: string): boolean {
@@ -249,10 +252,17 @@ export async function saveChatAttachmentToDevice(
   options: { fileName?: string | null; mimeType?: string | null } = {},
 ): Promise<boolean> {
   try {
-    return await openChatFile(localPath, {
-      ...options,
+    if (Platform.OS === "web") {
+      const fileName = getChatAttachmentName(options.fileName, localPath);
+      return downloadChatAttachmentInBrowser(localPath, fileName);
+    }
+    const Sharing = await import("expo-sharing");
+    if (!(await Sharing.isAvailableAsync())) return false;
+    await Sharing.shareAsync(localPath, {
       dialogTitle: "Save or share file",
+      mimeType: normalizeChatAttachmentMimeType(options.mimeType, options.fileName),
     });
+    return true;
   } catch (error) {
     console.warn("[ChatAttachment] Could not open the system file actions:", error);
     return false;

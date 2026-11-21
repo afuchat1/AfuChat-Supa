@@ -1,24 +1,21 @@
 // ─── DonateSheet ─────────────────────────────────────────────────────────────
 // Bottom-sheet donation flow powered by Pesapal.
 // Calls the existing `pesapal-initiate` edge function with
-// { purpose: "donation", usd_amount: X } — the same checkout WebView
-// pattern used by the ACoins top-up flow in modules/afupay.
+// { purpose: "donation", usd_amount: X }; hosted checkouts open externally.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Modal,
+  AppState,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
-import { WebView } from "react-native-webview";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { SUPABASE_EDGE_URL } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
@@ -27,6 +24,7 @@ import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
 import { useLanguage } from "@/context/LanguageContext";
 import { PaymentProviderPicker, type PaymentProvider } from "@/components/PaymentProviderPicker";
 import { confirmWhopPayment, startWhopCheckout } from "@/lib/whopPayments";
+import { openExternalLink } from "@/lib/openExternalLink";
 
 const ACCENT = Colors.brand;
 
@@ -58,7 +56,6 @@ interface DonateSheetProps {
 export function DonateSheet({ visible, onClose }: DonateSheetProps) {
   const { colors, isDark } = useTheme();
   const { t } = useLanguage();
-  const insets = useSafeAreaInsets();
 
   const [selectedPreset, setSelectedPreset] = useState<number>(1); // default $5
   const [customAmt, setCustomAmt] = useState("");
@@ -66,12 +63,47 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
   const [error, setError] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [webLoading, setWebLoading] = useState(false);
   const [provider, setProvider] = useState<PaymentProvider>("whop");
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const completionHandled = useRef(false);
+  const wasBackgrounded = useRef(false);
+  const confirmingOnResume = useRef(false);
+
+  useEffect(() => {
+    if (!checkoutUrl) return;
+    const url = checkoutUrl;
+    setCheckoutUrl(null);
+    void openExternalLink(url).catch((launchError) => {
+      setCheckoutSessionId(null);
+      setError(launchError instanceof Error ? launchError.message : "Could not open the payment page. Please try again.");
+    });
+  }, [checkoutUrl]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        wasBackgrounded.current = true;
+        return;
+      }
+      if (!wasBackgrounded.current) return;
+      wasBackgrounded.current = false;
+      const sessionId = checkoutSessionId;
+      if (!visible || provider !== "whop" || !sessionId || confirmingOnResume.current) return;
+      confirmingOnResume.current = true;
+      void confirmWhopPayment(sessionId)
+        .then((result) => {
+          if (!result.confirmed) return;
+          setCheckoutSessionId(null);
+          setDone(true);
+        })
+        .catch(() => {})
+        .finally(() => {
+          confirmingOnResume.current = false;
+        });
+    });
+    return () => subscription.remove();
+  }, [checkoutSessionId, provider, visible]);
 
   const usdAmount =
     customAmt !== ""
@@ -95,11 +127,11 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
       return;
     }
     setLoading(true);
+    setCheckoutSessionId(null);
     try {
       if (provider === "whop") {
         const result = await startWhopCheckout({ purpose: "donation", usd_amount: usdAmount });
         setCheckoutSessionId(result.session_id);
-        completionHandled.current = false;
         setCheckoutUrl(result.purchase_url);
       } else {
         const token = await getToken();
@@ -119,7 +151,6 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
         const data = await res.json();
         if (data.redirect_url) {
           setCheckoutSessionId(null);
-          completionHandled.current = false;
           setCheckoutUrl(data.redirect_url);
         } else {
           setError(data.error || t("donate.error_checkout"));
@@ -133,40 +164,6 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
     setLoading(false);
   }
 
-  function handleNavChange(nav: any) {
-    const u: string = nav.url || "";
-    if (
-      u.includes("payment-complete") ||
-      u.includes("payment_complete") ||
-      u.includes("paymentcomplete")
-    ) {
-      if (completionHandled.current) return;
-      completionHandled.current = true;
-      setCheckoutUrl(null);
-      if (provider === "whop") {
-        let returnedSessionId: string | null = null;
-        try { returnedSessionId = new URL(u).searchParams.get("session_id"); } catch {}
-        const sessionId = returnedSessionId || checkoutSessionId;
-        if (!sessionId) {
-          setError("We could not find your payment reference. Please check again shortly.");
-          return;
-        }
-        void confirmWhopPayment(sessionId).then((result) => {
-          if (result.confirmed) setDone(true);
-          else setError("Whop is still confirming your payment. Please check again shortly.");
-        }).catch((error) => {
-          setError(error instanceof Error ? error.message : "Whop is still confirming your payment.");
-        });
-      } else {
-        setDone(true);
-      }
-    }
-  }
-
-  function handleWebviewClose() {
-    setCheckoutUrl(null);
-  }
-
   function handleClose() {
     setSelectedPreset(1);
     setCustomAmt("");
@@ -176,65 +173,6 @@ export function DonateSheet({ visible, onClose }: DonateSheetProps) {
     setCheckoutSessionId(null);
     setProvider("whop");
     onClose();
-  }
-
-  // ── Hosted payment WebView modal ───────────────────────────────────────────
-  if (checkoutUrl) {
-    return (
-      <Modal
-        visible
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={handleWebviewClose}
-      >
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-          {/* Header */}
-          <View style={[s.webviewHeader, {
-            paddingTop: insets.top + 8,
-            borderBottomColor: colors.border,
-            backgroundColor: colors.background,
-          }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name="lock-closed" size={13} color="#34C759" />
-              <Text style={[s.webviewTitle, { color: colors.text }]}>{t("donate.checkout_title")}</Text>
-              <View style={s.pesapalBadge}>
-                <Text style={s.pesapalBadgeText}>{provider === "whop" ? "Whop" : "Pesapal"}</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={handleWebviewClose} hitSlop={12} style={{ padding: 6 }}>
-              <Ionicons name="close" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Progress bar */}
-          {webLoading && (
-            <View style={{ height: 3, backgroundColor: ACCENT + "30" }}>
-              <View style={{ width: "60%", height: 3, backgroundColor: ACCENT }} />
-            </View>
-          )}
-
-          <WebView
-            source={{ uri: checkoutUrl }}
-            style={{ flex: 1, backgroundColor: colors.background }}
-            onLoadStart={() => setWebLoading(true)}
-            onLoadEnd={() => setWebLoading(false)}
-            onNavigationStateChange={handleNavChange}
-            javaScriptEnabled
-            domStorageEnabled
-            startInLoadingState
-            renderLoading={() => (
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <ActivityIndicator size="large" color={ACCENT} />
-                <Text style={{ marginTop: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 14 }}>
-                  {t("donate.loading_payment")}
-                </Text>
-              </View>
-            )}
-          />
-          <View style={{ height: insets.bottom, backgroundColor: colors.background }} />
-        </View>
-      </Modal>
-    );
   }
 
   // ── Thank-you state ───────────────────────────────────────────────────────
@@ -554,31 +492,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
-  },
-
-  // WebView header
-  webviewHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 0.5,
-  },
-  webviewTitle: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-  },
-  pesapalBadge: {
-    backgroundColor: "#34C75920",
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  pesapalBadgeText: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
-    color: "#34C759",
   },
 
   // Thank-you

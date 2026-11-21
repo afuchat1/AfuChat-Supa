@@ -20,7 +20,6 @@ export type AdvancedFeatureSettings = {
   quick_action_menu: boolean;
   drag_drop_upload: boolean;
   user_tagging: boolean;
-  in_app_browser: boolean;
   message_translation: boolean;
   translation_language: string;
   voice_to_text: boolean;
@@ -58,7 +57,6 @@ const defaults: AdvancedFeatureSettings = {
   quick_action_menu: true,
   drag_drop_upload: true,
   user_tagging: true,
-  in_app_browser: true,
   message_translation: false,
   translation_language: "en",
   voice_to_text: true,

@@ -29,6 +29,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { decodeId } from "./shortId";
+import { parsePaymentReturnParams } from "./paymentReturn";
 
 export const PENDING_JOIN_KEY = "pending_join_group_id";
 
@@ -94,6 +95,7 @@ const NAV_ROUTES: Record<string, string> = {
   terms:              "/terms",
   help:               "/help",
   privacy:            "/privacy",
+  "payment-return":   "/payment-return",
   // ── Content creation ──────────────────────────────────────────────────────
   moments:            "/moments",
   "create-post":      "/create-post",
@@ -119,7 +121,7 @@ const SYSTEM_ROUTES = new Set([
   ...Object.keys(NAV_ROUTES),
   "wallet", "settings", "chat", "premium", "onboarding",
   "login", "register", "search", "discover", "communities", "contacts",
-  "apps", "moments", "shorts", "stories", "post", "video", "article",
+  "apps", "browser", "moments", "shorts", "stories", "post", "video", "article",
   "shop", "freelance", "company", "mini-programs", "prestige",
   "username-market", "match", "gifts", "events", "market", "jobs",
   "support", "qr-scanner", "digital-id", "language-settings",
@@ -193,6 +195,11 @@ export async function handleIncomingUrl(
       isCustomScheme ? url.replace("afuchat://", "https://afuchat.com/") : url,
     );
     const segments = parsed.pathname.split("/").filter(Boolean);
+
+    const paymentReturnParams = parsePaymentReturnParams(url);
+    if (paymentReturnParams) {
+      return { type: "navigate", path: "/payment-return", params: paymentReturnParams };
+    }
 
     // 1. /join/:code -- group/channel invite link (UUID or shortId)
     if (segments.length === 2 && segments[0] === "join") {

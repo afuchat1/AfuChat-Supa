@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Image,
   Modal,
   Platform,
@@ -14,7 +15,6 @@ import {
   View,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
-import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -34,6 +34,7 @@ import AfuServicesApp from "@/modules/afuservices";
 import { safeRouter } from "@/lib/navUtils";
 import { PaymentProviderPicker, type PaymentProvider } from "@/components/PaymentProviderPicker";
 import { confirmWhopPayment, startWhopCheckout } from "@/lib/whopPayments";
+import { openExternalLink } from "@/lib/openExternalLink";
 import {
   getAcoinStorePackages,
   purchaseAcoinStorePackage,
@@ -601,83 +602,6 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
   );
 }
 
-function PaymentWebViewModal({ url, provider, colors, insets, onClose, onComplete }: {
-  url: string; provider: PaymentProvider; colors: any; insets: any; onClose: () => void; onComplete: (returnUrl: string) => void;
-}) {
-  const [webLoading, setWebLoading] = useState(true);
-  const completionHandled = useRef(false);
-
-  function complete(returnUrl: string) {
-    if (completionHandled.current) return;
-    completionHandled.current = true;
-    onComplete(returnUrl);
-  }
-
-  function handleNavChange(nav: any) {
-    const u: string = nav.url || "";
-    if (u.includes("payment-complete") || u.includes("payment_complete") || u.includes("paymentcomplete")) {
-      complete(u);
-    }
-  }
-
-  function shouldStart(req: any) {
-    const u: string = req.url || "";
-    if (u.includes("payment-complete") || u.includes("payment_complete") || u.includes("paymentcomplete")) {
-      complete(u);
-      return false;
-    }
-    return true;
-  }
-
-  return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={{
-          flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-          paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12,
-          borderBottomColor: colors.border, backgroundColor: colors.background,
-        }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Ionicons name="lock-closed" size={13} color="#34C759" />
-            <Text style={{ fontFamily: "Inter_600SemiBold", fontSize: 15, color: colors.text }}>Secure Checkout</Text>
-            <View style={{ backgroundColor: "#34C75920", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: "#34C759" }}>
-                {provider === "whop" ? "Whop" : "Pesapal"}
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={onClose} hitSlop={12} style={{ padding: 6 }}>
-            <Ionicons name="close" size={22} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-        {webLoading && (
-          <View style={{ height: 3, backgroundColor: Colors.brand + "30" }}>
-            <View style={{ width: "60%", height: 3, backgroundColor: Colors.brand }} />
-          </View>
-        )}
-        <WebView
-          source={{ uri: url }}
-          style={{ flex: 1, backgroundColor: colors.background }}
-          onLoadStart={() => setWebLoading(true)}
-          onLoadEnd={() => setWebLoading(false)}
-          onNavigationStateChange={handleNavChange}
-          onShouldStartLoadWithRequest={shouldStart}
-          javaScriptEnabled
-          domStorageEnabled
-          startInLoadingState
-          renderLoading={() => (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
-              <ActivityIndicator size="large" color={Colors.brand} />
-              <Text style={{ marginTop: 12, color: colors.textMuted, fontFamily: "Inter_400Regular", fontSize: 14 }}>Loading secure payment…</Text>
-            </View>
-          )}
-        />
-        <View style={{ height: insets.bottom, backgroundColor: colors.background }} />
-      </View>
-    </Modal>
-  );
-}
-
 function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) {
   const isNativeStorePurchase = Platform.OS !== "web";
   const [selectedPack, setSelectedPack] = useState<number | null>(2);
@@ -691,6 +615,44 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   const [provider, setProvider] = useState<PaymentProvider>("whop");
+  const wasBackgrounded = useRef(false);
+  const confirmingOnResume = useRef(false);
+
+  useEffect(() => {
+    if (!checkoutUrl) return;
+    const url = checkoutUrl;
+    setCheckoutUrl(null);
+    void openExternalLink(url).catch((error) => {
+      setCheckoutSessionId(null);
+      showAlert("Checkout could not open", error instanceof Error ? error.message : "Please try again.");
+    });
+  }, [checkoutUrl]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") {
+        wasBackgrounded.current = true;
+        return;
+      }
+      if (!wasBackgrounded.current) return;
+      wasBackgrounded.current = false;
+      const sessionId = checkoutSessionId;
+      if (provider !== "whop" || !sessionId || confirmingOnResume.current) return;
+      confirmingOnResume.current = true;
+      void confirmWhopPayment(sessionId)
+        .then((result) => {
+          if (!result.confirmed) return;
+          setCheckoutSessionId(null);
+          onSuccess?.();
+          showAlert("Payment Confirmed", "Your ACoin wallet has been updated.");
+        })
+        .catch(() => {})
+        .finally(() => {
+          confirmingOnResume.current = false;
+        });
+    });
+    return () => subscription.remove();
+  }, [checkoutSessionId, onSuccess, provider]);
 
   useEffect(() => {
     if (!isNativeStorePurchase) return;
@@ -751,6 +713,7 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
 
   async function checkout() {
     if (isNativeStorePurchase) return;
+    setCheckoutSessionId(null);
     const acoinAmt = selectedPack !== null ? PACKAGES[selectedPack].amount : (parseInt(customAmt || "0") || 0);
     const minimum = provider === "whop" ? 100 : 50;
     if (acoinAmt < minimum) {
@@ -1007,42 +970,6 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
           )}
         </TouchableOpacity>
       </View>
-
-      {!!checkoutUrl && (
-        <PaymentWebViewModal
-          url={checkoutUrl}
-          provider={provider}
-          colors={colors}
-          insets={insets}
-          onClose={() => setCheckoutUrl(null)}
-          onComplete={async (returnUrl) => {
-            let returnedSessionId: string | null = null;
-            try { returnedSessionId = new URL(returnUrl).searchParams.get("session_id"); } catch {}
-            setCheckoutUrl(null);
-            if (provider === "whop") {
-              const sessionId = returnedSessionId || checkoutSessionId;
-              if (!sessionId) {
-                showAlert("Payment Pending", "We could not find your payment reference. Your payment will be confirmed automatically if it succeeds.");
-                return;
-              }
-              try {
-                const result = await confirmWhopPayment(sessionId);
-                onSuccess?.();
-                if (result.confirmed) {
-                  showAlert("Payment Confirmed", "Your ACoin wallet has been updated.");
-                } else {
-                  showAlert("Payment Pending", "Whop is still confirming your payment. Your wallet will update when it is verified.");
-                }
-              } catch (error) {
-                showAlert("Payment Pending", error instanceof Error ? error.message : "Whop is still confirming your payment.");
-              }
-              return;
-            }
-            onSuccess?.();
-            showAlert("Payment Submitted", "Your payment is being processed. Your ACoin balance will update shortly.");
-          }}
-        />
-      )}
 
       <Modal
         visible={confirmTestPurchase}

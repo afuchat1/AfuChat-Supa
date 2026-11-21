@@ -53,8 +53,8 @@ pnpm run typecheck
 ## Native-only notes
 
 - The app does not include a web or Express server layer.
-- `expo-web-browser` remains for Android OAuth and external links.
-- `react-native-webview` remains for the native AfuPay payment flow.
+- `expo-web-browser` remains only for secure OAuth authentication sessions.
+- Hosted payment checkouts open in the system browser and return through the AfuChat payment link.
 - Replit startup uses `EXPO_OFFLINE=1`; do not replace it with `CI=1`.
 - EAS builds from Replit require `EAS_NO_VCS=1`.
 
