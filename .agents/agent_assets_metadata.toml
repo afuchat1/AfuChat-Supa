@@ -122,14 +122,14 @@ content_type = "image/png"
 id = "7CMuO_DSJUl0uoCQDEAaO"
 uri = "file://attached_assets/expo-go-qr.png"
 type = "image"
-title = "Expo Go QR code"
-description = "Scan this QR code with Expo Go to open the running AfuChat native app."
+title = "AfuChat Expo Go QR code"
+description = "Scan with Expo Go to open the currently running AfuChat development session."
 logical_id = "e59becc7-5cc1-4ab0-aabb-ca5af86cec9c"
-content_hash = "sha256:cce1166aff03813ef510f4dbc3b63b8f65e8912b214b9fea29078e1cce602f7f"
-size = 4743
-mtime_ms = 1793545469089
-storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:10052b23-87ab-499b-a02a-a55cf2258bf2/e59becc7-5cc1-4ab0-aabb-ca5af86cec9c/a0803fc0-15c9-4434-ac88-b7876b7c906b"
-storage_version_token = "1793545475166622"
+content_hash = "sha256:1ec1489b240301da1611af5962e564fe64614b2da7f5403e23d2d5e3fdab8b6a"
+size = 3943
+mtime_ms = 1795250440204
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:24450e36-a507-47d1-a09c-df68d0c36210/e59becc7-5cc1-4ab0-aabb-ca5af86cec9c/7eb4e8d0-84a3-4f9e-9cf8-a19eec63f946"
+storage_version_token = "1795250453316065"
 content_type = "image/png"
 
 [[outputs]]
