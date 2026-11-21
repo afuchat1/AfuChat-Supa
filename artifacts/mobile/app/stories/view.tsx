@@ -41,6 +41,13 @@ const STORY_DURATION = IMAGE_STORY_DURATION_SECONDS * 1000;
 const STORY_LIST_CACHE_PREFIX = "@afuchat:story_list:";
 const DISCOVER_STORY_CACHE_KEY = "@afuchat:discover_story_list";
 
+function isMissingStoryMusicColumns(error: any) {
+  const message = String(error?.message || "").toLowerCase();
+  return ["music_track_id", "music_start_seconds", "music_end_seconds"].some((column) =>
+    message.includes(column),
+  );
+}
+
 type Story = {
   id: string;
   media_url: string;
@@ -190,16 +197,33 @@ export default function ViewStoryScreen() {
         try { applyStories(JSON.parse(cached)); } catch {}
       }
       try {
-        const { data } = await supabase
+        const musicResponse = await supabase
           .from("stories")
           .select("id, media_url, media_type, caption, privacy, created_at, expires_at, view_count, user_id, music_track_id, music_start_seconds, music_end_seconds, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
           .eq("user_id", userId)
           .gt("expires_at", new Date().toISOString())
           .order("created_at", { ascending: true });
-        if (data && data.length > 0) {
-          applyStories(data);
-          AsyncStorage.setItem(`${STORY_LIST_CACHE_PREFIX}${userId}`, JSON.stringify(data)).catch(() => {});
-        } else if (data && data.length === 0) {
+        let storyRows: any[] | null = musicResponse.data as any[] | null;
+        if (musicResponse.error) {
+          if (!isMissingStoryMusicColumns(musicResponse.error)) throw musicResponse.error;
+          const legacyResponse = await supabase
+            .from("stories")
+            .select("id, media_url, media_type, caption, privacy, created_at, expires_at, view_count, user_id, profiles!stories_user_id_fkey(display_name, avatar_url, handle, is_verified, is_organization_verified)")
+            .eq("user_id", userId)
+            .gt("expires_at", new Date().toISOString())
+            .order("created_at", { ascending: true });
+          if (legacyResponse.error) throw legacyResponse.error;
+          storyRows = (legacyResponse.data ?? []).map((item: any) => ({
+            ...item,
+            music_track_id: null,
+            music_start_seconds: null,
+            music_end_seconds: null,
+          }));
+        }
+        if (storyRows && storyRows.length > 0) {
+          applyStories(storyRows);
+          AsyncStorage.setItem(`${STORY_LIST_CACHE_PREFIX}${userId}`, JSON.stringify(storyRows)).catch(() => {});
+        } else if (storyRows && storyRows.length === 0) {
           AsyncStorage.removeItem(`${STORY_LIST_CACHE_PREFIX}${userId}`).catch(() => {});
         }
       } catch {
@@ -705,6 +729,7 @@ export default function ViewStoryScreen() {
     >
       {story.music_track_id && storyMusicUri && soundtrackEndSeconds > soundtrackStartSeconds && (
         <StorySoundtrackAudio
+          key={story.id}
           uri={storyMusicUri}
           startSeconds={soundtrackStartSeconds}
           endSeconds={soundtrackEndSeconds}

@@ -351,14 +351,34 @@ const DISCOVER_STORY_CACHE_KEY = "@afuchat:discover_story_list";
     }
 
     try {
-      const { data } = await supabase
+      const musicResponse = await supabase
         .from("stories")
         .select("id, user_id, media_url, media_type, caption, created_at, expires_at, view_count, privacy, music_track_id, music_start_seconds, music_end_seconds, profiles!stories_user_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
           .gt("expires_at", new Date().toISOString())
         .order("created_at", { ascending: false })
         .limit(100);
-      if (data) {
-        const visible = (data as any[]).filter((s) => s.user_id === userId || s.privacy === "everyone");
+      let storyRows: any[] | null = musicResponse.data as any[] | null;
+      if (musicResponse.error) {
+        const message = String(musicResponse.error.message || "").toLowerCase();
+        const musicColumnsMissing = ["music_track_id", "music_start_seconds", "music_end_seconds"]
+          .some((column) => message.includes(column));
+        if (!musicColumnsMissing) throw musicResponse.error;
+        const legacyResponse = await supabase
+          .from("stories")
+          .select("id, user_id, media_url, media_type, caption, created_at, expires_at, view_count, privacy, profiles!stories_user_id_fkey(display_name, avatar_url, is_verified, is_organization_verified)")
+          .gt("expires_at", new Date().toISOString())
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (legacyResponse.error) throw legacyResponse.error;
+        storyRows = (legacyResponse.data ?? []).map((item: any) => ({
+          ...item,
+          music_track_id: null,
+          music_start_seconds: null,
+          music_end_seconds: null,
+        }));
+      }
+      if (storyRows) {
+        const visible = storyRows.filter((s) => s.user_id === userId || s.privacy === "everyone");
         const storyIds = visible.map((s) => s.id).filter(Boolean);
         const { data: viewed } = userId && storyIds.length
           ? await supabase.from("story_views").select("story_id").eq("viewer_id", userId).in("story_id", storyIds)

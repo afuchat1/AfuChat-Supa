@@ -151,6 +151,25 @@ export default function CreateStoryScreen() {
       return;
     }
 
+    if (selectedMusic) {
+      const { error: schemaError } = await supabase
+        .from("stories")
+        .select("music_track_id, music_start_seconds, music_end_seconds")
+        .limit(0);
+      if (schemaError) {
+        const message = String(schemaError.message || "").toLowerCase();
+        const missingMusicColumn = ["music_track_id", "music_start_seconds", "music_end_seconds"]
+          .some((column) => message.includes(column));
+        showAlert(
+          missingMusicColumn ? "Story music isn't ready" : "Could not check story music",
+          missingMusicColumn
+            ? "The story-music database update is not available yet. Your story was not uploaded."
+            : "Please try again before sharing this story.",
+        );
+        return;
+      }
+    }
+
     setStarting(true);
     const tier = (subscription?.plan_tier as "free" | "silver" | "gold" | "platinum") || "free";
     const usage = await getDailyUsage("stories_create", tier);
@@ -279,17 +298,20 @@ export default function CreateStoryScreen() {
 
       updateStoryProgress(0.75);
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const { error } = await supabase.from("stories").insert({
+      const storyInsert = {
         user_id: _userId,
         media_url: publicUrl,
         media_type: _mediaType,
         caption: _caption || null,
         expires_at: expiresAt,
         privacy: _privacy,
-        music_track_id: _musicTrackId,
-        music_start_seconds: _musicTrackId ? _musicStartSeconds : null,
-        music_end_seconds: _musicTrackId ? _musicEndSeconds : null,
-      });
+        ...(_musicTrackId ? {
+          music_track_id: _musicTrackId,
+          music_start_seconds: _musicStartSeconds,
+          music_end_seconds: _musicEndSeconds,
+        } : {}),
+      };
+      const { error } = await supabase.from("stories").insert(storyInsert);
 
       if (error) {
         console.error("[Story Upload] DB insert failed:", error.message);
