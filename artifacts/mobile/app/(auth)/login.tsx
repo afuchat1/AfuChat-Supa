@@ -45,6 +45,10 @@ import {
   signInSilentlyWithNativeGoogle,
   signInWithNativeGoogle,
 } from "@/lib/nativeGoogleAuth";
+import {
+  continueWithGoogleOAuth,
+  getGoogleAuthDestination,
+} from "@/lib/googleOAuth";
 
 const BIO_REFRESH_KEY = "afu_bio_refresh_token";
 const BIO_EMAIL_KEY = "afu_bio_display_email";
@@ -332,6 +336,7 @@ export default function SignInScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SW, height: SH } = useWindowDimensions();
+  const panelWidth = SW || 2048;
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -363,68 +368,24 @@ export default function SignInScreen() {
   const nativeAutoSignInRef = useRef(false);
 
   async function finishGoogleIdTokenSignIn(idToken: string) {
-    const { error } = await supabase.auth.signInWithIdToken({
+    const { data, error } = await supabase.auth.signInWithIdToken({
       provider: "google",
       token: idToken,
     });
     if (error) throw error;
+    const userId = data.user?.id;
+    if (!userId) throw new Error("Google did not return an authenticated user.");
     setOauthLoading(null);
-    router.replace("/(tabs)/chats");
+    router.replace(await getGoogleAuthDestination(userId) as any);
   }
 
   async function handleGoogleOAuthFallback() {
     try {
-      const redirectUrl = getAuthRedirectUrl("afuchat://(auth)/login");
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-          queryParams: { prompt: "select_account" },
-        },
-      });
-      if (error || !data?.url) throw error ?? new Error("Google sign-in could not be started.");
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
-        showInRecents: false,
-      });
-      if (result.type !== "success" || !result.url) return;
-
-      const callbackUrl = new URL(result.url);
-      const callbackHash = new URLSearchParams(callbackUrl.hash.replace(/^#/, ""));
-      const callbackError =
-        callbackUrl.searchParams.get("error_description") ??
-        callbackHash.get("error_description") ??
-        callbackUrl.searchParams.get("error") ??
-        callbackHash.get("error");
-      if (callbackError) throw new Error(callbackError);
-
-      const code = callbackUrl.searchParams.get("code");
-      if (code) {
-        const { data: authData, error: exchangeError } =
-          await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeError) throw exchangeError;
-        if (!authData.session) throw new Error("Google did not return an authenticated session.");
-      } else {
-        const accessToken =
-          callbackHash.get("access_token") ?? callbackUrl.searchParams.get("access_token");
-        const refreshToken =
-          callbackHash.get("refresh_token") ?? callbackUrl.searchParams.get("refresh_token");
-        if (!accessToken || !refreshToken) {
-          throw new Error("Google did not return an authenticated session.");
-        }
-
-        const { data: authData, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (sessionError) throw sessionError;
-        if (!authData.session) throw new Error("Google did not return an authenticated session.");
-      }
-
-      router.replace("/(tabs)/chats");
-    } catch {
-      showAlert("Google sign-in failed", "Could not complete Google sign-in. Please try again.");
+      const result = await continueWithGoogleOAuth();
+      if (result.redirected || !result.user) return;
+      router.replace(await getGoogleAuthDestination(result.user.id) as any);
+    } catch (error: any) {
+      showAlert("Google sign-in failed", error?.message || "Could not complete Google sign-in. Please try again.");
     }
   }
 
@@ -530,21 +491,31 @@ export default function SignInScreen() {
 
   // Slide animation
   const landingX = useRef(new Animated.Value(0)).current;
-  const formX = useRef(new Animated.Value(SW)).current;
+  const formX = useRef(new Animated.Value(panelWidth)).current;
+  const stepRef = useRef(step);
+  stepRef.current = step;
+
+  // Static web rendering can start with a zero-width viewport. Keep the
+  // inactive panel off-screen in the exported HTML, then use the real width.
+  useEffect(() => {
+    const onLanding = stepRef.current === "landing";
+    landingX.setValue(onLanding ? 0 : -panelWidth);
+    formX.setValue(onLanding ? panelWidth : 0);
+  }, [panelWidth, landingX, formX]);
 
   function goToEmail() {
     setStep("email");
     Animated.parallel([
-      Animated.spring(landingX, { toValue: -SW, useNativeDriver: true, tension: 200, friction: 28 }),
-      Animated.spring(formX, { toValue: 0, useNativeDriver: true, tension: 200, friction: 28 }),
+      Animated.spring(landingX, { toValue: -panelWidth, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
+      Animated.spring(formX, { toValue: 0, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
     ]).start();
   }
 
   function goToLanding() {
     setStep("landing");
     Animated.parallel([
-      Animated.spring(landingX, { toValue: 0, useNativeDriver: true, tension: 200, friction: 28 }),
-      Animated.spring(formX, { toValue: SW, useNativeDriver: true, tension: 200, friction: 28 }),
+      Animated.spring(landingX, { toValue: 0, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
+      Animated.spring(formX, { toValue: panelWidth, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
     ]).start();
   }
 
@@ -679,8 +650,8 @@ export default function SignInScreen() {
   async function handleGoogle() {
     try {
       setOauthLoading("google");
-      if (Platform.OS !== "android") {
-        showAlert("Google sign-in unavailable", "Google sign-in is available in the Android app.");
+      if (Platform.OS !== "android" || isExpoGo()) {
+        await handleGoogleOAuthFallback();
         return;
       }
 
@@ -695,7 +666,7 @@ export default function SignInScreen() {
 
       if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
       if (nativeResult.kind === "unavailable") {
-        showAlert("Google sign-in unavailable", "Install the Android app to use native Google sign-in.");
+        await handleGoogleOAuthFallback();
         return;
       }
       await finishGoogleIdTokenSignIn(nativeResult.idToken);
@@ -760,13 +731,10 @@ export default function SignInScreen() {
           <Text style={[sc.subheading, { color: colors.textSecondary }]}>{t("Sign in to your AfuChat account")}</Text>
 
           <View style={{ gap: 12, marginTop: 28 }}>
-            {/* Native Google is available only in the Android standalone app. */}
-            {Platform.OS === "android" && (
-              <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "google" && { opacity: 0.62 }]} onPress={handleGoogle} disabled={oauthLoading !== null} activeOpacity={0.78}>
-                {oauthLoading === "google" ? <ActivityIndicator size="small" color={accent} /> : <GoogleLogo size={20} />}
-                <Text style={[sc.glassBtnText, { color: colors.text }]}>{oauthLoading === "google" ? t("Signing in…") : t("Continue with Google")}</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "google" && { opacity: 0.62 }]} onPress={handleGoogle} disabled={oauthLoading !== null} activeOpacity={0.78}>
+              {oauthLoading === "google" ? <ActivityIndicator size="small" color={accent} /> : <GoogleLogo size={20} />}
+              <Text style={[sc.glassBtnText, { color: colors.text }]}>{oauthLoading === "google" ? t("Signing in…") : t("Continue with Google")}</Text>
+            </TouchableOpacity>
 
             {/* GitHub */}
             <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "github" && { opacity: 0.62 }]} onPress={handleGitHub} disabled={oauthLoading !== null} activeOpacity={0.78}>

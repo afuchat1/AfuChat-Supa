@@ -8,6 +8,7 @@ import { storage, KEYS } from "@/lib/storage/mmkv";
 import { safeRouter } from "@/lib/navUtils";
 import { handleIncomingUrl, isAfuChatDeepLink } from "@/lib/deepLinkHandler";
 import { LANGUAGE_PREFERENCE_KEY } from "@/context/LanguageContext";
+import { getGoogleAuthDestination } from "@/lib/googleOAuth";
 
 export default function IndexScreen() {
   const { session, profile, loading, user } = useAuth();
@@ -18,19 +19,55 @@ export default function IndexScreen() {
   const [initialDeepLinkPending, setInitialDeepLinkPending] = useState(false);
   const [languageChecked, setLanguageChecked] = useState(false);
   const [languageSelected, setLanguageSelected] = useState(false);
-  const { handle } = useLocalSearchParams<{ handle?: string }>();
+  const { handle, googleAuth, error, error_description } = useLocalSearchParams<{
+    handle?: string;
+    googleAuth?: string;
+    error?: string;
+    error_description?: string;
+  }>();
+  const isGoogleOAuthReturn = googleAuth === "1";
+  const googleOAuthError = error_description || error;
   const hasKnownIdentity = Boolean(getCachedUserId() || user?.id || session?.user?.id);
 
   // Cached returning users go straight to the chat shell instead of waiting
   // for language and initial-URL checks. The root deep-link gate still handles
   // any incoming AfuChat action after navigation is ready.
   useEffect(() => {
-    if (!hasKnownIdentity || handle || redirected.current) return;
+    if (!hasKnownIdentity || handle || isGoogleOAuthReturn || redirected.current) return;
     redirected.current = true;
     safeRouter.replace(
       profile?.onboarding_completed === false ? "/onboarding" : "/(tabs)/chats",
     );
-  }, [hasKnownIdentity, handle, profile?.onboarding_completed]);
+  }, [hasKnownIdentity, handle, isGoogleOAuthReturn, profile?.onboarding_completed]);
+
+  // Browser OAuth returns to the app root. Keep the callback marker out of the
+  // ordinary cached-user redirect so new Google users reach profile setup.
+  useEffect(() => {
+    if (!isGoogleOAuthReturn || loading || redirected.current) return;
+    if (googleOAuthError) {
+      redirected.current = true;
+      safeRouter.replace("/(auth)/login");
+      return;
+    }
+    const authenticatedUserId = session?.user?.id;
+    if (!authenticatedUserId) return;
+
+    let active = true;
+    void getGoogleAuthDestination(authenticatedUserId)
+      .then((destination) => {
+        if (!active || redirected.current) return;
+        redirected.current = true;
+        safeRouter.replace(destination as any);
+      })
+      .catch(() => {
+        if (!active || redirected.current) return;
+        redirected.current = true;
+        safeRouter.replace("/onboarding");
+      });
+    return () => {
+      active = false;
+    };
+  }, [isGoogleOAuthReturn, googleOAuthError, loading, session?.user?.id]);
 
   useEffect(() => {
     let mounted = true;
@@ -147,7 +184,7 @@ export default function IndexScreen() {
   // Main routing — fires whenever auth state resolves
   useEffect(() => {
     if (!languageChecked || !initialUrlChecked || loading) return;
-    if (handle || initialDeepLinkPending) return;
+    if (handle || isGoogleOAuthReturn || initialDeepLinkPending) return;
     if (!languageSelected) {
       if (!redirected.current) {
         redirected.current = true;
@@ -160,7 +197,7 @@ export default function IndexScreen() {
       !!profile,
       profile?.onboarding_completed === true,
     );
-  }, [session, profile, loading, handle, user?.id, initialUrlChecked, initialDeepLinkPending, languageChecked, languageSelected]);
+  }, [session, profile, loading, handle, isGoogleOAuthReturn, user?.id, initialUrlChecked, initialDeepLinkPending, languageChecked, languageSelected]);
 
   // Safety net: if auth takes too long, route based on cached/in-memory state.
   //
@@ -175,7 +212,7 @@ export default function IndexScreen() {
       // If auth already resolved, the main effect owns navigation. The old
       // timer could still redirect just after a slow Android auth restore and
       // replace a valid destination with Welcome/Chats.
-      if (redirected.current || !loading || initialDeepLinkPending) return;
+      if (redirected.current || !loading || isGoogleOAuthReturn || initialDeepLinkPending) return;
       if (!languageSelected) {
         redirected.current = true;
         safeRouter.replace("/welcome");
@@ -193,7 +230,7 @@ export default function IndexScreen() {
     }, 2500);
 
     return () => clearTimeout(timeout);
-  }, [handle, loading, user?.id, initialUrlChecked, initialDeepLinkPending, languageChecked, languageSelected]);
+  }, [handle, loading, isGoogleOAuthReturn, user?.id, initialUrlChecked, initialDeepLinkPending, languageChecked, languageSelected]);
 
   // This route is only a navigation handoff. Keep it visually empty while
   // the redirect effects resolve; never show a branded loader or block the

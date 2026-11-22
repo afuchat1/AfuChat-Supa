@@ -32,6 +32,7 @@ import { uploadAvatar as uploadAvatarMedia } from "@/lib/mediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/hooks/useTheme";
 import { showAlert } from "@/lib/alert";
+import { getGoogleProfileDetails } from "@/lib/googleOAuth";
 import type { Country } from "@/constants/countries";
 const getCountries = () => (require("@/constants/countries").COUNTRIES as Country[]);
 import {
@@ -106,7 +107,7 @@ function DotIndicator({ index, step, accent }: { index: number; step: number; ac
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const { colors } = useTheme();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { safeAreaInsets: insets } = useDeviceAdaptation();
   const params = useLocalSearchParams<{ userId?: string }>();
 
@@ -118,6 +119,7 @@ export default function OnboardingScreen() {
   const handleInputRef = useRef<any>(null);
   const scrollRef = useRef<any>(null);
   const displayNameInputRef = useRef<any>(null);
+  const displayNameEditedRef = useRef(false);
   const phoneInputRef = useRef<any>(null);
   const activeInputRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
@@ -147,6 +149,16 @@ export default function OnboardingScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const userId = params.userId || user?.id;
   const activeDraftKey = userId ? `afuchat:onboarding:draft:${userId}` : null;
+  const currentProfile = profile?.id === userId ? profile : null;
+  const googleProfile = getGoogleProfileDetails(user?.id === userId ? user : null);
+  const currentAvatarUrl = avatarUri || currentProfile?.avatar_url || googleProfile.avatarUrl;
+
+  useEffect(() => {
+    if (!userId || hydratedUserId !== userId || displayNameEditedRef.current) return;
+    const suggestedName = currentProfile?.display_name?.trim() || googleProfile.displayName;
+    if (!suggestedName) return;
+    setDisplayName((current) => current.trim() ? current : suggestedName);
+  }, [userId, hydratedUserId, currentProfile?.display_name, googleProfile.displayName]);
 
   function focusInput(field: string, inputRef: React.RefObject<any>) {
     setFocusedField(field);
@@ -258,7 +270,7 @@ export default function OnboardingScreen() {
       case 4:
         return selectedInterests.size >= 3;
       case 5:
-        return avatarUri !== null;
+        return true;
       default:
         return false;
     }
@@ -477,7 +489,7 @@ export default function OnboardingScreen() {
       return;
     }
 
-    let avatarUrl: string | null = null;
+    let avatarUrl: string | null = currentProfile?.avatar_url || googleProfile.avatarUrl;
     if (avatarUri) {
       try {
         avatarUrl = await uploadAvatar();
@@ -606,7 +618,10 @@ export default function OnboardingScreen() {
                 placeholder="e.g. John Doe"
                 placeholderTextColor={colors.textMuted}
                 value={displayName}
-                onChangeText={setDisplayName}
+                onChangeText={(value) => {
+                  displayNameEditedRef.current = true;
+                  setDisplayName(value);
+                }}
                 autoCapitalize="words"
                 returnKeyType="next"
                 onSubmitEditing={() => handleInputRef.current?.focus()}
@@ -870,15 +885,19 @@ export default function OnboardingScreen() {
           </View>
           <Text style={[st.stepTitle, { color: colors.text }]}>Finish your profile</Text>
           <Text style={[st.stepDesc, { color: colors.textSecondary }]}>
-            {"Add a photo so people can recognise you, then start building your place in the AfuChat community."}
+            {googleProfile.avatarUrl && !avatarUri
+              ? "Your Google profile photo is ready to use. You can change it or add one later."
+              : currentAvatarUrl
+                ? "Your current profile photo will stay unless you choose another one."
+                : "A profile photo is optional. You can add one later."}
           </Text>
         </View>
 
         <View style={st.avatarSection}>
           <TouchableOpacity onPress={pickAvatar} activeOpacity={0.8}>
             <View style={st.avatarContainer}>
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={st.avatarImage} />
+              {currentAvatarUrl ? (
+                <Image source={{ uri: currentAvatarUrl }} style={st.avatarImage} />
               ) : (
                 <View style={[st.avatarPlaceholder, { backgroundColor: colors.inputBg }]}>
                   <Ionicons name="camera" size={40} color={colors.textMuted} />
@@ -891,7 +910,7 @@ export default function OnboardingScreen() {
           </TouchableOpacity>
           <TouchableOpacity onPress={pickAvatar}>
             <Text style={[st.photoActionText, { color: colors.accent }]}>
-              {avatarUri ? "Change Photo" : "Choose from Gallery"}
+              {currentAvatarUrl ? "Change Photo" : "Add Photo (optional)"}
             </Text>
           </TouchableOpacity>
         </View>

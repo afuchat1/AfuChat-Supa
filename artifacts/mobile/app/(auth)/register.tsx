@@ -35,8 +35,15 @@ import { showAlert } from "@/lib/alert";
 import AfuLogo from "@/components/ui/AfuLogo";
 import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
-import { signInWithNativeGoogle } from "@/lib/nativeGoogleAuth";
+import {
+  isNativeGoogleConfigurationError,
+  signInWithNativeGoogle,
+} from "@/lib/nativeGoogleAuth";
 import { getAuthRedirectUrl } from "@/lib/authRedirect";
+import {
+  continueWithGoogleOAuth,
+  getGoogleAuthDestination,
+} from "@/lib/googleOAuth";
 
 // ─── Soft orb ─────────────────────────────────────────────────────────────────
 function SoftOrb({ cx, cy, size, color }: { cx: number; cy: number; size: number; color: string }) {
@@ -247,6 +254,7 @@ export default function SignUpScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width: SW, height: SH } = useWindowDimensions();
+  const panelWidth = SW || 2048;
   // Only redirect already-logged-in users when this screen first mounts.
   // Do NOT react to `user` becoming set during the sign-up flow itself —
   // the sign-up handlers navigate explicitly. Reacting to [user] caused a
@@ -319,21 +327,31 @@ export default function SignUpScreen() {
 
   // Slide animation
   const landingX = useRef(new Animated.Value(0)).current;
-  const formX = useRef(new Animated.Value(SW)).current;
+  const formX = useRef(new Animated.Value(panelWidth)).current;
+  const stepRef = useRef(step);
+  stepRef.current = step;
+
+  // Static web rendering can start with a zero-width viewport. Keep the
+  // inactive panel off-screen in the exported HTML, then use the real width.
+  useEffect(() => {
+    const onLanding = stepRef.current === "landing";
+    landingX.setValue(onLanding ? 0 : -panelWidth);
+    formX.setValue(onLanding ? panelWidth : 0);
+  }, [panelWidth, landingX, formX]);
 
   function goToEmail() {
     setStep("email");
     Animated.parallel([
-      Animated.spring(landingX, { toValue: -SW, useNativeDriver: true, tension: 200, friction: 28 }),
-      Animated.spring(formX, { toValue: 0, useNativeDriver: true, tension: 200, friction: 28 }),
+      Animated.spring(landingX, { toValue: -panelWidth, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
+      Animated.spring(formX, { toValue: 0, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
     ]).start();
   }
 
   function goToLanding() {
     setStep("landing");
     Animated.parallel([
-      Animated.spring(landingX, { toValue: 0, useNativeDriver: true, tension: 200, friction: 28 }),
-      Animated.spring(formX, { toValue: SW, useNativeDriver: true, tension: 200, friction: 28 }),
+      Animated.spring(landingX, { toValue: 0, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
+      Animated.spring(formX, { toValue: panelWidth, useNativeDriver: Platform.OS !== "web", tension: 200, friction: 28 }),
     ]).start();
   }
 
@@ -434,14 +452,30 @@ export default function SignUpScreen() {
     try {
       setOauthLoading("google");
       if (Platform.OS !== "android") {
-        showAlert("Google sign-up unavailable", "Google sign-up is available in the Android app.");
+        const result = await continueWithGoogleOAuth();
+        if (!result.redirected && result.user) {
+          router.replace(await getGoogleAuthDestination(result.user.id) as any);
+        }
         return;
       }
 
-      const nativeResult = await signInWithNativeGoogle();
+      let nativeResult: Awaited<ReturnType<typeof signInWithNativeGoogle>>;
+      try {
+        nativeResult = await signInWithNativeGoogle();
+      } catch (error) {
+        if (!isNativeGoogleConfigurationError(error)) throw error;
+        const result = await continueWithGoogleOAuth();
+        if (!result.redirected && result.user) {
+          router.replace(await getGoogleAuthDestination(result.user.id) as any);
+        }
+        return;
+      }
       if (nativeResult.kind === "cancelled" || nativeResult.kind === "no_saved_credential") return;
       if (nativeResult.kind === "unavailable") {
-        showAlert("Google sign-up unavailable", "Install the Android app to use native Google sign-up.");
+        const result = await continueWithGoogleOAuth();
+        if (!result.redirected && result.user) {
+          router.replace(await getGoogleAuthDestination(result.user.id) as any);
+        }
         return;
       }
 
@@ -453,16 +487,7 @@ export default function SignUpScreen() {
 
       const uid = authData.user?.id;
       if (!uid) throw new Error("Google sign-up did not create a user session.");
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("onboarding_completed")
-        .eq("id", uid)
-        .maybeSingle();
-      if (!profile?.onboarding_completed) {
-        router.replace({ pathname: "/onboarding", params: { userId: uid } } as any);
-      } else {
-        router.replace("/(tabs)/chats");
-      }
+      router.replace(await getGoogleAuthDestination(uid) as any);
     } catch (error: any) {
       showAlert("Google sign-up failed", error?.message || "Could not complete Google sign-up.");
     } finally {
@@ -506,13 +531,10 @@ export default function SignUpScreen() {
           <Text style={[sc.subheading, { color: colors.textSecondary }]}>{t("Join millions of people on AfuChat")}</Text>
 
           <View style={{ gap: 12, marginTop: 28 }}>
-            {/* Native Google is available only in the Android standalone app. */}
-            {Platform.OS === "android" && (
-              <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "google" && { opacity: 0.62 }]} onPress={handleGoogle} disabled={oauthLoading !== null} activeOpacity={0.78}>
-                {oauthLoading === "google" ? <ActivityIndicator size="small" color={accent} /> : <GoogleLogo size={20} />}
-                <Text style={[sc.glassBtnText, { color: colors.text }]}>{oauthLoading === "google" ? t("Signing up…") : t("Continue with Google")}</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "google" && { opacity: 0.62 }]} onPress={handleGoogle} disabled={oauthLoading !== null} activeOpacity={0.78}>
+              {oauthLoading === "google" ? <ActivityIndicator size="small" color={accent} /> : <GoogleLogo size={20} />}
+              <Text style={[sc.glassBtnText, { color: colors.text }]}>{oauthLoading === "google" ? t("Signing up…") : t("Continue with Google")}</Text>
+            </TouchableOpacity>
 
             {/* GitHub */}
             <TouchableOpacity style={[sc.glassBtn, { backgroundColor: colors.surface, borderColor: colors.border }, oauthLoading === "github" && { opacity: 0.62 }]} onPress={handleGitHub} disabled={oauthLoading !== null} activeOpacity={0.78}>
