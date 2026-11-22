@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -21,7 +20,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 
 const USAGE_KEY = "afu_app_usage";
-const COLS = 4;
 const H_PAD = 16;
 
 type PlatformPage = {
@@ -208,7 +206,6 @@ const CATEGORIES: Category[] = [
 ];
 
 const ALL_PAGES = CATEGORIES.flatMap((c) => c.pages);
-const FEATURED_IDS = ["afupay", "afumarket", "afumatch", "afufreelance"];
 
 function resolveGradient(gradient: [string, string], accent: string): [string, string] {
   return gradient.map((c) => (c === "#258FE5" ? accent : c)) as [string, string];
@@ -216,66 +213,6 @@ function resolveGradient(gradient: [string, string], accent: string): [string, s
 
 function openPlatformPage(page: PlatformPage) {
   safeRouter.push(page.route as any);
-}
-
-function FeaturedPageCard({
-  page,
-  accent,
-  onTap,
-}: {
-  page: PlatformPage;
-  accent: string;
-  onTap: (id: string) => void;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const { t } = useLanguage();
-
-  function handlePressIn() {
-    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
-  }
-  function handlePressOut() {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start();
-  }
-  function handlePress() {
-    Haptics.selectionAsync();
-    onTap(page.id);
-    openPlatformPage(page);
-  }
-
-  const [c0, c1] = resolveGradient(page.gradient, accent);
-
-  return (
-    <Animated.View style={{ transform: [{ scale }], marginRight: 12 }}>
-      <Pressable onPress={handlePress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
-        <LinearGradient colors={[c0, c1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.featCard}>
-          <View style={styles.featCardInner}>
-            <View style={styles.featIconRing}>
-            <Ionicons name={page.icon} size={28} color="#fff" />
-            </View>
-            {page.badge ? (
-              <View style={styles.featBadge}>
-                <Text style={styles.featBadgeText}>{t(page.badge)}</Text>
-              </View>
-            ) : null}
-          </View>
-            <Text
-              style={styles.featLabel}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.78}
-            >
-              {t(page.label)}
-            </Text>
-          {page.featuredSub ? (
-            <Text style={styles.featSub} numberOfLines={3}>{t(page.featuredSub)}</Text>
-          ) : null}
-          <View style={styles.featOpenBtn}>
-            <Text style={styles.featOpenText}>{t("Open")}</Text>
-          </View>
-        </LinearGradient>
-      </Pressable>
-    </Animated.View>
-  );
 }
 
 function PageTile({
@@ -355,8 +292,10 @@ export default function AppsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const { isPremium, profile } = useAuth();
   const isOrgVerified = !!profile?.is_organization_verified;
-
-  const tileWidth = Math.floor((SW - H_PAD * 2) / COLS);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const columnCount = SW >= 960 ? 6 : SW >= 620 ? 5 : 4;
+  const contentWidth = Math.min(SW, 960);
+  const tileWidth = Math.floor((contentWidth - H_PAD * 2) / columnCount);
 
   useEffect(() => {
     AsyncStorage.getItem(USAGE_KEY).then((raw) => {
@@ -380,35 +319,23 @@ export default function AppsScreen() {
     return true;
   }
 
-  const featuredApps = FEATURED_IDS
-    .map((id) => ALL_PAGES.find((a) => a.id === id))
-    .filter((a): a is PlatformPage => !!a && isVisible(a));
-
-  const filteredCategories = CATEGORIES.map((cat) => ({
-    ...cat,
-    pages: cat.pages.filter((a) => {
-      if (!isVisible(a)) return false;
-      if (!searchQuery) return true;
-       return t(a.label).toLowerCase().includes(searchQuery.toLowerCase());
-    }),
-  })).filter((cat) => cat.pages.length > 0);
+  const visibleCategories = CATEGORIES.filter((category) =>
+    category.pages.some(isVisible),
+  );
+  const visiblePages = (selectedCategory === "all"
+    ? ALL_PAGES
+    : CATEGORIES.find((category) => category.id === selectedCategory)?.pages ?? []
+  ).filter((page) => {
+    if (!isVisible(page)) return false;
+    return !searchQuery || t(page.label).toLowerCase().includes(searchQuery.trim().toLowerCase());
+  });
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{
-          paddingTop: insets.top + 12,
-          paddingBottom: insets.bottom + 100,
-        }}
-        bounces={false}
-        alwaysBounceVertical={false}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Header ── */}
+      <View style={[styles.content, { width: contentWidth, paddingTop: insets.top + 8 }]}>
         <View style={[styles.header, { paddingHorizontal: H_PAD }]}>
           <View style={styles.headerLeft}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>{t("Pages")}</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>{t("Apps")}</Text>
             {isPremium ? (
               <View style={[styles.premiumPill, { backgroundColor: colors.backgroundSecondary }]}>
                 <Ionicons name="diamond" size={11} color="#FFD60A" />
@@ -418,14 +345,13 @@ export default function AppsScreen() {
           </View>
         </View>
 
-        {/* ── Search bar ── */}
-        <View style={[styles.searchWrap, { paddingHorizontal: H_PAD, marginBottom: 20 }]}>
+        <View style={[styles.searchWrap, { paddingHorizontal: H_PAD }]}>
           <View style={[styles.searchBox, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }]}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
               appearance="embedded"
               style={[styles.searchInput, { color: colors.text }]}
-              placeholder={t("Search pages…")}
+              placeholder={t("Search apps…")}
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -440,71 +366,53 @@ export default function AppsScreen() {
           </View>
         </View>
 
-        {/* ── Featured horizontal scroll ── */}
-        {!searchQuery ? (
-          <View style={{ marginBottom: 28 }}>
-              <Text
-                style={[styles.sectionTitle, { color: colors.text, paddingHorizontal: H_PAD, marginBottom: 12 }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
+        <View style={styles.categoryList}>
+          <Pressable
+            onPress={() => setSelectedCategory("all")}
+            style={[
+              styles.categoryChip,
+              { backgroundColor: selectedCategory === "all" ? accent : colors.backgroundSecondary },
+            ]}
+          >
+            <Text style={[styles.categoryText, { color: selectedCategory === "all" ? "#fff" : colors.textMuted }]}>
+              {t("All")}
+            </Text>
+          </Pressable>
+          {visibleCategories.map((category) => {
+            const selected = selectedCategory === category.id;
+            return (
+              <Pressable
+                key={category.id}
+                onPress={() => setSelectedCategory(category.id)}
+                style={[
+                  styles.categoryChip,
+                  { backgroundColor: selected ? accent : colors.backgroundSecondary },
+                ]}
               >
-              {t("Featured")}
-              </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              bounces={false}
-              alwaysBounceHorizontal={false}
-              contentContainerStyle={{ paddingHorizontal: H_PAD, paddingBottom: 4 }}
-              decelerationRate="fast"
-              snapToInterval={172}
-              snapToAlignment="start"
-            >
-              {featuredApps.map((page) => (
-                <FeaturedPageCard
-                  key={page.id}
-                  page={page}
-                  accent={accent}
-                  onTap={trackTap}
-                />
-              ))}
-            </ScrollView>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.categoryText, { color: selected ? "#fff" : colors.textMuted }]}
+                >
+                  {t(category.title)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {visiblePages.length > 0 ? (
+          <View style={[styles.grid, { paddingHorizontal: H_PAD }]}>
+            {visiblePages.map((page) => (
+              <PageTile
+                key={page.id}
+                page={page}
+                tileWidth={tileWidth}
+                usageCount={usageCounts[page.id]}
+                onTap={trackTap}
+              />
+            ))}
           </View>
-        ) : null}
-
-        {/* ── Category grids ── */}
-        {filteredCategories.map((cat) => {
-          const padCount = cat.pages.length % COLS === 0 ? 0 : COLS - (cat.pages.length % COLS);
-          return (
-            <View key={cat.id} style={{ marginBottom: 24 }}>
-              <Text
-                style={[styles.sectionTitle, { color: colors.text, paddingHorizontal: H_PAD, marginBottom: 4 }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-              >
-                {t(cat.title)}
-              </Text>
-              <View style={[styles.grid, { paddingHorizontal: H_PAD }]}>
-                {cat.pages.map((page) => (
-                  <PageTile
-                    key={page.id}
-                    page={page}
-                    tileWidth={tileWidth}
-                    usageCount={usageCounts[page.id]}
-                    onTap={trackTap}
-                  />
-                ))}
-                {Array.from({ length: padCount }).map((_, i) => (
-                  <View key={"pad-" + i} style={{ width: tileWidth }} />
-                ))}
-              </View>
-            </View>
-          );
-        })}
-
-        {filteredCategories.length === 0 ? (
+        ) : (
           <View style={styles.emptyWrap}>
             <Ionicons name="search" size={40} color={colors.textMuted} />
             <Text
@@ -513,27 +421,27 @@ export default function AppsScreen() {
               adjustsFontSizeToFit
               minimumFontScale={0.8}
             >
-              {t("No pages match")} "{searchQuery}"
+              {t("No apps match")} "{searchQuery}"
             </Text>
           </View>
-        ) : null}
-      </ScrollView>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { flex: 1 },
+  content: { flex: 1, alignSelf: "center" },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 8,
   },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   headerTitle: {
-    fontSize: 34,
+    fontSize: 28,
     fontFamily: "Inter_700Bold",
     letterSpacing: -0.5,
   },
@@ -546,14 +454,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   premiumPillText: { color: "#FFD60A", fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  searchWrap: {},
+  searchWrap: { marginBottom: 10 },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    height: 40,
   },
   searchInput: {
     flex: 1,
@@ -561,76 +469,28 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     padding: 0,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: -0.3,
-  },
-  /* Featured card */
-  featCard: {
-    width: 160,
-    borderRadius: 20,
-    padding: 16,
-    justifyContent: "space-between",
-    minHeight: 170,
-  },
-  featCardInner: {
+  categoryList: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  featIconRing: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.22)",
+    flexWrap: "wrap",
+    paddingHorizontal: H_PAD,
+    gap: 7,
     alignItems: "center",
-    justifyContent: "center",
+    marginBottom: 8,
   },
-  featBadge: {
-    backgroundColor: "rgba(255,255,255,0.28)",
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  featBadgeText: { color: "#fff", fontSize: 10, fontFamily: "Inter_700Bold" },
-  featLabel: {
-    color: "#fff",
-    fontSize: 17,
-    fontFamily: "Inter_700Bold",
-    lineHeight: 21,
-    marginBottom: 4,
-  },
-  featSub: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 10.5,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 14,
-    flex: 1,
-  },
-  featOpenBtn: {
-    marginTop: 12,
-    backgroundColor: "rgba(255,255,255,0.22)",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    alignSelf: "flex-start",
-  },
-  featOpenText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  /* Grid tile */
+  categoryChip: { minHeight: 28, borderRadius: 14, paddingHorizontal: 11, justifyContent: "center" },
+  categoryText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   tilePressable: {
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 5,
     paddingHorizontal: 2,
     width: "100%",
   },
-  iconWrapper: { position: "relative", marginBottom: 8 },
+  iconWrapper: { position: "relative", marginBottom: 4 },
   iconGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -649,13 +509,13 @@ const styles = StyleSheet.create({
   badgeDefault: { backgroundColor: "#FF3B30" },
   badgeText: { color: "#fff", fontSize: 8, fontFamily: "Inter_700Bold" },
   tileLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "Inter_500Medium",
     textAlign: "center",
-    lineHeight: 14,
-    minHeight: 28,
+    lineHeight: 13,
+    minHeight: 15,
   },
-  usageText: { fontSize: 9, fontFamily: "Inter_400Regular", marginTop: 1 },
-  emptyWrap: { alignItems: "center", paddingTop: 60, gap: 12, paddingHorizontal: H_PAD },
-  emptyText: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  usageText: { fontSize: 8, fontFamily: "Inter_400Regular", marginTop: 0 },
+  emptyWrap: { alignItems: "center", paddingTop: 36, gap: 10, paddingHorizontal: H_PAD },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 });
