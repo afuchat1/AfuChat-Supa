@@ -108,6 +108,23 @@ export async function signInWithNativeGoogle(): Promise<NativeGoogleResult> {
   }
 }
 
+/**
+ * Prefer the last approved Google account so returning Android users can
+ * continue without reopening account selection. First-time users fall through
+ * to the existing native Google account picker.
+ */
+export async function signInWithNativeGoogleOneTap(): Promise<NativeGoogleResult> {
+  const savedAccount = await signInSilentlyWithNativeGoogle();
+  if (
+    savedAccount.kind === "success" ||
+    savedAccount.kind === "unavailable" ||
+    savedAccount.kind === "cancelled"
+  ) {
+    return savedAccount;
+  }
+  return signInWithNativeGoogle();
+}
+
 export async function signInSilentlyWithNativeGoogle(): Promise<NativeGoogleResult> {
   const googleSignin = await getConfiguredGoogleSignin();
   if (!googleSignin) return { kind: "unavailable" };

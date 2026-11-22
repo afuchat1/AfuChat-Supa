@@ -43,7 +43,7 @@ import Colors from "@/constants/colors";
 import {
   isNativeGoogleConfigurationError,
   signInSilentlyWithNativeGoogle,
-  signInWithNativeGoogle,
+  signInWithNativeGoogleOneTap,
 } from "@/lib/nativeGoogleAuth";
 import {
   continueWithGoogleOAuth,
@@ -655,9 +655,9 @@ export default function SignInScreen() {
         return;
       }
 
-      let nativeResult: Awaited<ReturnType<typeof signInWithNativeGoogle>>;
+      let nativeResult: Awaited<ReturnType<typeof signInWithNativeGoogleOneTap>>;
       try {
-        nativeResult = await signInWithNativeGoogle();
+        nativeResult = await signInWithNativeGoogleOneTap();
       } catch (error) {
         if (!isNativeGoogleConfigurationError(error)) throw error;
         await handleGoogleOAuthFallback();

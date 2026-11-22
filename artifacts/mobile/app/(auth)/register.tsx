@@ -37,7 +37,7 @@ import { GitHubLogo, GoogleLogo } from "@/components/ui/OAuthLogos";
 import Colors from "@/constants/colors";
 import {
   isNativeGoogleConfigurationError,
-  signInWithNativeGoogle,
+  signInWithNativeGoogleOneTap,
 } from "@/lib/nativeGoogleAuth";
 import { getAuthRedirectUrl } from "@/lib/authRedirect";
 import {
@@ -459,9 +459,9 @@ export default function SignUpScreen() {
         return;
       }
 
-      let nativeResult: Awaited<ReturnType<typeof signInWithNativeGoogle>>;
+      let nativeResult: Awaited<ReturnType<typeof signInWithNativeGoogleOneTap>>;
       try {
-        nativeResult = await signInWithNativeGoogle();
+        nativeResult = await signInWithNativeGoogleOneTap();
       } catch (error) {
         if (!isNativeGoogleConfigurationError(error)) throw error;
         const result = await continueWithGoogleOAuth();
