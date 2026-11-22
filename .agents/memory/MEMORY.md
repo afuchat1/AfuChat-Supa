@@ -35,4 +35,5 @@
 - [Selective verification policy](manual-verification-policy.md) — Keep personal verification selective, based on sustained authentic participation, with concise, actionable qualification guidance.
 - [Achievement reward integrity](achievement-reward-integrity.md) — Verify eligibility and enforce one-time XP claims on the server; clients only request synchronization.
 - [Wallet receipt notifications](wallet-receipt-notifications.md) — Notify recipients about completed incoming wallet transactions once, with clear wording and no self top-up or conversion noise.
+- [Wallet payment and withdrawal policy](wallet-payment-policy.md) — Keep store billing when available alongside Whop/Pesapal; withdrawals are not open and activity should be encouraged.
 - [Gold Nameplate visibility](gold-nameplate-visibility.md) — Show the equipped reflective Gold Nameplate wherever the user's display name appears.

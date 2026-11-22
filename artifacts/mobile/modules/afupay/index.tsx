@@ -622,11 +622,13 @@ function HistoryView({ colors, insets, txs, loading, filter, setFilter, refreshi
 }
 
 function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) {
-  const isNativeStorePurchase = Platform.OS !== "web";
+  const isNativePlatform = Platform.OS !== "web";
+  const [useStoreBilling, setUseStoreBilling] = useState(false);
+  const isNativeStorePurchase = isNativePlatform && useStoreBilling;
   const [selectedPack, setSelectedPack] = useState<number | null>(2);
   const [customAmt, setCustomAmt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [nativeLoading, setNativeLoading] = useState(isNativeStorePurchase);
+  const [nativeLoading, setNativeLoading] = useState(isNativePlatform);
   const [nativePackages, setNativePackages] = useState<AcoinStorePackage[]>([]);
   const [nativeError, setNativeError] = useState("");
   const [nativeRetryCount, setNativeRetryCount] = useState(0);
@@ -674,10 +676,10 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
   }, [checkoutSessionId, onSuccess, provider]);
 
   useEffect(() => {
-    if (!isNativeStorePurchase) return;
+    if (!isNativePlatform) return;
     let active = true;
     if (!userId) {
-      setNativeError("Sign in to see in-app Acoin purchase options.");
+      setNativeError("Sign in to use store billing. Whop and Pesapal remain available.");
       setNativeLoading(false);
       return () => { active = false; };
     }
@@ -688,22 +690,22 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
       .then((packages) => {
         if (!active) return;
         setNativePackages(packages);
-        setSelectedPack(packages.length ? Math.min(2, packages.length - 1) : null);
         if (!packages.length) {
           const storeName = Platform.OS === "android" ? "Google Play" : "App Store";
-          setNativeError(`No Acoin products are currently available from ${storeName}. Check that you're using the store version of AfuChat, then try again or contact support.`);
+          setNativeError(`${storeName} billing isn’t available on this device. You can still top up with Whop or Pesapal.`);
         }
       })
-      .catch((error) => {
+      .catch(() => {
         if (!active) return;
-        setNativeError(error instanceof Error ? error.message : "Could not load in-app purchases.");
+        const storeName = Platform.OS === "android" ? "Google Play" : "App Store";
+        setNativeError(`Could not load ${storeName} billing. You can still top up with Whop or Pesapal.`);
       })
       .finally(() => {
         if (active) setNativeLoading(false);
       });
 
     return () => { active = false; };
-  }, [isNativeStorePurchase, nativeRetryCount, userId]);
+  }, [isNativePlatform, nativeRetryCount, userId]);
 
   const selectedNativePackage = isNativeStorePurchase && selectedPack !== null
     ? nativePackages[selectedPack] ?? null
@@ -808,6 +810,8 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
     : acoinAmt >= minimumAmount;
 
   const country = profile?.country ?? null;
+  const storeName = Platform.OS === "ios" ? "App Store" : "Google Play";
+  const storeUnavailable = isNativePlatform && !nativeLoading && nativePackages.length === 0;
 
   return (
     <View style={[s.root, { backgroundColor: colors.background }]}>
@@ -833,27 +837,6 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
           <View style={{ alignItems: "center", paddingVertical: 24 }}>
             <ActivityIndicator color={Colors.brand} />
             <Text style={[s.topupStepSub, { color: colors.textMuted, marginTop: 10 }]}>Loading store prices…</Text>
-          </View>
-        )}
-
-        {isNativeStorePurchase && !nativeLoading && !!nativeError && (
-          <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border, marginBottom: 14, flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", gap: 10 }]}>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-              <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
-              <Text style={[s.topupStepSub, { color: colors.textMuted, flex: 1 }]}>{nativeError}</Text>
-            </View>
-            {userId ? (
-              <TouchableOpacity
-                testID="acoin-purchases-retry"
-                accessibilityRole="button"
-                accessibilityLabel="Try loading Acoin purchases again"
-                activeOpacity={0.75}
-                onPress={() => setNativeRetryCount((count) => count + 1)}
-                style={{ alignSelf: "flex-end", paddingVertical: 4, paddingHorizontal: 8 }}
-              >
-                <Text style={{ color: Colors.brand, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Try again</Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
         )}
 
@@ -897,6 +880,29 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
           })}
         </View>
 
+        {storeUnavailable && (
+          <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 12, marginBottom: 4, flexDirection: "column", alignItems: "stretch", justifyContent: "flex-start", gap: 8 }]}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+              <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} />
+              <Text style={[s.topupStepSub, { color: colors.textMuted, flex: 1 }]}>
+                {nativeError || `${storeName} billing isn’t available right now. Choose Whop or Pesapal to top up.`}
+              </Text>
+            </View>
+            {userId ? (
+              <TouchableOpacity
+                testID="acoin-purchases-retry"
+                accessibilityRole="button"
+                accessibilityLabel="Try loading Acoin purchases again"
+                activeOpacity={0.75}
+                onPress={() => setNativeRetryCount((count) => count + 1)}
+                style={{ alignSelf: "flex-end", paddingVertical: 4, paddingHorizontal: 8 }}
+              >
+                <Text style={{ color: Colors.brand, fontSize: 13, fontFamily: "Inter_600SemiBold" }}>Try again</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+
         {!isNativeStorePurchase && (
           <>
             <Text style={[s.sectionTitle, { color: colors.textSecondary, marginTop: 12, marginBottom: 4 }]}>CUSTOM AMOUNT</Text>
@@ -919,11 +925,30 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
               />
               <Text style={{ color: colors.textMuted, fontFamily: "Inter_500Medium", fontSize: 13 }}>AC</Text>
             </View>
-            <View style={{ marginTop: 12 }}>
-              <PaymentProviderPicker value={provider} onChange={setProvider} colors={colors} />
-            </View>
           </>
         )}
+
+        <View style={{ marginTop: 12 }}>
+          <PaymentProviderPicker
+            value={provider}
+            onChange={(nextProvider) => {
+              setProvider(nextProvider);
+              setUseStoreBilling(false);
+            }}
+            colors={colors}
+            storeOption={nativePackages.length > 0 ? {
+              label: storeName,
+              selected: isNativeStorePurchase,
+              onSelect: () => {
+                setUseStoreBilling(true);
+                setCustomAmt("");
+                setSelectedPack((current) => current === null
+                  ? Math.min(2, nativePackages.length - 1)
+                  : Math.min(current, nativePackages.length - 1));
+              },
+            } : undefined}
+          />
+        </View>
 
         <View style={[s.topupOrderCard, { backgroundColor: colors.surface, borderColor: colors.border, marginTop: 12, marginBottom: 6 }]}>
           <View style={s.topupOrderCopy}>
@@ -946,7 +971,7 @@ function TopUpView({ colors, insets, profile, userId, onBack, onSuccess }: any) 
             {isNativeStorePurchase
               ? `Securely billed by ${Platform.OS === "ios" ? "the App Store" : "Google Play"}.`
               : provider === "whop"
-                ? "Whop checkout stays inside AfuChat."
+                ? "Secure Whop checkout opens externally."
                 : "Secure checkout handled by Pesapal."}
           </Text>
         </View>
