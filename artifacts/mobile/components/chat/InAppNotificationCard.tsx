@@ -41,6 +41,8 @@ type Props = {
 function getNotificationVerb(notification: NotificationMessageData): string {
   const metadata = notification.metadata ?? {};
   switch (notification.kind.toLowerCase()) {
+    case "story_mention":
+      return "mentioned you in a story";
     case "follow":
       if (notification.title?.toLowerCase().includes("followed you back")) {
         return "followed you back";

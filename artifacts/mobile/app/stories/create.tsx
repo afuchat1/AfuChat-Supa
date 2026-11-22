@@ -11,6 +11,7 @@ import {
   View,
   useWindowDimensions,
   KeyboardAvoidingView,
+  Modal,
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import type { TextInputInstance } from "react-native";
@@ -54,6 +55,12 @@ import {
 const CAPTION_MAX = 200;
 
 type Privacy = "everyone" | "close_friends" | "only_me";
+type StoryMentionProfile = {
+  id: string;
+  handle: string;
+  display_name: string;
+  avatar_url: string | null;
+};
 const PRIVACY_OPTIONS: { id: Privacy; label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; desc: string }[] = [
   { id: "everyone", label: "Everyone", icon: "earth", desc: "All your followers can see this story" },
   { id: "close_friends", label: "Close Friends", icon: "star", desc: "Only people in your close friends list" },
@@ -89,6 +96,10 @@ export default function CreateStoryScreen() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [mentionResults, setMentionResults] = useState<StoryMentionProfile[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
   const [selectedMusic, setSelectedMusic] = useState<AfuMusicTrack | null>(null);
   const [musicStartSeconds, setMusicStartSeconds] = useState(0);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -97,6 +108,7 @@ export default function CreateStoryScreen() {
 
   const shareScale = useRef(new Animated.Value(1)).current;
   const captionRef = useRef<TextInputInstance>(null);
+  const mentionSearchRequest = useRef(0);
   const previewRadius = 24;
   const previewMargin = 8;
   const previewW = screenW - previewMargin * 2;
@@ -110,6 +122,47 @@ export default function CreateStoryScreen() {
 
   function pickMedia() {
     setShowMediaPicker(true);
+  }
+
+  async function searchStoryMentions(value: string) {
+    setMentionSearch(value);
+    const query = value.trim().replace(/^@/, "").replace(/[^a-zA-Z0-9_.\-\s]/g, "").slice(0, 48);
+    const requestId = ++mentionSearchRequest.current;
+    if (query.length < 2) {
+      setMentionResults([]);
+      setMentionLoading(false);
+      return;
+    }
+
+    setMentionLoading(true);
+    try {
+      let request = supabase
+        .from("profiles")
+        .select("id, handle, display_name, avatar_url")
+        .or(`handle.ilike.%${query}%,display_name.ilike.%${query}%`)
+        .limit(10);
+      if (user?.id) request = request.neq("id", user.id);
+      const { data, error } = await request;
+      if (error) throw error;
+      if (requestId === mentionSearchRequest.current) {
+        setMentionResults((data ?? []) as StoryMentionProfile[]);
+      }
+    } catch {
+      if (requestId === mentionSearchRequest.current) setMentionResults([]);
+    } finally {
+      if (requestId === mentionSearchRequest.current) setMentionLoading(false);
+    }
+  }
+
+  function insertStoryMention(handle: string) {
+    setCaption((current) => {
+      const separator = current.length > 0 && !/\s$/.test(current) ? " " : "";
+      return `${current}${separator}@${handle} `.slice(0, CAPTION_MAX);
+    });
+    setShowMentionPicker(false);
+    setMentionSearch("");
+    setMentionResults([]);
+    setTimeout(() => captionRef.current?.focus(), 120);
   }
 
   function handleGallerySelect(assets: GalleryAsset[]) {
@@ -311,7 +364,11 @@ export default function CreateStoryScreen() {
           music_end_seconds: _musicEndSeconds,
         } : {}),
       };
-      const { error } = await supabase.from("stories").insert(storyInsert);
+      const { data: createdStory, error } = await supabase
+        .from("stories")
+        .insert(storyInsert)
+        .select("id")
+        .single();
 
       if (error) {
         console.error("[Story Upload] DB insert failed:", error.message);
@@ -319,6 +376,17 @@ export default function CreateStoryScreen() {
         setStarting(false);
         showAlert("Story could not be shared", error.message || "Failed to save your story. Please try again.");
         return;
+      }
+
+      let mentionDeliveryFailed = false;
+      if (createdStory?.id && /@[a-zA-Z0-9_.-]{1,32}/.test(_caption)) {
+        const { error: mentionError } = await supabase.rpc("share_story_mentions", {
+          p_story_id: createdStory.id,
+        });
+        if (mentionError) {
+          mentionDeliveryFailed = true;
+          console.error("[Story mentions] Delivery failed:", mentionError.message);
+        }
       }
 
       try { const { rewardXp } = await import("../../lib/rewardXp"); rewardXp("story_created"); } catch (_) {}
@@ -330,6 +398,14 @@ export default function CreateStoryScreen() {
         router.dismissAll();
       } else {
         router.replace("/(tabs)/chats");
+      }
+      if (mentionDeliveryFailed) {
+        setTimeout(() => {
+          showAlert(
+            "Story shared, but mentions were not delivered",
+            "Please try again later. Your story is already live.",
+          );
+        }, 300);
       }
     } catch (error: any) {
       const message = error?.message || "Could not publish story. Please try again.";
@@ -435,6 +511,22 @@ export default function CreateStoryScreen() {
                 <TouchableOpacity style={styles.sideBtn} activeOpacity={0.75}
                   onPress={() => { setShowEmojis(false); setShowColors(false); captionRef.current?.focus(); }}>
                   <Ionicons name="text" size={22} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.sideBtn}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    setShowEmojis(false);
+                    setShowColors(false);
+                    setMentionSearch("");
+                    setMentionResults([]);
+                    setShowMentionPicker(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mention someone in your story"
+                  testID="story-mention-button"
+                >
+                  <Ionicons name="at" size={22} color="#fff" />
                 </TouchableOpacity>
                 {/* Emoji picker toggle */}
                 <TouchableOpacity style={[styles.sideBtn, showEmojis && { backgroundColor: "rgba(255,255,255,0.35)" }]}
@@ -670,6 +762,86 @@ export default function CreateStoryScreen() {
           </Pressable>
         </Pressable>
       )}
+      <Modal
+        visible={showMentionPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMentionPicker(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowMentionPicker(false)}
+        >
+          <Pressable
+            style={[styles.modalSheet, styles.mentionSheet, { backgroundColor: colors.surface, paddingBottom: insets.bottom + 16 }]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.modalHandle} />
+            <View style={styles.mentionHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Mention someone</Text>
+              <TouchableOpacity
+                onPress={() => setShowMentionPicker(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close mention picker"
+                hitSlop={10}
+              >
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.mentionSearchWrap, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+              <Ionicons name="search" size={17} color={colors.textMuted} />
+              <TextInput
+                appearance="embedded"
+                style={[styles.mentionSearchInput, { color: colors.text }]}
+                placeholder="Search by name or handle"
+                placeholderTextColor={colors.textMuted}
+                value={mentionSearch}
+                onChangeText={searchStoryMentions}
+                autoFocus
+                testID="story-mention-search"
+              />
+              {mentionLoading && <ActivityIndicator size="small" color={colors.accent} />}
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={{ maxHeight: 320 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {mentionResults.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.mentionResultRow}
+                  onPress={() => insertStoryMention(item.handle)}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mention @${item.handle}`}
+                >
+                  <Avatar uri={item.avatar_url} name={item.display_name || item.handle} size={38} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.mentionHandle, { color: colors.text }]} numberOfLines={1}>
+                      @{item.handle}
+                    </Text>
+                    {!!item.display_name && item.display_name !== item.handle && (
+                      <Text style={[styles.mentionDisplayName, { color: colors.textMuted }]} numberOfLines={1}>
+                        {item.display_name}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {mentionResults.length === 0 && (
+                <Text style={[styles.mentionEmpty, { color: colors.textMuted }]}>
+                  {mentionLoading
+                    ? "Searching…"
+                    : mentionSearch.trim().length >= 2
+                      ? "No users found"
+                      : "Type at least two characters"}
+                </Text>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
       <MediaGalleryPicker
         visible={showMediaPicker}
         onClose={() => setShowMediaPicker(false)}
@@ -979,6 +1151,54 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
+  },
+  mentionSheet: {
+    maxHeight: "76%",
+  },
+  mentionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  mentionSearchWrap: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  mentionSearchInput: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    paddingVertical: 10,
+  },
+  mentionResultRow: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  mentionHandle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  mentionDisplayName: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  mentionEmpty: {
+    paddingVertical: 22,
+    textAlign: "center",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
   },
   modalHandle: {
     width: 36,

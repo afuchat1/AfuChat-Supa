@@ -591,7 +591,8 @@ function getNotificationRoute(event: NotificationMessageData): { pathname: strin
   }
   if (route === "/stories/view" && event.entity_id) {
     const owner = typeof event.metadata?.story_owner_id === "string" ? event.metadata.story_owner_id : event.entity_id;
-    return { pathname: route, params: { userId: owner } };
+    const storyId = typeof event.metadata?.story_id === "string" ? event.metadata.story_id : undefined;
+    return { pathname: route, params: { userId: owner, ...(storyId ? { storyId } : {}) } };
   }
   if (event.entity_id && ["/chat/[id]", "/contact/[id]", "/post/[id]", "/video/[id]", "/article/[id]"].includes(route)) {
     return { pathname: route, params: { id: event.entity_id } };
@@ -2053,12 +2054,22 @@ function MessageBubble({ msg, isMe, isChannel, showTail, showName, onLongPress, 
               const raw = msg.encrypted_content ?? "";
               const isEncoded = raw.startsWith("storyUserId:");
               const storyUserId = isEncoded ? raw.slice("storyUserId:".length).split("|")[0] : null;
-              const storyDisplayText = isEncoded ? raw.slice("storyUserId:".length + (storyUserId?.length ?? 0) + 1) : raw;
+              const encodedDisplayText = isEncoded
+                ? raw.slice("storyUserId:".length + (storyUserId?.length ?? 0) + 1)
+                : raw;
+              const storyIdMatch = encodedDisplayText.match(/\|storyId:([0-9a-f-]{36})$/i);
+              const storyId = storyIdMatch?.[1] ?? null;
+              const storyDisplayText = storyIdMatch
+                ? encodedDisplayText.slice(0, storyIdMatch.index)
+                : encodedDisplayText;
               const isShared = isEncoded && (storyDisplayText === "Shared a story" || storyDisplayText.startsWith('"'));
 
               return (
                 <TouchableOpacity
-                  onPress={() => storyUserId && router.push({ pathname: "/stories/view", params: { userId: storyUserId } })}
+                  onPress={() => storyUserId && router.push({
+                    pathname: "/stories/view",
+                    params: { userId: storyUserId, ...(storyId ? { storyId } : {}) },
+                  })}
                   onLongPress={messageLongPress}
                   delayLongPress={300}
                   activeOpacity={0.85}

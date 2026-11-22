@@ -272,6 +272,8 @@ async function dispatchSocialNotification(eventId: string) {
     followId: typeof metadata.follow_id === "string" ? metadata.follow_id : "",
     chatId: typeof metadata.chat_id === "string" ? metadata.chat_id : "",
     messageId: typeof metadata.message_id === "string" ? metadata.message_id : "",
+    storyId: typeof metadata.story_id === "string" ? metadata.story_id : "",
+    storyOwnerId: typeof metadata.story_owner_id === "string" ? metadata.story_owner_id : "",
     route: event.cta_route ?? "",
     entityId: event.entity_id ?? "",
     transactionId: typeof metadata.transaction_id === "string" ? metadata.transaction_id : "",

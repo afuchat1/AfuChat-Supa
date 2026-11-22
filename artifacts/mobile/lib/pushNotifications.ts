@@ -126,6 +126,8 @@ function getTarget(response: PushResponse) {
     notificationId: stringValue(data.notificationId ?? data.notification_id),
     route: stringValue(data.route),
     entityId: stringValue(data.entityId ?? data.entity_id),
+    storyId: stringValue(data.storyId ?? data.story_id),
+    storyOwnerId: stringValue(data.storyOwnerId ?? data.story_owner_id),
     callId: stringValue(data.callId ?? data.call_id),
     callerId: stringValue(data.callerId ?? data.caller_id),
     callerName: stringValue(data.callerName ?? data.caller_name),

@@ -90,7 +90,14 @@ export default function PushNotificationManager() {
           } else if (target.route) {
             safeRouter.navigate({
               pathname: target.route as any,
-              params: target.entityId ? { id: target.entityId } : undefined,
+              params: target.route === "/stories/view"
+                ? {
+                    userId: target.storyOwnerId ?? target.entityId ?? "",
+                    ...(target.storyId ? { storyId: target.storyId } : {}),
+                  }
+                : target.entityId
+                  ? { id: target.entityId }
+                  : undefined,
             } as any);
           }
         }

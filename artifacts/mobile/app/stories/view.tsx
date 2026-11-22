@@ -16,7 +16,7 @@ import {
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
-import { navigateToProfile } from "@/lib/navigateToProfile";
+import { navigateToKnownProfile } from "@/lib/navigateToProfile";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -26,7 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Avatar } from "@/components/ui/Avatar";
 import VerifiedBadge from "@/components/ui/VerifiedBadge";
 import UserName from "@/components/ui/UserName";
-import { shareStory } from "@/lib/share";
+import { showAlert } from "@/lib/alert";
 import { hydrateViewedUsers, markStoriesViewed } from "@/lib/storyViewedStore";
 import { safePause, safePlay } from "@/lib/safeMedia";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -80,7 +80,7 @@ type Viewer = {
 };
 
 export default function ViewStoryScreen() {
-  const { userId } = useLocalSearchParams<{ userId: string }>();
+  const { userId, storyId } = useLocalSearchParams<{ userId: string; storyId?: string }>();
   const { user, profile } = useAuth();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -182,6 +182,10 @@ export default function ViewStoryScreen() {
       });
       const mapped = visible.map((s: any) => ({ ...s, profile: s.profiles ?? s.profile, like_count: 0 }));
       setStories(mapped);
+      if (storyId) {
+        const requestedIndex = mapped.findIndex((item: Story) => item.id === storyId);
+        if (requestedIndex >= 0) setIndex(requestedIndex);
+      }
       const storyIds = mapped.map((s: any) => s.id);
       if (storyIds.length > 0) loadLikeState(storyIds);
     };
@@ -233,7 +237,7 @@ export default function ViewStoryScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, storyId]);
 
   // ── Fetch like counts + my likes for all stories ────────────────────────────
   async function loadLikeState(storyIds: string[]) {
@@ -587,7 +591,7 @@ export default function ViewStoryScreen() {
           await supabase.from("messages").insert({
             chat_id: chatId,
             sender_id: user.id,
-            encrypted_content: `storyUserId:${s.user_id}|${trimmed}`,
+            encrypted_content: `storyUserId:${s.user_id}|${trimmed}|storyId:${s.id}`,
             attachment_url: s.media_url,
             attachment_type: "story_reply",
           });
@@ -608,6 +612,10 @@ export default function ViewStoryScreen() {
   // ── Share sheet ─────────────────────────────────────────────────────────────
   const openShareSheet = useCallback(async () => {
     if (!story) return;
+    if (!user) {
+      router.push("/(auth)/login" as any);
+      return;
+    }
     setPaused(true);
     setShowShareSheet(true);
     try {
@@ -615,6 +623,7 @@ export default function ViewStoryScreen() {
         .from("chats")
         .select("id, is_group, is_channel, name, chat_members!inner(user_id, profiles!chat_members_user_id_fkey(display_name, avatar_url))")
         .eq("is_channel", false)
+        .eq("chat_members.user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(20);
       if (data) {
@@ -644,15 +653,16 @@ export default function ViewStoryScreen() {
     closeShareSheet();
     try {
       const caption = story.caption ? `"${story.caption}"` : "Shared a story";
-      await supabase.from("messages").insert({
+      const { error } = await supabase.from("messages").insert({
         chat_id: chatId,
         sender_id: user.id,
-        encrypted_content: `storyUserId:${story.user_id}|${caption}`,
+        encrypted_content: `storyUserId:${story.user_id}|${caption}|storyId:${story.id}`,
         attachment_url: story.media_url,
         attachment_type: "story_reply",
       });
-    } catch {
-      // send failed — already navigated away, nothing to revert
+      if (error) throw error;
+    } catch (error: any) {
+      showAlert("Story could not be sent", error?.message || "Please try again.");
     }
   }, [story, user, closeShareSheet]);
 
@@ -820,22 +830,31 @@ export default function ViewStoryScreen() {
       {/* ── Top bar — avatar, name, time, share, close ───────────────────── */}
       <View style={[styles.topBar, { top: insets.top + 20 }]}>
         <TouchableOpacity
-          onPress={() => navigateToProfile(story.profile.handle, true).catch(() => {})}
+          style={styles.storyOwnerPressable}
+          onPress={() => navigateToKnownProfile({
+            id: story.user_id,
+            handle: story.profile.handle,
+            display_name: story.profile.display_name,
+            avatar_url: story.profile.avatar_url,
+          })}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Open @${story.profile.handle}'s public profile`}
+          testID="story-owner-profile"
         >
           <Avatar uri={story.profile.avatar_url} name={story.profile.display_name} size={36} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <UserName userId={story.user_id} name={story.profile.display_name} style={styles.storyName} />
-            <VerifiedBadge
-              isVerified={story.profile.is_verified}
-              isOrganizationVerified={story.profile.is_organization_verified}
-              size={14}
-            />
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <UserName userId={story.user_id} name={story.profile.display_name} style={styles.storyName} />
+              <VerifiedBadge
+                isVerified={story.profile.is_verified}
+                isOrganizationVerified={story.profile.is_organization_verified}
+                size={14}
+              />
+            </View>
+            <Text style={styles.storyTime}>{timeLabel}</Text>
           </View>
-          <Text style={styles.storyTime}>{timeLabel}</Text>
-        </View>
+        </TouchableOpacity>
         {isVideoStory && (
           <TouchableOpacity
             style={styles.topBtn}
@@ -845,7 +864,14 @@ export default function ViewStoryScreen() {
             <Ionicons name={inPip ? "contract" : "expand"} size={20} color={inPip ? "#258FE5" : "#fff"} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.topBtn} onPress={openShareSheet} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.topBtn}
+          onPress={openShareSheet}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Share story in chat"
+          testID="story-share-button"
+        >
           <Ionicons name="share-social" size={20} color="#fff" />
         </TouchableOpacity>
         <GlassBackButton
@@ -1047,11 +1073,7 @@ export default function ViewStoryScreen() {
                 >
                   <Ionicons name="send" size={20} color="#fff" />
                 </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={styles.actionBtn} onPress={openShareSheet} activeOpacity={0.8}>
-                  <Ionicons name="share-social" size={20} color="#fff" />
-                </TouchableOpacity>
-              )}
+              ) : null}
                 </>
               )}
             </>
@@ -1073,25 +1095,7 @@ export default function ViewStoryScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.shareOptionRow}
-              activeOpacity={0.75}
-              onPress={() => {
-                closeShareSheet();
-                shareStory({ userName: story.profile.display_name, userId: story.user_id });
-              }}
-            >
-              <View style={[styles.shareOptionIcon, { backgroundColor: "#0088FF22" }]}>
-                <Ionicons name="link" size={20} color="#0088FF" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shareOptionLabel}>Share Link</Text>
-                <Text style={styles.shareOptionSub}>Copy or send via any app</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
-            </TouchableOpacity>
-
-            {chatList.length > 0 && (
+            {chatList.length > 0 ? (
               <>
                 <Text style={styles.shareContactsLabel}>Send to a contact</Text>
                 <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
@@ -1111,6 +1115,8 @@ export default function ViewStoryScreen() {
                   ))}
                 </ScrollView>
               </>
+            ) : (
+              <Text style={styles.shareEmptyLabel}>Your chats will appear here.</Text>
             )}
           </View>
         </>
@@ -1274,6 +1280,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  storyOwnerPressable: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
   },
   storyName: {
     color: "#fff",
@@ -1538,33 +1551,6 @@ const styles = StyleSheet.create({
   },
 
   // Share sheet
-  shareOptionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.07)",
-  },
-  shareOptionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shareOptionLabel: {
-    color: "#fff",
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-  },
-  shareOptionSub: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    marginTop: 1,
-  },
   shareContactsLabel: {
     color: "rgba(255,255,255,0.5)",
     fontSize: 12,
@@ -1574,6 +1560,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 6,
+  },
+  shareEmptyLabel: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    paddingVertical: 24,
   },
   shareContactRow: {
     flexDirection: "row",
