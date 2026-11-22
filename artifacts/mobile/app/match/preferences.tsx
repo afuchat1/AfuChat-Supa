@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +17,7 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { useAppRouteBack } from "@/lib/superapp/useAppRouteBack";
 
 type Prefs = {
   show_in_match: boolean;
@@ -34,10 +34,11 @@ const INTERESTED_OPTIONS: { v: Prefs["interested_in"]; l: string; icon: React.Co
 
 const AGE_OPTIONS = [18, 21, 25, 30, 35, 40, 50, 60, 70, 80];
 
-export default function MatchPreferencesScreen() {
+export default function MatchPreferencesScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const handleBack = useAppRouteBack("afumatch", undefined, embedded);
   const [prefs, setPrefs] = useState<Prefs>({ show_in_match: true, interested_in: "everyone", min_age: 18, max_age: 50 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,7 +66,11 @@ export default function MatchPreferencesScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <GlassHeader title="Match Preferences" right={saving ? <ActivityIndicator size="small" color={colors.accent} /> : undefined} />
+      <GlassHeader
+        title="Match Preferences"
+        onBack={embedded ? handleBack : undefined}
+        right={saving ? <ActivityIndicator size="small" color={colors.accent} /> : undefined}
+      />
 
       {loading ? <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View> : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>

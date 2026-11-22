@@ -22,6 +22,7 @@ import { GlassHeader } from "@/components/ui/GlassHeader";
 import { supabase } from "@/lib/supabase";
 import { ShopOrder, ORDER_STATUS_LABELS, ESCROW_STATUS_LABELS, getBuyerOrders, formatShopAcoin } from "@/lib/shop";
 import Colors from "@/constants/colors";
+import { useAppRouteBack } from "@/lib/superapp/useAppRouteBack";
 const BRAND = Colors.brand;
 const GOLD = "#D4A853";
 
@@ -121,10 +122,11 @@ function OrderCard({ order, onPress }: { order: ShopOrder; onPress: () => void }
   );
 }
 
-export default function MyOrdersScreen() {
+export default function MyOrdersScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const browseMarketplace = useAppRouteBack("afumarket", undefined, embedded);
 
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +196,7 @@ export default function MyOrdersScreen() {
   if (loading) {
     return (
       <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
-        <GlassHeader title="My Orders" />
+        <GlassHeader title="My Orders" onBack={embedded ? browseMarketplace : undefined} />
         <ActivityIndicator color={BRAND} style={{ marginTop: 60 }} />
       </View>
     );
@@ -204,8 +206,9 @@ export default function MyOrdersScreen() {
     <View style={[st.root, { backgroundColor: colors.backgroundSecondary }]}>
       <GlassHeader
         title="My Orders"
+        onBack={embedded ? browseMarketplace : undefined}
         right={
-          <TouchableOpacity onPress={() => router.push("/app/afumarket" as any)} hitSlop={8}>
+          <TouchableOpacity onPress={browseMarketplace} hitSlop={8}>
             <Ionicons name="storefront" size={20} color={BRAND} />
           </TouchableOpacity>
         }
@@ -275,7 +278,7 @@ export default function MyOrdersScreen() {
               {filter === "all" ? "Browse the marketplace and make your first purchase" : "Nothing here yet"}
             </Text>
             {filter === "all" && (
-              <TouchableOpacity style={[st.shopNowBtn, { backgroundColor: BRAND }]} onPress={() => router.push("/app/afumarket" as any)}>
+              <TouchableOpacity style={[st.shopNowBtn, { backgroundColor: BRAND }]} onPress={browseMarketplace}>
                 <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Browse Marketplace</Text>
               </TouchableOpacity>
             )}

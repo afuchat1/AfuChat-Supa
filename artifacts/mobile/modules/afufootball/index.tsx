@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -16,7 +16,7 @@ import {
 import { Image as ExpoImage } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { safeRouter } from "@/lib/navUtils";
@@ -179,11 +179,13 @@ function ScreenFrame({
   eyebrow,
   children,
   action,
+  onBack,
 }: {
   title: string;
   eyebrow?: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  onBack?: () => void;
 }) {
   const { colors, backIconColor } = usePalette();
   const insets = useSafeAreaInsets();
@@ -197,7 +199,7 @@ function ScreenFrame({
         }}
       >
         <View style={styles.topRow}>
-          <Pressable onPress={() => safeRouter.back("/app/afufootball")} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
+          <Pressable onPress={onBack ?? (() => safeRouter.back("/app/afufootball"))} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
             <Ionicons name="arrow-back" size={20} color={backIconColor} />
           </Pressable>
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -464,7 +466,7 @@ function FootballBrandHeader() {
         </Text>
       </View>
       <Pressable
-        onPress={() => safeRouter.push("/football/search")}
+        onPress={() => router.setParams({ section: "search" })}
         style={styles.headerIconButton}
         accessibilityRole="button"
         accessibilityLabel="Search football"
@@ -472,7 +474,7 @@ function FootballBrandHeader() {
         <Ionicons name="search" size={22} color="#FFFFFF" />
       </Pressable>
       <Pressable
-        onPress={() => safeRouter.push("/football/settings")}
+        onPress={() => router.setParams({ section: "settings" })}
         style={styles.headerIconButton}
         accessibilityRole="button"
         accessibilityLabel="Match notification settings"
@@ -552,7 +554,7 @@ function HomeFixtureRow({ item }: { item: FootballRecord }) {
         </View>
       </Pressable>
       <Pressable
-        onPress={() => safeRouter.push("/football/settings")}
+        onPress={() => router.setParams({ section: "settings" })}
         style={styles.matchReminderButton}
         accessibilityRole="button"
         accessibilityLabel="Open match notification settings"
@@ -665,9 +667,14 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
   const [date, setDate] = useState(() => new Date());
   const [selectedSection, setSelectedSection] = useState<HomeSectionKey>(() => initialHomeSection(initialSection));
   const insets = useSafeAreaInsets();
-  useEffect(() => {
+  useLayoutEffect(() => {
     setSelectedSection(initialHomeSection(initialSection));
   }, [initialSection]);
+  const selectHomeSection = (next: HomeSectionKey) => {
+    setSelectedSection(next);
+    const section = next === "overview" ? undefined : next === "teams" ? "followed" : next;
+    router.setParams({ section, id: undefined, userId: undefined });
+  };
   const live = useFootballQuery<FootballRecord>("football:live", "live");
   const fixtureDate = localDateKey(date);
   const fixtureTimeZone = localTimeZone();
@@ -748,7 +755,7 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
             return (
               <Pressable
                 key={section.key}
-                onPress={() => setSelectedSection(section.key)}
+                onPress={() => selectHomeSection(section.key)}
                 style={[styles.sectionTab, active && styles.sectionTabActive]}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
@@ -808,7 +815,7 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
                   key={action.label}
                   onPress={() => {
                     setDate(new Date());
-                    setSelectedSection(action.tab);
+                    selectHomeSection(action.tab);
                   }}
                   style={({ pressed }) => [styles.quickActionTile, { opacity: pressed ? 0.84 : 1 }]}
                   accessibilityRole="button"
@@ -823,13 +830,13 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
               items={dateFixtures}
               loading={dated.loading && !dated.error}
               hasError={!!dated.error}
-              onSeeAll={() => setSelectedSection("matches")}
+              onSeeAll={() => selectHomeSection("matches")}
             />
             <PopularCompetitionsCard
               items={compItems}
               loading={competitions.loading && !competitions.error}
               hasError={!!competitions.error}
-              onSeeAll={() => setSelectedSection("competitions")}
+              onSeeAll={() => selectHomeSection("competitions")}
               onOpen={openCompetition}
             />
           </>
@@ -840,7 +847,7 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
             <SectionTitle
               title="Live Matches"
               note="Real-time scores from the football provider."
-              right={<Pressable onPress={() => safeRouter.push("/football/search")} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>}
+              right={<Pressable onPress={() => router.setParams({ section: "search" })} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>}
             />
             {!homeError && live.loading ? <DataNotice loading /> : null}
             {!homeError && !liveFixtures.length && !live.loading ? <DataNotice emptyText="No live matches right now" /> : null}
@@ -866,7 +873,7 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
 
         {selectedSection === "competitions" ? (
           <>
-            <SectionTitle title="Popular Competitions" note="Explore leagues and tournaments." right={<Pressable onPress={() => safeRouter.push("/football/search")} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>} />
+            <SectionTitle title="Popular Competitions" note="Explore leagues and tournaments." right={<Pressable onPress={() => router.setParams({ section: "search" })} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>} />
             {!competitions.error && competitions.loading ? <DataNotice loading /> : null}
             {!competitions.error && !competitions.loading && !compItems.length ? <DataNotice emptyText="No competitions available" /> : null}
             {compItems.map((item, index) => <CompetitionRow key={String(item.league?.id ?? item.id ?? index)} item={item} onPress={() => openCompetition(item)} />)}
@@ -878,7 +885,7 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
             <SectionTitle
               title="My Teams"
               note="Clubs and competitions you follow."
-              right={<Pressable onPress={() => safeRouter.push("/football/search")} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>}
+              right={<Pressable onPress={() => router.setParams({ section: "search" })} style={styles.headerLink}><Ionicons name="search" size={18} color="#FFFFFF" /></Pressable>}
             />
             {follows.loading && !follows.error ? <DataNotice loading /> : null}
             {!follows.error && !follows.loading && !following.length ? (
@@ -886,7 +893,7 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
                 <View style={[styles.emptyMark, { backgroundColor: pitch }]}><Ionicons name="star-outline" size={22} color={colors.accent} /></View>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>Build your matchday</Text>
                 <Text style={[styles.muted, { color: colors.textMuted, textAlign: "center", marginTop: 5 }]}>Follow teams and competitions to keep them close.</Text>
-                <Pressable onPress={() => safeRouter.push("/football/search")} style={[styles.primaryButton, { backgroundColor: colors.accent, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Find teams</Text></Pressable>
+                <Pressable onPress={() => router.setParams({ section: "search" })} style={[styles.primaryButton, { backgroundColor: colors.accent, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Find teams</Text></Pressable>
               </View>
             ) : null}
             {following.map((item) => (
@@ -901,13 +908,13 @@ export function AfuFootballApp({ initialSection }: { initialSection?: string }) 
 
         {selectedSection === "standings" ? (
           <>
-            <SectionTitle title={firstLeague.name ? `${firstLeague.name} Standings` : "Standings"} note="Current table from the football provider." right={<Pressable onPress={() => setSelectedSection("competitions")} style={styles.headerLink}><Ionicons name="trophy-outline" size={18} color="#FFFFFF" /></Pressable>} />
+            <SectionTitle title={firstLeague.name ? `${firstLeague.name} Standings` : "Standings"} note="Current table from the football provider." right={<Pressable onPress={() => selectHomeSection("competitions")} style={styles.headerLink}><Ionicons name="trophy-outline" size={18} color="#FFFFFF" /></Pressable>} />
             {!firstLeague.id ? (
               <View style={[styles.emptyCard, { backgroundColor: colors.surface }]}>
                 <View style={[styles.emptyMark, { backgroundColor: pitch }]}><Ionicons name="bar-chart-outline" size={22} color={colors.accent} /></View>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>Choose a competition</Text>
                 <Text style={[styles.muted, { color: colors.textMuted, textAlign: "center", marginTop: 5 }]}>Open a league to view its current table.</Text>
-                <Pressable onPress={() => setSelectedSection("competitions")} style={[styles.primaryButton, { backgroundColor: colors.accent, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Browse competitions</Text></Pressable>
+                <Pressable onPress={() => selectHomeSection("competitions")} style={[styles.primaryButton, { backgroundColor: colors.accent, marginTop: 15 }]}><Text style={styles.primaryButtonText}>Browse competitions</Text></Pressable>
               </View>
             ) : standingsRows.length ? (
               <View style={[styles.panel, { backgroundColor: colors.surface }]}>
@@ -1047,7 +1054,7 @@ export function FootballLeagueScreen() {
   );
 }
 
-export function FootballSearchScreen() {
+export function FootballSearchScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const params = useLocalSearchParams<{ q?: string; type?: string }>();
   const initialQuery = Array.isArray(params.q) ? params.q[0] : params.q ?? "";
   const [query, setQuery] = useState(initialQuery);
@@ -1069,7 +1076,11 @@ export function FootballSearchScreen() {
   }
 
   return (
-    <ScreenFrame title="Find your football" eyebrow="AfuFootball">
+    <ScreenFrame
+      title="Find your football"
+      eyebrow="AfuFootball"
+      onBack={embedded ? () => router.setParams({ section: undefined }) : undefined}
+    >
       <View style={[styles.searchBox, { backgroundColor: colors.surface }]}>
         <Ionicons name="search" size={19} color={colors.textMuted} />
         <TextInput value={query} onChangeText={setQuery} onSubmitEditing={submit} placeholder="Team, competition or player" placeholderTextColor={colors.textMuted} returnKeyType="search" style={[styles.searchInput, { color: colors.text }]} accessibilityLabel="Search football" />
@@ -1089,7 +1100,7 @@ export function FootballSearchScreen() {
   );
 }
 
-export function FootballSettingsScreen() {
+export function FootballSettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -1140,7 +1151,11 @@ export function FootballSettingsScreen() {
   ];
 
   return (
-    <ScreenFrame title="Football settings" eyebrow="Your matchday">
+    <ScreenFrame
+      title="Football settings"
+      eyebrow="Your matchday"
+      onBack={embedded ? () => router.setParams({ section: undefined }) : undefined}
+    >
       <View style={[styles.settingsIntro, { backgroundColor: pitch }]}><Ionicons name="notifications-outline" size={22} color={green} /><View style={{ flex: 1 }}><Text style={[styles.cardTitle, { color: colors.text }]}>Choose what matters</Text><Text style={[styles.muted, { color: colors.textMuted, marginTop: 4 }]}>These preferences are saved to your AfuFootball profile. Delivery depends on supported notification services.</Text></View></View>
       {preferencesQuery.loading ? <DataNotice loading /> : null}
       {preferencesQuery.data?.error ? <DataNotice error={preferencesQuery.data.error} onRetry={() => { queryCacheInvalidate("football:notification-preferences"); void preferencesQuery.refresh(); }} /> : null}

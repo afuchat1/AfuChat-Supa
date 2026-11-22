@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -199,7 +199,12 @@ export default function AfuPayApp({
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
-  const [view, setView] = useState<AppView>(() => initialRecipientId ? "send" : initialView ?? "home");
+  const requestedView: AppView = initialRecipientId
+    ? "send"
+    : initialView && ["home", "history", "topup", "send", "receive", "exchange", "requests", "services"].includes(initialView)
+      ? initialView
+      : "home";
+  const [view, setView] = useState<AppView>(requestedView);
   const [transactions, setTransactions] = useState<Tx[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -207,16 +212,20 @@ export default function AfuPayApp({
   const [currSettings, setCurrSettings] = useState<{ nexa_to_acoin_rate: number; conversion_fee_percent: number } | null>(null);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
 
-  useEffect(() => {
-    setView(initialRecipientId ? "send" : initialView ?? "home");
-  }, [initialRecipientId, initialView]);
+  useLayoutEffect(() => {
+    setView(requestedView);
+  }, [requestedView]);
 
   const acoin = profile?.acoin ?? 0;
   const nexa = profile?.xp ?? 0;
   const navigateToView = useCallback((nextView: AppView) => {
     setView(nextView);
-    const href = nextView === "home" ? "/app/afupay" : `/app/afupay?section=${nextView}`;
-    safeRouter.replace(href as any);
+    router.setParams({
+      section: nextView === "home" ? undefined : nextView,
+      initialRecipientId: undefined,
+      recipientId: undefined,
+      paymentReference: undefined,
+    });
   }, []);
   const openMoneyRequest = useCallback(() => {
     safeRouter.push("/app/afupay?section=request" as any);

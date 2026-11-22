@@ -39,7 +39,7 @@ import TicketsScreen from "@/app/mini-programs/tickets";
 import TransferScreen from "@/app/mini-programs/transfer";
 import MoneyRequestScreen from "@/app/wallet/request";
 import AfuMusicApp from "@/modules/afumusic";
-import { AfuFootballApp } from "@/modules/afufootball";
+import { AfuFootballApp, FootballSearchScreen, FootballSettingsScreen } from "@/modules/afufootball";
 import {
   cacheMusicTrackOffline,
   getMusicPlaybackUri,
@@ -84,8 +84,8 @@ function AppContent({
         />
       );
     case "afumarket":
-      if (section === "cart") return <CartScreen />;
-      if (section === "orders") return <MyOrdersScreen />;
+      if (section === "cart") return <CartScreen embedded />;
+      if (section === "orders") return <MyOrdersScreen embedded />;
       if (section === "manage") return <ShopManageScreen />;
       if (section === "apply") return <SellerApplyScreen />;
       if (section === "storefront") return <StoreStorefrontScreen />;
@@ -102,13 +102,13 @@ function AppContent({
     case "afufiles":
       return <FileManagerScreen />;
     case "afugifts":
-      if (section === "marketplace") return <GiftMarketplaceScreen />;
+      if (section === "marketplace") return <GiftMarketplaceScreen embedded />;
       return <GiftsScreen />;
     case "afuevents":
       return <AfuEventsApp initialTab={section as any} />;
     case "afumatch":
-      if (section === "preferences") return <MatchPreferencesScreen />;
-      if (section === "settings") return <MatchSettingsScreen />;
+      if (section === "preferences") return <MatchPreferencesScreen embedded />;
+      if (section === "settings") return <MatchSettingsScreen embedded />;
       if (section === "profile") return <MatchProfileScreen />;
       if (section === "onboarding") return <MatchOnboardingScreen />;
       if (section === "view-profile") return <MatchViewProfileScreen />;
@@ -128,6 +128,8 @@ function AppContent({
     case "afumusic":
       return <ConnectedAfuMusic initialSection={section} />;
     case "afufootball":
+      if (section === "search") return <FootballSearchScreen embedded />;
+      if (section === "settings") return <FootballSettingsScreen embedded />;
       return <AfuFootballApp initialSection={section} />;
   }
 }
@@ -150,7 +152,7 @@ export default function FullAppRoute() {
   ) as Record<string, string>;
   if (!rawId || !isFullAppId(rawId)) return <Redirect href="/apps" />;
   return (
-    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(section)} showNav={rawId !== "afupay"}>
+    <AppPageShell appId={rawId} activeKey={normalizeAppNavKey(rawId, section)} showNav={rawId !== "afupay"}>
       <AppContent appId={rawId} section={section} params={routeParams} />
     </AppPageShell>
   );

@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -579,9 +580,14 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
   const [undoStack, setUndoStack] = useState<Candidate[]>([]);
   const [acoinBalance, setAcoinBalance] = useState(0);
 
-  useEffect(() => {
-    if (initialTab) setTab(initialTab);
+  useLayoutEffect(() => {
+    setTab(initialTab === "matches" ? "matches" : "discover");
   }, [initialTab]);
+
+  const selectMatchTab = (next: "discover" | "matches") => {
+    setTab(next);
+    router.setParams({ section: next === "matches" ? "matches" : undefined });
+  };
 
   // Check if user has a dating profile
   useEffect(() => { checkProfile(); }, []);
@@ -843,7 +849,7 @@ export default function MatchScreen({ initialTab }: { initialTab?: "discover" | 
       {/* Tab bar */}
       <View style={[styles.tabBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         {(["discover", "matches"] as const).map((t) => (
-          <Pressable key={t} style={styles.tabItem} onPress={() => setTab(t)}>
+          <Pressable key={t} style={styles.tabItem} onPress={() => selectMatchTab(t)}>
             <Text style={[styles.tabLabel, { color: tab === t ? BRAND : colors.textMuted }]}>
               {t === "discover" ? "Discover" : "My Matches"}
             </Text>

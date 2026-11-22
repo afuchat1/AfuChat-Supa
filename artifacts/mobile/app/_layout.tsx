@@ -254,15 +254,13 @@ function AppNavigationStack() {
       <Stack.Screen name="(tabs)"     options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="payment-return" options={{ animation: "slide_from_right", gestureEnabled: true }} />
       <Stack.Screen name="apps"       options={{ animation: "slide_from_right" }} />
-      {/* Product surfaces own their internal navigation. Avoid a second native
-          slide/gesture on every product tab change, which feels like a bounce. */}
+      {/* Mini-app sections share one route shell, so section changes should not
+          transition as independent full-screen pages. */}
       <Stack.Screen
         name="app/[appId]"
         options={{
-          // Mini-apps are full stack pages, never modal cards over the
-          // previous screen.
           presentation: "card",
-          animation: "slide_from_right",
+          animation: "none",
           gestureEnabled: true,
           contentStyle: { backgroundColor: bg },
         }}

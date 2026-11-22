@@ -3,6 +3,7 @@ import { Platform, View } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import AppBottomNav, { type AppNavItem } from "./AppBottomNav";
 import type { FullAppId } from "@/lib/superapp/appRouteIds";
+import { normalizeAppNavKey as normalizeRouteNavKey } from "@/lib/superapp/appNavigation";
 
 export type { FullAppId } from "@/lib/superapp/appRouteIds";
 
@@ -71,7 +72,7 @@ const NAV: Record<FullAppId, AppNavItem[]> = {
     { key: "live", label: "Matchday", icon: "football-outline", activeIcon: "football", href: "/app/afufootball" },
     { key: "competitions", label: "Leagues", icon: "trophy-outline", activeIcon: "trophy", href: "/app/afufootball?section=competitions" },
     { key: "followed", label: "Following", icon: "bookmark-outline", activeIcon: "bookmark", href: "/app/afufootball?section=followed" },
-    { key: "search", label: "Search", icon: "search-outline", activeIcon: "search", href: "/football/search" },
+    { key: "search", label: "Search", icon: "search-outline", activeIcon: "search", href: "/app/afufootball?section=search" },
   ],
 };
 
@@ -86,14 +87,8 @@ export function getAppNav(appId: FullAppId) {
     : items;
 }
 
-export function normalizeAppNavKey(section?: string) {
-  if (section === "request") return "requests";
-  if (["send", "receive", "exchange"].includes(section ?? "")) return "home";
-  if (section === "apply-seller") return "sell";
-  if (section === "apply" || section === "manage" || section === "storefront" || section === "product" || section === "order") return "browse";
-  if (section === "post-gig") return "post-gig";
-  if (["competitions", "followed"].includes(section ?? "")) return section;
-  return section;
+export function normalizeAppNavKey(appId: FullAppId, section?: string) {
+  return normalizeRouteNavKey(appId, section, Platform.OS === "web" ? "web" : "native");
 }
 
 type Props = {
@@ -110,7 +105,7 @@ export default function AppPageShell({ appId, activeKey, showNav = true, childre
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flex: 1, minHeight: 0, position: "relative" }}>{children}</View>
-      {shouldShowNav && <AppBottomNav items={items} activeKey={activeKey} />}
+      {shouldShowNav && <AppBottomNav appId={appId} items={items} activeKey={activeKey} />}
     </View>
   );
 }

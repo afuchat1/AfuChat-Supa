@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,7 @@ import {
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -44,11 +45,18 @@ export default function AfuEventsApp({ initialTab }: { initialTab?: "upcoming" |
   const insets = useSafeAreaInsets();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"upcoming" | "online" | "free">("upcoming");
+  const requestedTab = initialTab && ["upcoming", "online", "free"].includes(initialTab)
+    ? initialTab
+    : "upcoming";
+  const [tab, setTab] = useState<"upcoming" | "online" | "free">(requestedTab);
 
-  useEffect(() => {
-    if (initialTab) setTab(initialTab);
-  }, [initialTab]);
+  useLayoutEffect(() => {
+    setTab(requestedTab);
+  }, [requestedTab]);
+  const selectEventTab = (next: "upcoming" | "online" | "free") => {
+    setTab(next);
+    router.setParams({ section: next === "upcoming" ? undefined : next });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,7 +133,7 @@ export default function AfuEventsApp({ initialTab }: { initialTab?: "upcoming" |
       </View>
       <View style={[s.tabs, { borderBottomColor: colors.border }]}>
         {(["upcoming", "online", "free"] as const).map(t => (
-          <TouchableOpacity key={t} style={[s.tabBtn, tab === t && { borderBottomColor: "#FF9500", borderBottomWidth: 2 }]} onPress={() => setTab(t)}>
+          <TouchableOpacity key={t} style={[s.tabBtn, tab === t && { borderBottomColor: "#FF9500", borderBottomWidth: 2 }]} onPress={() => selectEventTab(t)}>
             <Text style={[s.tabText, { color: tab === t ? "#FF9500" : colors.textMuted }]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
           </TouchableOpacity>
         ))}

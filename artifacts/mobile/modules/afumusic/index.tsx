@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -377,7 +377,7 @@ export default function AfuMusicApp({
     return loadTracks();
   }, [loadOfflineTracks, loadStudioTracks, loadTracks, section]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const next = ["discover", "library", "offline", "studio"].includes(initialSection)
       ? initialSection as MusicSection
       : "discover";

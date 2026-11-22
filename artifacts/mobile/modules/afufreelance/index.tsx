@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -18,6 +18,7 @@ import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
@@ -82,7 +83,14 @@ export default function AfuFreelanceApp({ initialScreen }: { initialScreen?: Scr
   const insets = useSafeAreaInsets();
   const { navigateOutside } = useSuperApp();
 
-  const [screen, setScreen] = useState<Screen>("browse");
+  const requestedScreen: Screen = initialScreen === "post-gig" ? "post-gig" : "browse";
+  const [screen, setScreenState] = useState<Screen>(requestedScreen);
+  const setScreen = (next: Screen) => {
+    setScreenState(next);
+    if (next === "browse" || next === "post-gig") {
+      router.setParams({ section: next === "browse" ? undefined : next, id: undefined });
+    }
+  };
   const [cat, setCat] = useState("All");
   const [search, setSearch] = useState("");
   const [gigs, setGigs] = useState<Gig[]>([]);
@@ -101,9 +109,9 @@ export default function AfuFreelanceApp({ initialScreen }: { initialScreen?: Scr
   const [fEmoji, setFEmoji] = useState("💼");
   const [posting, setPosting] = useState(false);
 
-  useEffect(() => {
-    if (initialScreen) setScreen(initialScreen);
-  }, [initialScreen]);
+  useLayoutEffect(() => {
+    setScreenState(requestedScreen);
+  }, [requestedScreen]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,7 +148,7 @@ export default function AfuFreelanceApp({ initialScreen }: { initialScreen?: Scr
     setSelectedGig(gig);
     setReviews([]);
     loadReviews(gig.id);
-    setScreen("detail");
+    router.push(`/app/afufreelance?section=detail&id=${encodeURIComponent(gig.id)}` as any);
   }
 
   async function placeOrder() {

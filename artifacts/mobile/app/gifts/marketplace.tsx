@@ -27,6 +27,7 @@ import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
 import { formatCompactAmount } from "@/lib/formatCompactAmount";
 import SwipeableBottomSheet from "@/components/SwipeableBottomSheet";
+import { useAppRouteBack } from "@/lib/superapp/useAppRouteBack";
 
 type MarketplaceListing = {
   id: string;
@@ -80,11 +81,12 @@ function GiftImage({ uri, emoji, size }: { uri: string | null; emoji: string; si
   );
 }
 
-export default function GiftMarketplaceScreen() {
+export default function GiftMarketplaceScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { colors } = useTheme();
   const { width: screenW } = useWindowDimensions();
   const cardW = (screenW - 32 - 8) / 2;
   const { user, profile, refreshProfile } = useAuth();
+  const handleBack = useAppRouteBack("afugifts", undefined, embedded);
   const insets = useSafeAreaInsets();
   const [listings, setListings] = useState<MarketplaceListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -331,6 +333,7 @@ export default function GiftMarketplaceScreen() {
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
       <GlassHeader
         title="Gift Marketplace"
+        onBack={embedded ? handleBack : undefined}
         sideWidth={76}
         right={
           <TouchableOpacity onPress={() => safeRouter.replace("/app/afupay" as any)} style={styles.walletButton}>

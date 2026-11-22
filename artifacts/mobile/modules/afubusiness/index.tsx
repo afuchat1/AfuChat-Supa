@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,6 +15,7 @@ import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import { useAuth } from "@/context/AuthContext";
@@ -123,7 +124,13 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   const { user, profile } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [screen, setScreen] = useState<Screen>("home");
+  const validScreens: Screen[] = ["home", "analytics", "products", "add-product", "edit-product", "orders", "order-detail", "audience", "edit-profile", "shop-setup"];
+  const requestedScreen = validScreens.includes(initialScreen as Screen) ? initialScreen as Screen : "home";
+  const [screen, setScreenState] = useState<Screen>(requestedScreen);
+  const setScreen = (next: Screen) => {
+    setScreenState(next);
+    router.setParams({ section: next === "home" ? undefined : next });
+  };
   const [shop, setShop] = useState<Shop | null | undefined>(undefined);
   const [followerCount, setFollowerCount] = useState(0);
   const [postCount, setPostCount] = useState(0);
@@ -156,9 +163,9 @@ export default function AfuBusinessApp({ initialScreen }: { initialScreen?: Scre
   const [prodAvailable, setProdAvailable] = useState(true);
   const [prodSaving, setProdSaving] = useState(false);
 
-  useEffect(() => {
-    if (initialScreen) setScreen(initialScreen);
-  }, [initialScreen]);
+  useLayoutEffect(() => {
+    setScreenState(requestedScreen);
+  }, [requestedScreen]);
 
   useEffect(() => {
     if (!user) return;

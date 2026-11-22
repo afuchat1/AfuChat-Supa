@@ -22,11 +22,13 @@ import { ListRowSkeleton } from "@/components/ui/Skeleton";
 import { CartItem, getOrCreateCart, removeFromCart, updateCartQty, placeOrder, formatShopAcoin, formatShopUGX, PLATFORM_FEE_PCT } from "@/lib/shop";
 import Colors from "@/constants/colors";
 import { showAlert } from "@/lib/alert";
+import { useAppRouteBack } from "@/lib/superapp/useAppRouteBack";
 
-export default function CartScreen() {
+export default function CartScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { colors } = useTheme();
   const { user, profile, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
+  const handleBack = useAppRouteBack("afumarket", undefined, embedded);
 
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +132,7 @@ export default function CartScreen() {
       <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
           <View style={styles.headerSide}>
-            <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+            <GlassBackButton onPress={handleBack} icon="chevron-back" />
           </View>
           <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
           <View style={styles.headerSide} />
@@ -144,7 +146,7 @@ export default function CartScreen() {
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary, paddingTop: insets.top }]}>
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerSide}>
-          <GlassBackButton onPress={() => router.back()} icon="chevron-back" />
+          <GlassBackButton onPress={handleBack} icon="chevron-back" />
         </View>
         <Text style={[styles.headerTitle, { color: colors.text }]}>My Cart</Text>
         <View style={styles.headerSide}>
@@ -157,7 +159,7 @@ export default function CartScreen() {
           <Text style={{ fontSize: 72 }}>🛒</Text>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>Your cart is empty</Text>
           <Text style={[styles.emptySub, { color: colors.textMuted }]}>Browse shops and add products to your cart</Text>
-          <TouchableOpacity style={[styles.browseBtn, { backgroundColor: colors.accent }]} onPress={() => router.back()}>
+          <TouchableOpacity style={[styles.browseBtn, { backgroundColor: colors.accent }]} onPress={handleBack}>
             <Text style={styles.browseBtnText}>Start Shopping</Text>
           </TouchableOpacity>
         </View>
@@ -314,7 +316,7 @@ export default function CartScreen() {
             <Text style={[styles.successSub, { color: colors.textMuted }]}>
               Your order has been placed and the seller will process it shortly.
             </Text>
-            <TouchableOpacity style={[styles.successBtn, { backgroundColor: colors.accent }]} onPress={() => { setOrderDone(false); router.back(); }}>
+            <TouchableOpacity style={[styles.successBtn, { backgroundColor: colors.accent }]} onPress={() => { setOrderDone(false); handleBack(); }}>
               <Text style={styles.successBtnText}>Continue Shopping</Text>
             </TouchableOpacity>
           </View>

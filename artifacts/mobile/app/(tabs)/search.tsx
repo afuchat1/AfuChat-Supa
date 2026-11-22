@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -466,6 +466,9 @@ export function SearchScreen({
   const colors = themeColors;
   const isDark = themeIsDark;
   const BRAND = colors.accent;
+  const requestedTab: SearchTab = initialTab && TABS.some((item) => item.id === initialTab)
+    ? initialTab
+    : "all";
 
   const CATEGORIES = [
     { id: "people",   label: "People",   icon: "people",        gradient: [BRAND,  Colors.brandDark]   as [string,string] },
@@ -498,7 +501,7 @@ export function SearchScreen({
 
   const [query,        setQuery]        = useState("");
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false);
-  const [tab,          setTab]          = useState<SearchTab>(initialTab ?? "all");
+  const [tab,          setTab]          = useState<SearchTab>(requestedTab);
   const sortMode: SortMode = "relevance";
   const dateRange: DateRange = "all";
   const verifiedOnly = false;
@@ -520,9 +523,14 @@ export function SearchScreen({
   const relatedIndexReadyRef = useRef<Promise<void> | null>(null);
   const [didYouMean, setDidYouMean] = useState<DidYouMeanState | null>(null);
 
-  useEffect(() => {
-    if (initialTab) setTab(initialTab);
-  }, [initialTab]);
+  useLayoutEffect(() => {
+    setTab(requestedTab);
+  }, [requestedTab]);
+
+  const selectSearchTab = useCallback((next: SearchTab) => {
+    setTab(next);
+    if (isAfuSearch) router.setParams({ section: next === "all" ? undefined : next });
+  }, [isAfuSearch]);
 
   useEffect(() => {
     if (!searchOverlayOpen || !isAfuSearch) return;
@@ -1373,7 +1381,7 @@ export function SearchScreen({
         : ["channel", "group"].includes(content.source_type) ? "channels"
         : "all";
       setQuery(content.title);
-      setTab(targetTab);
+      selectSearchTab(targetTab);
       performSearch(content.title, targetTab, verifiedOnly, sortMode, dateRange, true, undefined, false);
       inputRef.current?.blur();
       return;
@@ -1649,14 +1657,14 @@ export function SearchScreen({
     clearLensResults();
     closeSearchOverlay();
     const q = `#${tag}`;
-    setQuery(q); setTab("posts");
+    setQuery(q); selectSearchTab("posts");
     performSearch(q, "posts", verifiedOnly, sortMode, dateRange, true, undefined, true);
     inputRef.current?.blur();
   }
 
   function onTabPress(t: SearchTab) {
     Haptics.selectionAsync();
-    setTab(t);
+    selectSearchTab(t);
     if (isVisualSearchActive) return;
     if (hasSearched) performSearch(query, t, verifiedOnly, sortMode, dateRange);
     else if (t === "videos" || t === "jobs") performSearch("", t, verifiedOnly, "popular", "all");
@@ -1743,7 +1751,7 @@ export function SearchScreen({
     setLensResult(null);
     setLensLoading(true);
     setLensError(null);
-    setTab("all");
+    selectSearchTab("all");
     setResults(EMPTY);
     setDidYouMean(null);
     setHasSearched(true);
@@ -2415,7 +2423,7 @@ export function SearchScreen({
               clearLensResults();
               setHasSearched(false);
               setResults(EMPTY);
-              setTab("all");
+              selectSearchTab("all");
             }}
             hitSlop={10}
             accessibilityRole="button"
@@ -2462,7 +2470,7 @@ export function SearchScreen({
               clearLensResults();
               setHasSearched(false);
               setResults(EMPTY);
-              setTab("all");
+              selectSearchTab("all");
             }}
             hitSlop={10}
             accessibilityRole="button"
@@ -2917,7 +2925,7 @@ export function SearchScreen({
               ] as const).map((category) => (
                 <TouchableOpacity
                   key={category.id}
-                  onPress={() => { setTab(category.id); openSearchOverlay(); }}
+                  onPress={() => { selectSearchTab(category.id); openSearchOverlay(); }}
                   style={{ flex: 1, minHeight: 38, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 6, borderRadius: 20, backgroundColor: tab === category.id ? BRAND + "18" : colors.surface }}
                   activeOpacity={0.75}
                   accessibilityRole="button"

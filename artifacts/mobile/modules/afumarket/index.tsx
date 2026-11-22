@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,6 +17,7 @@ import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { useTheme } from "@/hooks/useTheme";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
@@ -105,7 +106,14 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const [screen, setScreen] = useState<Screen>("browse");
+  const requestedScreen: Screen = initialScreen === "apply-seller" ? "apply-seller" : "browse";
+  const [screen, setScreenState] = useState<Screen>(requestedScreen);
+  const setScreen = (next: Screen) => {
+    setScreenState(next);
+    if (next === "browse" || next === "apply-seller") {
+      router.setParams({ section: next === "browse" ? undefined : next, id: undefined });
+    }
+  };
   const [selected, setSelected] = useState<Product | null>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -128,9 +136,9 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
   const [sellerCat, setSellerCat] = useState(CATEGORIES[0]);
   const [sellerSaving, setSellerSaving] = useState(false);
 
-  useEffect(() => {
-    if (initialScreen) setScreen(initialScreen);
-  }, [initialScreen]);
+  useLayoutEffect(() => {
+    setScreenState(requestedScreen);
+  }, [requestedScreen]);
 
   const CARD_W = Math.floor((width - 16 * 2 - 12) / 2);
 
@@ -334,7 +342,7 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <TouchableOpacity
-             onPress={() => safeRouter.replace("/app/afumarket?section=orders" as any)}
+             onPress={() => router.setParams({ section: "orders", id: undefined, userId: undefined })}
             style={[s.cartBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Ionicons name="receipt-outline" size={20} color={colors.text} />
@@ -484,7 +492,7 @@ export default function AfuMarketApp({ initialScreen }: { initialScreen?: Screen
             cardW={CARD_W}
             accent={accent}
             colors={colors}
-            onPress={() => { setSelected(item); setScreen("product"); }}
+            onPress={() => router.push({ pathname: "/app/afumarket", params: { section: "product", id: item.id } } as any)}
             onCart={() => handleAddToCart(item)}
             addingId={addingId}
           />

@@ -17,6 +17,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { GlassHeader } from "@/components/ui/GlassHeader";
 import { showAlert } from "@/lib/alert";
 import { ListRowSkeleton } from "@/components/ui/Skeleton";
+import { useAppRouteBack } from "@/lib/superapp/useAppRouteBack";
 
 const BRAND = "#FF2D55";
 
@@ -73,10 +74,11 @@ function NavRow({ icon, iconBg, label, description, onPress, danger }: {
   );
 }
 
-export default function MatchSettingsScreen() {
+export default function MatchSettingsScreen({ embedded = false }: { embedded?: boolean } = {}) {
   const { colors } = useTheme();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const handleBack = useAppRouteBack("afumatch", undefined, embedded);
   const [prefs, setPrefs] = useState<Prefs>({ show_in_discovery: true, show_age: true, show_distance: true, is_paused: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -113,7 +115,10 @@ export default function MatchSettingsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.backgroundSecondary }]}>
-      <GlassHeader title="AfuMatch Settings" />
+      <GlassHeader
+        title="AfuMatch Settings"
+        onBack={embedded ? handleBack : undefined}
+      />
 
       {loading ? (
         <View style={{ padding: 16, gap: 10 }}>{[1,2,3,4,5].map(i => <ListRowSkeleton key={i} />)}</View>

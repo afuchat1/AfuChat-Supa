@@ -2,13 +2,15 @@ import React, { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
-import { usePathname } from "expo-router";
+import { router, useLocalSearchParams, usePathname } from "expo-router";
 import { safeRouter } from "@/lib/navUtils";
+import { appRouteHrefMatchesLocation, resolveAppRouteAction } from "@/lib/superapp/appNavigation";
 import {
   FloatingNavIndicator,
   FloatingNavSurface,
   floatingNavigationStyles,
 } from "@/components/ui/FloatingNavSurface";
+import type { FullAppId } from "@/lib/superapp/appRouteIds";
 
 export type AppNavItem = {
   key: string;
@@ -21,15 +23,18 @@ export type AppNavItem = {
 };
 
 type Props = {
+  appId: FullAppId;
   items: AppNavItem[];
   activeKey?: string;
 };
 
-export default function AppBottomNav({ items, activeKey }: Props) {
+export default function AppBottomNav({ appId, items, activeKey }: Props) {
   const { colors } = useTheme();
   const pathname = usePathname();
+  const routeParams = useLocalSearchParams<Record<string, string | string[]>>();
   const activeIndex = items.findIndex((item) =>
-    item.key === activeKey || (!activeKey && !!item.href && pathname === item.href)
+    item.key === activeKey ||
+    (!activeKey && !!item.href && appRouteHrefMatchesLocation(item.href, pathname, routeParams))
   );
   const selectedIndex = Math.max(0, activeIndex);
   const [barWidth, setBarWidth] = useState(0);
@@ -52,7 +57,11 @@ export default function AppBottomNav({ items, activeKey }: Props) {
             accessibilityLabel={item.label}
             onPress={() => {
               if (item.onPress) item.onPress();
-              else if (item.href) safeRouter.replace(item.href as any);
+              else if (item.href) {
+                const action = resolveAppRouteAction(`/app/${appId}`, item.href, routeParams);
+                if (action.kind === "params") router.setParams(action.params);
+                else safeRouter.replace(action.href as any);
+              }
             }}
             style={({ pressed }) => [
               floatingNavigationStyles.item,

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";
 import { SmartSheet } from "@/components/ui/SmartSheet";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -561,7 +562,10 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
   const [featured, setFeatured] = useState<FeaturedPlacement[]>([]);
   const [owned, setOwned] = useState<OwnedUsername[]>([]);
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"market" | "owned" | "mine">("market");
+  const requestedTab = initialTab && ["market", "owned", "mine"].includes(initialTab)
+    ? initialTab
+    : "market";
+  const [tab, setTab] = useState<"market" | "owned" | "mine">(requestedTab);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -571,9 +575,13 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
   const [selectedBid, setSelectedBid] = useState<Listing | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<Listing | null>(null);
 
-  useEffect(() => {
-    if (initialTab) setTab(initialTab);
-  }, [initialTab]);
+  useLayoutEffect(() => {
+    setTab(requestedTab);
+  }, [requestedTab]);
+  const selectUsernameTab = (next: "market" | "owned" | "mine") => {
+    setTab(next);
+    router.setParams({ section: next === "market" ? undefined : next });
+  };
   const [listVisible, setListVisible] = useState(false);
 
   useEffect(() => {
@@ -760,14 +768,14 @@ export default function AfuUsernamesApp({ initialTab }: { initialTab?: "market" 
       ) : null}
 
       <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => setTab("market")} style={[styles.tab, tab === "market" && { borderBottomColor: colors.accent }]}>
+        <Pressable onPress={() => selectUsernameTab("market")} style={[styles.tab, tab === "market" && { borderBottomColor: colors.accent }]}>
           <Text style={[styles.tabText, { color: tab === "market" ? colors.accent : colors.textMuted }]}>Usernames</Text>
         </Pressable>
-        <Pressable onPress={() => setTab("owned")} style={[styles.tab, tab === "owned" && { borderBottomColor: colors.accent }]}>
+        <Pressable onPress={() => selectUsernameTab("owned")} style={[styles.tab, tab === "owned" && { borderBottomColor: colors.accent }]}>
           <Text style={[styles.tabText, { color: tab === "owned" ? colors.accent : colors.textMuted }]}>Owned</Text>
           {owned.length ? <View style={[styles.count, { backgroundColor: colors.accent }]}><Text style={styles.countText}>{owned.length}</Text></View> : null}
         </Pressable>
-        <Pressable onPress={() => setTab("mine")} style={[styles.tab, tab === "mine" && { borderBottomColor: colors.accent }]}>
+        <Pressable onPress={() => selectUsernameTab("mine")} style={[styles.tab, tab === "mine" && { borderBottomColor: colors.accent }]}>
           <Text style={[styles.tabText, { color: tab === "mine" ? colors.accent : colors.textMuted }]}>My Listings</Text>
           {sellerListingCount ? <View style={[styles.count, { backgroundColor: colors.accent }]}><Text style={styles.countText}>{sellerListingCount}</Text></View> : null}
         </Pressable>
