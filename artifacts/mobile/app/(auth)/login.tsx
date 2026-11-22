@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { StatusBar } from "expo-status-bar";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import type { TextInputInstance } from "react-native";

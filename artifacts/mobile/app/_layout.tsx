@@ -11,6 +11,7 @@ markStartupPhase("primary");
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AppState, BackHandler, I18nManager, Linking, LogBox, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { runAfterIdle } from "@/lib/runAfterIdle";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -632,6 +633,7 @@ export default function RootLayout() {
       <ShareIntentProvider options={{ scheme: "afuchat" }}>
         <ErrorBoundary>
         <GestureHandlerRootView style={styles.root}>
+          <KeyboardProvider>
           <SafeAreaProvider>
             <DataModeProvider>
               <AuthProvider>
@@ -677,6 +679,7 @@ export default function RootLayout() {
               </AuthProvider>
             </DataModeProvider>
           </SafeAreaProvider>
+          </KeyboardProvider>
         </GestureHandlerRootView>
         </ErrorBoundary>
       </ShareIntentProvider>

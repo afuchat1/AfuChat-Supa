@@ -5,7 +5,6 @@ import {
   FlatList,
   Image as RNImage,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import type { TextInputInstance } from "react-native";
 import Image from "@/components/ui/OptimizedImage";

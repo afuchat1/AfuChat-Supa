@@ -6,7 +6,6 @@ import {
   Easing,
   FlatList,
   Image as RNImage,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,

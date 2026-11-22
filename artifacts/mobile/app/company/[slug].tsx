@@ -4,7 +4,6 @@ import {
   Animated,
   FlatList,
   Image as RNImage,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -17,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";

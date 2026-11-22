@@ -22,7 +22,6 @@ import React, {
 import {
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   Linking,
   PanResponder,
   Platform,
@@ -35,6 +34,7 @@ import {
   useWindowDimensions,
   Modal,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { StatusBar } from "expo-status-bar";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";

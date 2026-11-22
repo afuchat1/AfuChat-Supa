@@ -6,21 +6,22 @@ import {
   AppState,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  findNodeHandle,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  KeyboardAwareScrollView,
+  KeyboardStickyView,
+} from "react-native-keyboard-controller";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDeviceAdaptation } from "@/hooks/useDeviceAdaptation";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";
 import * as Haptics from "@/lib/haptics";
@@ -106,7 +107,7 @@ function DotIndicator({ index, step, accent }: { index: number; step: number; ac
 export default function OnboardingScreen() {
   const { colors } = useTheme();
   const { user, refreshProfile } = useAuth();
-  const insets = useSafeAreaInsets();
+  const { safeAreaInsets: insets } = useDeviceAdaptation();
   const params = useLocalSearchParams<{ userId?: string }>();
 
   // ── Form state (identical to original) ──────────────────────────────────────
@@ -119,9 +120,7 @@ export default function OnboardingScreen() {
   const displayNameInputRef = useRef<any>(null);
   const phoneInputRef = useRef<any>(null);
   const activeInputRef = useRef<any>(null);
-  const focusScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
   const [handleStatus, setHandleStatus] = useState<"idle"|"checking"|"available"|"owned"|"listed"|"taken"|"invalid_format"|"error">("idle");
@@ -149,34 +148,9 @@ export default function OnboardingScreen() {
   const userId = params.userId || user?.id;
   const activeDraftKey = userId ? `afuchat:onboarding:draft:${userId}` : null;
 
-  function scrollFocusedInputIntoView() {
-    if (Platform.OS === "web") return;
-    const nativeHandle = activeInputRef.current ? findNodeHandle(activeInputRef.current) : null;
-    const scrollView = scrollRef.current as any;
-    if (nativeHandle == null || !scrollView?.scrollResponderScrollNativeHandleToKeyboard) return;
-
-    const scrollToFocusedInput = (scrollViewTop = 0) => {
-      scrollView.scrollResponderScrollNativeHandleToKeyboard(
-        nativeHandle,
-        Math.max(0, scrollViewTop) + KEYBOARD_ACTION_CLEARANCE,
-        true,
-      );
-    };
-
-    if (typeof scrollView.measureInWindow === "function") {
-      scrollView.measureInWindow((_x: number, y: number) => scrollToFocusedInput(y));
-    } else {
-      scrollToFocusedInput();
-    }
-  }
-
   function focusInput(field: string, inputRef: React.RefObject<any>) {
     setFocusedField(field);
     activeInputRef.current = inputRef.current;
-    if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
-    focusScrollTimerRef.current = Keyboard.isVisible()
-      ? setTimeout(scrollFocusedInputIntoView, 100)
-      : null;
   }
 
   function blurInput(field: string, inputRef: React.RefObject<any>) {
@@ -184,23 +158,6 @@ export default function OnboardingScreen() {
     activeInputRef.current = null;
     setFocusedField((current) => current === field ? null : current);
   }
-
-  useEffect(() => {
-    const showSubscription = Keyboard.addListener("keyboardDidShow", () => {
-      setKeyboardVisible(true);
-      if (!activeInputRef.current) return;
-      if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
-      focusScrollTimerRef.current = setTimeout(scrollFocusedInputIntoView, 90);
-    });
-    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardVisible(false);
-    });
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-      if (focusScrollTimerRef.current) clearTimeout(focusScrollTimerRef.current);
-    };
-  }, []);
 
   // Restore this account's saved progress before enabling autosave or country detection.
   useEffect(() => {
@@ -971,21 +928,26 @@ export default function OnboardingScreen() {
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
-          <View style={[st.searchBox, { backgroundColor: colors.inputBg }]}>
-            <Ionicons name="search" size={18} color={colors.textMuted} />
-            <TextInput
-              appearance="embedded"
-              style={[st.searchInput, { color: colors.text }]}
-              placeholder="Search country..."
-              placeholderTextColor={colors.textMuted}
-              value={countrySearch}
-              onChangeText={setCountrySearch}
-              autoFocus
-            />
-          </View>
           <FlatList
             data={filteredCountries}
             keyExtractor={(item) => item.code}
+            ListHeaderComponent={
+              <View style={[st.searchBox, { backgroundColor: colors.inputBg }]}>
+                <Ionicons name="search" size={18} color={colors.textMuted} />
+                <TextInput
+                  appearance="embedded"
+                  style={[st.searchInput, { color: colors.text }]}
+                  placeholder="Search country..."
+                  placeholderTextColor={colors.textMuted}
+                  value={countrySearch}
+                  onChangeText={setCountrySearch}
+                  autoFocus
+                />
+              </View>
+            }
+            renderScrollComponent={(props) => (
+              <KeyboardAwareScrollView {...props} bottomOffset={16} />
+            )}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={[st.countryItem, { borderBottomColor: colors.border }, selectedCountry?.code === item.code && { backgroundColor: colors.inputBg }]}
@@ -1055,11 +1017,7 @@ export default function OnboardingScreen() {
   return (
     <React.Fragment>
     <OnboardingBackdrop />
-    <KeyboardAvoidingView
-      style={st.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
-    >
+    <View style={st.root}>
       {/* ── Top bar ── */}
       <View style={[st.topBar, { paddingTop: insets.top + 8 }]}>
         {step > 1 ? (
@@ -1080,8 +1038,9 @@ export default function OnboardingScreen() {
 
       {/* A single vertical scroll container avoids nested pager/keyboard gesture
           conflicts on Android OEM keyboards and keeps the active form mounted. */}
-      <ScrollView
+      <KeyboardAwareScrollView
         ref={scrollRef}
+        bottomOffset={KEYBOARD_ACTION_CLEARANCE}
         style={st.pagerOuter}
         contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 140 }]}
         keyboardShouldPersistTaps="handled"
@@ -1089,10 +1048,12 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         {stepRenderers[step - 1]()}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
-      {/* ── Bottom action bar — positioned absolute so it floats above keyboard ── */}
-        <View style={[st.bottomBar, { paddingBottom: keyboardVisible ? KEYBOARD_BOTTOM_PADDING : Math.max(insets.bottom, 16) }]}>
+      {/* Keep the primary action above the live keyboard frame without guessing its height. */}
+      <KeyboardStickyView
+        style={[st.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}
+      >
         <Pressable
           style={[
             st.nextBtn,
@@ -1112,11 +1073,11 @@ export default function OnboardingScreen() {
             </Text>
           )}
         </Pressable>
-      </View>
+      </KeyboardStickyView>
 
       {renderCountryPicker()}
       {renderDobPicker()}
-    </KeyboardAvoidingView>
+    </View>
 
     </React.Fragment>
   );

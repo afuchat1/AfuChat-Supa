@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import {
   Animated,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

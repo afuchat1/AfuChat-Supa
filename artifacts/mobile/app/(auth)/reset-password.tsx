@@ -5,11 +5,11 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   ActivityIndicator,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassBackButton } from "@/components/ui/GlassBackButton";

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { LinearGradient } from "@/components/ui/SafeGradient";
 import { router } from "expo-router";

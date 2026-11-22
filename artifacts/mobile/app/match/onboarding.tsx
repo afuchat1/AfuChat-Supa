@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Image as RNImage,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { LinearGradient } from "@/components/ui/SafeGradient";

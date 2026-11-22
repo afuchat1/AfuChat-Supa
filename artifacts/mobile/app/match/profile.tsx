@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image as RNImage,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import AsyncStorage from "@react-native-async-storage/async-storage";

@@ -3,7 +3,6 @@ import {
   Animated,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   useWindowDimensions,
   ActivityIndicator,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";

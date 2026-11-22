@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { router, useLocalSearchParams } from "expo-router";
 import { OptimizedImage as ExpoImage } from "@/components/ui/OptimizedImage";

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image as RNImage,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   View,
   type ScrollViewInstance,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { Ionicons } from "@expo/vector-icons";

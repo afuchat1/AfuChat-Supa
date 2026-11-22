@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { OptimizedImage as Image } from "@/components/ui/OptimizedImage";

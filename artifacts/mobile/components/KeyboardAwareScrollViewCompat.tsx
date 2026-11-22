@@ -1,20 +1,14 @@
 import React from "react";
 import {
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   ScrollViewProps,
-  StyleSheet,
 } from "react-native";
-
-let NativeKeyboardAwareScrollView: any = null;
-try {
-  NativeKeyboardAwareScrollView =
-    require("react-native-keyboard-controller").KeyboardAwareScrollView;
-} catch (_) {}
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 type Props = ScrollViewProps & {
   keyboardShouldPersistTaps?: "always" | "never" | "handled";
+  bottomOffset?: number;
   extraScrollHeight?: number;
   [key: string]: any;
 };
@@ -22,42 +16,35 @@ type Props = ScrollViewProps & {
 export function KeyboardAwareScrollViewCompat({
   children,
   keyboardShouldPersistTaps = "handled",
+  bottomOffset = 16,
   style,
   contentContainerStyle,
   extraScrollHeight,
   ...props
 }: Props) {
-  if (NativeKeyboardAwareScrollView) {
+  if (Platform.OS === "web") {
     return (
-      <NativeKeyboardAwareScrollView
+      <ScrollView
+        {...props}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps}
         style={style}
         contentContainerStyle={contentContainerStyle}
-        {...props}
       >
         {children}
-      </NativeKeyboardAwareScrollView>
+      </ScrollView>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.flex, style as any]}
-      behavior="padding"
-      keyboardVerticalOffset={24}
+    <KeyboardAwareScrollView
+      {...props}
+      keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+      bottomOffset={bottomOffset}
+      extraKeyboardSpace={extraScrollHeight}
+      style={style}
+      contentContainerStyle={contentContainerStyle}
     >
-      <ScrollView
-        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-        contentContainerStyle={contentContainerStyle}
-        showsVerticalScrollIndicator={false}
-        {...props}
-      >
-        {children}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {children}
+    </KeyboardAwareScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-});

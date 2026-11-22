@@ -5,7 +5,6 @@ import {
   Dimensions,
   Easing,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Platform,
@@ -16,6 +15,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "@/components/ui/SafeGradient";

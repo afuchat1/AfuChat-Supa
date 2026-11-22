@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import type { TextInputInstance } from "react-native";
 import { router } from "expo-router";

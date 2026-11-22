@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import type { TextInputInstance } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

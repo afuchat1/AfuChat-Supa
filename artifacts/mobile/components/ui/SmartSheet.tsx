@@ -15,7 +15,6 @@ import React, {
 } from "react";
 import {
   Animated,
-  KeyboardAvoidingView,
   Modal,
   PanResponder,
   Platform,
@@ -26,6 +25,7 @@ import {
   useWindowDimensions,
   type ScrollViewInstance,
 } from "react-native";
+import { KeyboardAvoidingViewCompat as KeyboardAvoidingView } from "@/components/KeyboardAvoidingViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { T } from "@/constants/theme";

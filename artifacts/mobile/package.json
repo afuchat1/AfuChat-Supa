@@ -113,6 +113,7 @@
     "react": "19.3.0",
     "react-native": "0.88.1",
     "react-native-compressor": "^1.6.0",
+    "react-native-keyboard-controller": "1.22.7",
     "react-native-mmkv": "^3.2.0",
     "react-native-pager-view": "9.0.7",
     "react-native-purchases": "11.0.2",
