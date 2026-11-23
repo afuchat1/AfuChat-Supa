@@ -96,6 +96,34 @@ test("route gate skips an active page and reuses a visited stack destination", (
   });
 });
 
+test("forwarding through several pages and returning does not suppress a valid route", () => {
+  const gate = new NavigationRouteGate(5_000, 20);
+  const routes = ["/(tabs)/chats", "/settings/security", "/profile/edit", "/post/post-7"];
+  const identities = routes.map((route) => routeIdentityFromHref(route));
+  const screens = routes.map((route) => routeScreenIdentityFromHref(route));
+
+  gate.updateCurrentRoute(identities[0], screens[0]);
+  for (let index = 1; index < routes.length; index += 1) {
+    assert.deepEqual(gate.decide("push", identities[index], screens[index], 1_000 + index), {
+      skip: false,
+      reuseVisitedRoute: false,
+    });
+    gate.updateCurrentRoute(identities[index], screens[index]);
+  }
+
+  // Simulate back navigation to an earlier screen, then reopen an already
+  // visited destination without adding another copy to the stack.
+  gate.updateCurrentRoute(identities[2], screens[2]);
+  assert.deepEqual(gate.decide("push", identities[3], screens[3], 2_000), {
+    skip: false,
+    reuseVisitedRoute: true,
+  });
+  assert.deepEqual(gate.decide("push", identities[1], screens[1], 2_001), {
+    skip: false,
+    reuseVisitedRoute: true,
+  });
+});
+
 test("query changes reuse the current screen instead of stacking a copy", () => {
   const gate = new NavigationRouteGate();
   const current = routeIdentityFromHref({

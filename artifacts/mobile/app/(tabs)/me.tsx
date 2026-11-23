@@ -502,6 +502,7 @@ export default function MeScreen() {
       <View style={[s.heroCard, { backgroundColor: colors.cardSurface }]}>
 
           {profile?.banner_url ? (
+            <>
             <ProfileCover
               uri={profile.banner_url}
               fadeToColor={colors.background}
@@ -522,6 +523,7 @@ export default function MeScreen() {
             <View style={[s.identityBelowCover, { backgroundColor: colors.background }]}>
               {renderProfileIdentity()}
             </View>
+            </>
           ) : null}
 
           {!profile?.banner_url && (

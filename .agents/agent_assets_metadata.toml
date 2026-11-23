@@ -355,3 +355,17 @@ mtime_ms = 1795246015156
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:264d11da-1124-49d1-8cc3-9456fc5aff2a/981938b9-3f02-4202-aa7c-4be6daf4ed32/874c81bf-952a-4ad9-af75-0c0c678dbb5a"
 storage_version_token = "1795246019826245"
 content_type = "image/png"
+
+[[outputs]]
+id = "uDpHiJUI-QP3vTRSRPzXj"
+uri = "file://generated-artifacts/afu-chat-expo-go-qr.png"
+type = "image"
+title = "AfuChat — Expo Go QR"
+description = "Scan with Expo Go on your phone. The live Android and iOS bundles were verified from the current tunnel."
+logical_id = "55375120-9660-4044-9c45-6f7f1cba8789"
+content_hash = "sha256:82d9385c10df43f3d33f4c06820a8c6583dbf578d9faeaff8b851ea4304b0fa4"
+size = 5662
+mtime_ms = 1795455835992
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:f99185ae-e64e-4409-a549-15d5ee23ada5/55375120-9660-4044-9c45-6f7f1cba8789/7051213e-3551-4d95-8517-d5715e62477b"
+storage_version_token = "1795455874458515"
+content_type = "image/png"

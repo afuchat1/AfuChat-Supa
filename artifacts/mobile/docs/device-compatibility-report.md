@@ -150,13 +150,18 @@ pass.
 
 ## Verification and open limitations
 
-- TypeScript check: passed after the shared component migration.
-- Mobile Node test suite: 49 passed, 0 failed, including the width-class and
-  onboarding architecture regression tests.
-- Expo web export: passed and served 150 static routes; the browser preview
-  loaded the public root route. A web screenshot cannot exercise native
-  keyboard movement.
-- Native startup and Android/iOS device tests: not run.
+- TypeScript check: passed after the shared component migration and native
+  fallback changes.
+- Mobile Node test suite: 54 passed, 0 failed, including width-class,
+  onboarding, and multi-page route/back/reopen regression tests.
+- Expo Go Android and iOS manifests and JavaScript bundles: HTTP 200 from the
+  active tunnel. This verifies the current bundle is reachable, not that a
+  physical device has rendered or interacted with it.
+- Fixed an Android bundle parse failure in the profile screen that had made the
+  earlier QR unusable.
+- Physical Expo Go startup and Android/iOS device tests: not yet observed.
+- The separate static-web workflow currently has an import-resolution failure;
+  it is not used as evidence for the native app.
 - Physical Android/iOS and IME testing: not run.
 - Chat, story, channel, post, and video-comment features still contain bespoke
   keyboard-event listeners because they coordinate custom composers, media, or

@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView as ReactNativeKeyboardAvoidingView,
   Platform,
   ScrollView,
-  View,
 } from "react-native";
 import { isExpoGo } from "@/lib/expoEnvironment";
 
@@ -60,7 +59,12 @@ export function KeyboardAwareScrollView(props: any) {
     extraScrollHeight: _extraScrollHeight,
     ...fallbackProps
   } = props;
-  return <ScrollView {...fallbackProps} />;
+  return (
+    <ScrollView
+      {...fallbackProps}
+      automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+    />
+  );
 }
 
 export function KeyboardStickyView(props: any) {
@@ -69,8 +73,19 @@ export function KeyboardStickyView(props: any) {
     return <NativeKeyboardStickyView {...props} />;
   }
 
-  const { offset: _offset, ...fallbackProps } = props;
-  return <View {...fallbackProps} />;
+  const {
+    offset,
+    enabled = true,
+    ...fallbackProps
+  } = props;
+  return (
+    <ReactNativeKeyboardAvoidingView
+      {...fallbackProps}
+      enabled={enabled}
+      behavior={Platform.OS === "ios" ? "position" : undefined}
+      keyboardVerticalOffset={offset?.opened ?? 0}
+    />
+  );
 }
 
 export function useKeyboardContext(): any {
