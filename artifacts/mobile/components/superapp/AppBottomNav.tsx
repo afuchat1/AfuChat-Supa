@@ -23,7 +23,7 @@ export type AppNavItem = {
 };
 
 type Props = {
-  appId: FullAppId;
+  appId?: FullAppId;
   items: AppNavItem[];
   activeKey?: string;
 };
@@ -58,7 +58,8 @@ export default function AppBottomNav({ appId, items, activeKey }: Props) {
             onPress={() => {
               if (item.onPress) item.onPress();
               else if (item.href) {
-                const action = resolveAppRouteAction(`/app/${appId}`, item.href, routeParams);
+                const currentRoutePathname = appId ? `/app/${appId}` : pathname;
+                const action = resolveAppRouteAction(currentRoutePathname, item.href, routeParams);
                 if (action.kind === "params") router.setParams(action.params);
                 else safeRouter.replace(action.href as any);
               }
