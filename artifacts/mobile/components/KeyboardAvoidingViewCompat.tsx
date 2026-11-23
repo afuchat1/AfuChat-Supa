@@ -5,10 +5,11 @@ import {
 } from "react-native";
 import {
   KeyboardAvoidingView as ControllerKeyboardAvoidingView,
-  type KeyboardAvoidingViewProps,
-} from "react-native-keyboard-controller";
+  type KeyboardAvoidingViewControllerProps,
+} from "@/components/KeyboardControllerCompat";
 
-export type KeyboardAvoidingViewCompatProps = KeyboardAvoidingViewProps;
+export type KeyboardAvoidingViewCompatProps =
+  KeyboardAvoidingViewControllerProps;
 
 export function KeyboardAvoidingViewCompat(
   props: KeyboardAvoidingViewCompatProps,

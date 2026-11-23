@@ -17,7 +17,7 @@ import {
 import {
   KeyboardAwareScrollView,
   KeyboardStickyView,
-} from "react-native-keyboard-controller";
+} from "@/components/KeyboardControllerCompat";
 import { TextInput } from "@/components/ui/AfuTextInput";
 import Image from "@/components/ui/OptimizedImage";
 import { router, useLocalSearchParams } from "expo-router";

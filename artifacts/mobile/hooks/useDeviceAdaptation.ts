@@ -1,6 +1,6 @@
 import { Platform, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useKeyboardContext } from "react-native-keyboard-controller";
+import { useKeyboardContext } from "@/components/KeyboardControllerCompat";
 import { classifyWindowWidth } from "@/lib/deviceLayout";
 
 export function useDeviceAdaptation() {

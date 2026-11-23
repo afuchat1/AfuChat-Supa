@@ -4,7 +4,7 @@ import {
   ScrollView,
   ScrollViewProps,
 } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { KeyboardAwareScrollView } from "@/components/KeyboardControllerCompat";
 
 type Props = ScrollViewProps & {
   keyboardShouldPersistTaps?: "always" | "never" | "handled";
