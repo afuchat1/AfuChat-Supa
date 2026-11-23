@@ -213,10 +213,7 @@ export default function MeScreen() {
   }, [user?.id]);
   const [localProfile, setLocalProfile] = useState<any>(null);
   const profile = authProfile ?? cachedProfile ?? localProfile;
-  const profileCoverTone = useProfileCoverTone(profile?.banner_url);
   const profileStatusTone = useProfileCoverTone(profile?.banner_url, "status");
-  const profileCoverForeground =
-    profileCoverTone === "light" ? Colors.light.text : Colors.dark.text;
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [qrPosterOpen, setQrPosterOpen] = useState(false);
 
@@ -438,28 +435,24 @@ export default function MeScreen() {
     </TouchableOpacity>
   );
 
-  const renderProfileIdentity = (onCover: boolean) => {
+  const renderProfileIdentity = () => {
     const identityColor = colors.text;
     const secondaryColor = colors.textMuted;
-    const businessColor = onCover ? profileCoverForeground : Colors.gold;
+    const businessColor = Colors.gold;
 
     return (
-      <View style={onCover ? s.coverIdentity : { flex: 1, gap: 3 }}>
+      <View style={s.profileIdentity}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
           <UserName
             userId={profile?.id}
             name={profile?.display_name || t("common.user")}
-            style={[
-              s.heroName,
-              { color: onCover ? identityColor : equippedGoods.has("sg4") ? Colors.gold : identityColor },
-            ]}
+            style={[s.heroName, { color: identityColor }]}
             numberOfLines={1}
           />
           <VerifiedBadge
             isVerified={isVerifiedCreator || !!profile?.is_verified}
             isOrganizationVerified={profile?.is_organization_verified}
             size={17}
-            coverTone={onCover ? profileCoverTone : undefined}
           />
         </View>
 
@@ -511,7 +504,7 @@ export default function MeScreen() {
           {profile?.banner_url ? (
             <ProfileCover
               uri={profile.banner_url}
-              fadeToColor={colors.cardSurface}
+              fadeToColor={colors.background}
               showTopFade={profileStatusTone === "dark"}
               style={[s.heroCover, { height: profileCoverHeight }]}
             >
@@ -525,14 +518,16 @@ export default function MeScreen() {
                 <Ionicons name="camera" size={16} color="#fff" />
               </TouchableOpacity>
               {renderProfileAvatar("cover")}
-              {renderProfileIdentity(true)}
             </ProfileCover>
+            <View style={[s.identityBelowCover, { backgroundColor: colors.background }]}>
+              {renderProfileIdentity()}
+            </View>
           ) : null}
 
           {!profile?.banner_url && (
             <View style={[s.heroTop, s.heroTopNoCover]}>
               {renderProfileAvatar("inline")}
-              {renderProfileIdentity(false)}
+              {renderProfileIdentity()}
             </View>
           )}
 
@@ -840,7 +835,14 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  coverIdentity: { position: "absolute", left: 112, right: 16, bottom: 13, gap: 3 },
+  profileIdentity: { flex: 1, gap: 3 },
+  identityBelowCover: {
+    minHeight: 78,
+    paddingLeft: 112,
+    paddingRight: 16,
+    paddingVertical: 10,
+    justifyContent: "center",
+  },
   heroTop: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14, gap: 14 },
   heroTopNoCover: { alignItems: "center", paddingTop: 18 },
   heroName: { fontSize: 19, fontFamily: "Inter_700Bold", flexShrink: 1 },

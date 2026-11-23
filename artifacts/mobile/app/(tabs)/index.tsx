@@ -362,12 +362,12 @@ function ChatRow({
               <UserName
                 userId={item.other_id}
                 name={displayName || "Chat"}
-                style={[styles.name, { color: colors.text, fontFamily: hasUnread ? "Inter_700Bold" : "Inter_600SemiBold" }]}
+                style={[styles.name, { color: colors.text, fontFamily: "Inter_700Bold" }]}
                 numberOfLines={1}
               />
             ) : (
               <Text
-                style={[styles.name, { color: colors.text, fontFamily: hasUnread ? "Inter_700Bold" : "Inter_600SemiBold" }]}
+                style={[styles.name, { color: colors.text, fontFamily: "Inter_700Bold" }]}
                 numberOfLines={1}
               >
                 {displayName || "Chat"}
@@ -2586,7 +2586,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   nameRow: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: 8 },
-  name: { fontSize: 16, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
+  name: { fontSize: 16, fontFamily: "Inter_700Bold", flexShrink: 1 },
   rowTopRight: { flexDirection: "row", alignItems: "center", gap: 2 },
   time: { fontSize: 12, fontFamily: "Inter_400Regular" },
   rowBottom: { flexDirection: "row", alignItems: "center", gap: 6 },

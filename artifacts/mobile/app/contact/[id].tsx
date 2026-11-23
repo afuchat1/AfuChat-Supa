@@ -164,7 +164,6 @@ export default function ContactScreen() {
   const [expandedLoading,   setExpandedLoading]   = useState(false);
   const [expandedFollowIds, setExpandedFollowIds] = useState<Set<string>>(new Set());
   const [expandedToggling,  setExpandedToggling]  = useState<string | null>(null);
-  const profileCoverTone = useProfileCoverTone(profile?.banner_url);
   const profileStatusTone = useProfileCoverTone(profile?.banner_url, "status");
 
   // ── Load profile ──────────────────────────────────────────────────────────
@@ -458,20 +457,10 @@ export default function ContactScreen() {
     </TouchableOpacity>
   );
 
-  const renderProfileIdentity = (onCover: boolean) => {
-    const primaryColor = onCover
-      ? profileCoverTone === "dark" ? Colors.dark.bubbleText : Colors.light.text
-      : colors.text;
-    const secondaryColor = onCover
-      ? profileCoverTone === "dark" ? Colors.dark.textSecondary : Colors.light.textSecondary
-      : colors.textSecondary;
-    const inlineFollowText = isFollowFilled ? "#fff" : onCover ? primaryColor : followTxt;
-    const inlineFollowBackground = isFollowFilled
-      ? followBg
-      : onCover ? `${primaryColor}18` : followBg;
-    const inlineFollowBorder = isFollowFilled
-      ? followBrd
-      : onCover ? `${primaryColor}66` : followBrd;
+  const renderProfileIdentity = () => {
+    const primaryColor = colors.text;
+    const secondaryColor = colors.textSecondary;
+    const inlineFollowText = isFollowFilled ? "#fff" : followTxt;
 
     return (
       <View style={s.profileIdentity}>
@@ -487,7 +476,6 @@ export default function ContactScreen() {
               isVerified={profile.is_verified}
               isOrganizationVerified={profile.is_organization_verified}
               size={16}
-              coverTone={onCover ? profileCoverTone : undefined}
             />
           </View>
           {!isSelf && user && (
@@ -496,8 +484,8 @@ export default function ContactScreen() {
                 s.primaryBtn,
                 s.inlineFollowButton,
                 {
-                  backgroundColor: inlineFollowBackground,
-                  borderColor: inlineFollowBorder,
+                  backgroundColor: followBg,
+                  borderColor: followBrd,
                 },
               ]}
               onPress={handleFollow}
@@ -551,9 +539,8 @@ export default function ContactScreen() {
             style={[s.coverWrap, { height: coverHeight }]}
           >
             <View style={[s.navRow, { top: topInset + 6 }]}>{profileNavControls}</View>
-            <View style={s.coverIdentityRow}>
+            <View style={s.coverAvatarOnly}>
               {renderProfileAvatar()}
-              {renderProfileIdentity(true)}
             </View>
           </ProfileCover>
         ) : (
@@ -562,10 +549,15 @@ export default function ContactScreen() {
 
         {/* Identity remains grouped; actions sit beneath the name/avatar row. */}
         <View style={[s.identityBand, profile.banner_url && s.identityBandWithCover]}>
-          {!profile.banner_url && (
+          {profile.banner_url ? (
+            <View style={s.identityTopRow}>
+              <View style={s.coverAvatarSpacer} />
+              {renderProfileIdentity()}
+            </View>
+          ) : (
             <View style={s.identityTopRow}>
               {renderProfileAvatar()}
-              {renderProfileIdentity(false)}
+              {renderProfileIdentity()}
             </View>
           )}
 
@@ -1087,24 +1079,21 @@ const s = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
-  identityBandWithCover: { paddingTop: AVATAR_SIZE / 2 + 12 },
+  identityBandWithCover: { paddingTop: 8 },
   identityTopRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     minHeight: AVATAR_SIZE + 6,
   },
-  coverIdentityRow: {
+  coverAvatarOnly: {
     position: "absolute",
     left: 14,
-    right: 14,
     bottom: -(AVATAR_SIZE / 2 + 4),
     zIndex: 3,
     elevation: 3,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
   },
+  coverAvatarSpacer: { width: AVATAR_SIZE + 6 },
   profileIdentity: { flex: 1, minWidth: 0, justifyContent: "center", gap: 4 },
   nameLine: {
     flexDirection: "row",
