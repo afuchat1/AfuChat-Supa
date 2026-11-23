@@ -138,6 +138,9 @@ export default function ViewStoryScreen() {
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const [replyExpanded, setReplyExpanded] = useState(false);
+  const [commentInputFocused, setCommentInputFocused] = useState(false);
+  const [loadingShareContacts, setLoadingShareContacts] = useState(false);
+  const [shareContactsLoadFailed, setShareContactsLoadFailed] = useState(false);
 
   // Like state — per story id: { liked: boolean, count: number }
   const [likeState, setLikeState] = useState<Record<string, { liked: boolean; count: number }>>({});
@@ -162,6 +165,7 @@ export default function ViewStoryScreen() {
   useEffect(() => {
     setReplyExpanded(false);
     setCommentText("");
+    setCommentInputFocused(false);
     Keyboard.dismiss();
   }, [index]);
 
@@ -600,6 +604,7 @@ export default function ViewStoryScreen() {
       setCommentText("");
       sent = true;
       setReplyExpanded(false);
+      setCommentInputFocused(false);
       Keyboard.dismiss();
     } catch {
       // comment send failed — silently recover, keep text in input
@@ -618,28 +623,32 @@ export default function ViewStoryScreen() {
     }
     setPaused(true);
     setShowShareSheet(true);
+    setChatList([]);
+    setShareContactsLoadFailed(false);
+    setLoadingShareContacts(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("chats")
         .select("id, is_group, is_channel, name, chat_members!inner(user_id, profiles!chat_members_user_id_fkey(display_name, avatar_url))")
         .eq("is_channel", false)
         .eq("chat_members.user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(20);
-      if (data) {
-        const items = (data as any[]).map((c) => {
-          if (c.is_group) return { id: c.id, name: c.name || "Group", avatar_url: null };
-          const other = (c.chat_members || []).find((m: any) => m.user_id !== user?.id);
-          return {
-            id: c.id,
-            name: other?.profiles?.display_name || c.name || "Chat",
-            avatar_url: other?.profiles?.avatar_url || null,
-          };
-        });
-        setChatList(items);
-      }
+      if (error) throw error;
+      const items = ((data || []) as any[]).map((c) => {
+        if (c.is_group) return { id: c.id, name: c.name || "Group", avatar_url: null };
+        const other = (c.chat_members || []).find((m: any) => m.user_id !== user.id);
+        return {
+          id: c.id,
+          name: other?.profiles?.display_name || c.name || "Chat",
+          avatar_url: other?.profiles?.avatar_url || null,
+        };
+      });
+      setChatList(items);
     } catch {
-      // failed to load chats — sheet still shows, just empty
+      setShareContactsLoadFailed(true);
+    } finally {
+      setLoadingShareContacts(false);
     }
   }, [story, user]);
 
@@ -661,6 +670,7 @@ export default function ViewStoryScreen() {
         attachment_type: "story_reply",
       });
       if (error) throw error;
+      showAlert("Story sent", "Your story was shared to this chat.");
     } catch (error: any) {
       showAlert("Story could not be sent", error?.message || "Please try again.");
     }
@@ -931,6 +941,7 @@ export default function ViewStoryScreen() {
                   onPress={() => {
                     Keyboard.dismiss();
                     setReplyExpanded(false);
+                    setCommentInputFocused(false);
                     setPaused(false);
                   }}
                   accessibilityRole="button"
@@ -945,7 +956,9 @@ export default function ViewStoryScreen() {
                 styles.expandedReplyField,
                 !isDark && { backgroundColor: colors.inputBg, borderColor: colors.border, borderWidth: 1 },
               ]}>
-                <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "You"} size={30} userId={user?.id} />
+                {commentInputFocused && (
+                  <Avatar uri={profile?.avatar_url ?? null} name={profile?.display_name || "You"} size={30} userId={user?.id} />
+                )}
                 <TextInput
                   appearance="embedded"
                   style={[styles.expandedCommentInput, { color: colors.text }]}
@@ -954,8 +967,12 @@ export default function ViewStoryScreen() {
                   selectionColor={colors.accent}
                   value={commentText}
                   onChangeText={setCommentText}
-                  onFocus={() => setPaused(true)}
+                  onFocus={() => {
+                    setCommentInputFocused(true);
+                    setPaused(true);
+                  }}
                   onBlur={() => {
+                    setCommentInputFocused(false);
                     if (!commentText.trim()) {
                       setReplyExpanded(false);
                       setPaused(false);
@@ -1031,14 +1048,6 @@ export default function ViewStoryScreen() {
               {/* Compact reply bar grows into a multiline composer on focus. */}
               {!isOwner && (
                 <>
-              {user ? (
-                <Avatar
-                  uri={profile?.avatar_url ?? null}
-                  name={profile?.display_name || "You"}
-                  size={30}
-                  userId={user.id}
-                />
-              ) : null}
               <View style={[
                 styles.commentInputWrap,
                 !isDark && { backgroundColor: colors.inputBg, borderColor: colors.border },
@@ -1056,10 +1065,14 @@ export default function ViewStoryScreen() {
                     setPaused(true);
                   }}
                   onFocus={() => {
+                    setCommentInputFocused(true);
                     setReplyExpanded(true);
                     setPaused(true);
                   }}
-                  onBlur={() => { if (!commentText.trim()) setPaused(false); }}
+                  onBlur={() => {
+                    setCommentInputFocused(false);
+                    if (!commentText.trim()) setPaused(false);
+                  }}
                   returnKeyType="send"
                   onSubmitEditing={sendComment}
                   maxLength={500}
@@ -1095,7 +1108,21 @@ export default function ViewStoryScreen() {
               </TouchableOpacity>
             </View>
 
-            {chatList.length > 0 ? (
+            {loadingShareContacts ? (
+              <View style={{ alignItems: "center", paddingVertical: 24 }}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.shareEmptyLabel}>Loading chats…</Text>
+              </View>
+            ) : shareContactsLoadFailed ? (
+              <TouchableOpacity
+                onPress={openShareSheet}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading chats"
+              >
+                <Text style={styles.shareEmptyLabel}>Couldn’t load chats. Tap to retry.</Text>
+              </TouchableOpacity>
+            ) : chatList.length > 0 ? (
               <>
                 <Text style={styles.shareContactsLabel}>Send to a contact</Text>
                 <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
@@ -1280,6 +1307,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    zIndex: 20,
+    elevation: 20,
   },
   storyOwnerPressable: {
     flex: 1,
@@ -1315,6 +1344,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: "row",
+    zIndex: 1,
   },
   tapLeft: { flex: 1 },
   tapRight: { flex: 2 },

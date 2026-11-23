@@ -2,7 +2,7 @@
   "expo": {
     "name": "AfuChat",
     "slug": "afuchat-personal",
-    "version": "0.0.10",
+    "version": "0.0.11",
     "icon": "./assets/images/icon.png",
     "scheme": "afuchat",
     "orientation": "default",
@@ -218,7 +218,7 @@
         "mode": "granular"
       }
     },
-    "owner": "afuapp",
+    "owner": "mindsetradio",
     "web": {
       "bundler": "metro",
       "output": "static",
@@ -227,7 +227,7 @@
     "ios": {
       "bundleIdentifier": "com.afuchat.mobile",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "0.0.9",
+      "buildNumber": "0.0.10",
       "infoPlist": {
         "NSCameraUsageDescription": "AfuChat uses the camera to take photos and videos for stories and messages.",
         "NSMicrophoneUsageDescription": "AfuChat uses the microphone to record voice messages and video with audio.",
