@@ -161,7 +161,7 @@ export function ProfilePrivateView({
         )}
 
         {handle && (
-          <Text style={[styles.handleText, { color: colors.textMuted }]}>@{handle}</Text>
+          <Text style={[styles.handleText, { color: colors.textSecondary }]}>@{handle}</Text>
         )}
 
         <Text style={[styles.sub, { color: colors.textMuted }]}>
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   handleText: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_600SemiBold",
   },
   sub: {
     fontSize: 14,

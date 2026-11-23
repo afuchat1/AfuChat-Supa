@@ -43,6 +43,9 @@ type Props = {
 };
 
 const styles = StyleSheet.create({
+  emphasizedName: {
+    fontFamily: "Inter_700Bold",
+  },
   maskedView: {
     alignSelf: "flex-start",
     overflow: "hidden",
@@ -110,7 +113,7 @@ export default function UserName({
         onLayout={handleLayout}
         style={[viewStyle, styles.maskedView]}
         maskElement={
-          <Text style={[style, { color: "#FFFFFF", backgroundColor: "transparent" }]} numberOfLines={numberOfLines}>
+          <Text style={[style, styles.emphasizedName, { color: "#FFFFFF", backgroundColor: "transparent" }]} numberOfLines={numberOfLines}>
             {shownName}
           </Text>
         }
@@ -120,7 +123,7 @@ export default function UserName({
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
         >
-          <Text style={[style, { color: "transparent" }]} numberOfLines={numberOfLines}>
+          <Text style={[style, styles.emphasizedName, { color: "transparent" }]} numberOfLines={numberOfLines}>
             {shownName}
           </Text>
         </LinearGradient>
@@ -142,7 +145,7 @@ export default function UserName({
 
   return (
     <Text
-      style={style}
+      style={[style, styles.emphasizedName]}
       numberOfLines={numberOfLines}
     >
       {shownName}

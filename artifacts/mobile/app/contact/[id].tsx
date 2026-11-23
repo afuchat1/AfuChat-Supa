@@ -459,8 +459,12 @@ export default function ContactScreen() {
   );
 
   const renderProfileIdentity = (onCover: boolean) => {
-    const primaryColor = colors.text;
-    const secondaryColor = colors.textMuted;
+    const primaryColor = onCover
+      ? profileCoverTone === "dark" ? Colors.dark.bubbleText : Colors.light.text
+      : colors.text;
+    const secondaryColor = onCover
+      ? profileCoverTone === "dark" ? Colors.dark.textSecondary : Colors.light.textSecondary
+      : colors.textSecondary;
     const inlineFollowText = isFollowFilled ? "#fff" : onCover ? primaryColor : followTxt;
     const inlineFollowBackground = isFollowFilled
       ? followBg
@@ -782,7 +786,7 @@ export default function ContactScreen() {
                           <UserName userId={eu.id} name={eu.display_name} style={[s.expandCardName, { color: colors.text }]} numberOfLines={1} />
                           {eu.is_verified && <Ionicons name="checkmark-circle" size={11} color={accent} />}
                         </View>
-                        <Text style={[s.expandCardHandle, { color: colors.textMuted }]} numberOfLines={1}>@{eu.handle}</Text>
+                        <Text style={[s.expandCardHandle, { color: colors.textSecondary }]} numberOfLines={1}>@{eu.handle}</Text>
                       </View>
                       {!isMe && user && (
                         <TouchableOpacity
@@ -931,7 +935,7 @@ export default function ContactScreen() {
                     <Avatar uri={m.avatar_url} name={m.handle} size={34} />
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <UserName userId={m.id} name={(m as any).display_name || `@${m.handle}`} style={[s.mutualRowName, { color: colors.text }]} numberOfLines={1} />
-                      <Text style={[s.mutualRowHandle, { color: colors.textMuted }]}>@{m.handle}</Text>
+                      <Text style={[s.mutualRowHandle, { color: colors.textSecondary }]}>@{m.handle}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={13} color={colors.textMuted} />
                   </TouchableOpacity>
@@ -1161,7 +1165,7 @@ const s = StyleSheet.create({
   handleRow: {
     flexDirection: "row", alignItems: "center", gap: 5, flexWrap: "wrap",
   },
-  handle: { fontSize: 12.5, fontFamily: "Inter_400Regular", flexShrink: 1, minWidth: 0, textAlign: "left" },
+  handle: { fontSize: 12.5, fontFamily: "Inter_600SemiBold", flexShrink: 1, minWidth: 0, textAlign: "left" },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11.5, fontFamily: "Inter_400Regular" },
 
@@ -1272,7 +1276,7 @@ const s = StyleSheet.create({
   expandCardInfo: { alignItems: "center", width: "100%", gap: 1 },
   expandCardNameRow: { flexDirection: "row", alignItems: "center", gap: 3 },
   expandCardName: { fontSize: 12, fontFamily: "Inter_600SemiBold", maxWidth: 68, textAlign: "center" },
-  expandCardHandle: { fontSize: 10, fontFamily: "Inter_400Regular", textAlign: "center" },
+  expandCardHandle: { fontSize: 10, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   expandFollowBtn: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1342,7 +1346,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 10, gap: 10,
   },
   mutualRowName: { fontSize: 13, fontFamily: "Inter_600SemiBold", minWidth: 0, textAlign: "left" },
-  mutualRowHandle: { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "left" },
+  mutualRowHandle: { fontSize: 11, fontFamily: "Inter_600SemiBold", textAlign: "left" },
   mutualSeeAll: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14, paddingVertical: 11,
