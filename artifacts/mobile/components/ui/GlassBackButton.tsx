@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/context/LanguageContext";
 import { FloatingGlassSurface } from "@/components/ui/FloatingNavSurface";
+import { safeRouter } from "@/lib/navUtils";
 
 type Props = {
   onPress?: () => void;
@@ -18,6 +19,7 @@ type Props = {
   icon?: React.ComponentProps<typeof Ionicons>["name"];
   iconSize?: number;
   size?: number;
+  fallback?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -28,12 +30,14 @@ export function GlassBackButton({
   icon = "arrow-back",
   iconSize = 18,
   size = 40,
+  fallback,
   style,
 }: Props) {
   const { isDark } = useTheme();
   const { t } = useLanguage();
   const translatedLabel = label ? t(label) : undefined;
   const translatedAccessibilityLabel = t(accessibilityLabel ?? label ?? "Go back");
+  const handlePress = onPress ?? (() => safeRouter.back(fallback));
   // Back navigation is system-neutral: never inherit the AfuChat accent color
   // or a per-screen color override.
   const iconColor = isDark ? "#FFFFFF" : "#000000";
@@ -48,10 +52,9 @@ export function GlassBackButton({
       contentStyle={styles.surfaceContent}
     >
       <Pressable
-        onPress={onPress}
+        onPress={handlePress}
         style={({ pressed }) => [styles.button, translatedLabel && styles.labeledButton, pressed && styles.pressed]}
         hitSlop={8}
-        disabled={!onPress}
         android_ripple={{
           color: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)",
           borderless: false,

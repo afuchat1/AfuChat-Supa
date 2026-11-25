@@ -17,6 +17,7 @@
 
 import { router } from "expo-router";
 import { useCallback, useRef } from "react";
+import { performBackNavigation } from "./backNavigation";
 
 export const NAV_COOLDOWN_MS = 250;
 
@@ -111,8 +112,12 @@ export const safeRouter = {
   push    (href: any, _cooldown = NAV_COOLDOWN_MS): void { runNavigation(() => router.push(href)); },
   replace (href: any, _cooldown = NAV_COOLDOWN_MS): void { runNavigation(() => router.replace(href)); },
   navigate(href: any, _cooldown = NAV_COOLDOWN_MS): void { runNavigation(() => router.navigate(href)); },
-  back    (fallback: string = "/(tabs)/chats", _cooldown = NAV_COOLDOWN_MS): void {
-    runNavigation(() => { if (router.canGoBack()) router.back(); else router.replace(fallback as any); });
+  back    (fallback?: string, _cooldown = NAV_COOLDOWN_MS): void {
+    runNavigation(() => performBackNavigation({
+      canGoBack: () => router.canGoBack(),
+      back: () => router.back(),
+      replace: (href) => router.replace(href as any),
+    }, fallback));
   },
 };
 

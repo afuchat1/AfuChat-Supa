@@ -19,6 +19,7 @@ import {
   routeScreenIdentityFromHref,
   routeScreenIdentityFromLocation,
 } from "./navigationDedupe";
+import { performBackNavigation } from "./backNavigation";
 
 const DUPLICATE_WINDOW_MS = 250;
 const DUPLICATE_ROUTE_WINDOW_MS = 5_000;
@@ -131,17 +132,16 @@ function runWithMountRetry(action: () => void, attempt = 0): void {
 (router as any).back = () => {
   if (!acquire(keyFor("back"))) return;
   runWithMountRetry(() => {
-    if (_origCanGoBack()) {
-      _origBack();
-      return;
-    }
-
     // Keep the fallback consistent with the user's current local identity:
     // guests return to Feed, while authenticated users return to Chats.
     const fallbackRoute = getCachedUserId()
       ? "/(tabs)/chats"
       : "/(tabs)/discover";
-    _origReplace(fallbackRoute as any);
+    performBackNavigation({
+      canGoBack: _origCanGoBack,
+      back: _origBack,
+      replace: (href) => _origReplace(href as any),
+    }, fallbackRoute);
   });
 };
 

@@ -9,6 +9,27 @@ import {
   routeScreenIdentityFromHref,
   routeScreenIdentityFromLocation,
 } from "../lib/navigationDedupe.ts";
+import { performBackNavigation } from "../lib/backNavigation.ts";
+
+test("shared back logic prefers history and only replaces when history is absent", () => {
+  const calls = [];
+  const adapter = {
+    canGoBack: () => true,
+    back: () => calls.push("back"),
+    replace: (href) => calls.push(`replace:${href}`),
+  };
+
+  performBackNavigation(adapter, "/apps");
+  assert.deepEqual(calls, ["back"]);
+
+  calls.length = 0;
+  performBackNavigation({ ...adapter, canGoBack: () => false }, "/apps");
+  assert.deepEqual(calls, ["replace:/apps"]);
+
+  calls.length = 0;
+  performBackNavigation({ ...adapter, canGoBack: () => false });
+  assert.deepEqual(calls, ["back"]);
+});
 
 test("route identity removes Expo route groups and resolves dynamic params", () => {
   assert.equal(

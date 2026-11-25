@@ -1237,17 +1237,14 @@ export function SearchScreen({
 
   function AfuSearchBackButton({ style }: { style?: any } = {}) {
     return (
-      <TouchableOpacity
-        onPress={() => safeRouter.back("/apps")}
-        accessibilityRole="button"
+      <GlassBackButton
+        fallback="/apps"
         accessibilityLabel="Go back"
-        style={[
-          { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 20, backgroundColor: colors.surface },
-          style,
-        ]}
-      >
-        <Ionicons name="arrow-back" size={18} color={themeIsDark ? "#FFFFFF" : "#000000"} />
-      </TouchableOpacity>
+        icon="arrow-back"
+        iconSize={18}
+        size={40}
+        style={style}
+      />
     );
   }
 
